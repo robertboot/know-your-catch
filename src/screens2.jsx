@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench,
+  Wrench, Ruler,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -320,6 +320,90 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
                 </div>
               </div>
               <StatusPill status={status} size="small" />
+              <ChevronRight size={16} color={T.brass} />
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   MEASURE — how to measure + size limits & possession
+   ============================================================ */
+export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPick }) {
+  const [q, setQ] = useState('');
+  const filtered = useMemo(() => {
+    const lower = q.toLowerCase().trim();
+    return SPECIES
+      .filter(s => !lower || s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)))
+      .sort((a, b) => a.commonName.localeCompare(b.commonName));
+  }, [q]);
+
+  return (
+    <div style={{ padding: '16px 16px 8px' }}>
+      <H1 size={22} style={{ marginBottom: 4 }}>Measure Fish</H1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
+        <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600 }}>
+          {jurisdiction ? jurisdiction.name : 'No waters selected'}
+        </div>
+        <button onClick={onChangeJurisdiction} style={{
+          background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
+          padding: '5px 10px', borderRadius: 8, fontSize: 10, fontWeight: 800,
+          letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase',
+        }}>Change</button>
+      </div>
+
+      {/* How to measure */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <Ruler size={18} color={T.brass} />
+          <SectionLabel>How to measure</SectionLabel>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Total length</div>
+            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+              Tip of the closed mouth to the tip of the tail, with the tail squeezed together for the longest measurement.
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Fork length</div>
+            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+              Tip of the mouth to the center of the fork in the tail. Used for many pelagics.
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, borderTop: `1px solid ${T.cardEdge}`, paddingTop: 8 }}>
+            Lay the fish flat on a measuring device, mouth closed. Which length is regulated
+            varies by species — always confirm on the species' rule below.
+          </div>
+        </div>
+      </Card>
+
+      <SectionLabel style={{ color: T.inkSoft, margin: '0 2px 8px' }}>Size limits &amp; possession</SectionLabel>
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search species…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {filtered.map(s => {
+          const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+          return (
+            <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
+              <FishMark species={s} size={38} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                  {reg
+                    ? `Min ${formatSize(reg.minSize, state.units)}`
+                      + (reg.maxSize ? ` · Max ${formatSize(reg.maxSize, state.units)}` : '')
+                      + ` · Bag ${reg.bagLimit ?? '—'}`
+                      + (reg.vesselLimit != null ? ` · Vessel ${reg.vesselLimit}` : '')
+                    : 'No size data for these waters'}
+                </div>
+              </div>
               <ChevronRight size={16} color={T.brass} />
             </Card>
           );

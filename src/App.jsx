@@ -17,6 +17,7 @@ import {
 import {
   SpeciesDetailScreen, CompareScreen, RegulationsListScreen, RegulationDetailScreen,
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
+  MeasureScreen,
 } from './screens2.jsx';
 
 const ALERT_COUNT = 2;
@@ -72,7 +73,7 @@ export default function App() {
     onChangeJurisdiction: () => setShowJur(true),
     onIdentify:   () => push({ name: 'identify' }),
     onRegulations:() => push({ name: 'regulations' }),
-    onMeasure:    () => push({ name: 'regulations' }),
+    onMeasure:    () => push({ name: 'measure' }),
     onReport:     () => push({ name: 'pbs' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
@@ -133,6 +134,13 @@ export default function App() {
       break;
     case 'regulations':
       body = <RegulationsListScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} />;
+      break;
+    case 'measure':
+      body = <MeasureScreen
+        state={state} jurisdiction={jurisdiction}
+        onChangeJurisdiction={() => setShowJur(true)}
+        onPick={(id) => push({ name: 'species', id })}
+      />;
       break;
     case 'regulation':
       body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} />;

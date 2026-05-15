@@ -109,21 +109,33 @@ function FeaturedCard({ species, status, bag, onClick }) {
   const st = STATUS_TEXT[status] || STATUS_TEXT.unknown;
   return (
     <button onClick={onClick} style={{
-      flex: '0 0 138px', background: T.card, border: `1px solid ${T.cardEdge}`,
-      borderRadius: 12, padding: 12, cursor: 'pointer', textAlign: 'left',
+      flex: '0 0 152px', background: T.card, border: `1px solid ${T.cardEdge}`,
+      borderRadius: 14, padding: 10, cursor: 'pointer', textAlign: 'left',
     }}>
       <div style={{
-        background: T.oceanDeep, borderRadius: 8, height: 78, display: 'flex',
-        alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+        position: 'relative', borderRadius: 10, height: 100, marginBottom: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        background: 'linear-gradient(165deg, #16415c 0%, #0c2335 55%, #061320 100%)',
+        boxShadow: `inset 0 0 0 1px ${T.cardEdge}`,
       }}>
-        <FishMark species={species} size={104} />
+        <FishMark species={species} size={130} />
+        <span style={{
+          position: 'absolute', top: 8, left: 8, display: 'inline-flex', alignItems: 'center', gap: 5,
+          background: 'rgba(6,19,32,0.78)', padding: '3px 8px', borderRadius: 999,
+          fontSize: 10, fontWeight: 800, letterSpacing: 0.4, color: st.color,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }} />
+          {st.label.toUpperCase()}
+        </span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {species.commonName}
       </div>
-      <div style={{ fontSize: 12, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
-      <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>
-        Bag Limit: {bag != null ? bag : '—'}
+      <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+        {species.scientific}
+      </div>
+      <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, fontWeight: 600 }}>
+        Bag Limit: <span style={{ color: T.ink }}>{bag != null ? bag : '—'}</span>
       </div>
     </button>
   );
