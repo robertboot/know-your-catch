@@ -1,20 +1,31 @@
-/* Theme — rugged Gulf field-guide. High contrast for outdoor sun. */
+/* Theme — deep-water dark. Tuned to the Know Your Catch brand mockups. */
 export const T = {
-  parchment: '#F2EBD8',
-  parchmentDeep: '#E8DFC4',
-  card: '#FBF6E8',
-  cardEdge: '#D4C6A1',
-  ink: '#1A2530',
-  inkSoft: '#3B4A57',
-  inkMute: '#6B7681',
-  brass: '#A47424',
-  brassDeep: '#7C5618',
-  ocean: '#0E3A4F',
-  oceanDeep: '#082635',
-  open: '#2F6B3C',
-  openBg: '#DCE9D8',
-  closed: '#A8362B',
-  closedBg: '#F0D7D3',
-  warn: '#A06814',
-  warnBg: '#F4E3C1',
+  /* page + surfaces */
+  bg: '#081826',            // app background (deep navy)
+  bgDeep: '#00081b',        // splash / behind-everything
+  parchment: '#EAF3F7',     // primary light foreground (text on dark/teal/ocean)
+  parchmentDeep: '#0F2A3D', // recessed surface (inputs, empty states)
+  card: '#0E2436',          // card surface
+  cardEdge: '#1E3E55',      // card / divider border
+
+  /* text */
+  ink: '#EAF3F7',
+  inkSoft: '#A7BECB',
+  inkMute: '#6E8A9B',
+
+  /* brand accent (teal) — replaces the old brass */
+  brass: '#34C2D6',
+  brassDeep: '#3FCEE0',
+
+  /* hero / deep-blue surfaces */
+  ocean: '#0F3148',
+  oceanDeep: '#0A1B2A',
+
+  /* status — colorblind-safe pairs, tuned for dark */
+  open: '#46C76F',
+  openBg: '#10311F',
+  closed: '#F05A50',
+  closedBg: '#371513',
+  warn: '#E7B042',
+  warnBg: '#33280D',
 };

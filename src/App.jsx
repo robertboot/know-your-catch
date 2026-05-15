@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Fish, ChevronLeft, BookOpen, Trophy, Anchor, ListChecks,
-  Settings as SettingsIcon,
+  Fish, ChevronLeft, BookOpen, Bell, ClipboardList,
+  Home as HomeIcon, MoreHorizontal, Settings as SettingsIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import { DISCLAIMER_VERSION } from './data.js';
@@ -11,7 +11,7 @@ import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
 } from './components.jsx';
 import {
-  HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
+  SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
   PhotoAnalyzingScreen, PhotoResultScreen,
 } from './screens1.jsx';
 import {
@@ -19,9 +19,12 @@ import {
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
 } from './screens2.jsx';
 
+const ALERT_COUNT = 2;
+
 export default function App() {
   const [state, setState] = useState(defaultState);
   const [loaded, setLoaded] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const [stack, setStack] = useState([{ name: 'home' }]);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showJur, setShowJur] = useState(false);
@@ -35,6 +38,12 @@ export default function App() {
     setLoaded(true);
     if (s.disclaimerAcceptedVersion !== DISCLAIMER_VERSION) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
+  }, []);
+
+  // Auto-dismiss the splash after a short hold.
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 2200);
+    return () => clearTimeout(t);
   }, []);
 
   // update() merges patch into state and persists.
@@ -51,24 +60,29 @@ export default function App() {
   const pop   = ()     => setStack(st => st.length > 1 ? st.slice(0, -1) : st);
   const reset = (s)    => setStack(Array.isArray(s) ? s : [s]);
 
-  if (!loaded) {
-    return <div style={{ background: T.parchment, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute }}>Loading…</div>;
+  if (showSplash || !loaded) {
+    return <SplashScreen onContinue={() => loaded && setShowSplash(false)} />;
   }
 
   const jurisdiction = jurisdictionById(state.jurisdiction);
   const stale = isStale(state.syncMeta);
 
+  const homeProps = {
+    state, jurisdiction, stale,
+    onChangeJurisdiction: () => setShowJur(true),
+    onIdentify:   () => push({ name: 'identify' }),
+    onRegulations:() => push({ name: 'regulations' }),
+    onMeasure:    () => push({ name: 'regulations' }),
+    onReport:     () => push({ name: 'pbs' }),
+    onSpecies:    (id) => push({ name: 'species', id }),
+    onSpeciesList:() => push({ name: 'species_list' }),
+  };
+
   // Build the body based on current screen.
   let body;
   switch (screen.name) {
     case 'home':
-      body = <HomeScreen
-        state={state} jurisdiction={jurisdiction} stale={stale}
-        onChangeJurisdiction={() => setShowJur(true)}
-        onIdentify={() => push({ name: 'identify' })}
-        onRegulations={() => push({ name: 'regulations' })}
-        onPBs={() => push({ name: 'pbs' })}
-      />;
+      body = <HomeScreen {...homeProps} />;
       break;
     case 'identify':
       body = <IdentifyScreen
@@ -143,67 +157,77 @@ export default function App() {
                 onShowDisclaimer={() => setShowDisclaimer(true)} />;
       break;
     default:
-      body = <HomeScreen
-        state={state} jurisdiction={jurisdiction} stale={stale}
-        onChangeJurisdiction={() => setShowJur(true)}
-        onIdentify={() => push({ name: 'identify' })}
-        onRegulations={() => push({ name: 'regulations' })}
-        onPBs={() => push({ name: 'pbs' })}
-      />;
+      body = <HomeScreen {...homeProps} />;
   }
 
-  const showBack = screen.name !== 'home';
+  const isHome = screen.name === 'home';
   const activeTab =
-    ['identify', 'categories', 'category', 'search', 'photo_analyzing', 'photo_result'].includes(screen.name) ? 'identify' :
+    isHome ? 'home' :
     ['regulations', 'regulation'].includes(screen.name) ? 'regulations' :
-    ['species_list', 'species', 'compare'].includes(screen.name) ? 'species' :
-    ['pbs', 'pb_detail', 'pb_entry'].includes(screen.name) ? 'pbs' :
-    null;
+    ['pbs', 'pb_detail', 'pb_entry'].includes(screen.name) ? 'logbook' :
+    screen.name === 'settings' ? 'more' :
+    'species';
 
   return (
     <div style={{
-      background: T.parchment, minHeight: '100vh', color: T.ink,
+      background: T.bg, minHeight: '100vh', color: T.ink,
       maxWidth: 440, margin: '0 auto', position: 'relative',
-      boxShadow: '0 0 40px rgba(8,38,53,0.08)',
+      boxShadow: '0 0 60px rgba(0,0,0,0.5)',
     }}>
       {/* Top app bar */}
       <div style={{
-        background: T.oceanDeep, color: T.parchment, padding: '14px 16px',
+        background: T.oceanDeep, color: T.parchment, padding: '12px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: `3px solid ${T.brass}`, position: 'sticky', top: 0, zIndex: 50,
+        borderBottom: `1px solid ${T.cardEdge}`, position: 'sticky', top: 0, zIndex: 50,
       }}>
-        {showBack ? (
-          <button onClick={pop} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 14 }}>
-            <ChevronLeft size={20} /> Back
+        {isHome ? (
+          <button onClick={() => reset([{ name: 'home' }])} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/brand/mark.jpg" alt="" width={40} height={40} style={{ borderRadius: 9, display: 'block' }} />
+            <span style={{ textAlign: 'left', lineHeight: 1 }}>
+              <span style={{ display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: T.parchment }}>KNOW YOUR</span>
+              <span style={{ display: 'block', fontSize: 21, fontWeight: 900, letterSpacing: 2, color: T.brass, marginTop: 2 }}>CATCH</span>
+              <span style={{ display: 'block', fontSize: 7.5, fontWeight: 700, letterSpacing: 1.6, color: T.inkSoft, marginTop: 3 }}>IDENTIFY · CHECK RULES · STAY LEGAL</span>
+            </span>
           </button>
         ) : (
-          <button onClick={() => reset([{ name: 'home' }])} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Anchor size={18} />
-            <span style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 600 }}>Know Your Catch</span>
+          <button onClick={pop} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
+            <ChevronLeft size={20} /> Back
           </button>
         )}
-        <button onClick={() => push({ name: 'settings' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer' }} aria-label="Settings">
-          <SettingsIcon size={20} />
-        </button>
+        {isHome ? (
+          <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
+            <Bell size={22} />
+            {ALERT_COUNT > 0 && (
+              <span style={{
+                position: 'absolute', top: -2, right: -3, background: T.brass, color: T.oceanDeep,
+                fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+              }}>{ALERT_COUNT}</span>
+            )}
+          </button>
+        ) : (
+          <button onClick={() => push({ name: 'settings' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer' }} aria-label="Settings">
+            <SettingsIcon size={20} />
+          </button>
+        )}
       </div>
 
-      <div style={{ paddingBottom: activeTab ? 70 : 16, minHeight: 'calc(100vh - 120px)' }}>
+      <div style={{ paddingBottom: 78, minHeight: 'calc(100vh - 132px)' }}>
         {body}
       </div>
 
       {/* Bottom tab bar */}
-      {activeTab && (
-        <div style={{
-          position: 'sticky', bottom: 0, background: T.card,
-          borderTop: `2px solid ${T.brass}`, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-          padding: '6px 4px 8px', zIndex: 50,
-        }}>
-          <TabBtn label="Identify" active={activeTab === 'identify'} onClick={() => reset([{ name: 'identify' }])} icon={<Fish size={20} />} />
-          <TabBtn label="Regs" active={activeTab === 'regulations'} onClick={() => reset([{ name: 'regulations' }])} icon={<ListChecks size={20} />} />
-          <TabBtn label="Species" active={activeTab === 'species'} onClick={() => reset([{ name: 'species_list' }])} icon={<BookOpen size={20} />} />
-          <TabBtn label="PBs" active={activeTab === 'pbs'} onClick={() => reset([{ name: 'pbs' }])} icon={<Trophy size={20} />} />
-        </div>
-      )}
+      <div style={{
+        position: 'sticky', bottom: 0, background: T.oceanDeep,
+        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+        padding: '8px 4px 10px', zIndex: 50,
+      }}>
+        <TabBtn label="Home" active={activeTab === 'home'} onClick={() => reset([{ name: 'home' }])} icon={<HomeIcon size={20} />} />
+        <TabBtn label="Species" active={activeTab === 'species'} onClick={() => reset([{ name: 'species_list' }])} icon={<Fish size={20} />} />
+        <TabBtn label="Regulations" active={activeTab === 'regulations'} onClick={() => reset([{ name: 'regulations' }])} icon={<ClipboardList size={20} />} />
+        <TabBtn label="Logbook" active={activeTab === 'logbook'} onClick={() => reset([{ name: 'pbs' }])} icon={<BookOpen size={20} />} />
+        <TabBtn label="More" active={activeTab === 'more'} onClick={() => reset([{ name: 'settings' }])} icon={<MoreHorizontal size={20} />} />
+      </div>
 
       {showDisclaimer && (
         <DisclaimerModal onAccept={() => {
@@ -246,9 +270,9 @@ export default function App() {
 function TabBtn({ label, active, onClick, icon }) {
   return (
     <button onClick={onClick} style={{
-      background: 'transparent', border: 'none', color: active ? T.ocean : T.inkMute,
+      background: 'transparent', border: 'none', color: active ? T.brass : T.inkMute,
       padding: '4px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', gap: 2, fontSize: 11, fontWeight: active ? 700 : 500,
+      alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: active ? 700 : 500,
     }}>
       <span style={{ color: active ? T.brass : T.inkMute }}>{icon}</span>
       {label}

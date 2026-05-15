@@ -11,8 +11,8 @@ export function StatusPill({ status, size = 'normal' }) {
     open:    { label: 'OPEN',   bg: T.openBg,   fg: T.open,      shape: 'circle' },
     closed:  { label: 'CLOSED', bg: T.closedBg, fg: T.closed,    shape: 'square' },
     caution: { label: 'VERIFY', bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
-    unknown: { label: '—',      bg: '#E5DEC8',  fg: T.inkMute,   shape: 'circle' },
-  }[status] || { label: '—', bg: '#E5DEC8', fg: T.inkMute, shape: 'circle' };
+    unknown: { label: '—',      bg: T.parchmentDeep,  fg: T.inkMute,   shape: 'circle' },
+  }[status] || { label: '—', bg: T.parchmentDeep, fg: T.inkMute, shape: 'circle' };
   const pad = size === 'small' ? '2px 8px' : '4px 10px';
   const fs = size === 'small' ? 10 : 11;
   const shape = m.shape === 'circle'
@@ -134,7 +134,7 @@ export function DetailRow({ label, value }) {
 
 export const inputStyle = {
   width: '100%', padding: '10px 12px', fontSize: 14, border: `1.5px solid ${T.cardEdge}`,
-  borderRadius: 4, background: T.parchment, color: T.ink, outline: 'none', boxSizing: 'border-box',
+  borderRadius: 4, background: T.parchmentDeep, color: T.ink, outline: 'none', boxSizing: 'border-box',
 };
 export function Field({ label, value, onChange, type = 'text', placeholder }) {
   return (
@@ -147,7 +147,7 @@ export function Field({ label, value, onChange, type = 'text', placeholder }) {
 export function PickButton({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      flex: 1, background: active ? T.ocean : T.parchment, color: active ? T.parchment : T.ink,
+      flex: 1, background: active ? T.ocean : T.parchmentDeep, color: active ? T.parchment : T.ink,
       border: `1.5px solid ${active ? T.ocean : T.cardEdge}`, padding: '10px 8px', borderRadius: 4,
       fontSize: 13, fontWeight: 600, cursor: 'pointer',
     }}>{children}</button>
@@ -160,8 +160,8 @@ export const overlayStyle = {
   justifyContent: 'center', padding: 20, zIndex: 100,
 };
 export const modalStyle = {
-  background: T.parchment, borderRadius: 8, padding: 20, width: '100%', maxWidth: 400,
-  border: `2px solid ${T.brass}`, boxShadow: '0 10px 40px rgba(0,0,0,0.4)', maxHeight: '85vh', overflowY: 'auto',
+  background: T.card, borderRadius: 8, padding: 20, width: '100%', maxWidth: 400,
+  border: `2px solid ${T.brass}`, boxShadow: '0 10px 40px rgba(0,0,0,0.55)', maxHeight: '85vh', overflowY: 'auto',
 };
 
 /* ============================================================

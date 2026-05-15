@@ -150,7 +150,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
         )}
       </Card>
 
-      <Card style={{ marginBottom: 14, background: pb ? '#FAF4DD' : T.card, borderColor: pb ? T.brass : T.cardEdge }}>
+      <Card style={{ marginBottom: 14, background: pb ? T.parchmentDeep : T.card, borderColor: pb ? T.brass : T.cardEdge }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div>
             <SectionLabel>Personal Best</SectionLabel>
@@ -222,7 +222,7 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
         </div>
       )}
       {reg.sectors && (
-        <div style={{ marginTop: 10, padding: 10, background: '#F4EEDB', border: `1px solid ${T.cardEdge}`, borderRadius: 4 }}>
+        <div style={{ marginTop: 10, padding: 10, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Sector-specific</SectionLabel>
           {Object.entries(reg.sectors).map(([sector, txt]) => (
             <div key={sector} style={{ fontSize: 12, marginBottom: 4 }}>
@@ -408,7 +408,7 @@ export function PBsScreen({ state, onAdd, onView }) {
               const s = speciesById(id); const pb = state.pbs[id];
               if (!s) return null;
               return (
-                <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FAF4DD', borderColor: T.brass }}>
+                <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
                   <Trophy size={20} color={T.brass} />
                   <FishMark species={s} size={44} />
                   <div style={{ flex: 1 }}>

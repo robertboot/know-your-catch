@@ -3,6 +3,8 @@ import {
   Fish, Search, ChevronRight, AlertTriangle, Plus, Pencil, BookOpen,
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft,
+  MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
+  CheckCircle2,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -22,51 +24,209 @@ import {
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
 
 /* ============================================================
+   SPLASH
+   ============================================================ */
+export function SplashScreen({ onContinue }) {
+  return (
+    <div
+      onClick={onContinue}
+      style={{
+        position: 'fixed', inset: 0, background: T.bgDeep,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        zIndex: 200, cursor: 'pointer', padding: 24,
+      }}
+    >
+      <img
+        src="/brand/splash.png"
+        alt="Know Your Catch — Identify, Check Rules, Stay Legal. Built for the Gulf of America."
+        style={{ maxWidth: 'min(86vw, 380px)', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
+      />
+      <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>
+        Tap to continue
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    HOME
    ============================================================ */
-export function HomeScreen({ state, jurisdiction, stale, onChangeJurisdiction, onIdentify, onRegulations, onPBs }) {
-  return (
-    <div style={{ padding: '20px 16px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 22 }}>
-        <H1 size={28}>Know Your Catch</H1>
-        <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 13, marginTop: 6, letterSpacing: 0.5 }}>
-          Identify it. Know the rules. Stay legal.
-        </div>
-      </div>
+const FEATURED_IDS = ['red_snapper', 'king_mackerel', 'gag_grouper', 'greater_amberjack', 'cobia', 'mahi', 'wahoo'];
 
-      <Card style={{ background: T.oceanDeep, color: T.parchment, border: `1.5px solid ${T.brass}`, marginBottom: 14 }}>
-        <SectionLabel style={{ color: T.brass, marginBottom: 4 }}>Fishing in</SectionLabel>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <div style={{ fontFamily: 'Georgia, serif', fontSize: 19, fontWeight: 600 }}>
-              {jurisdiction ? jurisdiction.name : 'Select waters'}
-            </div>
-            {jurisdiction && <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 2 }}>{jurisdiction.agency} · {jurisdiction.boundary}</div>}
-          </div>
-          <button onClick={onChangeJurisdiction} style={{
-            background: T.brass, color: T.oceanDeep, border: 'none', padding: '6px 12px',
-            borderRadius: 4, fontSize: 12, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer', textTransform: 'uppercase',
-          }}>Change</button>
+function regForSpecies(id, jurId) {
+  const byJur = REGULATIONS[id];
+  if (!byJur) return null;
+  return byJur[jurId] || byJur.fed_gulf || Object.values(byJur)[0] || null;
+}
+
+const STATUS_TEXT = {
+  open:    { label: 'Season Open',   color: T.open },
+  closed:  { label: 'Season Closed', color: T.closed },
+  caution: { label: 'Check Season',  color: T.warn },
+  unknown: { label: 'Verify Rules',  color: T.inkMute },
+};
+
+function ActionTile({ icon, title, subtitle, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 12,
+      padding: '16px 14px', cursor: 'pointer', textAlign: 'left',
+      display: 'flex', flexDirection: 'column', gap: 10, minHeight: 132,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 17, fontWeight: 700, color: T.ink, lineHeight: 1.2, maxWidth: '70%' }}>{title}</span>
+        <span style={{ color: T.brass, flexShrink: 0 }}>{icon}</span>
+      </div>
+      <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
+      <ChevronRight size={18} color={T.brass} />
+    </button>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div style={{ textAlign: 'left' }}>
+      <div style={{ fontSize: 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 14, color: T.ink, fontWeight: 700, marginTop: 3 }}>{value}</div>
+    </div>
+  );
+}
+
+function SectionHead({ children, action, onAction }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '22px 2px 10px' }}>
+      <SectionLabel style={{ color: T.inkSoft }}>{children}</SectionLabel>
+      {action && (
+        <button onClick={onAction} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1, cursor: 'pointer', padding: 0 }}>
+          {action}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FeaturedCard({ species, status, bag, onClick }) {
+  const st = STATUS_TEXT[status] || STATUS_TEXT.unknown;
+  return (
+    <button onClick={onClick} style={{
+      flex: '0 0 138px', background: T.card, border: `1px solid ${T.cardEdge}`,
+      borderRadius: 12, padding: 12, cursor: 'pointer', textAlign: 'left',
+    }}>
+      <div style={{
+        background: T.oceanDeep, borderRadius: 8, height: 78, display: 'flex',
+        alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+      }}>
+        <FishMark species={species} size={104} />
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {species.commonName}
+      </div>
+      <div style={{ fontSize: 12, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
+      <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>
+        Bag Limit: {bag != null ? bag : '—'}
+      </div>
+    </button>
+  );
+}
+
+export function HomeScreen({
+  state, jurisdiction, stale, onChangeJurisdiction,
+  onIdentify, onRegulations, onMeasure, onReport, onSpecies, onSpeciesList,
+}) {
+  const jurId = jurisdiction?.id || 'fed_gulf';
+  const featured = FEATURED_IDS
+    .map(id => {
+      const s = speciesById(id);
+      if (!s) return null;
+      const r = regForSpecies(id, jurId);
+      return { s, status: regStatus(r), bag: r?.bagLimit };
+    })
+    .filter(Boolean);
+  const anyClosed = featured.some(f => f.status === 'closed');
+
+  return (
+    <div style={{ padding: '14px 16px' }}>
+      {/* Location */}
+      <Card style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12 }}>
+        <div style={{ background: T.oceanDeep, color: T.brass, width: 42, height: 42, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <MapPin size={22} />
         </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <SectionLabel style={{ color: T.brass, fontSize: 10 }}>Current Location</SectionLabel>
+          <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {jurisdiction ? jurisdiction.name : 'Select fishing waters'}
+          </div>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {jurisdiction ? jurisdiction.agency : 'Tap change to pick your waters'}
+          </div>
+        </div>
+        <button onClick={onChangeJurisdiction} style={{
+          background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
+          padding: '7px 12px', borderRadius: 8, fontSize: 11, fontWeight: 800,
+          letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0,
+        }}>Change</button>
       </Card>
 
       {stale && (
-        <Card style={{ background: T.warnBg, borderColor: T.warn, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <Card style={{ background: T.warnBg, borderColor: T.warn, marginTop: 12, display: 'flex', gap: 10, alignItems: 'flex-start', borderRadius: 12 }}>
           <AlertTriangle size={20} color={T.warn} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 13, color: T.brassDeep }}>
+          <div style={{ fontSize: 13, color: T.ink }}>
             <strong>Regulations data is more than 7 days old.</strong> Connect to internet when possible to refresh.
           </div>
         </Card>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
-        <BigButton onClick={onIdentify} icon={<Fish size={28} />} title="Identify a Fish" subtitle="Photo capture, browse, or search" />
-        <BigButton onClick={onRegulations} icon={<ListChecks size={28} />} title="Check Regulations" subtitle="Sizes, bag limits, seasons" />
-        <BigButton onClick={onPBs} icon={<Trophy size={28} />} title="Personal Bests" subtitle="Track your records" />
+      {/* Action grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
+        <ActionTile icon={<Fish size={22} />} title="Identify Fish" subtitle="Browse species and ID guide" onClick={onIdentify} />
+        <ActionTile icon={<ClipboardList size={22} />} title="Check Regulations" subtitle="View rules, limits and seasons" onClick={onRegulations} />
+        <ActionTile icon={<Ruler size={22} />} title="Measure Fish" subtitle="Check size limits and possession" onClick={onMeasure} />
+        <ActionTile icon={<Camera size={22} />} title="Report Catch" subtitle="Log your catch and keep records" onClick={onReport} />
       </div>
 
-      <div style={{ marginTop: 24, padding: '14px 12px', borderTop: `1px dashed ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center', fontStyle: 'italic' }}>
-        Built for Gulf Coast offshore anglers · v{DATA_VERSION}
+      {/* Today's conditions */}
+      <SectionHead action="VIEW FORECAST" onAction={onRegulations}>Today's Conditions</SectionHead>
+      <Card style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 12 }}>
+        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <CloudSun size={30} color={T.warn} />
+          <div style={{ fontSize: 26, fontWeight: 800, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
+          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>Partly Cloudy</div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <Metric label="WIND" value="SE 14 mph" />
+          <Metric label="WAVES" value="2.1 ft" />
+          <Metric label="WATER" value="79°" />
+        </div>
+      </Card>
+
+      {/* Regulation alerts */}
+      <SectionHead action="VIEW ALL" onAction={onRegulations}>Regulation Alerts</SectionHead>
+      <Card style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12 }}>
+        {anyClosed ? (
+          <AlertTriangle size={26} color={T.warn} style={{ flexShrink: 0 }} />
+        ) : (
+          <CheckCircle2 size={26} color={T.open} style={{ flexShrink: 0 }} />
+        )}
+        <div>
+          <div style={{ fontSize: 14, color: T.ink, fontWeight: 600, lineHeight: 1.4 }}>
+            {anyClosed
+              ? 'Some featured species have an active closure in these waters.'
+              : 'No active closures or restrictions in your area.'}
+          </div>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>Always check before you head out.</div>
+        </div>
+      </Card>
+
+      {/* Featured species */}
+      <SectionHead action="VIEW ALL" onAction={onSpeciesList}>Featured Species</SectionHead>
+      <div className="kyc-hscroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6, margin: '0 -16px', padding: '0 16px 6px' }}>
+        {featured.map(f => (
+          <FeaturedCard key={f.s.id} species={f.s} status={f.status} bag={f.bag} onClick={() => onSpecies(f.s.id)} />
+        ))}
+      </div>
+
+      <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
+        Built for the Gulf of America · For anglers, by anglers · v{DATA_VERSION}
       </div>
     </div>
   );
@@ -239,7 +399,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetak
         </Card>
 
         {s?.lookalikes?.length > 0 && (
-          <Card style={{ marginBottom: 12, background: '#FAF4DD', borderColor: T.brass }}>
+          <Card style={{ marginBottom: 12, background: T.parchmentDeep, borderColor: T.brass }}>
             <SectionLabel style={{ marginBottom: 6 }}>Confirm with your eyes</SectionLabel>
             <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 10 }}>
               Even a confident match can be wrong on lookalikes. Glance at these — does one fit better?
@@ -250,7 +410,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetak
                 if (!o) return null;
                 return (
                   <button key={otherId} onClick={() => onPickSpecies(otherId)} style={{
-                    background: T.parchment, border: `1px solid ${T.cardEdge}`, padding: '8px 10px',
+                    background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, padding: '8px 10px',
                     borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%', textAlign: 'left',
                   }}>
                     <FishMark species={o} size={32} />
