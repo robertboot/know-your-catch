@@ -20,19 +20,33 @@
   .row { display:grid; grid-template-columns:1.4fr 1fr 1.6fr 1.2fr 1.1fr; gap:8px; align-items:center; padding:8px 0; border-top:1px solid #1E3E5566; }
   .row b { font-size:13px; } .hint { color:var(--mute); font-size:12px; } .msg { padding:10px 12px; border-radius:6px; margin:10px 0; font-weight:600; }
   .msg.ok { background:#10311F; color:var(--ok); } .msg.err { background:#371513; color:var(--bad); } a { color:var(--teal); }
+  .big { padding:14px; font-size:16px; }
+  @media (max-width:680px){ .row{ grid-template-columns:1fr; gap:4px; padding:12px 0; } .row b{ font-size:15px; margin-bottom:4px; } }
 </style>
 </head>
 <body>
 <header><b>KNOW YOUR CATCH · ADMIN</b><span class="hint">Git-backed · commits to GitHub</span></header>
 <main>
   <div class="card">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><label>GitHub token (repo scope, fine-grained: Contents RW)</label><input id="tok" type="password" placeholder="github_pat_…"></div>
-      <div><label>Repo</label><input id="repo" value="robertboot/know-your-catch"></div>
-      <div><label>Branch</label><input id="branch" value="claude/upload-app-assets-NUxRr"></div>
-      <div style="display:flex;align-items:flex-end;gap:8px"><button onclick="connect()">Connect</button><button class="ghost" onclick="loadAll()">Reload data</button></div>
+    <h2 style="margin:0 0 4px;font-size:18px;color:var(--teal)">Connect to GitHub</h2>
+    <p class="hint" style="margin:0 0 16px">One-time. Your token stays in this browser tab only and is never committed.</p>
+
+    <label>Step 1 — Paste your GitHub token here</label>
+    <input id="tok" class="big" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ghp_… or github_pat_…">
+    <div style="margin:8px 0 18px">
+      <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=KYC%20Admin" target="_blank" rel="noopener">Need one? Tap here to create a token →</a>
+      <div class="hint">Copy it on the GitHub screen, come back, paste above.</div>
     </div>
-    <div id="conn" class="hint" style="margin-top:8px">Not connected. Token stays in this tab only (sessionStorage); never committed.</div>
+
+    <button class="big" style="width:100%" onclick="connect()">Step 2 — Connect</button>
+    <div id="conn" class="hint" style="margin-top:12px">Not connected yet.</div>
+
+    <details style="margin-top:14px">
+      <summary class="hint" style="cursor:pointer">Advanced — repo &amp; branch (already set, rarely change)</summary>
+      <label>Repo</label><input id="repo" value="robertboot/know-your-catch">
+      <label>Branch</label><input id="branch" value="claude/upload-app-assets-NUxRr">
+      <button class="ghost" style="margin-top:10px" onclick="loadAll()">Reload data</button>
+    </details>
   </div>
 
   <div class="tabs">
