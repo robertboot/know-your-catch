@@ -132,6 +132,15 @@ export const SPECIES = [
   { id: 'mahi', commonName: 'Mahi-Mahi', altNames: ['Dolphinfish', 'Dolphin', 'Dorado'], scientific: 'Coryphaena hippurus', category: 'reef',
     keyIds: ['Brilliant green, blue, and gold coloration', 'Adult males: steep blunt forehead', 'Long continuous dorsal fin', 'Deeply forked tail'],
     lookalikes: [], habitat: 'Offshore, under floating debris, weed lines, sargassum.', typicalSize: '20–40 in' },
+  { id: 'golden_tilefish', commonName: 'Golden Tilefish', altNames: ['Tilefish', 'Golden Tile'], scientific: 'Lopholatilus chamaeleonticeps', category: 'reef',
+    keyIds: ['Blue-green back fading to yellow then white belly', 'Bright yellow spots scattered over the body', 'Fleshy crest (adipose flap) on top of the head', 'Large blunt head; deep clay-bottom fish'],
+    lookalikes: ['blueline_tilefish'], habitat: 'Deep clay and mud bottoms with burrows, 250–1,500 ft.', typicalSize: '20–40 in', reefFish: true },
+  { id: 'blueline_tilefish', commonName: 'Blueline Tilefish', altNames: ['Gray Tilefish', 'Blueline Tile'], scientific: 'Caulolatilus microps', category: 'reef',
+    keyIds: ['Blue line running just beneath the eye', 'Pale gray to olive body with a gold midline', 'No fleshy crest on the head (unlike golden tilefish)', 'Deep rocky and rubble bottoms'],
+    lookalikes: ['golden_tilefish'], habitat: 'Deep rocky and rubble bottoms, 250–800 ft.', typicalSize: '15–30 in', reefFish: true },
+  { id: 'short_bigeye', commonName: 'Short Bigeye', altNames: ['Toro', 'Big Eye Toro', 'Bigeye'], scientific: 'Pristigenys alta', category: 'reef',
+    keyIds: ['Bright red to rosy body', 'Very large eye', 'Deep, oval, strongly compressed body', 'Rough scales; single continuous spiny dorsal fin'],
+    lookalikes: [], habitat: 'Reefs, rocky ledges and drop-offs, 50–600 ft.', typicalSize: '6–12 in' },
 ];
 
 export const COMPARISONS = {
@@ -257,6 +266,12 @@ export const COMPARISONS = {
     { feature: 'Vertical bars on sides', a: 'No vertical bars', b: 'Bright blue vertical bars' },
     { feature: 'Snout', a: 'Shorter', b: 'Long, pointed' },
     { feature: 'Body proportion', a: 'Elongate but less so', b: 'Very elongate, torpedo-like' },
+  ],
+  'golden_tilefish:blueline_tilefish': [
+    { feature: 'Head crest', a: 'Prominent fleshy crest/flap on top of head', b: 'No crest on head' },
+    { feature: 'Eye marking', a: 'No blue line at the eye', b: 'Distinct blue line beneath the eye' },
+    { feature: 'Color', a: 'Blue-green with bright yellow spots', b: 'Plain gray to olive, gold midline' },
+    { feature: 'Size', a: 'Larger — to 40+ in', b: 'Smaller — 15–30 in' },
   ],
 };
 
@@ -423,6 +438,18 @@ function buildRegs() {
       default: { open: 'Year-round', minSize: null, bagLimit: 10, vesselLimit: 60 },
       fl_state: { minSize: 20, bagLimit: 5, vesselLimit: 30, notes: 'Fork length.' },
       tx_state: { vesselLimit: null },
+      source: 'fisheries.noaa.gov',
+    }),
+    golden_tilefish: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Gulf reef fish — managed in the deep-water grouper/tilefish complex; aggregate limits and seasonal closures may apply. No fixed rec size limit on file. Verify with the agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    blueline_tilefish: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Gulf reef fish — managed in the deep-water grouper/tilefish complex; aggregate limits and seasonal closures may apply. No fixed rec size limit on file. Verify with the agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    short_bigeye: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'No species-specific recreational size or bag limit on file. Verify with the agency before keeping.' },
       source: 'fisheries.noaa.gov',
     }),
   };
