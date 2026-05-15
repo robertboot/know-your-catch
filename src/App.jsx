@@ -206,22 +206,23 @@ export default function App() {
             <ChevronLeft size={20} /> Back
           </button>
         )}
-        {isHome ? (
-          <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
-            <Bell size={22} />
-            {ALERT_COUNT > 0 && (
-              <span style={{
-                position: 'absolute', top: -2, right: -3, background: T.brass, color: T.oceanDeep,
-                fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
-              }}>{ALERT_COUNT}</span>
-            )}
-          </button>
-        ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isHome && (
+            <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
+              <Bell size={22} />
+              {ALERT_COUNT > 0 && (
+                <span style={{
+                  position: 'absolute', top: -2, right: -3, background: T.brass, color: T.oceanDeep,
+                  fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+                }}>{ALERT_COUNT}</span>
+              )}
+            </button>
+          )}
           <button onClick={() => push({ name: 'settings' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer' }} aria-label="Settings">
             <SettingsIcon size={20} />
           </button>
-        )}
+        </div>
       </div>
 
       <div style={{ paddingBottom: 78, minHeight: 'calc(100vh - 132px)' }}>
