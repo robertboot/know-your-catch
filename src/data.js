@@ -2,9 +2,13 @@
    KNOW YOUR CATCH — Data tables
    ============================================================ */
 
-// Regulations are SEED VALUES. Verify against current agency
-// sources before relying on them. Replace this file with
-// authoritative data before shipping.
+// Regulations start as SEED VALUES and are overlaid by verified feed
+// files from regulations/feed/ (see regulations/README.md). The app is
+// offline-first: the bundled feed is the floor; a future runtime sync
+// can refresh it. Seed values remain the fallback for anything the
+// feed does not cover.
+
+import gulfFederal2026 from '../regulations/feed/gulf-federal-2026.json';
 
 export const JURISDICTIONS = [
   { id: 'al_state', name: 'Alabama State Waters', short: 'AL', agency: 'Alabama DCNR', boundary: '3 nm', regsUrl: 'https://www.outdooralabama.com/fishing/saltwater-fishing' },
@@ -423,7 +427,36 @@ function buildRegs() {
     }),
   };
 }
+// Overlay a verified feed file onto the seed for one jurisdiction.
+// Feed values win; anything the feed omits keeps its seed value
+// (e.g. required-gear lists for reef species).
+function applyFeed(regs, feed) {
+  const jur = feed.jurisdiction;
+  for (const [sid, rule] of Object.entries(feed.rules || {})) {
+    if (!regs[sid]) regs[sid] = {};
+    regs[sid][jur] = {
+      ...(regs[sid][jur] || {}),
+      open: rule.open,
+      minSize: rule.minSize,
+      maxSize: rule.maxSize,
+      bagLimit: rule.bagLimit,
+      vesselLimit: rule.vesselLimit,
+      lengthType: rule.lengthType,
+      notes: rule.notes,
+      source: rule.source,
+      lastUpdated: rule.lastUpdated,
+      verified: rule.verified,
+      confidence: rule.confidence,
+    };
+  }
+}
+
 export const REGULATIONS = buildRegs();
+applyFeed(REGULATIONS, gulfFederal2026);
+
+export const FEEDS = [
+  { file: 'gulf-federal-2026.json', jurisdiction: gulfFederal2026.jurisdiction, verifiedDate: gulfFederal2026.verifiedDate },
+];
 
 export const DATA_VERSION = '1.0.0-seed';
 export const DATA_BUILD_DATE = '2025-04-01';

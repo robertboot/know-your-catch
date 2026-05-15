@@ -56,9 +56,15 @@ export function cleanSeason(open) {
 // shows the best-known info plus the official source to confirm).
 export function regStatus(r) {
   if (!r || !r.open) return 'unknown';
-  const o = (r.open || '').toLowerCase();
+  const raw = r.open.trim();
+  const o = raw.toLowerCase();
+  if (/not federally managed|not managed|see state|follow state/.test(o)) return 'unknown';
+  if (/^check current season$/i.test(raw)) return 'unknown';
+  // A leading "Open"/"Year-round" governs even if a later clause notes a
+  // closed window; an entry that *starts* closed is closed.
+  if (/^(open|year-round|year round)\b/.test(o)) return 'open';
+  if (o.startsWith('closed')) return 'closed';
   if (o.includes('closed')) return 'closed';
-  if (/^check current season$/i.test(r.open.trim())) return 'unknown';
   return 'open';
 }
 
