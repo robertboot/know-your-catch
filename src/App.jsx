@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Fish, ChevronLeft, BookOpen, Bell, ClipboardList,
-  Home as HomeIcon, MoreHorizontal, Settings as SettingsIcon,
+  Home as HomeIcon, Settings as SettingsIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import { DISCLAIMER_VERSION } from './data.js';
@@ -177,7 +177,7 @@ export default function App() {
     isHome ? 'home' :
     ['regulations', 'regulation'].includes(screen.name) ? 'regulations' :
     ['pbs', 'pb_detail', 'pb_entry'].includes(screen.name) ? 'logbook' :
-    screen.name === 'settings' ? 'more' :
+    screen.name === 'settings' ? '' :
     'species';
 
   return (
@@ -231,14 +231,13 @@ export default function App() {
       {/* Bottom tab bar */}
       <div style={{
         position: 'sticky', bottom: 0, background: T.oceanDeep,
-        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
         padding: '8px 4px 10px', zIndex: 50,
       }}>
         <TabBtn label="Home" active={activeTab === 'home'} onClick={() => reset([{ name: 'home' }])} icon={<HomeIcon size={20} />} />
         <TabBtn label="Species" active={activeTab === 'species'} onClick={() => reset([{ name: 'species_list' }])} icon={<Fish size={20} />} />
         <TabBtn label="Regulations" active={activeTab === 'regulations'} onClick={() => reset([{ name: 'regulations' }])} icon={<ClipboardList size={20} />} />
         <TabBtn label="Logbook" active={activeTab === 'logbook'} onClick={() => reset([{ name: 'pbs' }])} icon={<BookOpen size={20} />} />
-        <TabBtn label="More" active={activeTab === 'more'} onClick={() => reset([{ name: 'settings' }])} icon={<MoreHorizontal size={20} />} />
       </div>
 
       {showDisclaimer && (
