@@ -1,0 +1,20 @@
+/* Theme — rugged Gulf field-guide. High contrast for outdoor sun. */
+export const T = {
+  parchment: '#F2EBD8',
+  parchmentDeep: '#E8DFC4',
+  card: '#FBF6E8',
+  cardEdge: '#D4C6A1',
+  ink: '#1A2530',
+  inkSoft: '#3B4A57',
+  inkMute: '#6B7681',
+  brass: '#A47424',
+  brassDeep: '#7C5618',
+  ocean: '#0E3A4F',
+  oceanDeep: '#082635',
+  open: '#2F6B3C',
+  openBg: '#DCE9D8',
+  closed: '#A8362B',
+  closedBg: '#F0D7D3',
+  warn: '#A06814',
+  warnBg: '#F4E3C1',
+};
