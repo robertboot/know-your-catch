@@ -319,37 +319,62 @@ export function CompareScreen({ aId, bId, onPick }) {
    ============================================================ */
 export function RegulationsListScreen({ state, jurisdiction, onPick }) {
   const [q, setQ] = useState('');
-  const filtered = useMemo(() => {
+  const [sort, setSort] = useState('name'); // 'name' | 'status'
+  const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
-    return SPECIES.filter(s => !lower || s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)))
-      .sort((a, b) => a.commonName.localeCompare(b.commonName));
-  }, [q]);
+    const list = SPECIES
+      .filter(s => !lower || s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)))
+      .map(s => {
+        const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+        return { s, reg, status: reg ? seasonState(reg.open).status : 'unknown' };
+      });
+    // Sort by status puts what you can keep right now on top.
+    const rank = { open: 0, upcoming: 1, closed: 2, unknown: 3 };
+    list.sort((a, b) =>
+      sort === 'status'
+        ? (rank[a.status] - rank[b.status]) || a.s.commonName.localeCompare(b.s.commonName)
+        : a.s.commonName.localeCompare(b.s.commonName)
+    );
+    return list;
+  }, [q, sort, jurisdiction]);
+
+  const sortBtn = (key, label) => (
+    <button onClick={() => setSort(key)} style={{
+      flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+      fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+      background: sort === key ? T.brass : T.parchmentDeep,
+      color: sort === key ? T.oceanDeep : T.inkSoft,
+      border: `1.5px solid ${sort === key ? T.brass : T.cardEdge}`,
+    }}>{label}</button>
+  );
+
   return (
     <div style={{ padding: '16px 16px 8px' }}>
       <H1 size={22} style={{ marginBottom: 4 }}>Regulations</H1>
       {jurisdiction && <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600, marginBottom: 12 }}>{jurisdiction.name}</div>}
-      <div style={{ position: 'relative', marginBottom: 14 }}>
+      <div style={{ position: 'relative', marginBottom: 10 }}>
         <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search species…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
+        {sortBtn('name', 'A–Z')}
+        {sortBtn('status', 'Status')}
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {filtered.map(s => {
-          const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
-          const status = reg ? seasonState(reg.open).status : 'unknown';
-          return (
-            <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
-              <FishMark species={s} size={38} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                <div style={{ fontSize: 11, color: T.inkMute }}>
-                  {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
-                </div>
+        {rows.map(({ s, reg, status }) => (
+          <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
+            <FishMark species={s} size={38} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+              <div style={{ fontSize: 11, color: T.inkMute }}>
+                {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
               </div>
-              <StatusPill status={status} size="small" />
-              <ChevronRight size={16} color={T.brass} />
-            </Card>
-          );
-        })}
+            </div>
+            <StatusPill status={status} size="small" />
+            <ChevronRight size={16} color={T.brass} />
+          </Card>
+        ))}
       </div>
     </div>
   );
