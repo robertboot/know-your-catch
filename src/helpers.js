@@ -1,4 +1,18 @@
 import { SPECIES, JURISDICTIONS, COMPARISONS, DATA_BUILD_DATE } from './data.js';
+import photoManifest from '../photos/manifest.json';
+
+// Best available photo for a species, or null (caller draws the
+// FishMark illustration). Proprietary-file display is a documented
+// next step; for now the app shows a licensed fallback photo when one
+// is recorded, with its required attribution.
+export function speciesPhoto(id) {
+  const e = photoManifest.species && photoManifest.species[id];
+  if (!e) return null;
+  if (e.primary === 'fallback' && e.fallback && e.fallback.url) {
+    return { url: e.fallback.url, credit: e.fallback.credit, license: e.fallback.license };
+  }
+  return null;
+}
 
 export const speciesById = (id) => SPECIES.find(s => s.id === id);
 export const jurisdictionById = (id) => JURISDICTIONS.find(j => j.id === id);

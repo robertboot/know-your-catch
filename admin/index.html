@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Know Your Catch — Admin</title>
+<style>
+  :root { --bg:#081826; --card:#0E2436; --edge:#1E3E55; --ink:#EAF3F7; --soft:#A7BECB; --mute:#6E8A9B; --teal:#34C2D6; --warn:#E7B042; --ok:#46C76F; --bad:#F05A50; }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui,sans-serif; }
+  header { background:#0A1B2A; border-bottom:1px solid var(--edge); padding:14px 18px; display:flex; align-items:center; justify-content:space-between; }
+  header b { color:var(--teal); letter-spacing:1px; } main { max-width:920px; margin:0 auto; padding:18px; }
+  .card { background:var(--card); border:1px solid var(--edge); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--mute); margin:10px 0 4px; font-weight:700; }
+  input,select,textarea { width:100%; padding:9px 11px; background:#0F2A3D; border:1.5px solid var(--edge); border-radius:6px; color:var(--ink); font:inherit; }
+  textarea { min-height:340px; font-family:ui-monospace,Menlo,monospace; font-size:12px; white-space:pre; }
+  button { background:var(--teal); color:#06141f; border:0; padding:10px 16px; border-radius:6px; font-weight:800; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--teal); border:1.5px solid var(--teal); }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; } .tabs button { background:#0F2A3D; color:var(--soft); border:1.5px solid var(--edge); }
+  .tabs button.on { background:var(--teal); color:#06141f; border-color:var(--teal); }
+  .row { display:grid; grid-template-columns:1.4fr 1fr 1.6fr 1.2fr 1.1fr; gap:8px; align-items:center; padding:8px 0; border-top:1px solid #1E3E5566; }
+  .row b { font-size:13px; } .hint { color:var(--mute); font-size:12px; } .msg { padding:10px 12px; border-radius:6px; margin:10px 0; font-weight:600; }
+  .msg.ok { background:#10311F; color:var(--ok); } .msg.err { background:#371513; color:var(--bad); } a { color:var(--teal); }
+</style>
+</head>
+<body>
+<header><b>KNOW YOUR CATCH · ADMIN</b><span class="hint">Git-backed · commits to GitHub</span></header>
+<main>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><label>GitHub token (repo scope, fine-grained: Contents RW)</label><input id="tok" type="password" placeholder="github_pat_…"></div>
+      <div><label>Repo</label><input id="repo" value="robertboot/know-your-catch"></div>
+      <div><label>Branch</label><input id="branch" value="claude/upload-app-assets-NUxRr"></div>
+      <div style="display:flex;align-items:flex-end;gap:8px"><button onclick="connect()">Connect</button><button class="ghost" onclick="loadAll()">Reload data</button></div>
+    </div>
+    <div id="conn" class="hint" style="margin-top:8px">Not connected. Token stays in this tab only (sessionStorage); never committed.</div>
+  </div>
+
+  <div class="tabs">
+    <button id="t-photos" class="on" onclick="tab('photos')">Photos</button>
+    <button id="t-regs" onclick="tab('regs')">Regulations</button>
+  </div>
+
+  <div id="pane-photos" class="card">
+    <p class="hint">Per species: pick a licensed fallback photo (URL + required attribution) or upload a proprietary image. <b>none</b> = the app draws its illustration. Proprietary files commit to <code>photos/proprietary/</code>.</p>
+    <div id="plist"></div>
+    <div style="margin-top:14px"><button onclick="savePhotos()">Save photo manifest</button> <span id="pmsg" class="hint"></span></div>
+  </div>
+
+  <div id="pane-regs" class="card" style="display:none">
+    <label>Feed file</label>
+    <select id="feedsel" onchange="loadFeed()"></select>
+    <p class="hint">Edit the verified feed JSON. It is schema-checked before commit. Keep <code>verified:true</code> only for figures you confirmed against the official source.</p>
+    <textarea id="feedjson" spellcheck="false"></textarea>
+    <div style="margin-top:10px"><button onclick="saveFeed()">Validate &amp; commit feed</button> <span id="fmsg" class="hint"></span></div>
+  </div>
+</main>
+<script>
+const API = 'https://api.github.com';
+let manifest=null, manifestSha=null, feed=null, feedSha=null, feedPath=null;
+const $=id=>document.getElementById(id);
+const gh=async(path,opts={})=>{
+  const r=await fetch(API+path,{...opts,headers:{Authorization:'Bearer '+$('tok').value.trim(),Accept:'application/vnd.github+json',...(opts.headers||{})}});
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).message||('HTTP '+r.status));
+  return r.status===204?null:r.json();
+};
+const b64e=s=>btoa(unescape(encodeURIComponent(s)));
+const b64d=b=>decodeURIComponent(escape(atob(b.replace(/\n/g,''))));
+const repo=()=>$('repo').value.trim(), branch=()=>$('branch').value.trim();
+sessionStorage.tok && ($('tok').value=sessionStorage.tok);
+
+async function connect(){
+  sessionStorage.tok=$('tok').value.trim();
+  try{ const u=await gh('/repos/'+repo()); $('conn').innerHTML='Connected to <b>'+u.full_name+'</b> ('+(u.private?'private':'public')+'). '; await loadAll(); }
+  catch(e){ $('conn').innerHTML='<span style="color:var(--bad)">'+e.message+'</span>'; }
+}
+async function getFile(path){
+  const j=await gh('/repos/'+repo()+'/contents/'+path+'?ref='+encodeURIComponent(branch()));
+  return { json:JSON.parse(b64d(j.content)), sha:j.sha };
+}
+async function putFile(path,obj,sha,message){
+  return gh('/repos/'+repo()+'/contents/'+path,{method:'PUT',body:JSON.stringify({
+    message, branch:branch(), sha, content:b64e(JSON.stringify(obj,null,2)+'\n')
+  })});
+}
+async function loadAll(){
+  const m=await getFile('photos/manifest.json'); manifest=m.json; manifestSha=m.sha; renderPhotos();
+  const dir=await gh('/repos/'+repo()+'/contents/regulations/feed?ref='+encodeURIComponent(branch()));
+  $('feedsel').innerHTML=dir.filter(f=>f.name.endsWith('.json')).map(f=>'<option>'+f.name+'</option>').join('');
+  await loadFeed();
+}
+function renderPhotos(){
+  const s=manifest.species;
+  $('plist').innerHTML='<div class="row hint"><b>Species</b><span>Primary</span><span>Fallback URL</span><span>Credit</span><span>License</span></div>'+
+   Object.keys(s).sort((a,b)=>s[a].name.localeCompare(s[b].name)).map(id=>{
+    const e=s[id],f=e.fallback||{};
+    return '<div class="row" data-id="'+id+'"><b>'+e.name+'</b>'+
+      '<select class="p-primary"><option'+(e.primary==='none'?' selected':'')+'>none</option><option value="fallback"'+(e.primary==='fallback'?' selected':'')+'>fallback</option><option value="proprietary"'+(e.primary==='proprietary'?' selected':'')+'>proprietary</option></select>'+
+      '<input class="p-url" placeholder="https://… (licensed)" value="'+(f.url||'')+'">'+
+      '<input class="p-credit" placeholder="Photographer / NOAA" value="'+(f.credit||'').replace(/"/g,'&quot;')+'">'+
+      '<input class="p-license" placeholder="Public domain / CC BY 4.0" value="'+(f.license||'').replace(/"/g,'&quot;')+'"></div>';
+  }).join('');
+}
+async function savePhotos(){
+  $('pmsg').textContent='Saving…';
+  try{
+    document.querySelectorAll('#plist .row[data-id]').forEach(r=>{
+      const id=r.dataset.id,e=manifest.species[id];
+      e.primary=r.querySelector('.p-primary').value;
+      const url=r.querySelector('.p-url').value.trim();
+      e.fallback=url?{url,credit:r.querySelector('.p-credit').value.trim(),license:r.querySelector('.p-license').value.trim()}:null;
+      e.updated=new Date().toISOString().slice(0,10);
+    });
+    manifest.updated=new Date().toISOString().slice(0,10);
+    const res=await putFile('photos/manifest.json',manifest,manifestSha,'admin: update photo manifest');
+    manifestSha=res.content.sha; $('pmsg').innerHTML='<span style="color:var(--ok)">Committed.</span>';
+  }catch(e){ $('pmsg').innerHTML='<span style="color:var(--bad)">'+e.message+'</span>'; }
+}
+async function loadFeed(){
+  if(!$('feedsel').value) return;
+  feedPath='regulations/feed/'+$('feedsel').value;
+  const r=await getFile(feedPath); feed=r.json; feedSha=r.sha;
+  $('feedjson').value=JSON.stringify(feed,null,2);
+}
+async function saveFeed(){
+  $('fmsg').textContent='Validating…';
+  let obj; try{ obj=JSON.parse($('feedjson').value); }catch(e){ return $('fmsg').innerHTML='<span style="color:var(--bad)">Invalid JSON: '+e.message+'</span>'; }
+  if(obj.schema!=='kyc-regulations/v1'||!obj.rules||typeof obj.rules!=='object') return $('fmsg').innerHTML='<span style="color:var(--bad)">schema must be kyc-regulations/v1 with a rules object</span>';
+  for(const [k,v] of Object.entries(obj.rules)){ if(!v.open||typeof v.verified!=='boolean'||!v.source||!v.lastUpdated) return $('fmsg').innerHTML='<span style="color:var(--bad)">'+k+': needs open, verified, source, lastUpdated</span>'; }
+  try{ const res=await putFile(feedPath,obj,feedSha,'admin: update '+$('feedsel').value+' (verified data)'); feedSha=res.content.sha; $('fmsg').innerHTML='<span style="color:var(--ok)">Committed. CI will re-validate.</span>'; }
+  catch(e){ $('fmsg').innerHTML='<span style="color:var(--bad)">'+e.message+'</span>'; }
+}
+function tab(n){ for(const x of ['photos','regs']){ $('pane-'+x).style.display=x===n?'':'none'; $('t-'+x).className=x===n?'on':''; } }
+</script>
+</body>
+</html>

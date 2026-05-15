@@ -11,7 +11,7 @@ import {
 import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
-  formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState,
+  formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
 } from './helpers.js';
 import {
   StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -27,6 +27,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
   const [showNoteEdit, setShowNoteEdit] = useState(false);
   const [noteDraft, setNoteDraft] = useState(state.notes[id] || '');
   if (!s) return <div style={{ padding: 20 }}>Species not found.</div>;
+  const photo = speciesPhoto(s.id);
   const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
   const fedReg = REGULATIONS[id]?.fed_gulf;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
@@ -40,7 +41,14 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
   return (
     <div style={{ padding: '16px 16px 8px' }}>
       <Card style={{ background: T.oceanDeep, color: T.parchment, border: `1.5px solid ${T.brass}`, padding: 18, marginBottom: 14, textAlign: 'center' }}>
-        <FishMark species={s} size={100} />
+        {photo ? (
+          <>
+            <img src={photo.url} alt={s.commonName} loading="lazy" style={{ width: '100%', maxWidth: 300, height: 190, objectFit: 'cover', borderRadius: 8, display: 'block', margin: '0 auto' }} />
+            <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>
+          </>
+        ) : (
+          <FishMark species={s} size={100} />
+        )}
         <H1 size={24} style={{ color: T.parchment, marginTop: 8 }}>{s.commonName}</H1>
         <div style={{ fontStyle: 'italic', fontSize: 13, color: '#B8C5CD', marginTop: 4 }}>{s.scientific}</div>
         {s.altNames.length > 0 && (

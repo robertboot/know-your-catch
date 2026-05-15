@@ -1,0 +1,217 @@
+{
+  "schema": "kyc-photos/v1",
+  "updated": "2026-05-15",
+  "note": "primary: proprietary | fallback | none. Proprietary = repo file under photos/proprietary/. Fallback = a licensed external photo (url + credit + license). none = app shows the FishMark illustration.",
+  "species": {
+    "red_snapper": {
+      "name": "Red Snapper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "vermilion_snapper": {
+      "name": "Vermilion Snapper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "lane_snapper": {
+      "name": "Lane Snapper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "mangrove_snapper": {
+      "name": "Gray Snapper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "mutton_snapper": {
+      "name": "Mutton Snapper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "yellowtail_snapper": {
+      "name": "Yellowtail Snapper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "red_grouper": {
+      "name": "Red Grouper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "gag_grouper": {
+      "name": "Gag Grouper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "black_grouper": {
+      "name": "Black Grouper",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "scamp": {
+      "name": "Scamp",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "greater_amberjack": {
+      "name": "Greater Amberjack",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "lesser_amberjack": {
+      "name": "Lesser Amberjack",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "almaco_jack": {
+      "name": "Almaco Jack",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "banded_rudderfish": {
+      "name": "Banded Rudderfish",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "spanish_mackerel": {
+      "name": "Spanish Mackerel",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "king_mackerel": {
+      "name": "King Mackerel",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "cero_mackerel": {
+      "name": "Cero Mackerel",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "yellowfin_tuna": {
+      "name": "Yellowfin Tuna",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "blackfin_tuna": {
+      "name": "Blackfin Tuna",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "blue_marlin": {
+      "name": "Blue Marlin",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "sailfish": {
+      "name": "Atlantic Sailfish",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "white_marlin": {
+      "name": "White Marlin",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "gray_triggerfish": {
+      "name": "Gray Triggerfish",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "blacktip_shark": {
+      "name": "Blacktip Shark",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "cobia": {
+      "name": "Cobia",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "wahoo": {
+      "name": "Wahoo",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "mahi": {
+      "name": "Mahi-Mahi",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "golden_tilefish": {
+      "name": "Golden Tilefish",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "blueline_tilefish": {
+      "name": "Blueline Tilefish",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "short_bigeye": {
+      "name": "Short Bigeye",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    }
+  }
+}
