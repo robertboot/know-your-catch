@@ -1,13 +1,18 @@
 import { SPECIES, JURISDICTIONS, COMPARISONS, DATA_BUILD_DATE } from './data.js';
 import photoManifest from '../photos/manifest.json';
 
+// Proprietary images are served from the repo via GitHub raw (same
+// public source the feeds use); licensed fallbacks come from their URL.
+const PHOTO_RAW = 'https://raw.githubusercontent.com/robertboot/know-your-catch/claude/upload-app-assets-NUxRr/';
+
 // Best available photo for a species, or null (caller draws the
-// FishMark illustration). Proprietary-file display is a documented
-// next step; for now the app shows a licensed fallback photo when one
-// is recorded, with its required attribution.
+// FishMark illustration). Honours the manifest's chosen photo.
 export function speciesPhoto(id) {
   const e = photoManifest.species && photoManifest.species[id];
   if (!e) return null;
+  if (e.primary === 'proprietary' && e.proprietary) {
+    return { url: PHOTO_RAW + e.proprietary, proprietary: true };
+  }
   if (e.primary === 'fallback' && e.fallback && e.fallback.url) {
     return { url: e.fallback.url, credit: e.fallback.credit, license: e.fallback.license };
   }

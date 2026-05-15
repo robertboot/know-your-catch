@@ -44,7 +44,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
         {photo ? (
           <>
             <img src={photo.url} alt={s.commonName} loading="lazy" style={{ width: '100%', maxWidth: 300, height: 190, objectFit: 'cover', borderRadius: 8, display: 'block', margin: '0 auto' }} />
-            <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>
+            {photo.credit && <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
           </>
         ) : (
           <FishMark species={s} size={100} />

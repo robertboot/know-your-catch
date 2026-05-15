@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CheckCircle2, X, Anchor, AlertTriangle } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT } from './data.js';
+import { speciesPhoto } from './helpers.js';
 
 /* ============================================================
    STATUS PILL — colorblind-safe via shape + color
@@ -85,6 +86,19 @@ export function FishMark({ species, size = 56 }) {
       </>}
     </svg>
   );
+}
+
+/* Real photo when one is set in the manifest; the FishMark
+   illustration otherwise (or if the photo fails to load). */
+export function SpeciesImage({ species, size = 56, style }) {
+  const [err, setErr] = useState(false);
+  const p = species && species.id ? speciesPhoto(species.id) : null;
+  if (p && p.url && !err) {
+    return <img src={p.url} alt={species.commonName || ''} loading="lazy"
+      onError={() => setErr(true)}
+      style={{ width: size, height: Math.round(size * 0.7), objectFit: 'cover', borderRadius: 6, display: 'block', ...style }} />;
+  }
+  return <FishMark species={species} size={size} />;
 }
 
 /* ============================================================
