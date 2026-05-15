@@ -187,8 +187,8 @@
     },
     "mahi": {
       "name": "Mahi-Mahi",
-      "primary": "fallback",
-      "proprietary": null,
+      "primary": "proprietary",
+      "proprietary": "photos/proprietary/mahi.jpg",
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Mahimahi-NOAAFisheries.png?itok=tp6TjGnu",
         "credit": "NOAA Fisheries",
