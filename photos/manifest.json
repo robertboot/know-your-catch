@@ -46,7 +46,11 @@
       "name": "Yellowtail Snapper",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_c5z77GXVQnA5.jpg?1564016177",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/federally-managed-gulf-america-reef-fish"
+      },
       "updated": "2026-05-15"
     },
     "red_grouper": {
