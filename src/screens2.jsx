@@ -50,7 +50,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
         )}
         <div style={{ marginTop: 10 }}>
           {s.hms && <span style={{ background: T.warnBg, color: T.brassDeep, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1, marginRight: 6 }}>HMS PERMIT</span>}
-          {s.reefFish && <span style={{ background: '#D4E2DA', color: T.open, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>REEF FISH</span>}
+          {s.reefFish && <span style={{ background: T.openBg, color: T.open, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>REEF FISH</span>}
         </div>
       </Card>
 
@@ -104,7 +104,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
               </div>
             )}
             <RegBlock reg={reg} units={state.units} jurisdiction={jurisdiction} fedColumn={showFedColumn ? fedReg : null} />
-            <button onClick={onFullRegs} style={{ background: 'transparent', border: 'none', color: T.ocean, fontWeight: 600, cursor: 'pointer', fontSize: 13, marginTop: 10, padding: 0 }}>
+            <button onClick={onFullRegs} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', fontSize: 13, marginTop: 10, padding: 0 }}>
               View full regulation details →
             </button>
             {regStatus(reg) !== 'closed' && (
@@ -342,7 +342,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
         <div style={{ flex: 1 }}>
           <H1 size={20}>{s.commonName}</H1>
           <div style={{ fontStyle: 'italic', fontSize: 12, color: T.inkMute }}>{s.scientific}</div>
-          <div style={{ fontSize: 11, color: T.ocean, marginTop: 4, fontWeight: 600 }}>View species details →</div>
+          <div style={{ fontSize: 11, color: T.brass, marginTop: 4, fontWeight: 600 }}>View species details →</div>
         </div>
       </Card>
       {!jurisdiction ? (
@@ -657,13 +657,13 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Report or contact</SectionLabel>
-        <a href="mailto:corrections@knowyourcatch.example?subject=Regulation%20correction" style={{ color: T.ocean, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <a href="mailto:corrections@knowyourcatch.example?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Mail size={16} /> Email a regulation correction
         </a>
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Legal</SectionLabel>
-        <button onClick={onShowDisclaimer} style={{ background: 'transparent', border: 'none', color: T.ocean, fontWeight: 600, fontSize: 14, cursor: 'pointer', padding: 0 }}>
+        <button onClick={onShowDisclaimer} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, fontSize: 14, cursor: 'pointer', padding: 0 }}>
           Re-read disclaimer
         </button>
       </Card>

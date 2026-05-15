@@ -100,8 +100,8 @@ export function Card({ children, style, onClick }) {
 export function PrimaryButton({ children, onClick, disabled, style }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      width: '100%', background: disabled ? '#9AA4AD' : T.ocean, color: T.parchment, border: 'none',
-      padding: '14px 16px', borderRadius: 4, fontSize: 15, fontWeight: 600, letterSpacing: 0.3,
+      width: '100%', background: disabled ? '#2A3E4D' : T.brass, color: disabled ? T.inkMute : T.oceanDeep, border: 'none',
+      padding: '14px 16px', borderRadius: 6, fontSize: 15, fontWeight: 700, letterSpacing: 0.3,
       cursor: disabled ? 'not-allowed' : 'pointer',
       boxShadow: '0 1px 0 rgba(0,0,0,0.15)', ...style,
     }}>{children}</button>
@@ -110,8 +110,8 @@ export function PrimaryButton({ children, onClick, disabled, style }) {
 export function GhostButton({ children, onClick, style }) {
   return (
     <button onClick={onClick} style={{
-      background: 'transparent', color: T.ocean, border: `1.5px solid ${T.ocean}`,
-      padding: '10px 14px', borderRadius: 4, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+      background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
+      padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer',
       ...style,
     }}>{children}</button>
   );
@@ -147,8 +147,8 @@ export function Field({ label, value, onChange, type = 'text', placeholder }) {
 export function PickButton({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      flex: 1, background: active ? T.ocean : T.parchmentDeep, color: active ? T.parchment : T.ink,
-      border: `1.5px solid ${active ? T.ocean : T.cardEdge}`, padding: '10px 8px', borderRadius: 4,
+      flex: 1, background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.ink,
+      border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '10px 8px', borderRadius: 6,
       fontSize: 13, fontWeight: 600, cursor: 'pointer',
     }}>{children}</button>
   );
@@ -181,7 +181,7 @@ export function DisclaimerModal({ onAccept }) {
         <SectionLabel style={{ marginBottom: 8 }}>Before you start</SectionLabel>
         <p style={{ fontSize: 13, lineHeight: 1.6, color: T.inkSoft, margin: '0 0 14px', maxHeight: 200, overflowY: 'auto' }}>{DISCLAIMER_TEXT}</p>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 12, background: T.parchmentDeep, borderRadius: 4, cursor: 'pointer', marginBottom: 14 }}>
-          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop: 2, width: 18, height: 18, accentColor: T.ocean }} />
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop: 2, width: 18, height: 18, accentColor: T.brass }} />
           <span style={{ fontSize: 13, color: T.ink, fontWeight: 600 }}>I understand and accept.</span>
         </label>
         <PrimaryButton disabled={!checked} onClick={onAccept}>Accept & Continue</PrimaryButton>
@@ -200,7 +200,7 @@ export function JurisdictionPickerModal({ current, onPick, onClose, canCancel, o
         </div>
         <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
           Pick the waters you'll be fishing in. You can change this anytime.
-          {' '}<button onClick={onShowBoundary} style={{ background: 'transparent', border: 'none', color: T.ocean, fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13, textDecoration: 'underline' }}>
+          {' '}<button onClick={onShowBoundary} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13, textDecoration: 'underline' }}>
             What's the boundary?
           </button>
         </p>
@@ -289,7 +289,7 @@ export function BigButton({ icon, title, subtitle, onClick, accent = T.brass }) 
       width: '100%', textAlign: 'left',
       boxShadow: '0 1px 0 rgba(124, 86, 24, 0.06)',
     }}>
-      <div style={{ background: T.parchmentDeep, color: T.ocean, padding: 10, borderRadius: 4, flexShrink: 0 }}>{icon}</div>
+      <div style={{ background: T.parchmentDeep, color: T.brass, padding: 10, borderRadius: 4, flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1 }}>
         <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 600, color: T.ink }}>{title}</div>
         <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>{subtitle}</div>

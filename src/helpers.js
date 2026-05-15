@@ -1,4 +1,4 @@
-import { SPECIES, JURISDICTIONS, COMPARISONS } from './data.js';
+import { SPECIES, JURISDICTIONS, COMPARISONS, DATA_BUILD_DATE } from './data.js';
 
 export const speciesById = (id) => SPECIES.find(s => s.id === id);
 export const jurisdictionById = (id) => JURISDICTIONS.find(j => j.id === id);
@@ -27,7 +27,11 @@ export function daysSince(iso) {
 }
 
 export function isStale(meta) {
-  return daysSince(meta?.lastSyncDate) > 7;
+  // v1 ships bundled seed data and has no sync. Until a real sync writes a
+  // fresh lastSyncDate, the baseline is the build date — that's not "stale,"
+  // it's just the shipped data. Staleness only applies post-sync.
+  if (!meta?.lastSyncDate || meta.lastSyncDate === DATA_BUILD_DATE) return false;
+  return daysSince(meta.lastSyncDate) > 7;
 }
 
 export function regStatus(r) {
