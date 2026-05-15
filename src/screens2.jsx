@@ -11,7 +11,7 @@ import {
 import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
-  formatSize, formatWeight, regStatus, differs, cleanSeason,
+  formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState,
 } from './helpers.js';
 import {
   StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -107,7 +107,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
             <button onClick={onFullRegs} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', fontSize: 13, marginTop: 10, padding: 0 }}>
               View full regulation details →
             </button>
-            {regStatus(reg) !== 'closed' && (
+            {seasonState(reg.open).status === 'open' && (
               <button onClick={() => onKeep(s)} style={{
                 background: T.brass, color: T.oceanDeep, border: 'none', padding: '10px 14px',
                 borderRadius: 4, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
@@ -178,7 +178,9 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
 }
 
 function RegBlock({ reg, units, jurisdiction, fedColumn }) {
-  const status = regStatus(reg);
+  const ss = seasonState(reg.open);
+  const status = ss.status;
+  const ssColor = status === 'open' ? T.open : status === 'closed' ? T.closed : status === 'upcoming' ? T.warn : T.inkSoft;
   const rows = [
     { label: 'Season', val: cleanSeason(reg.open) || '—', fed: fedColumn ? cleanSeason(fedColumn?.open) : null },
     { label: 'Min size', val: formatSize(reg.minSize, units), fed: fedColumn ? formatSize(fedColumn?.minSize, units) : null },
@@ -188,7 +190,10 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
   ];
   return (
     <>
-      <div style={{ marginBottom: 10 }}><StatusPill status={status} /></div>
+      <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <StatusPill status={status} />
+        <span style={{ fontSize: 14, fontWeight: 700, color: ssColor }}>{ss.reason}</span>
+      </div>
       <div style={{ border: `1px solid ${T.cardEdge}`, borderRadius: 4, overflow: 'hidden' }}>
         {fedColumn && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: T.parchmentDeep, borderBottom: `1px solid ${T.cardEdge}`, fontSize: 11, fontWeight: 700, color: T.brassDeep, padding: '6px 10px', letterSpacing: 0.6 }}>
@@ -330,7 +335,7 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {filtered.map(s => {
           const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
-          const status = regStatus(reg);
+          const status = reg ? seasonState(reg.open).status : 'unknown';
           return (
             <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
               <FishMark species={s} size={38} />

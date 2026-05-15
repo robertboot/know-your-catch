@@ -430,7 +430,8 @@ function buildRegs() {
 // Overlay a verified feed file onto the seed for one jurisdiction.
 // Feed values win; anything the feed omits keeps its seed value
 // (e.g. required-gear lists for reef species).
-function applyFeed(regs, feed) {
+export function applyFeed(regs, feed) {
+  if (!feed || feed.schema !== 'kyc-regulations/v1' || !feed.rules) return;
   const jur = feed.jurisdiction;
   for (const [sid, rule] of Object.entries(feed.rules || {})) {
     if (!regs[sid]) regs[sid] = {};
@@ -453,6 +454,17 @@ function applyFeed(regs, feed) {
 
 export const REGULATIONS = buildRegs();
 applyFeed(REGULATIONS, gulfFederal2026);
+
+// Offline-first overlay: a feed cached by a previous runtime sync wins
+// over the bundled one. Any failure keeps the bundled data.
+try {
+  if (typeof localStorage !== 'undefined') {
+    const cached = JSON.parse(localStorage.getItem('kyc_regs_feed_v1') || 'null');
+    if (cached && cached.files) {
+      for (const f of Object.values(cached.files)) applyFeed(REGULATIONS, f);
+    }
+  }
+} catch (e) { /* keep bundled data */ }
 
 export const FEEDS = [
   { file: 'gulf-federal-2026.json', jurisdiction: gulfFederal2026.jurisdiction, verifiedDate: gulfFederal2026.verifiedDate },

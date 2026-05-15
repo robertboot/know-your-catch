@@ -52,11 +52,23 @@ URL is the next step.
 3. `npm run validate-feeds` (schema check) must pass.
 4. Commit with the source links in the message; review the diff.
 
+## Date-aware status
+
+`seasonState(open, today)` in `src/helpers.js` parses the human season
+string against the current date and returns `open` / `closed` /
+`upcoming` / `unknown` with a reason ("Opens Jun 1, 2026", "Closed until
+Sep 1, 2026"). Conservative: unparseable strings fall back to the coarse
+keyword status and a stated closure is never flipped to open.
+
 ## Roadmap to automation
 
 - [x] Versioned, schema-validated feed files + app overlay
-- [ ] `npm run validate-feeds` in CI on every PR
-- [ ] Scheduled monitor: poll eCFR API + NOAA bulletin index, diff against
-      current feed, open a PR with proposed changes + confidence flags
-- [ ] Publish feed to a stable versioned URL; app runtime sync + offline cache
-- [ ] Source-change alerts (hash watch on state HTML/PDF pages)
+- [x] `npm run validate-feeds` in CI before build
+- [x] Date-aware status evaluation
+- [x] Scheduled source monitor (`.github/workflows/regs-monitor.yml`) —
+      hash-watches official pages, opens a PR for human re-verification
+- [x] App runtime sync layer (`src/regsync.js`) + offline cache —
+      activates once `REGS_FEED_URL` points at the hosted feed
+- [ ] Publish the feed to a stable versioned URL (blocked on hosting:
+      repo visibility / Pages, tracked separately)
+- [ ] Monitor: structured eCFR-API diff (beyond hash detection)

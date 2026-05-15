@@ -6,6 +6,7 @@ import {
 import { T } from './theme.js';
 import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState } from './storage.js';
+import { refreshFeeds } from './regsync.js';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
@@ -39,6 +40,9 @@ export default function App() {
     setLoaded(true);
     if (s.disclaimerAcceptedVersion !== DISCLAIMER_VERSION) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
+    // Refresh the regulations feed in the background (no-op until a feed
+    // URL is configured; failures are silent — offline-first).
+    refreshFeeds().catch(() => {});
   }, []);
 
   // Auto-dismiss the splash after a short hold.

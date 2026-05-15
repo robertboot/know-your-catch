@@ -14,7 +14,7 @@ import {
 import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
-  formatSize, formatWeight, regStatus, differs,
+  formatSize, formatWeight, regStatus, differs, seasonState,
 } from './helpers.js';
 import {
   StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -60,10 +60,11 @@ function regForSpecies(id, jurId) {
 }
 
 const STATUS_TEXT = {
-  open:    { label: 'Season Open*',   color: T.open },
-  closed:  { label: 'Season Closed*', color: T.closed },
-  caution: { label: 'Season Open*',   color: T.open },
-  unknown: { label: 'Check Source',   color: T.inkSoft },
+  open:     { label: 'Season Open*',   color: T.open },
+  closed:   { label: 'Season Closed*', color: T.closed },
+  upcoming: { label: 'Opens Soon*',    color: T.warn },
+  caution:  { label: 'Season Open*',   color: T.open },
+  unknown:  { label: 'Check Source',   color: T.inkSoft },
 };
 
 function ActionTile({ icon, title, subtitle, onClick }) {
@@ -151,7 +152,7 @@ export function HomeScreen({
       const s = speciesById(id);
       if (!s) return null;
       const r = regForSpecies(id, jurId);
-      return { s, status: regStatus(r), bag: r?.bagLimit };
+      return { s, status: r ? seasonState(r.open).status : 'unknown', bag: r?.bagLimit };
     })
     .filter(Boolean);
   const anyClosed = featured.some(f => f.status === 'closed');

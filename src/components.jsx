@@ -8,9 +8,10 @@ import { JURISDICTIONS, DISCLAIMER_TEXT } from './data.js';
    ============================================================ */
 export function StatusPill({ status, size = 'normal' }) {
   const m = {
-    open:    { label: 'OPEN',   bg: T.openBg,   fg: T.open,      shape: 'circle' },
-    closed:  { label: 'CLOSED', bg: T.closedBg, fg: T.closed,    shape: 'square' },
-    caution: { label: 'VERIFY', bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
+    open:     { label: 'OPEN',        bg: T.openBg,   fg: T.open,      shape: 'circle' },
+    closed:   { label: 'CLOSED',      bg: T.closedBg, fg: T.closed,    shape: 'square' },
+    upcoming: { label: 'OPENS SOON',  bg: T.warnBg,   fg: T.warn,      shape: 'triangle' },
+    caution:  { label: 'VERIFY',      bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
     unknown: { label: 'CHECK SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
   }[status] || { label: 'CHECK SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
   const pad = size === 'small' ? '2px 8px' : '4px 10px';
