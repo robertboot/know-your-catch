@@ -263,7 +263,15 @@ function buildRegs() {
   function R(spec) {
     const out = {};
     for (const s of states) {
-      out[s] = { ...spec.default, ...(spec[s] || {}), lastUpdated: '2025-04-01', source: spec.source || 'agency website' };
+      // Baseline provenance first so a per-jurisdiction override can supply
+      // its own verified values, source and date.
+      out[s] = {
+        lastUpdated: '2025-04-01',
+        source: spec.source || 'agency website',
+        verified: false,
+        ...spec.default,
+        ...(spec[s] || {}),
+      };
     }
     return out;
   }
@@ -272,7 +280,12 @@ function buildRegs() {
       default: { open: 'Check current season', minSize: 16, bagLimit: 2, gear: reefGear, notes: 'Federal seasons differ by sector. Most Gulf states manage private rec under delegated authority.' },
       la_state: { bagLimit: 4, notes: 'Louisiana ROLP required. Higher bag limit than other Gulf states.' },
       tx_state: { open: 'Year-round in state waters', minSize: 15, bagLimit: 4, notes: 'Texas state waters allow year-round red snapper.' },
-      al_state: { notes: 'Alabama uses Snapper Check app for state season days.' },
+      al_state: {
+        open: 'Opens May 22, 2026 — 7 days/week (private rec, quota-managed)',
+        minSize: 16, bagLimit: 2,
+        notes: '16 in total length minimum. Reef Fish Endorsement required to land. Mandatory Snapper Check report before landing. Private-angler quota: 664,552 lb.',
+        source: 'outdooralabama.com', lastUpdated: '2026-05-15', verified: true,
+      },
       fed_gulf: { sectors: { 'Private rec': 'Limited federal season — varies by state delegation', 'For-hire / charter': 'Separate for-hire federal season' } },
       source: 'fisheries.noaa.gov',
     }),
@@ -304,6 +317,11 @@ function buildRegs() {
     }),
     gag_grouper: R({
       default: { open: 'June 1 – Oct 31 (verify)', minSize: 24, bagLimit: 2, gear: reefGear },
+      al_state: {
+        open: 'Sept 1 – Dec 31 (closed Jan 1 – Aug 31, 2026)',
+        notes: 'Recreational season closed Jan 1 – Aug 31, 2026; reopens Sept 1.',
+        source: 'outdooralabama.com', lastUpdated: '2026-05-15', verified: true,
+      },
       fl_state: { open: 'Sept 1 – Nov 10 (verify)', notes: 'FL Gulf gag season restricted in recent years. Verify before fishing.' },
       la_state: { minSize: 22 },
       tx_state: { open: 'Year-round (verify)', minSize: 22, bagLimit: 4 },
@@ -325,7 +343,11 @@ function buildRegs() {
     }),
     greater_amberjack: R({
       default: { open: 'Verify season — heavily restricted', minSize: 34, bagLimit: 1, gear: reefGear, notes: 'Often closed by emergency action.' },
-      al_state: { open: 'Aug 1 – Oct 31 (verify)' },
+      al_state: {
+        open: 'Sept 1 – Dec 31 (closed Jan 1 – Aug 31, 2026)',
+        notes: 'Recreational closures Jan 1 – Jul 31 and Aug 1 – Aug 31, 2026. Mandatory Snapper Check report before landing.',
+        source: 'outdooralabama.com', lastUpdated: '2026-05-15', verified: true,
+      },
       fl_state: { open: 'Closed — limited season, verify', notes: 'Greater amberjack has been closed or very limited in FL Gulf.' },
       tx_state: { open: 'Year-round (verify)' },
       fed_gulf: { open: 'Sept 1 – Oct 31 typical (verify)' },

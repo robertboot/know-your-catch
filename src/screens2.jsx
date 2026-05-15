@@ -234,9 +234,17 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
       {reg.notes && (
         <div style={{ marginTop: 10, fontSize: 12, color: T.inkSoft, fontStyle: 'italic', lineHeight: 1.5 }}>{reg.notes}</div>
       )}
-      <div style={{ marginTop: 12, padding: 10, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }}>
+      <div style={{
+        marginTop: 12, padding: 10, borderRadius: 4,
+        background: reg.verified ? T.openBg : T.parchmentDeep,
+        border: `1px solid ${reg.verified ? T.open : T.cardEdge}`,
+      }}>
         <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
-          <strong style={{ color: T.warn }}>Seed data — not official.</strong> Seasons and limits change in-season. Confirm the current rule with the agency before you keep a fish.
+          {reg.verified ? (
+            <><strong style={{ color: T.open }}>Verified — official.</strong> Confirmed against the agency for the current season. Rules can still change in-season; the official page is one tap away.</>
+          ) : (
+            <><strong style={{ color: T.warn }}>Seed data — not official.</strong> Seasons and limits change in-season. Confirm the current rule with the agency before you keep a fish.</>
+          )}
         </div>
         {jurisdiction?.regsUrl && (
           <a href={jurisdiction.regsUrl} target="_blank" rel="noopener noreferrer" style={{
@@ -248,7 +256,7 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
         )}
         <div style={{ marginTop: 8, fontSize: 11, color: T.inkMute, display: 'flex', justifyContent: 'space-between' }}>
           <span>Source: {reg.source}</span>
-          <span>Seed updated {reg.lastUpdated}</span>
+          <span>{reg.verified ? 'Verified' : 'Seed'} {reg.lastUpdated}</span>
         </div>
       </div>
     </>
