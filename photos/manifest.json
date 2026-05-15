@@ -63,7 +63,11 @@
       "name": "Black Grouper",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Grouper-Black-NOAAFisheries.png?itok=f6jBXPqQ",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/black-grouper"
+      },
       "updated": "2026-05-15"
     },
     "scamp": {
@@ -91,14 +95,22 @@
       "name": "Almaco Jack",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-02/640x427-Almaco-Jack-NOAAFisheries.png?itok=R7QNSttH",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/almaco-jack"
+      },
       "updated": "2026-05-15"
     },
     "banded_rudderfish": {
       "name": "Banded Rudderfish",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_MeYdapnDJ966.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "http://sedarweb.org/sedar-49"
+      },
       "updated": "2026-05-15"
     },
     "spanish_mackerel": {
