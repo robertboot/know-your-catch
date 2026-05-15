@@ -17,11 +17,13 @@
   button.ghost { background:transparent; color:var(--teal); border:1.5px solid var(--teal); }
   .tabs { display:flex; gap:8px; margin-bottom:16px; } .tabs button { background:#0F2A3D; color:var(--soft); border:1.5px solid var(--edge); }
   .tabs button.on { background:var(--teal); color:#06141f; border-color:var(--teal); }
-  .row { display:grid; grid-template-columns:1.4fr 1fr 1.6fr 1.2fr 1.1fr; gap:8px; align-items:center; padding:8px 0; border-top:1px solid #1E3E5566; }
+  .row { display:grid; grid-template-columns:1.1fr .8fr 1.1fr 1.5fr 1fr 1fr; gap:8px; align-items:center; padding:10px 0; border-top:1px solid #1E3E5566; }
   .row b { font-size:13px; } .hint { color:var(--mute); font-size:12px; } .msg { padding:10px 12px; border-radius:6px; margin:10px 0; font-weight:600; }
   .msg.ok { background:#10311F; color:var(--ok); } .msg.err { background:#371513; color:var(--bad); } a { color:var(--teal); }
   .big { padding:14px; font-size:16px; }
-  @media (max-width:680px){ .row{ grid-template-columns:1fr; gap:4px; padding:12px 0; } .row b{ font-size:15px; margin-bottom:4px; } }
+  .thumb { width:64px; height:48px; object-fit:cover; border-radius:5px; background:#0F2A3D; border:1px solid var(--edge); display:block; }
+  .filebtn { display:inline-block; background:#0F2A3D; color:var(--teal); border:1.5px solid var(--teal); border-radius:6px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; margin-top:5px; }
+  @media (max-width:680px){ .row{ grid-template-columns:1fr; gap:6px; padding:14px 0; } .row b{ font-size:16px; margin-bottom:2px; } }
 </style>
 </head>
 <body>
@@ -108,53 +110,51 @@ async function loadAll(){
 const esc=v=>(v||'').replace(/"/g,'&quot;');
 function renderPhotos(){
   const s=manifest.species;
-  $('plist').innerHTML=Object.keys(s).sort((a,b)=>s[a].name.localeCompare(s[b].name)).map(id=>{
+  $('plist').innerHTML='<div class="row hint"><b>Species</b><span>Primary</span><span>Proprietary</span><span>Fallback URL</span><span>Credit</span><span>License</span></div>'+
+   Object.keys(s).sort((a,b)=>s[a].name.localeCompare(s[b].name)).map(id=>{
     const e=s[id], f=e.fallback||{};
-    const cur = e.primary==='proprietary'&&e.proprietary ? rawUrl(e.proprietary)
-              : (f.url||'');
-    return '<div class="pblk" data-id="'+id+'" style="border-top:1px solid #1E3E5566;padding:14px 0">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-        '<b style="font-size:15px">'+e.name+'</b>'+
-        '<select class="p-primary" style="max-width:150px">'+
-          '<option'+(e.primary==='none'?' selected':'')+'>none</option>'+
-          '<option value="fallback"'+(e.primary==='fallback'?' selected':'')+'>fallback</option>'+
-          '<option value="proprietary"'+(e.primary==='proprietary'?' selected':'')+'>proprietary</option>'+
-        '</select>'+
+    const prop = e.primary==='proprietary'&&e.proprietary ? rawUrl(e.proprietary) : '';
+    return '<div class="row" data-id="'+id+'">'+
+      '<b>'+e.name+'</b>'+
+      '<select class="p-primary">'+
+        '<option'+(e.primary==='none'?' selected':'')+'>none</option>'+
+        '<option value="fallback"'+(e.primary==='fallback'?' selected':'')+'>fallback</option>'+
+        '<option value="proprietary"'+(e.primary==='proprietary'?' selected':'')+'>proprietary</option>'+
+      '</select>'+
+      '<div>'+
+        '<img class="p-thumb thumb" '+(prop?'src="'+prop+'"':'style="display:none"')+' onerror="this.style.display=\'none\'">'+
+        '<label class="filebtn">Upload<input type="file" accept="image/*" class="p-file" style="display:none" onchange="pickPhoto(\''+id+'\',this)"></label>'+
       '</div>'+
-      '<div style="display:flex;gap:12px;align-items:flex-start;margin-top:10px">'+
-        '<img class="p-thumb" '+(cur?'src="'+cur+'"':'style="display:none"')+' style="width:104px;height:78px;object-fit:cover;border-radius:6px;background:#0F2A3D;border:1px solid var(--edge);flex:none" onerror="this.style.display=\'none\'">'+
-        '<div style="flex:1;min-width:0">'+
-          '<label style="margin-top:0">Choose photo (proprietary)</label>'+
-          '<input type="file" accept="image/*" class="p-file" onchange="pickPhoto(\''+id+'\',this)">'+
-          '<div class="hint p-status">'+(e.primary==='proprietary'&&e.proprietary?'Current: '+e.proprietary:'')+'</div>'+
-        '</div>'+
+      '<div>'+
+        '<input class="p-url" placeholder="https://… licensed" value="'+esc(f.url)+'" oninput="urlPrev(this)">'+
+        '<img class="p-urlthumb thumb" style="margin-top:5px;'+(f.url?'':'display:none')+'" '+(f.url?'src="'+esc(f.url)+'"':'')+' onerror="this.style.display=\'none\'">'+
       '</div>'+
-      '<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">or use a licensed web photo (URL + attribution)</summary>'+
-        '<label>Photo URL</label><input class="p-url" placeholder="https://…" value="'+esc(f.url)+'">'+
-        '<label>Credit (required)</label><input class="p-credit" placeholder="Photographer / NOAA" value="'+esc(f.credit)+'">'+
-        '<label>License (required)</label><input class="p-license" placeholder="Public domain / CC BY 4.0" value="'+esc(f.license)+'">'+
-      '</details>'+
+      '<input class="p-credit" placeholder="Photographer / NOAA" value="'+esc(f.credit)+'">'+
+      '<input class="p-license" placeholder="Public domain / CC BY 4.0" value="'+esc(f.license)+'">'+
     '</div>';
   }).join('');
+}
+function urlPrev(input){
+  const img=input.parentElement.querySelector('.p-urlthumb'); const v=input.value.trim();
+  if(v){ img.src=v; img.style.display=''; } else { img.style.display='none'; }
 }
 const EXT={'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp','image/heic':'heic','image/gif':'gif'};
 function pickPhoto(id,input){
   const file=input.files&&input.files[0]; if(!file) return;
-  const row=input.closest('.pblk');
+  const row=input.closest('.row');
   const r=new FileReader();
   r.onload=()=>{
     const b64=String(r.result).split(',')[1];
     pending[id]={ b64, ext:EXT[file.type]||(file.name.split('.').pop()||'jpg').toLowerCase() };
     const img=row.querySelector('.p-thumb'); img.src=r.result; img.style.display='';
     row.querySelector('.p-primary').value='proprietary';
-    row.querySelector('.p-status').textContent='Ready — uploads on Save ('+Math.round(file.size/1024)+' KB)';
   };
   r.readAsDataURL(file);
 }
 async function savePhotos(){
   $('pmsg').textContent='Saving…';
   try{
-    document.querySelectorAll('#plist .pblk[data-id]').forEach(row=>{
+    document.querySelectorAll('#plist .row[data-id]').forEach(row=>{
       const id=row.dataset.id, e=manifest.species[id];
       e.primary=row.querySelector('.p-primary').value;
       const url=row.querySelector('.p-url').value.trim();
