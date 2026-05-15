@@ -11,8 +11,8 @@ export function StatusPill({ status, size = 'normal' }) {
     open:    { label: 'OPEN',   bg: T.openBg,   fg: T.open,      shape: 'circle' },
     closed:  { label: 'CLOSED', bg: T.closedBg, fg: T.closed,    shape: 'square' },
     caution: { label: 'VERIFY', bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
-    unknown: { label: '—',      bg: T.parchmentDeep,  fg: T.inkMute,   shape: 'circle' },
-  }[status] || { label: '—', bg: T.parchmentDeep, fg: T.inkMute, shape: 'circle' };
+    unknown: { label: 'CHECK SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
+  }[status] || { label: 'CHECK SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
   const pad = size === 'small' ? '2px 8px' : '4px 10px';
   const fs = size === 'small' ? 10 : 11;
   const shape = m.shape === 'circle'

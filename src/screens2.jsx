@@ -11,7 +11,7 @@ import {
 import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
-  formatSize, formatWeight, regStatus, differs,
+  formatSize, formatWeight, regStatus, differs, cleanSeason,
 } from './helpers.js';
 import {
   StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -180,7 +180,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
 function RegBlock({ reg, units, jurisdiction, fedColumn }) {
   const status = regStatus(reg);
   const rows = [
-    { label: 'Season', val: reg.open || '—', fed: fedColumn?.open },
+    { label: 'Season', val: cleanSeason(reg.open) || '—', fed: fedColumn ? cleanSeason(fedColumn?.open) : null },
     { label: 'Min size', val: formatSize(reg.minSize, units), fed: fedColumn ? formatSize(fedColumn?.minSize, units) : null },
     { label: 'Max size', val: reg.maxSize ? formatSize(reg.maxSize, units) : '—', fed: fedColumn ? (fedColumn?.maxSize ? formatSize(fedColumn?.maxSize, units) : '—') : null },
     { label: 'Bag limit', val: reg.bagLimit ?? '—', fed: fedColumn ? (fedColumn?.bagLimit ?? '—') : null },
@@ -234,9 +234,22 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
       {reg.notes && (
         <div style={{ marginTop: 10, fontSize: 12, color: T.inkSoft, fontStyle: 'italic', lineHeight: 1.5 }}>{reg.notes}</div>
       )}
-      <div style={{ marginTop: 10, fontSize: 11, color: T.inkMute, display: 'flex', justifyContent: 'space-between' }}>
-        <span>Source: {reg.source}</span>
-        <span>Updated {reg.lastUpdated}</span>
+      <div style={{ marginTop: 12, padding: 10, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }}>
+        <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
+          <strong style={{ color: T.warn }}>Seed data — not official.</strong> Seasons and limits change in-season. Confirm the current rule with the agency before you keep a fish.
+        </div>
+        {jurisdiction?.regsUrl && (
+          <a href={jurisdiction.regsUrl} target="_blank" rel="noopener noreferrer" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, color: T.brass,
+            fontWeight: 700, fontSize: 13, textDecoration: 'none',
+          }}>
+            Open official {jurisdiction.agency} regulations <ChevronRight size={15} />
+          </a>
+        )}
+        <div style={{ marginTop: 8, fontSize: 11, color: T.inkMute, display: 'flex', justifyContent: 'space-between' }}>
+          <span>Source: {reg.source}</span>
+          <span>Seed updated {reg.lastUpdated}</span>
+        </div>
       </div>
     </>
   );

@@ -60,10 +60,10 @@ function regForSpecies(id, jurId) {
 }
 
 const STATUS_TEXT = {
-  open:    { label: 'Season Open',   color: T.open },
-  closed:  { label: 'Season Closed', color: T.closed },
-  caution: { label: 'Check Season',  color: T.warn },
-  unknown: { label: 'Verify Rules',  color: T.inkMute },
+  open:    { label: 'Season Open*',   color: T.open },
+  closed:  { label: 'Season Closed*', color: T.closed },
+  caution: { label: 'Season Open*',   color: T.open },
+  unknown: { label: 'Check Source',   color: T.inkSoft },
 };
 
 function ActionTile({ icon, title, subtitle, onClick }) {
@@ -237,7 +237,12 @@ export function HomeScreen({
         ))}
       </div>
 
-      <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
+      <div style={{ marginTop: 10, fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
+        * Based on seed data (v{DATA_VERSION}, {DATA_BUILD_DATE}) — not yet officially verified.
+        Open a species to see the rule and a one-tap link to the official agency.
+      </div>
+
+      <div style={{ marginTop: 18, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
         Built for the Gulf of America · For anglers, by anglers · v{DATA_VERSION}
       </div>
     </div>

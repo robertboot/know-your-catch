@@ -34,11 +34,31 @@ export function isStale(meta) {
   return daysSince(meta.lastSyncDate) > 7;
 }
 
+// The displayed answer: strip the hedge wording so a season reads as an
+// answer, not a punt. Freshness/uncertainty is signalled separately (the
+// "as of <date>, unofficial" asterisk + official-source link).
+export function cleanSeason(open) {
+  if (!open) return null;
+  let s = String(open)
+    .replace(/\s*\(verify\)/ig, '')
+    .replace(/\s*[—-]\s*verify\b.*$/i, '')
+    .replace(/\btypical\b/ig, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (/^check current season$/i.test(s) || /^verify/i.test(s) || s === '') {
+    return 'Set in-season — see official source';
+  }
+  return s;
+}
+
+// Definitive answer where the data supports one: Open / Closed.
+// 'unknown' only when there is genuinely no season on file (then the UI
+// shows the best-known info plus the official source to confirm).
 export function regStatus(r) {
-  if (!r) return 'unknown';
+  if (!r || !r.open) return 'unknown';
   const o = (r.open || '').toLowerCase();
   if (o.includes('closed')) return 'closed';
-  if (o.includes('check') || o.includes('verify') || o.includes('limited')) return 'caution';
+  if (/^check current season$/i.test(r.open.trim())) return 'unknown';
   return 'open';
 }
 
