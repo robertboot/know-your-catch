@@ -28,7 +28,11 @@
       "name": "Gray Snapper",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_c6eYwd8Es617.jpg?1564020942",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/federally-managed-gulf-america-reef-fish"
+      },
       "updated": "2026-05-15"
     },
     "mutton_snapper": {
@@ -56,7 +60,11 @@
       "name": "Gag Grouper",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Grouper-Gag-NOAAFisheries.png?itok=lSzt2PoW",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/gag-grouper"
+      },
       "updated": "2026-05-15"
     },
     "black_grouper": {
@@ -81,14 +89,22 @@
       "name": "Greater Amberjack",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Amberjack-Greater-NOAAFisheries.png?itok=2uGqXs4W",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/greater-amberjack"
+      },
       "updated": "2026-05-15"
     },
     "lesser_amberjack": {
       "name": "Lesser Amberjack",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_MVN4Jxu6Ymt9.jpg?1564016030",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/federally-managed-gulf-america-reef-fish"
+      },
       "updated": "2026-05-15"
     },
     "almaco_jack": {
@@ -173,7 +189,11 @@
       "name": "Gray Triggerfish",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Triggerfish-Gray-NOAAFisheries.png?itok=kgwLtS0L",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/gray-triggerfish"
+      },
       "updated": "2026-05-15"
     },
     "blacktip_shark": {
@@ -187,7 +207,11 @@
       "name": "Cobia",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Cobia-NOAAFisheries.png?itok=ZbQQ_f85",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/cobia"
+      },
       "updated": "2026-05-15"
     },
     "wahoo": {
@@ -212,14 +236,22 @@
       "name": "Golden Tilefish",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tilefish-Golden-NOAAFisheries.png?itok=Q2j3ywYb",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/golden-tilefish"
+      },
       "updated": "2026-05-15"
     },
     "blueline_tilefish": {
       "name": "Blueline Tilefish",
       "primary": "none",
       "proprietary": null,
-      "fallback": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tilefish-Blueline-NOAAFisheries.png?itok=TENdZZdA",
+        "credit": "NOAA Fisheries",
+        "license": "https://www.fisheries.noaa.gov/species/blueline-tilefish"
+      },
       "updated": "2026-05-15"
     },
     "short_bigeye": {
