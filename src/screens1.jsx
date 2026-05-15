@@ -37,7 +37,7 @@ export function SplashScreen({ onContinue }) {
       }}
     >
       <img
-        src="/brand/splash.png"
+        src={`${import.meta.env.BASE_URL}brand/splash.png`}
         alt="Know Your Catch — Identify, Check Rules, Stay Legal. Built for the Gulf of America."
         style={{ maxWidth: 'min(86vw, 380px)', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
       />

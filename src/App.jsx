@@ -190,7 +190,7 @@ export default function App() {
       }}>
         {isHome ? (
           <button onClick={() => reset([{ name: 'home' }])} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/brand/mark.jpg" alt="" width={40} height={40} style={{ borderRadius: 9, display: 'block' }} />
+            <img src={`${import.meta.env.BASE_URL}brand/mark.jpg`} alt="" width={40} height={40} style={{ borderRadius: 9, display: 'block' }} />
             <span style={{ textAlign: 'left', lineHeight: 1 }}>
               <span style={{ display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: T.parchment }}>KNOW YOUR</span>
               <span style={{ display: 'block', fontSize: 21, fontWeight: 900, letterSpacing: 2, color: T.brass, marginTop: 2 }}>CATCH</span>
