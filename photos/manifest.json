@@ -426,6 +426,17 @@
       },
       "updated": "2026-06-27"
     },
+    "winter_flounder": {
+      "name": "Winter Flounder",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2021-05/640x427-Flounder-Winter-NB-W.jpg?itok=nibRqSut",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "summer_flounder": {
       "name": "Summer Flounder",
       "primary": "fallback",
@@ -641,6 +652,17 @@
       "proprietary": null,
       "fallback": {
         "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_IRKMi4RU9iM9.jpg?1564016009",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "wreckfish": {
+      "name": "Wreckfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Wreckfish-NOAAFisheries.png?itok=d6Bqw_O3",
         "credit": "NOAA Fisheries",
         "license": "Public domain"
       },

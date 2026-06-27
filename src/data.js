@@ -194,6 +194,10 @@ export const SPECIES = [
     keyIds: ['Five rows of bony plates (scutes) along the body', 'Long pointed snout with four barbels in front of the mouth', 'Heterocercal (shark-like) tail with upper lobe much longer', 'Olive-brown back fading to pale belly', 'No scales — armored with scutes instead'],
     lookalikes: [],
     habitat: 'Anadromous — Atlantic coast rivers, estuaries, and nearshore ocean. Federally endangered. Not a Gulf of America species.', typicalSize: '60–120 in' },
+  { id: 'winter_flounder', commonName: 'Winter Flounder', altNames: ['Blackback', 'Lemon Sole'], scientific: 'Pseudopleuronectes americanus', category: 'flatfish',
+    keyIds: ['Right-eyed flatfish — both eyes on the right side (opposite of summer flounder/fluke)', 'Small mouth (tiny relative to fluke)', 'Reddish-brown to nearly black upper side, often with mottling', 'White underside', 'Smaller and stockier than summer flounder'],
+    lookalikes: ['summer_flounder'],
+    habitat: 'Estuaries and coastal waters, 5–400 ft. Northeast Atlantic — not a Gulf species.', typicalSize: '10–18 in' },
   { id: 'summer_flounder', commonName: 'Summer Flounder', altNames: ['Fluke'], scientific: 'Paralichthys dentatus', category: 'flatfish',
     keyIds: ['Left-eyed flatfish — both eyes on the left side of the body when viewed from above', 'Large mouth with prominent teeth', 'Brown to gray-brown upper side with 10–14 dark ocelli (eye spots)', 'White underside', 'Capable of rapid color/pattern changes to match bottom'],
     lookalikes: [],
@@ -270,6 +274,10 @@ export const SPECIES = [
     keyIds: ['Bright yellow corners and lining of the mouth (key feature)', 'Body tan to brown with small dark spots and pale blotches', 'Caudal rays extended slightly ("broomtail"-like, less than scamp)', 'Yellow margin on pectoral and caudal fins'],
     lookalikes: ['scamp', 'gag_grouper'],
     habitat: 'Reefs, ledges, and hard bottom, 80–500 ft.', typicalSize: '15–24 in', reefFish: true },
+  { id: 'wreckfish', commonName: 'Wreckfish', altNames: ['Stone Bass'], scientific: 'Polyprion americanus', category: 'grouper',
+    keyIds: ['Stout, robust grouper-like body with very large head', 'Bony ridge across the top of the head and a strong opercular spine', 'Dark brown to gray-brown body, often with mottled markings', 'Adults inhabit very deep rocky bottoms and wrecks (typically 1,300–2,000 ft)', 'Federally managed South Atlantic species — strictly limited permits and quotas'],
+    lookalikes: ['warsaw_grouper', 'snowy_grouper'],
+    habitat: 'Deep rocky bottoms and shipwrecks, 1,000–2,400 ft.', typicalSize: '36–60 in', reefFish: true },
   { id: 'snowy_grouper', commonName: 'Snowy Grouper', altNames: ['Snowy'], scientific: 'Hyporthodus niveatus', category: 'grouper',
     keyIds: ['Dark chocolate-brown body covered in scattered white spots (juveniles especially)', 'White spots fade with age — large adults often nearly uniform dark', 'Square or slightly concave tail with pale margin', 'Black saddle blotch on caudal peduncle', 'Deep-water grouper — typically 300–1,500 ft'],
     lookalikes: ['gag_grouper', 'red_grouper'],
@@ -637,6 +645,10 @@ function buildRegs() {
       default: { open: 'Closed — federally endangered, no take', minSize: null, bagLimit: 0, notes: 'Atlantic Sturgeon is listed under the Endangered Species Act (most U.S. DPSs endangered, Gulf of Maine DPS threatened). Take is prohibited. If hooked incidentally, release immediately without removing from water when possible. Not a Gulf of America species.' },
       source: 'fisheries.noaa.gov',
     }),
+    winter_flounder: R({
+      default: { open: 'Check current season', minSize: 12, bagLimit: null, notes: 'Winter Flounder is managed by ASMFC and the New England Council with regional limits (typical 12 in minimum, state-by-state bag). Not a Gulf of America management species — verify with the appropriate region.' },
+      source: 'fisheries.noaa.gov',
+    }),
     summer_flounder: R({
       default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'Summer Flounder (fluke) is managed by ASMFC and the Mid-Atlantic Council with state-by-state limits (typical 17–19 in size, 3–5 bag). Primarily Mid-Atlantic/Northeast — not a Gulf of America species. Verify with the appropriate region.' },
       source: 'fisheries.noaa.gov',
@@ -713,6 +725,10 @@ function buildRegs() {
     yellowmouth_grouper: R({
       default: { open: 'Year-round (verify)', minSize: 20, bagLimit: 2, gear: reefGear, notes: 'Gulf shallow-water grouper aggregate (with gag, red, black, scamp, yellowfin). Aggregate bag and seasonal closures apply. Verify before keeping.' },
       tx_state: { minSize: 18, bagLimit: 4 },
+      source: 'fisheries.noaa.gov',
+    }),
+    wreckfish: R({
+      default: { open: 'Check current season — South Atlantic permit required', minSize: null, bagLimit: null, gear: reefGear, notes: 'Wreckfish is a federally managed South Atlantic species with a limited-access commercial fishery and tight recreational rules. Not part of the Gulf of America reef fish complex. Verify with NOAA Southeast Regional Office.' },
       source: 'fisheries.noaa.gov',
     }),
     snowy_grouper: R({
