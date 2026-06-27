@@ -376,7 +376,7 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
                       borderRadius: 6, padding: '8px 10px', cursor: 'pointer', textAlign: 'left',
                       display: 'flex', alignItems: 'center', gap: 10,
                     }}>
-                      <FishMark species={s} size={36} />
+                      <SpeciesImage species={s} size={44} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.ink, fontFamily: 'Georgia, serif' }}>{s.commonName}</div>
                         <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{s.scientific}</div>
