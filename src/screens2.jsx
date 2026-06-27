@@ -20,6 +20,7 @@ import {
   inputStyle,
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
+import { publishCatch, ensureAngler, isConfigured as cloudConfigured, CONSENT_VERSION } from './cloudsync.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -867,9 +868,73 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
 
   const nCatches = (state.catchLog || []).length;
   const nPBs = Object.keys(state.pbs || {}).length;
+
+  const research = state.research || defaultState.research;
+  const setResearch = (patch) => update({ research: { ...research, ...patch } });
+
+  const giveConsent = async () => {
+    const consentedAt = new Date().toISOString();
+    // Try to register an anonymous angler if the backend is configured;
+    // otherwise the consent stays local and the angler is created on the
+    // first publish once the backend goes live.
+    let anglerId = null;
+    if (cloudConfigured()) {
+      try { const r = await ensureAngler({ jurisdiction: state.jurisdiction, appVersion: DATA_VERSION }); if (r) anglerId = r.anglerId; } catch (e) {}
+    }
+    setResearch({ consented: true, consentedAt, consentVersion: CONSENT_VERSION, anglerId });
+  };
+  const stopContributing = () => {
+    if (window.confirm('Stop contributing future catches?\n\nAny catches you have already contributed remain in the research dataset for scientific integrity (this cannot be undone).')) {
+      setResearch({ consented: false });
+    }
+  };
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
+      <Card style={{ marginBottom: 10, borderColor: research.consented ? T.open : T.brass }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Research contribution {research.consented && <span style={{ color: T.open }}>· active</span>}</SectionLabel>
+        {!research.consented ? (
+          <>
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6, marginBottom: 10 }}>
+              Help fishery research by contributing your catch data to a dataset shared with NOAA. <b>The app is free in exchange for these contributions.</b>
+            </div>
+            <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, color: T.inkSoft, lineHeight: 1.7 }}>
+              <li>You stay anonymous — no name, email, or account.</li>
+              <li>You choose how precise the location shared is.</li>
+              <li><b>Contributions are permanent.</b> You can stop contributing future catches at any time, but data already contributed remains in the dataset.</li>
+              <li>Photos are not shared by default.</li>
+            </ul>
+            <PrimaryButton onClick={giveConsent}>I understand — contribute</PrimaryButton>
+            {!cloudConfigured() && (
+              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
+                Backend isn't live yet — your choice is recorded locally and uploads will begin automatically once it is.
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12 }}>
+              Contributing since {new Date(research.consentedAt).toLocaleDateString('en-US', { dateStyle: 'medium' })}{research.anglerId ? ' · anonymous ID set' : ' · ID assigns on first publish'}.
+            </div>
+            <SectionLabel style={{ marginBottom: 6 }}>Location precision shared</SectionLabel>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <PickButton active={research.locPrecision === 'exact'} onClick={() => setResearch({ locPrecision: 'exact' })}>Exact</PickButton>
+              <PickButton active={research.locPrecision === 'grid_1km'} onClick={() => setResearch({ locPrecision: 'grid_1km' })}>1 km</PickButton>
+              <PickButton active={research.locPrecision === 'grid_10km'} onClick={() => setResearch({ locPrecision: 'grid_10km' })}>10 km</PickButton>
+            </div>
+            <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 12, lineHeight: 1.4 }}>
+              1 km grid is the default — it's useful for research without pinpointing your spots.
+            </div>
+            <button onClick={stopContributing} style={{ background: 'transparent', border: `1.5px solid ${T.warn}`, color: T.warn, fontSize: 13, fontWeight: 700, padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>
+              Stop contributing future catches
+            </button>
+            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.4 }}>
+              Existing contributions remain in the research dataset for scientific integrity.
+            </div>
+          </>
+        )}
+      </Card>
+
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Fishing waters</SectionLabel>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1273,6 +1338,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     } else {
       update({ catchLog: [entry, ...(state.catchLog || [])] });
     }
+    // Best-effort research publish — no-op if cloud not configured or
+    // the angler hasn't opted in. Local log is canonical regardless.
+    publishCatch(entry, state.research).catch(() => {});
     onDone();
   };
 

@@ -10,6 +10,14 @@ export const defaultState = {
   pbs: {},     // speciesId -> { length, weight, primaryMetric, date, location, notes, jurisdiction, gearBait, photo, history }
   notes: {},   // speciesId -> string
   catchLog: [], // [{ id, speciesId, dateIso, lat, lon, length, weight, photo, notes, sunAlt, sunAz, moonPhase, moonIllum, weather }]
+  research: {
+    consented:    false,        // explicit opt-in to NOAA citizen-science dataset
+    anglerId:     null,         // anonymous UUID assigned by Supabase on consent
+    consentedAt:  null,         // ISO timestamp of consent
+    consentVersion: 0,
+    locPrecision: 'grid_1km',   // 'exact' | 'grid_1km' | 'grid_10km' — protect honey holes by default
+    sharePhotos:  false,        // separate opt-in; off by default
+  },
   syncMeta: { lastSyncDate: DATA_BUILD_DATE },
 };
 
@@ -24,6 +32,7 @@ export function loadState() {
       pbs: parsed.pbs || {},
       notes: parsed.notes || {},
       catchLog: Array.isArray(parsed.catchLog) ? parsed.catchLog : [],
+      research: { ...defaultState.research, ...(parsed.research || {}) },
       syncMeta: parsed.syncMeta || defaultState.syncMeta,
     };
   } catch (e) {
