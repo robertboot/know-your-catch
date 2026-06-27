@@ -196,71 +196,67 @@ export function HomeScreen({
         </Card>
       )}
 
-      {/* Hero — Identify Your Catch */}
+      {/* Hero — Identify Your Catch.
+          Content drives height; the image fills the resulting card via
+          object-fit cover, with a left-side gradient keeping the
+          headline legible without dimming the fish. */}
       <div style={{
         position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
         border: `1px solid ${T.cardEdge}`,
         background: '#031B33',
-        minHeight: 360,
       }}>
-        {/* Underwater hero photo — scaled to cover the card, fish anchored
-            to the right portion. object-position 'center' aligns the
-            picture's center with the card's center, so the fish lands in
-            the right half (around 55% of card width) instead of being
-            cropped behind the headline. */}
         <img
           src={`${import.meta.env.BASE_URL}brand/hero-tuna.png`}
           alt=""
           aria-hidden
           style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+            width: '100%', height: '100%',
             objectFit: 'cover', objectPosition: 'right center',
-            pointerEvents: 'none',
+            pointerEvents: 'none', display: 'block',
           }}
         />
-        {/* Left-side gradient overlay — fades out before reaching the fish */}
         <div aria-hidden style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.92) 18%, rgba(3, 27, 51, 0.55) 32%, rgba(3, 27, 51, 0) 50%)',
+          position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+          background: 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.94) 22%, rgba(3, 27, 51, 0.55) 38%, rgba(3, 27, 51, 0) 58%)',
           pointerEvents: 'none',
         }} />
 
-        {/* Hero content */}
-        <div style={{ position: 'relative', padding: '22px 18px 20px', maxWidth: 250 }}>
+        <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 230 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>IDENTIFY YOUR</div>
           <div style={{
-            fontSize: 52, fontWeight: 900, color: T.brass, letterSpacing: 3,
+            fontSize: 44, fontWeight: 900, color: T.brass, letterSpacing: 2.5,
             lineHeight: 1, marginTop: 2,
             textShadow: '0 0 22px rgba(25, 212, 242, 0.45)',
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
           }}>CATCH</div>
-          <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.4, marginTop: 16, maxWidth: 200 }}>
+          <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4, marginTop: 12, maxWidth: 200 }}>
             Snap a photo and identify your fish in seconds.
           </div>
           <button onClick={onIdentify} style={{
-            marginTop: 18, background: T.brass, color: T.oceanDeep, border: 'none',
-            padding: '13px 18px', borderRadius: 10, fontSize: 14, fontWeight: 800,
-            letterSpacing: 1.8, cursor: 'pointer',
+            marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
+            padding: '11px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800,
+            letterSpacing: 1.6, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: 10,
             boxShadow: '0 8px 24px rgba(25, 212, 242, 0.35)',
           }}>
-            <Camera size={18} strokeWidth={2.4} /> SNAP A PHOTO
+            <Camera size={16} strokeWidth={2.4} /> SNAP A PHOTO
           </button>
 
-          <div style={{ display: 'flex', gap: 18, marginTop: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
             <button onClick={onIdentify} style={{
               background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0,
-              fontSize: 12, fontWeight: 700, letterSpacing: 1.2,
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
+              fontSize: 11, fontWeight: 700, letterSpacing: 1.1,
             }}>
-              <ImageIcon size={16} color={T.ink} /> UPLOAD PHOTO
+              <ImageIcon size={14} color={T.ink} /> UPLOAD PHOTO
             </button>
             <button onClick={onBrowse || onSpeciesList} style={{
               background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0,
-              fontSize: 12, fontWeight: 700, letterSpacing: 1.2,
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
+              fontSize: 11, fontWeight: 700, letterSpacing: 1.1,
             }}>
-              <Search size={16} color={T.ink} /> BROWSE SPECIES
+              <Search size={14} color={T.ink} /> BROWSE SPECIES
             </button>
           </div>
         </div>
