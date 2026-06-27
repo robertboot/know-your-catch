@@ -200,61 +200,26 @@ export function HomeScreen({
       <div style={{
         position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
         border: `1px solid ${T.cardEdge}`,
-        background: 'linear-gradient(115deg, #062138 0%, #0B3756 45%, #0F5E85 100%)',
+        background: '#031B33',
         minHeight: 360,
       }}>
-        {/* Underwater scene right side */}
+        {/* Underwater hero photo */}
+        <img
+          src={`${import.meta.env.BASE_URL}brand/hero-tuna.png`}
+          alt=""
+          aria-hidden
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'right center',
+            pointerEvents: 'none',
+          }}
+        />
+        {/* Left-side gradient overlay to keep copy legible */}
         <div aria-hidden style={{
           position: 'absolute', inset: 0,
-          background: 'radial-gradient(circle at 80% 18%, rgba(25, 212, 242, 0.35) 0%, transparent 38%), radial-gradient(circle at 95% 60%, rgba(15, 94, 133, 0.55) 0%, transparent 50%)',
+          background: 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.92) 28%, rgba(3, 27, 51, 0.55) 48%, rgba(3, 27, 51, 0) 70%)',
           pointerEvents: 'none',
         }} />
-        {/* Subtle light rays */}
-        <div aria-hidden style={{
-          position: 'absolute', top: 0, right: 0, width: '55%', height: '60%',
-          background: 'linear-gradient(195deg, rgba(190, 230, 240, 0.18) 0%, transparent 60%)',
-          pointerEvents: 'none',
-        }} />
-        {/* Fish silhouette (offshore tuna shape) on right */}
-        <div aria-hidden style={{
-          position: 'absolute', right: -10, top: '50%', transform: 'translateY(-50%)',
-          width: '58%', maxWidth: 320, opacity: 0.95, pointerEvents: 'none',
-        }}>
-          <svg viewBox="0 0 300 200" width="100%" style={{ display: 'block', filter: 'drop-shadow(0 0 30px rgba(25, 212, 242, 0.25))' }}>
-            <defs>
-              <linearGradient id="bodyG" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"  stopColor="#2A5C7C" />
-                <stop offset="55%" stopColor="#13374D" />
-                <stop offset="100%" stopColor="#5A88A0" />
-              </linearGradient>
-              <linearGradient id="finG" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#19D4F2" />
-                <stop offset="100%" stopColor="#0E2D44" />
-              </linearGradient>
-            </defs>
-            {/* Body */}
-            <path d="M30,100 C 70,40 180,30 230,80 C 245,90 260,95 275,98 L 290,105 L 275,112 C 260,115 245,120 230,130 C 180,170 70,160 30,100 Z" fill="url(#bodyG)" stroke="#0F5E85" strokeWidth="1.4" />
-            {/* Belly highlight */}
-            <path d="M55,128 C 130,148 200,148 230,128 C 220,135 200,142 170,144 C 130,146 90,142 55,128 Z" fill="#A6C7DC" opacity="0.55" />
-            {/* Top fin */}
-            <path d="M132,52 L 152,30 L 168,55 Z" fill="url(#finG)" />
-            {/* Small finlets along top */}
-            <path d="M180,60 L 190,52 L 198,62 Z" fill="#19D4F2" opacity="0.85" />
-            <path d="M198,66 L 207,58 L 214,68 Z" fill="#19D4F2" opacity="0.75" />
-            <path d="M214,72 L 222,64 L 228,74 Z" fill="#19D4F2" opacity="0.65" />
-            {/* Pectoral fin */}
-            <path d="M110,118 L 145,150 L 90,128 Z" fill="url(#finG)" opacity="0.9" />
-            {/* Anal fin */}
-            <path d="M170,140 L 185,162 L 200,142 Z" fill="url(#finG)" opacity="0.85" />
-            {/* Tail */}
-            <path d="M275,98 L 298,55 L 285,100 L 298,148 L 275,112 Z" fill="url(#finG)" />
-            {/* Eye */}
-            <circle cx="62" cy="92" r="6" fill="#0B2740" stroke="#19D4F2" strokeWidth="1.2" />
-            <circle cx="60" cy="90" r="2" fill="#FFFFFF" />
-            {/* Gill line */}
-            <path d="M86,72 Q 90,100 86,128" stroke="#0B2740" strokeWidth="1.5" fill="none" />
-          </svg>
-        </div>
 
         {/* Hero content */}
         <div style={{ position: 'relative', padding: '22px 18px 20px', maxWidth: 250 }}>
