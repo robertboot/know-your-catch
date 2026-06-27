@@ -49,7 +49,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
             {photo.credit && <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
           </>
         ) : (
-          <FishMark species={s} size={100} />
+          <SpeciesImage species={s} size={100} />
         )}
         <H1 size={24} style={{ color: T.parchment, marginTop: 8 }}>{s.commonName}</H1>
         <div style={{ fontStyle: 'italic', fontSize: 13, color: '#B8C5CD', marginTop: 4 }}>{s.scientific}</div>
@@ -84,7 +84,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
                   background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, padding: '10px 12px',
                   borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%',
                 }}>
-                  <FishMark species={o} size={36} />
+                  <SpeciesImage species={o} size={36} />
                   <div style={{ flex: 1, textAlign: 'left' }}>
                     <div style={{ fontWeight: 600, fontSize: 14, color: T.ink }}>{o.commonName}</div>
                     <div style={{ fontSize: 11, color: T.inkMute }}>Compare features →</div>
@@ -294,11 +294,11 @@ export function CompareScreen({ aId, bId, onPick }) {
       <H1 size={20} style={{ marginBottom: 12 }}>Compare</H1>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
         <Card style={{ textAlign: 'center', padding: 10 }}>
-          <FishMark species={a} size={64} />
+          <SpeciesImage species={a} size={64} />
           <div style={{ marginTop: 6, fontFamily: 'Georgia, serif', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{a.commonName}</div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 10 }}>
-          <FishMark species={b} size={64} />
+          <SpeciesImage species={b} size={64} />
           <div style={{ marginTop: 6, fontFamily: 'Georgia, serif', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{b.commonName}</div>
         </Card>
       </div>
@@ -487,7 +487,7 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
           const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
           return (
             <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
-              <FishMark species={s} size={38} />
+              <SpeciesImage species={s} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
                 <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
@@ -517,7 +517,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   return (
     <div style={{ padding: '16px 16px' }}>
       <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }} onClick={onSpecies}>
-        <FishMark species={s} size={56} />
+        <SpeciesImage species={s} size={56} />
         <div style={{ flex: 1 }}>
           <H1 size={20}>{s.commonName}</H1>
           <div style={{ fontStyle: 'italic', fontSize: 12, color: T.inkMute }}>{s.scientific}</div>
@@ -589,7 +589,7 @@ export function PBsScreen({ state, onAdd, onView }) {
               return (
                 <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
                   <Trophy size={20} color={T.brass} />
-                  <FishMark species={s} size={44} />
+                  <SpeciesImage species={s} size={44} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
                     <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
@@ -607,7 +607,7 @@ export function PBsScreen({ state, onAdd, onView }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {SPECIES.filter(s => !state.pbs[s.id]).map(s => (
           <Card key={s.id} onClick={() => onAdd(s.id)} style={{ textAlign: 'center', padding: '10px 6px' }}>
-            <FishMark species={s} size={40} />
+            <SpeciesImage species={s} size={40} />
             <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: T.ink, lineHeight: 1.2 }}>{s.commonName}</div>
             <div style={{ fontSize: 10, color: T.brass, marginTop: 2 }}><Plus size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> Add</div>
           </Card>
@@ -727,7 +727,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
   return (
     <div style={{ padding: '16px 16px' }}>
       <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <FishMark species={s} size={50} />
+        <SpeciesImage species={s} size={50} />
         <div>
           <H1 size={18}>{s.commonName}</H1>
           <div style={{ fontSize: 12, color: T.inkMute }}>{edit ? 'Update PB' : 'New personal best'}</div>

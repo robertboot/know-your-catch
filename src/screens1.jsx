@@ -17,7 +17,7 @@ import {
   formatSize, formatWeight, regStatus, differs, seasonState,
 } from './helpers.js';
 import {
-  StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
+  StatusPill, FishMark, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
   inputStyle,
 } from './components.jsx';
@@ -119,7 +119,7 @@ function FeaturedCard({ species, status, bag, onClick }) {
         background: 'linear-gradient(165deg, #16415c 0%, #0c2335 55%, #061320 100%)',
         boxShadow: `inset 0 0 0 1px ${T.cardEdge}`,
       }}>
-        <FishMark species={species} size={130} />
+        <SpeciesImage species={species} size={130} />
         <span style={{
           position: 'absolute', top: 8, left: 8, display: 'inline-flex', alignItems: 'center', gap: 5,
           background: 'rgba(6,19,32,0.78)', padding: '3px 8px', borderRadius: 999,
@@ -432,7 +432,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetak
                     background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, padding: '8px 10px',
                     borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%', textAlign: 'left',
                   }}>
-                    <FishMark species={o} size={32} />
+                    <SpeciesImage species={o} size={32} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, color: T.ink }}>It's a {o.commonName}</div>
                       <div style={{ fontSize: 11, color: T.inkMute }}>Tap to switch</div>
@@ -467,7 +467,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetak
           if (!s) return null;
           return (
             <Card key={c.speciesId} onClick={() => onPickSpecies(c.speciesId)} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <FishMark species={s} size={50} />
+              <SpeciesImage species={s} size={50} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
                 {c.evidence?.length > 0 && (
@@ -500,7 +500,7 @@ export function CategoriesScreen({ onPick }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {CATEGORIES.map(c => (
           <Card key={c.id} onClick={() => onPick(c.id)} style={{ textAlign: 'center', padding: '14px 8px' }}>
-            <FishMark species={{ category: c.id }} size={48} />
+            <SpeciesImage species={{ category: c.id }} size={48} />
             <div style={{ marginTop: 8, fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{c.name}</div>
             <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{counts[c.id] || 0} species</div>
           </Card>
@@ -565,7 +565,7 @@ export function SearchScreen({ onPick }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {results.map(r => (
           <Card key={r.s.id} onClick={() => onPick(r.s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <FishMark species={r.s} size={44} />
+            <SpeciesImage species={r.s} size={44} />
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600 }}>{r.s.commonName}</div>
               {r.matchedAlt && <div style={{ fontSize: 11, color: T.brassDeep }}>also: {r.matchedAlt}</div>}
