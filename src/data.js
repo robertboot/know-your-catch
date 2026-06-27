@@ -197,6 +197,10 @@ export const SPECIES = [
     keyIds: ['Small, very deep, laterally compressed silver body', 'Forked tail; no pelvic fins', 'Single long dorsal fin; row of pores below dorsal', 'Bluish back fading to silver — looks like a coin'],
     lookalikes: [],
     habitat: 'Atlantic continental shelf, surface to 600 ft. Schools over sandy bottoms.', typicalSize: '6–9 in' },
+  { id: 'hogfish', commonName: 'Hogfish', altNames: ['Hog Snapper'], scientific: 'Lachnolaimus maximus', category: 'reef',
+    keyIds: ['Long pig-like snout (key feature)', 'First three dorsal spines very long and trailing', 'Pinkish to reddish body; large males show a dark blotch behind pectoral fin', 'Sharp protruding canine teeth at the front of the mouth', 'A wrasse — not a snapper despite the "hog snapper" name'],
+    lookalikes: [],
+    habitat: 'Reefs and hard bottom, 10–200 ft. Common around Florida and the eastern Gulf.', typicalSize: '14–24 in', reefFish: true },
 ];
 
 export const COMPARISONS = {
@@ -558,6 +562,11 @@ function buildRegs() {
     }),
     butterfish: R({
       default: { open: 'Bait/forage species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Butterfish is managed by the Mid-Atlantic Council, primarily as a commercial small-mesh fishery. Common as cut bait and forage for predators. No recreational size/bag on file — verify any state-specific bait-fish rules.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    hogfish: R({
+      default: { open: 'Check current season', minSize: 14, bagLimit: 1, gear: reefGear, notes: 'Gulf reef fish. Federal Gulf recreational rules: 14 in fork length, 1 fish/person/day. Florida Gulf state waters have additional seasonal closures (closed Nov 1 – Mar 31 typical). Verify before keeping.' },
+      fl_state: { open: 'Apr 1 – Oct 31 (verify)', minSize: 14, bagLimit: 1, notes: 'Florida Gulf: 14 in fork length, 1/person/day, season Apr 1 – Oct 31.' },
       source: 'fisheries.noaa.gov',
     }),
   };

@@ -431,6 +431,17 @@
         "license": "Public domain"
       },
       "updated": "2026-06-27"
+    },
+    "hogfish": {
+      "name": "Hogfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_EGBKdbt60QW1.jpg?1564016173",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     }
   }
 }
