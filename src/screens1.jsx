@@ -4,7 +4,7 @@ import {
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
-  CheckCircle2,
+  CheckCircle2, ShieldCheck, MoreHorizontal,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -51,7 +51,7 @@ export function SplashScreen({ onContinue }) {
 /* ============================================================
    HOME
    ============================================================ */
-const FEATURED_IDS = ['red_snapper', 'king_mackerel', 'gag_grouper', 'greater_amberjack', 'cobia', 'mahi', 'wahoo'];
+const FEATURED_IDS = ['red_snapper', 'king_mackerel', 'gag_grouper', 'mahi', 'greater_amberjack', 'cobia', 'wahoo'];
 
 function regForSpecies(id, jurId) {
   const byJur = REGULATIONS[id];
@@ -67,26 +67,29 @@ const STATUS_TEXT = {
   unknown:  { label: 'Check Source',  color: T.inkSoft },
 };
 
-function ActionTile({ icon, title, subtitle, onClick }) {
+// Small square action tile used in the 4-column quick-actions grid on home.
+function QuickTile({ icon, titleA, titleB, subtitle, onClick }) {
   return (
     <button onClick={onClick} style={{
-      background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 12,
-      padding: '16px 14px', cursor: 'pointer', textAlign: 'left',
-      display: 'flex', flexDirection: 'column', gap: 10, minHeight: 132,
+      background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
+      padding: '14px 12px 12px', cursor: 'pointer', textAlign: 'left',
+      display: 'flex', flexDirection: 'column', gap: 8, minHeight: 168,
+      boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: T.ink, lineHeight: 1.2, maxWidth: '70%' }}>{title}</span>
-        <span style={{ color: T.brass, flexShrink: 0 }}>{icon}</span>
+      <div style={{ color: T.brass, marginBottom: 4 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+        {titleA}
+        {titleB && <><br />{titleB}</>}
       </div>
-      <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
-      <ChevronRight size={18} color={T.brass} />
+      <div style={{ fontSize: 11.5, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
+      <ChevronRight size={16} color={T.brass} style={{ alignSelf: 'flex-end' }} />
     </button>
   );
 }
 
-function Metric({ label, value }) {
+function ConditionStat({ label, value }) {
   return (
-    <div style={{ textAlign: 'left' }}>
+    <div>
       <div style={{ fontSize: 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>{label}</div>
       <div style={{ fontSize: 14, color: T.ink, fontWeight: 700, marginTop: 3 }}>{value}</div>
     </div>
@@ -108,33 +111,47 @@ function SectionHead({ children, action, onAction }) {
 
 function FeaturedCard({ species, status, bag, onClick }) {
   const st = STATUS_TEXT[status] || STATUS_TEXT.unknown;
+  const bagLabel = bag != null ? `Bag Limit: ${bag}` : 'No Bag Limit';
   return (
     <button onClick={onClick} style={{
-      flex: '0 0 152px', background: T.card, border: `1px solid ${T.cardEdge}`,
+      flex: '0 0 168px', background: T.card, border: `1px solid ${T.cardEdge}`,
       borderRadius: 14, padding: 10, cursor: 'pointer', textAlign: 'left',
     }}>
       <div style={{
-        position: 'relative', borderRadius: 10, height: 100, marginBottom: 10,
+        position: 'relative', borderRadius: 10, height: 116, marginBottom: 12,
         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-        background: 'linear-gradient(165deg, #16415c 0%, #0c2335 55%, #061320 100%)',
+        background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
         boxShadow: `inset 0 0 0 1px ${T.cardEdge}`,
       }}>
-        <SpeciesImage species={species} size={130} />
+        <SpeciesImage species={species} size={150} />
       </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {species.commonName}
       </div>
-      <div style={{ fontSize: 12, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
-      <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>
-        Bag Limit: <span style={{ color: T.ink }}>{bag != null ? bag : '—'}</span>
-      </div>
+      <div style={{ fontSize: 12.5, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
+      <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>{bagLabel}</div>
     </button>
+  );
+}
+
+function ScrollDots({ count, active }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <span key={i} style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: i === active ? T.brass : 'rgba(148, 163, 184, 0.35)',
+          display: 'inline-block',
+        }} />
+      ))}
+    </div>
   );
 }
 
 export function HomeScreen({
   state, jurisdiction, stale, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
+  onCompare, onBrowse,
 }) {
   const jurId = jurisdiction?.id || 'fed_gulf';
   const featured = FEATURED_IDS
@@ -149,24 +166,24 @@ export function HomeScreen({
 
   return (
     <div style={{ padding: '14px 16px' }}>
-      {/* Location */}
-      <Card style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12 }}>
-        <div style={{ background: T.oceanDeep, color: T.brass, width: 42, height: 42, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <MapPin size={22} />
+      {/* Current Location */}
+      <Card style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 }}>
+        <div style={{ color: T.brass, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}>
+          <MapPin size={28} strokeWidth={2.2} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <SectionLabel style={{ color: T.brass, fontSize: 10 }}>Current Location</SectionLabel>
-          <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.8, color: T.brass, fontWeight: 800 }}>CURRENT LOCATION</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.ink, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {jurisdiction ? jurisdiction.name : 'Select fishing waters'}
           </div>
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {jurisdiction ? jurisdiction.agency : 'Tap change to pick your waters'}
           </div>
         </div>
         <button onClick={onChangeJurisdiction} style={{
           background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
-          padding: '7px 12px', borderRadius: 8, fontSize: 11, fontWeight: 800,
-          letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0,
+          padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 800,
+          letterSpacing: 1.5, cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0,
         }}>Change</button>
       </Card>
 
@@ -179,71 +196,216 @@ export function HomeScreen({
         </Card>
       )}
 
-      {/* Action grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
-        <ActionTile icon={<Fish size={22} />} title="Identify Fish" subtitle="Browse species and ID guide" onClick={onIdentify} />
-        <ActionTile icon={<ClipboardList size={22} />} title="Check Regulations" subtitle="View rules, limits and seasons" onClick={onRegulations} />
-        <div style={{ gridColumn: '1 / -1' }}>
-          <ActionTile icon={<Camera size={22} />} title="Log Catch" subtitle="Photo + GPS + conditions — build your map" onClick={onReport} />
+      {/* Hero — Identify Your Catch */}
+      <div style={{
+        position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
+        border: `1px solid ${T.cardEdge}`,
+        background: 'linear-gradient(115deg, #062138 0%, #0B3756 45%, #0F5E85 100%)',
+        minHeight: 360,
+      }}>
+        {/* Underwater scene right side */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(circle at 80% 18%, rgba(25, 212, 242, 0.35) 0%, transparent 38%), radial-gradient(circle at 95% 60%, rgba(15, 94, 133, 0.55) 0%, transparent 50%)',
+          pointerEvents: 'none',
+        }} />
+        {/* Subtle light rays */}
+        <div aria-hidden style={{
+          position: 'absolute', top: 0, right: 0, width: '55%', height: '60%',
+          background: 'linear-gradient(195deg, rgba(190, 230, 240, 0.18) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+        {/* Fish silhouette (offshore tuna shape) on right */}
+        <div aria-hidden style={{
+          position: 'absolute', right: -10, top: '50%', transform: 'translateY(-50%)',
+          width: '58%', maxWidth: 320, opacity: 0.95, pointerEvents: 'none',
+        }}>
+          <svg viewBox="0 0 300 200" width="100%" style={{ display: 'block', filter: 'drop-shadow(0 0 30px rgba(25, 212, 242, 0.25))' }}>
+            <defs>
+              <linearGradient id="bodyG" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"  stopColor="#2A5C7C" />
+                <stop offset="55%" stopColor="#13374D" />
+                <stop offset="100%" stopColor="#5A88A0" />
+              </linearGradient>
+              <linearGradient id="finG" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#19D4F2" />
+                <stop offset="100%" stopColor="#0E2D44" />
+              </linearGradient>
+            </defs>
+            {/* Body */}
+            <path d="M30,100 C 70,40 180,30 230,80 C 245,90 260,95 275,98 L 290,105 L 275,112 C 260,115 245,120 230,130 C 180,170 70,160 30,100 Z" fill="url(#bodyG)" stroke="#0F5E85" strokeWidth="1.4" />
+            {/* Belly highlight */}
+            <path d="M55,128 C 130,148 200,148 230,128 C 220,135 200,142 170,144 C 130,146 90,142 55,128 Z" fill="#A6C7DC" opacity="0.55" />
+            {/* Top fin */}
+            <path d="M132,52 L 152,30 L 168,55 Z" fill="url(#finG)" />
+            {/* Small finlets along top */}
+            <path d="M180,60 L 190,52 L 198,62 Z" fill="#19D4F2" opacity="0.85" />
+            <path d="M198,66 L 207,58 L 214,68 Z" fill="#19D4F2" opacity="0.75" />
+            <path d="M214,72 L 222,64 L 228,74 Z" fill="#19D4F2" opacity="0.65" />
+            {/* Pectoral fin */}
+            <path d="M110,118 L 145,150 L 90,128 Z" fill="url(#finG)" opacity="0.9" />
+            {/* Anal fin */}
+            <path d="M170,140 L 185,162 L 200,142 Z" fill="url(#finG)" opacity="0.85" />
+            {/* Tail */}
+            <path d="M275,98 L 298,55 L 285,100 L 298,148 L 275,112 Z" fill="url(#finG)" />
+            {/* Eye */}
+            <circle cx="62" cy="92" r="6" fill="#0B2740" stroke="#19D4F2" strokeWidth="1.2" />
+            <circle cx="60" cy="90" r="2" fill="#FFFFFF" />
+            {/* Gill line */}
+            <path d="M86,72 Q 90,100 86,128" stroke="#0B2740" strokeWidth="1.5" fill="none" />
+          </svg>
         </div>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <button onClick={onPBs} style={{
-            width: '100%', background: 'transparent', color: T.brass,
-            border: `1.5px dashed ${T.brass}`, borderRadius: 10,
-            padding: '10px 14px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
-          }}>
-            <Trophy size={16} /> My Personal Bests
-            {state?.pbs && Object.keys(state.pbs).length > 0 && (
-              <span style={{ background: T.brass, color: T.oceanDeep, fontSize: 11, fontWeight: 800, padding: '1px 8px', borderRadius: 999 }}>
-                {Object.keys(state.pbs).length}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
 
-      {/* Today's conditions */}
-      <SectionHead action="VIEW FORECAST" onAction={onRegulations}>Today's Conditions</SectionHead>
-      <Card style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 12 }}>
-        <div style={{ textAlign: 'center', flexShrink: 0 }}>
-          <CloudSun size={30} color={T.warn} />
-          <div style={{ fontSize: 26, fontWeight: 800, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
-          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>Partly Cloudy</div>
-        </div>
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <Metric label="WIND" value="SE 14 mph" />
-          <Metric label="WAVES" value="2.1 ft" />
-          <Metric label="WATER" value="79°" />
-        </div>
-      </Card>
-
-      {/* Regulation alerts */}
-      <SectionHead action="VIEW ALL" onAction={onRegulations}>Regulation Alerts</SectionHead>
-      <Card style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12 }}>
-        {anyClosed ? (
-          <AlertTriangle size={26} color={T.warn} style={{ flexShrink: 0 }} />
-        ) : (
-          <CheckCircle2 size={26} color={T.open} style={{ flexShrink: 0 }} />
-        )}
-        <div>
-          <div style={{ fontSize: 14, color: T.ink, fontWeight: 600, lineHeight: 1.4 }}>
-            {anyClosed
-              ? 'Some featured species have an active closure in these waters.'
-              : 'No active closures or restrictions in your area.'}
+        {/* Hero content */}
+        <div style={{ position: 'relative', padding: '22px 18px 20px', maxWidth: 250 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>IDENTIFY YOUR</div>
+          <div style={{
+            fontSize: 52, fontWeight: 900, color: T.brass, letterSpacing: 3,
+            lineHeight: 1, marginTop: 2,
+            textShadow: '0 0 22px rgba(25, 212, 242, 0.45)',
+            fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
+          }}>CATCH</div>
+          <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.4, marginTop: 16, maxWidth: 200 }}>
+            Snap a photo and identify your fish in seconds.
           </div>
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>Always check before you head out.</div>
+          <button onClick={onIdentify} style={{
+            marginTop: 18, background: T.brass, color: T.oceanDeep, border: 'none',
+            padding: '13px 18px', borderRadius: 10, fontSize: 14, fontWeight: 800,
+            letterSpacing: 1.8, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            boxShadow: '0 8px 24px rgba(25, 212, 242, 0.35)',
+          }}>
+            <Camera size={18} strokeWidth={2.4} /> SNAP A PHOTO
+          </button>
+
+          <div style={{ display: 'flex', gap: 18, marginTop: 16, flexWrap: 'wrap' }}>
+            <button onClick={onIdentify} style={{
+              background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0,
+              fontSize: 12, fontWeight: 700, letterSpacing: 1.2,
+            }}>
+              <ImageIcon size={16} color={T.ink} /> UPLOAD PHOTO
+            </button>
+            <button onClick={onBrowse || onSpeciesList} style={{
+              background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0,
+              fontSize: 12, fontWeight: 700, letterSpacing: 1.2,
+            }}>
+              <Search size={16} color={T.ink} /> BROWSE SPECIES
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* Quick Actions — 4 tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 14 }}>
+        <QuickTile
+          icon={<ClipboardList size={28} strokeWidth={1.8} />}
+          titleA="CHECK" titleB="REGULATIONS"
+          subtitle="View rules, limits and seasons"
+          onClick={onRegulations}
+        />
+        <QuickTile
+          icon={<Layers size={28} strokeWidth={1.8} />}
+          titleA="COMPARE" titleB="LOOKALIKES"
+          subtitle="Compare similar species"
+          onClick={onCompare || onSpeciesList}
+        />
+        <QuickTile
+          icon={<Camera size={28} strokeWidth={1.8} />}
+          titleA="LOG" titleB="CATCH"
+          subtitle="Photo, GPS and conditions"
+          onClick={onReport}
+        />
+        <QuickTile
+          icon={<BookOpen size={28} strokeWidth={1.8} />}
+          titleA="SPECIES" titleB="LIBRARY"
+          subtitle="Explore species and ID guide"
+          onClick={onSpeciesList}
+        />
+      </div>
+
+      {/* Conditions + Regulation Alerts (side-by-side) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+        {/* Conditions */}
+        <Card style={{ padding: 14, borderRadius: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
+            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ textAlign: 'center', flexShrink: 0 }}>
+              <CloudSun size={32} color={T.warn} strokeWidth={1.8} />
+              <div style={{ fontSize: 26, fontWeight: 900, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
+              <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4 }}>Partly Cloudy</div>
+            </div>
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <ConditionStat label="WIND"  value="SE 14 mph" />
+              <ConditionStat label="WATER" value="79°" />
+              <ConditionStat label="WAVES" value="2.1 ft" />
+              <ConditionStat label="PRESSURE" value="30.12 in" />
+            </div>
+          </div>
+        </Card>
+
+        {/* Regulation Alerts */}
+        <Card style={{ padding: 14, borderRadius: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>REGULATION ALERTS</span>
+            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <ShieldCheck size={36} color={anyClosed ? T.warn : T.open} strokeWidth={1.6} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <div style={{ fontSize: 14, color: T.ink, fontWeight: 800, lineHeight: 1.25 }}>
+                {anyClosed ? 'Active closure' : 'No Active Closures'}
+              </div>
+              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
+                {anyClosed
+                  ? 'A featured species is closed in these waters.'
+                  : `All clear in ${jurisdiction ? jurisdiction.name : 'these waters'}.`}
+              </div>
+              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.4 }}>
+                Always check before you head out.
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Featured Species */}
+      <Card style={{ marginTop: 14, padding: 14, borderRadius: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>FEATURED SPECIES</span>
+          <button onClick={onSpeciesList} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
+        </div>
+        <div className="kyc-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, margin: '0 -14px', padding: '0 14px 4px' }}>
+          {featured.map(f => (
+            <FeaturedCard key={f.s.id} species={f.s} status={f.status} bag={f.bag} onClick={() => onSpecies(f.s.id)} />
+          ))}
+        </div>
+        <ScrollDots count={Math.min(featured.length, 4)} active={0} />
       </Card>
 
-      {/* Featured species */}
-      <SectionHead action="VIEW ALL" onAction={onSpeciesList}>Featured Species</SectionHead>
-      <div className="kyc-hscroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6, margin: '0 -16px', padding: '0 16px 6px' }}>
-        {featured.map(f => (
-          <FeaturedCard key={f.s.id} species={f.s} status={f.status} bag={f.bag} onClick={() => onSpecies(f.s.id)} />
-        ))}
-      </div>
+      {/* My Personal Bests */}
+      <button onClick={onPBs} style={{
+        marginTop: 14, width: '100%',
+        background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
+        padding: '16px 14px', cursor: 'pointer', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <Trophy size={28} color={T.brass} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.ink, letterSpacing: 1.3 }}>MY PERSONAL BESTS</div>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>View your top catches and milestones</div>
+        </div>
+        {state?.pbs && Object.keys(state.pbs).length > 0 && (
+          <span style={{ background: T.brass, color: T.oceanDeep, fontSize: 11, fontWeight: 800, padding: '2px 9px', borderRadius: 999 }}>
+            {Object.keys(state.pbs).length}
+          </span>
+        )}
+        <ChevronRight size={18} color={T.brass} />
+      </button>
 
       <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
         Built for the Gulf of America · For anglers, by anglers · v{DATA_VERSION}

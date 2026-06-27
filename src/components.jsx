@@ -107,8 +107,8 @@ export function SpeciesImage({ species, size = 56, style }) {
 export function Card({ children, style, onClick }) {
   return (
     <div onClick={onClick} style={{
-      background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 6, padding: 14,
-      boxShadow: '0 1px 0 rgba(124, 86, 24, 0.06)', cursor: onClick ? 'pointer' : 'default', ...style,
+      background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 14, padding: 14,
+      boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.04) inset', cursor: onClick ? 'pointer' : 'default', ...style,
     }}>{children}</div>
   );
 }
@@ -116,9 +116,9 @@ export function PrimaryButton({ children, onClick, disabled, style }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       width: '100%', background: disabled ? '#2A3E4D' : T.brass, color: disabled ? T.inkMute : T.oceanDeep, border: 'none',
-      padding: '14px 16px', borderRadius: 6, fontSize: 15, fontWeight: 700, letterSpacing: 0.3,
+      padding: '14px 16px', borderRadius: 10, fontSize: 15, fontWeight: 800, letterSpacing: 0.4,
       cursor: disabled ? 'not-allowed' : 'pointer',
-      boxShadow: '0 1px 0 rgba(0,0,0,0.15)', ...style,
+      boxShadow: '0 4px 12px rgba(25, 212, 242, 0.18)', ...style,
     }}>{children}</button>
   );
 }

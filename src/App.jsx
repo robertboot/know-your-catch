@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Fish, ChevronLeft, BookOpen, Bell, ClipboardList,
+  Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera, MoreHorizontal,
   Home as HomeIcon, Settings as SettingsIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
@@ -79,6 +79,8 @@ export default function App() {
     state, jurisdiction, stale,
     onChangeJurisdiction: () => setShowJur(true),
     onIdentify:   () => push({ name: 'identify' }),
+    onBrowse:     () => push({ name: 'categories' }),
+    onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
     onReport:     () => push({ name: 'catch_entry' }),
     onSpecies:    (id) => push({ name: 'species', id }),
@@ -186,25 +188,33 @@ export default function App() {
     screen.name === 'settings' ? '' :
     'species';
 
+  const moreActive = screen.name === 'settings';
+  const speciesActive = ['species_list', 'species', 'categories', 'category', 'compare', 'search'].includes(screen.name);
+  const identifyActive = ['identify', 'photo_analyzing', 'photo_result'].includes(screen.name);
+
   return (
     <div style={{
-      background: T.bg, minHeight: '100vh', color: T.ink,
+      background: T.bgGradient, minHeight: '100vh', color: T.ink,
       maxWidth: 440, margin: '0 auto', position: 'relative',
       boxShadow: '0 0 60px rgba(0,0,0,0.5)',
     }}>
       {/* Top app bar */}
       <div style={{
-        background: T.oceanDeep, color: T.parchment, padding: '12px 16px',
+        background: T.oceanDeep, color: T.parchment, padding: '14px 16px 10px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: `1px solid ${T.cardEdge}`, position: 'sticky', top: 0, zIndex: 50,
       }}>
         {isHome ? (
-          <button onClick={() => reset([{ name: 'home' }])} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src={`${import.meta.env.BASE_URL}brand/mark.jpg`} alt="" width={40} height={40} style={{ borderRadius: 9, display: 'block' }} />
+          <button onClick={() => reset([{ name: 'home' }])} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img src={`${import.meta.env.BASE_URL}brand/mark.jpg`} alt="" width={56} height={56} style={{ borderRadius: 12, display: 'block', border: `1px solid ${T.cardEdge}` }} />
             <span style={{ textAlign: 'left', lineHeight: 1 }}>
-              <span style={{ display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: T.parchment }}>KNOW YOUR</span>
-              <span style={{ display: 'block', fontSize: 21, fontWeight: 900, letterSpacing: 2, color: T.brass, marginTop: 2 }}>CATCH</span>
-              <span style={{ display: 'block', fontSize: 7.5, fontWeight: 700, letterSpacing: 1.6, color: T.inkSoft, marginTop: 3 }}>IDENTIFY · CHECK RULES · STAY LEGAL</span>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 800, letterSpacing: 3, color: T.parchment }}>KNOW YOUR</span>
+              <span style={{
+                display: 'block', fontSize: 34, fontWeight: 900, letterSpacing: 3.5,
+                color: T.brass, marginTop: 1,
+                textShadow: '0 0 14px rgba(25, 212, 242, 0.45)',
+              }}>CATCH</span>
+              <span style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: 1.8, color: T.inkSoft, marginTop: 4 }}>IDENTIFY  •  CHECK RULES  •  STAY LEGAL</span>
             </span>
           </button>
         ) : (
@@ -212,39 +222,60 @@ export default function App() {
             <ChevronLeft size={20} /> Back
           </button>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {isHome && (
             <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
-              <Bell size={22} />
+              <Bell size={24} strokeWidth={1.8} />
               {ALERT_COUNT > 0 && (
                 <span style={{
-                  position: 'absolute', top: -2, right: -3, background: T.brass, color: T.oceanDeep,
-                  fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+                  position: 'absolute', top: -3, right: -4, background: T.brass, color: T.oceanDeep,
+                  fontSize: 11, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+                  boxShadow: '0 0 10px rgba(25, 212, 242, 0.55)',
                 }}>{ALERT_COUNT}</span>
               )}
             </button>
           )}
           <button onClick={() => push({ name: 'settings' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer' }} aria-label="Settings">
-            <SettingsIcon size={20} />
+            <SettingsIcon size={24} strokeWidth={1.8} />
           </button>
         </div>
       </div>
 
-      <div style={{ paddingBottom: 78, minHeight: 'calc(100vh - 132px)' }}>
+      <div style={{ paddingBottom: 96, minHeight: 'calc(100vh - 132px)' }}>
         {body}
       </div>
+
+      {/* Floating action button — quick fish scan, home only */}
+      {isHome && (
+        <button
+          onClick={() => push({ name: 'identify' })}
+          aria-label="Quick scan"
+          style={{
+            position: 'fixed', bottom: 92, right: 'max(16px, calc(50vw - 220px + 16px))',
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'radial-gradient(circle at 30% 30%, #2EE4FF 0%, #19D4F2 60%, #0F8FAA 100%)',
+            border: '3px solid rgba(25, 212, 242, 0.45)',
+            color: T.oceanDeep, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 0 6px rgba(25, 212, 242, 0.15), 0 8px 28px rgba(25, 212, 242, 0.55)',
+            zIndex: 49,
+          }}>
+          <Camera size={28} strokeWidth={2.2} />
+        </button>
+      )}
 
       {/* Bottom tab bar */}
       <div style={{
         position: 'sticky', bottom: 0, background: T.oceanDeep,
-        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-        padding: '8px 4px 10px', zIndex: 50,
+        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+        padding: '10px 4px 14px', zIndex: 50,
       }}>
-        <TabBtn label="Home" active={activeTab === 'home'} onClick={() => reset([{ name: 'home' }])} icon={<HomeIcon size={20} />} />
-        <TabBtn label="Species" active={activeTab === 'species'} onClick={() => reset([{ name: 'species_list' }])} icon={<Fish size={20} />} />
-        <TabBtn label="Regulations" active={activeTab === 'regulations'} onClick={() => reset([{ name: 'regulations' }])} icon={<ClipboardList size={20} />} />
-        <TabBtn label="Logbook" active={activeTab === 'logbook'} onClick={() => reset([{ name: 'catch_log' }])} icon={<BookOpen size={20} />} />
+        <TabBtn label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon size={22} strokeWidth={2} />} />
+        <TabBtn label="Identify"    active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish size={22} strokeWidth={2} />} />
+        <TabBtn label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList size={22} strokeWidth={2} />} />
+        <TabBtn label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen size={22} strokeWidth={2} />} />
+        <TabBtn label="More"        active={moreActive}                                    onClick={() => push({ name: 'settings' })}        icon={<MoreHorizontal size={22} strokeWidth={2} />} />
       </div>
 
       {showDisclaimer && (
@@ -309,9 +340,13 @@ function TabBtn({ label, active, onClick, icon }) {
     <button onClick={onClick} style={{
       background: 'transparent', border: 'none', color: active ? T.brass : T.inkMute,
       padding: '4px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: active ? 700 : 500,
+      alignItems: 'center', gap: 5, fontSize: 11, fontWeight: active ? 700 : 600,
+      letterSpacing: 0.2,
     }}>
-      <span style={{ color: active ? T.brass : T.inkMute }}>{icon}</span>
+      <span style={{
+        color: active ? T.brass : T.inkMute,
+        filter: active ? 'drop-shadow(0 0 6px rgba(25, 212, 242, 0.55))' : 'none',
+      }}>{icon}</span>
       {label}
     </button>
   );
