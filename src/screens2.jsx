@@ -990,7 +990,7 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `know-your-catch-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `reelintel-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -1006,7 +1006,7 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
       r.onload = () => {
         try {
           const payload = JSON.parse(String(r.result));
-          if (payload.schema !== 'kyc-backup/v1') { window.alert('Not a Know Your Catch backup file.'); return; }
+          if (payload.schema !== 'kyc-backup/v1') { window.alert('Not a ReelIntel backup file.'); return; }
           const ncatches = (payload.catchLog || []).length;
           const npbs = Object.keys(payload.pbs || {}).length;
           if (!window.confirm(`Restore ${ncatches} catch${ncatches === 1 ? '' : 'es'} and ${npbs} personal best${npbs === 1 ? '' : 's'}?\n\nYour current data will be replaced.`)) return;
@@ -1091,7 +1091,7 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Report or contact</SectionLabel>
-        <a href="mailto:corrections@knowyourcatch.example?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <a href="mailto:corrections@reelintel.example?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Mail size={16} /> Email a regulation correction
         </a>
       </Card>

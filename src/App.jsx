@@ -205,17 +205,16 @@ export default function App() {
         borderBottom: `1px solid ${T.cardEdge}`, position: 'sticky', top: 0, zIndex: 50,
       }}>
         {isHome ? (
-          <button onClick={() => reset([{ name: 'home' }])} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <img src={`${import.meta.env.BASE_URL}brand/mark.jpg`} alt="" width={56} height={56} style={{ borderRadius: 12, display: 'block', border: `1px solid ${T.cardEdge}` }} />
-            <span style={{ textAlign: 'left', lineHeight: 1 }}>
-              <span style={{ display: 'block', fontSize: 13, fontWeight: 800, letterSpacing: 3, color: T.parchment }}>KNOW YOUR</span>
-              <span style={{
-                display: 'block', fontSize: 34, fontWeight: 900, letterSpacing: 3.5,
-                color: T.brass, marginTop: 1,
-                textShadow: '0 0 14px rgba(25, 212, 242, 0.45)',
-              }}>CATCH</span>
-              <span style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: 1.8, color: T.inkSoft, marginTop: 4 }}>IDENTIFY  •  CHECK RULES  •  STAY LEGAL</span>
-            </span>
+          <button
+            onClick={() => reset([{ name: 'home' }])}
+            aria-label="ReelIntel — home"
+            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`}
+              alt="ReelIntel — identify, check rules, log catch, find better spots"
+              style={{ height: 64, width: 'auto', maxWidth: 320, display: 'block' }}
+            />
           </button>
         ) : (
           <button onClick={pop} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>

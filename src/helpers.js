@@ -269,7 +269,7 @@ export function buildPBReport({ anglerName, species, pb, units }) {
   if (pb.gearBait) lines.push(`🎣 ${pb.gearBait}`);
   if (pb.notes) { lines.push(''); lines.push(pb.notes); }
   lines.push('');
-  lines.push('Logged with Know Your Catch');
+  lines.push('Logged with ReelIntel · reelintel.app');
   return lines.filter(l => l != null).join('\n');
 }
 
@@ -304,7 +304,7 @@ export function buildCatchReport({ anglerName, species, c, units }) {
   }
   if (c.notes) { lines.push(''); lines.push(c.notes); }
   lines.push('');
-  lines.push('Logged with Know Your Catch');
+  lines.push('Logged with ReelIntel · reelintel.app');
   return lines.join('\n');
 }
 

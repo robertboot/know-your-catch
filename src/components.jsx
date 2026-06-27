@@ -151,8 +151,8 @@ export function DisclaimerModal({ onAccept }) {
       <div style={modalStyle}>
         <div style={{ textAlign: 'center', borderBottom: `1px solid ${T.cardEdge}`, paddingBottom: 14, marginBottom: 14 }}>
           <Anchor size={26} color={T.brass} style={{ margin: '0 auto 6px', display: 'block' }} />
-          <H1 size={22}>Know Your Catch</H1>
-          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 12, marginTop: 4, letterSpacing: 0.5 }}>Identify it. Know the rules. Stay legal.</div>
+          <H1 size={22}>ReelIntel</H1>
+          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 12, marginTop: 4, letterSpacing: 0.5 }}>Fish smarter. Catch more.</div>
         </div>
         <SectionLabel style={{ marginBottom: 8 }}>Before you start</SectionLabel>
         <p style={{ fontSize: 13, lineHeight: 1.6, color: T.inkSoft, margin: '0 0 14px', maxHeight: 200, overflowY: 'auto' }}>{DISCLAIMER_TEXT}</p>
@@ -346,8 +346,8 @@ export function ShareReportModal({
                 </div>
               )}
 
-              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(244, 227, 193, 0.18)', textAlign: 'center', fontSize: 10, letterSpacing: 1.5, color: T.brass, fontWeight: 700 }}>
-                KNOW YOUR CATCH
+              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(244, 227, 193, 0.18)', textAlign: 'center', fontSize: 10, letterSpacing: 1.8, color: T.brass, fontWeight: 800 }}>
+                REELINTEL
               </div>
             </div>
           </div>

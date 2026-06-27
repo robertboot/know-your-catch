@@ -1,5 +1,5 @@
 /* Theme — premium offshore marine, dark navy + cyan accent.
-   Tuned to the Know Your Catch home-screen mockup. */
+   Tuned to the ReelIntel home-screen mockup. */
 export const T = {
   /* page + surfaces — deep navy gradient floor */
   bg: '#031B33',

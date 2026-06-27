@@ -1,9 +1,9 @@
 {
-  "appId": "com.knowyourcatch.app",
-  "appName": "Know Your Catch",
+  "appId": "com.reelintel.app",
+  "appName": "ReelIntel",
   "webDir": "dist",
   "ios": {
-    "scheme": "Know Your Catch",
+    "scheme": "ReelIntel",
     "contentInset": "always"
   },
   "plugins": {

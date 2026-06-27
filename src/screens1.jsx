@@ -37,9 +37,9 @@ export function SplashScreen({ onContinue }) {
       }}
     >
       <img
-        src={`${import.meta.env.BASE_URL}brand/splash.png`}
-        alt="Know Your Catch — Identify, Check Rules, Stay Legal. Built for the Gulf of America."
-        style={{ maxWidth: 'min(86vw, 380px)', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
+        src={`${import.meta.env.BASE_URL}brand/reelintel-brand.png`}
+        alt="ReelIntel — identify, check rules, log catch, find better spots. Built for the Gulf of America."
+        style={{ maxWidth: 'min(92vw, 460px)', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
       />
       <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>
         Tap to continue
@@ -373,7 +373,7 @@ export function HomeScreen({
       </button>
 
       <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
-        Built for the Gulf of America · For anglers, by anglers · v{DATA_VERSION}
+        ReelIntel · Built for the Gulf of America · v{DATA_VERSION}
       </div>
     </div>
   );
