@@ -1,0 +1,13 @@
+{
+  "appId": "com.knowyourcatch.app",
+  "appName": "Know Your Catch",
+  "webDir": "dist",
+  "ios": {
+    "scheme": "Know Your Catch",
+    "contentInset": "always"
+  },
+  "plugins": {
+    "Camera": {},
+    "Geolocation": {}
+  }
+}

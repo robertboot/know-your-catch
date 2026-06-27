@@ -19,6 +19,7 @@ import {
   DetailRow, Field, PickButton, SpeciesRow,
   inputStyle,
 } from './components.jsx';
+import { getLocation, getPhoto } from './native.js';
 
 /* ============================================================
    SPECIES DETAIL
@@ -899,21 +900,15 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [loc, setLoc] = useState({ lat: null, lon: null, error: null, loading: true });
   const [weather, setWeather] = useState(null);
   const [wxStatus, setWxStatus] = useState('idle');
-  const fileRef = useRef(null);
   const now = useMemo(() => new Date(), []);
 
-  // Get GPS. Longer timeout for offshore "cold start" (no cell A-GPS).
+  // Native iOS via Capacitor when wrapped; web geolocation otherwise.
+  // Longer timeout handles offshore cold-start (no A-GPS assist).
   const fetchGps = () => {
-    if (!('geolocation' in navigator)) {
-      setLoc({ lat: null, lon: null, error: 'GPS not available', loading: false });
-      return;
-    }
     setLoc(l => ({ ...l, loading: true, error: null }));
-    navigator.geolocation.getCurrentPosition(
-      pos => setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude, error: null, loading: false }),
-      err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }),
-      { enableHighAccuracy: true, timeout: 60000, maximumAge: 60000 }
-    );
+    getLocation({ enableHighAccuracy: true, timeout: 60000, maximumAge: 60000 })
+      .then(({ lat, lon }) => setLoc({ lat, lon, error: null, loading: false }))
+      .catch(err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }));
   };
   useEffect(() => { fetchGps(); }, []);
 
@@ -935,12 +930,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const sun = loc.lat != null && loc.lon != null ? sunPosition(now, loc.lat, loc.lon) : null;
   const moon = moonPhase(now);
 
-  const pickPhoto = e => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => setPhoto(String(r.result));
-    r.readAsDataURL(f);
+  const takePhoto = async () => {
+    const dataUrl = await getPhoto(); // native camera prompt or web file picker
+    if (dataUrl) setPhoto(dataUrl);
   };
 
   const canSave = !!speciesId;
@@ -975,8 +967,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         {photo
           ? <img src={photo} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
           : <div style={{ height: 140, background: T.parchmentDeep, border: `1px dashed ${T.cardEdge}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>No photo yet</div>}
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pickPhoto} style={{ display: 'none' }} />
-        <button onClick={() => fileRef.current && fileRef.current.click()} style={{ marginTop: 10, background: T.brass, color: T.oceanDeep, border: 'none', padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+        <button onClick={takePhoto} style={{ marginTop: 10, background: T.brass, color: T.oceanDeep, border: 'none', padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
           <Camera size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> {photo ? 'Replace photo' : 'Take or choose photo'}
         </button>
       </Card>
