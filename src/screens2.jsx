@@ -20,6 +20,8 @@ import {
   inputStyle,
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 /* ============================================================
    SPECIES DETAIL
@@ -865,62 +867,194 @@ function compassDir(deg) {
   return dirs[Math.round(((deg % 360) / 22.5)) % 16];
 }
 
+function moonGroup(phase) {
+  if (phase == null) return null;
+  if (phase < 0.03 || phase >= 0.97) return 'new';
+  if (phase < 0.47) return 'waxing';
+  if (phase < 0.53) return 'full';
+  return 'waning';
+}
+function timeOfDay(sunAlt, dateIso) {
+  if (sunAlt == null) return null;
+  if (sunAlt > 6) return 'day';
+  if (sunAlt < -6) return 'night';
+  const h = new Date(dateIso || Date.now()).getUTCHours();
+  return h < 12 ? 'dawn' : 'dusk';
+}
+
 export function CatchLogScreen({ state, onNew, onView }) {
+  const [view, setView] = useState('list'); // 'list' | 'map'
+  const [filters, setFilters] = useState({ speciesId: '', moon: '', tod: '' });
   const items = (state.catchLog || []).slice().sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
+
+  const filtered = useMemo(() => items.filter(c => {
+    if (filters.speciesId && c.speciesId !== filters.speciesId) return false;
+    if (filters.moon && moonGroup(c.moonPhase) !== filters.moon) return false;
+    if (filters.tod && timeOfDay(c.sunAlt, c.dateIso) !== filters.tod) return false;
+    return true;
+  }), [items, filters]);
+
+  const speciesInLog = useMemo(() => {
+    const ids = new Set(items.map(c => c.speciesId).filter(Boolean));
+    return Array.from(ids).map(id => speciesById(id)).filter(Boolean).sort((a, b) => a.commonName.localeCompare(b.commonName));
+  }, [items]);
+
+  const chip = (key, group, label) => {
+    const active = filters[group] === key;
+    return (
+      <button onClick={() => setFilters(f => ({ ...f, [group]: active ? '' : key }))} style={{
+        background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
+        border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
+        fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
+      }}>{label}</button>
+    );
+  };
+
   return (
     <div style={{ padding: '16px 16px 8px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
         <H1 size={22}>Catch Log</H1>
         <button onClick={onNew} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer' }}>
-          <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW CATCH
+          <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
       </div>
+
       {items.length === 0 ? (
         <Card>
           <div style={{ textAlign: 'center', padding: 18, color: T.inkSoft }}>
             <Camera size={36} color={T.brass} style={{ display: 'block', margin: '0 auto 10px' }} />
             <div style={{ fontWeight: 700, color: T.ink, marginBottom: 6 }}>No catches logged yet</div>
-            <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tap <b>NEW CATCH</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tap <b>NEW</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
           </div>
         </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map(c => {
-            const s = speciesById(c.speciesId);
-            const when = new Date(c.dateIso);
-            return (
-              <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ display: 'flex', gap: 12, alignItems: 'stretch', padding: 10 }}>
-                {c.photo
-                  ? <img src={c.photo} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 6 }} />
-                  : <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={26} color={T.inkMute} /></div>}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{s ? s.commonName : (c.speciesId || 'Unknown')}</div>
-                  <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
-                    {when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                  </div>
-                  {c.lat != null && c.lon != null && (
-                    <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
-                      {c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°
-                    </div>
-                  )}
-                  <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
-                    {c.length ? `${c.length} in · ` : ''}
-                    {c.sunAlt != null ? `Sun ${c.sunAlt.toFixed(0)}° ${compassDir(c.sunAz || 0)} · ` : ''}
-                    {c.moonIllum != null ? `${c.moonName || 'Moon'} ${Math.round(c.moonIllum * 100)}%` : ''}
-                  </div>
-                  {c.weather && (
-                    <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
-                      {c.weather.tempF != null ? `${Math.round(c.weather.tempF)}°F · ` : ''}
-                      {c.weather.windMph != null ? `Wind ${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph · ` : ''}
-                      {c.weather.cloudPct != null ? `${Math.round(c.weather.cloudPct)}% cloud` : ''}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <>
+          {/* List / Map toggle */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            <button onClick={() => setView('list')} style={{ padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'list' ? T.brass : T.parchmentDeep, color: view === 'list' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'list' ? T.brass : T.cardEdge}` }}>List</button>
+            <button onClick={() => setView('map')} style={{ padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'map' ? T.brass : T.parchmentDeep, color: view === 'map' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'map' ? T.brass : T.cardEdge}` }}>Map</button>
+          </div>
+
+          {/* Filters */}
+          <div style={{ marginBottom: 10 }}>
+            <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
+              <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Species</span>
+              {chip('', 'speciesId', 'All')}
+              {speciesInLog.map(s => chip(s.id, 'speciesId', s.commonName))}
+            </div>
+            <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
+              <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Moon</span>
+              {chip('', 'moon', 'Any')}
+              {chip('new', 'moon', 'New')}
+              {chip('waxing', 'moon', 'Waxing')}
+              {chip('full', 'moon', 'Full')}
+              {chip('waning', 'moon', 'Waning')}
+            </div>
+            <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+              <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
+              {chip('', 'tod', 'Any')}
+              {chip('dawn', 'tod', 'Dawn')}
+              {chip('day', 'tod', 'Day')}
+              {chip('dusk', 'tod', 'Dusk')}
+              {chip('night', 'tod', 'Night')}
+            </div>
+          </div>
+
+          {view === 'list'
+            ? <CatchListView items={filtered} onView={onView} />
+            : <CatchMapView items={filtered} onView={onView} />}
+        </>
       )}
+    </div>
+  );
+}
+
+function CatchListView({ items, onView }) {
+  if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map(c => {
+        const s = speciesById(c.speciesId);
+        const when = new Date(c.dateIso);
+        return (
+          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ display: 'flex', gap: 12, alignItems: 'stretch', padding: 10 }}>
+            {c.photo
+              ? <img src={c.photo} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 6 }} />
+              : <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={26} color={T.inkMute} /></div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{s ? s.commonName : (c.speciesId || 'Unknown')}</div>
+              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>{when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+              {c.lat != null && c.lon != null && <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°</div>}
+              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                {c.length ? `${c.length} in · ` : ''}
+                {c.sunAlt != null ? `Sun ${c.sunAlt.toFixed(0)}° ${compassDir(c.sunAz || 0)} · ` : ''}
+                {c.moonIllum != null ? `${c.moonName || 'Moon'} ${Math.round(c.moonIllum * 100)}%` : ''}
+              </div>
+              {c.weather && (
+                <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
+                  {c.weather.tempF != null ? `${Math.round(c.weather.tempF)}°F · ` : ''}
+                  {c.weather.windMph != null ? `Wind ${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph · ` : ''}
+                  {c.weather.cloudPct != null ? `${Math.round(c.weather.cloudPct)}% cloud` : ''}
+                </div>
+              )}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function CatchMapView({ items, onView }) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef(null);
+
+  // Init map once on mount.
+  useEffect(() => {
+    if (mapRef.current || !containerRef.current) return;
+    const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true }).setView([26.5, -88], 6);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> &middot; &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd', maxZoom: 19,
+    }).addTo(map);
+    markersRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    return () => { map.remove(); mapRef.current = null; markersRef.current = null; };
+  }, []);
+
+  // Redraw markers when items change.
+  useEffect(() => {
+    if (!mapRef.current || !markersRef.current) return;
+    markersRef.current.clearLayers();
+    const located = items.filter(c => c.lat != null && c.lon != null);
+    for (const c of located) {
+      const s = speciesById(c.speciesId);
+      const icon = c.photo
+        ? L.divIcon({ html: `<img class="kyc-pin-img" src="${c.photo}">`, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
+        : L.divIcon({ html: `<div class="kyc-pin"></div>`, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
+      const when = new Date(c.dateIso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const m = L.marker([c.lat, c.lon], { icon }).addTo(markersRef.current);
+      const popup = `<b style="font-size:13px">${(s && s.commonName) || 'Unknown'}</b><br><span style="color:#A7BECB">${when}</span>${c.length ? `<br>${c.length} in` : ''}${c.moonName ? `<br>${c.moonName} ${Math.round((c.moonIllum||0)*100)}%` : ''}<br><a href="#" style="color:#34C2D6">View</a>`;
+      m.bindPopup(popup);
+      if (onView) m.on('popupopen', e => {
+        const a = e.popup.getElement().querySelector('a');
+        if (a) a.onclick = ev => { ev.preventDefault(); onView(c.id); };
+      });
+    }
+    if (located.length === 1) mapRef.current.setView([located[0].lat, located[0].lon], 9);
+    else if (located.length > 1) {
+      mapRef.current.fitBounds(L.latLngBounds(located.map(c => [c.lat, c.lon])), { padding: [40, 40], maxZoom: 11 });
+    }
+  }, [items, onView]);
+
+  const located = items.filter(c => c.lat != null && c.lon != null).length;
+  return (
+    <div>
+      <div ref={containerRef} style={{ height: 420, borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }} />
+      <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, textAlign: 'center' }}>
+        {located} of {items.length} catch{items.length === 1 ? '' : 'es'} have GPS · pins are tappable
+      </div>
     </div>
   );
 }
