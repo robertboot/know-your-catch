@@ -200,20 +200,20 @@ export default function App() {
     }}>
       {/* Top app bar */}
       <div style={{
-        background: T.oceanDeep, color: T.parchment, padding: '14px 16px 10px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: T.oceanDeep, color: T.parchment, padding: '8px 12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         borderBottom: `1px solid ${T.cardEdge}`, position: 'sticky', top: 0, zIndex: 50,
       }}>
         {isHome ? (
           <button
             onClick={() => reset([{ name: 'home' }])}
             aria-label="ReelIntel — home"
-            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}
           >
             <img
               src={`${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`}
               alt="ReelIntel — identify, check rules, log catch, find better spots"
-              style={{ height: 64, width: 'auto', maxWidth: 320, display: 'block' }}
+              style={{ height: 112, width: 'auto', maxWidth: '100%', display: 'block', objectFit: 'contain' }}
             />
           </button>
         ) : (
