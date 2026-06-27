@@ -18,7 +18,7 @@ import {
 import {
   SpeciesDetailScreen, CompareScreen, RegulationsListScreen, RegulationDetailScreen,
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
-  CatchLogScreen, CatchEntryScreen,
+  CatchLogScreen, CatchEntryScreen, CatchDetailScreen,
 } from './screens2.jsx';
 
 const ALERT_COUNT = 2;
@@ -142,7 +142,10 @@ export default function App() {
       body = <CatchLogScreen state={state} onNew={() => push({ name: 'catch_entry' })} onView={(id) => push({ name: 'catch_detail', id })} />;
       break;
     case 'catch_entry':
-      body = <CatchEntryScreen state={state} jurisdiction={jurisdiction} update={update} onDone={() => reset([{ name: 'catch_log' }])} onCancel={pop} />;
+      body = <CatchEntryScreen state={state} jurisdiction={jurisdiction} update={update} editingId={screen.editingId} onDone={() => reset([{ name: 'catch_log' }])} onCancel={pop} />;
+      break;
+    case 'catch_detail':
+      body = <CatchDetailScreen id={screen.id} state={state} update={update} onEdit={() => push({ name: 'catch_entry', editingId: screen.id })} onBack={pop} />;
       break;
     case 'regulation':
       body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} />;

@@ -1059,16 +1059,95 @@ function CatchMapView({ items, onView }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel }) {
-  const [speciesId, setSpeciesId] = useState('');
-  const [length, setLength] = useState('');
-  const [weight, setWeight] = useState('');
-  const [notes, setNotes] = useState('');
-  const [photo, setPhoto] = useState(null);
-  const [loc, setLoc] = useState({ lat: null, lon: null, error: null, loading: true });
-  const [weather, setWeather] = useState(null);
-  const [wxStatus, setWxStatus] = useState('idle');
-  const now = useMemo(() => new Date(), []);
+export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
+  const c = (state.catchLog || []).find(x => x.id === id);
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const t = setTimeout(() => setConfirming(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirming]);
+  if (!c) return <div style={{ padding: 20, color: T.inkSoft }}>Catch not found.</div>;
+  const s = speciesById(c.speciesId);
+  const when = new Date(c.dateIso);
+  const remove = () => {
+    update({ catchLog: (state.catchLog || []).filter(x => x.id !== c.id) });
+    onBack();
+  };
+  return (
+    <div style={{ padding: '16px 16px 24px' }}>
+      {c.photo
+        ? <img src={c.photo} alt="" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14 }} />
+        : <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>}
+
+      <H1 size={22}>{s ? s.commonName : (c.speciesId || 'Unknown')}</H1>
+      {s && <div style={{ fontStyle: 'italic', fontSize: 13, color: T.inkSoft, marginBottom: 14 }}>{s.scientific}</div>}
+
+      <Card style={{ marginBottom: 12 }}>
+        <DetailRow label="When" value={when.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })} />
+        {c.lat != null && c.lon != null && <DetailRow label="Where" value={`${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°`} />}
+        {c.length != null && <DetailRow label="Length" value={`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`} />}
+        {c.weight != null && <DetailRow label="Weight" value={`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`} />}
+        {c.jurisdiction && <DetailRow label="Waters" value={(jurisdictionById(c.jurisdiction) || { name: c.jurisdiction }).name} />}
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Conditions when caught</SectionLabel>
+        {c.sunAlt != null && <DetailRow label="Sun" value={`${c.sunAlt.toFixed(1)}° altitude · ${compassDir(c.sunAz || 0)} (${(c.sunAz||0).toFixed(0)}°)`} />}
+        {c.moonName && <DetailRow label="Moon" value={`${c.moonName} · ${Math.round((c.moonIllum||0)*100)}% illum`} />}
+        {c.weather ? (
+          <>
+            {c.weather.tempF != null && <DetailRow label="Temp" value={`${Math.round(c.weather.tempF)}°F`} />}
+            {c.weather.windMph != null && <DetailRow label="Wind" value={`${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph`} />}
+            {c.weather.cloudPct != null && <DetailRow label="Clouds" value={`${Math.round(c.weather.cloudPct)}%`} />}
+            {c.weather.pressureMb != null && <DetailRow label="Pressure" value={`${Math.round(c.weather.pressureMb)} mb`} />}
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 6 }}>Weather wasn't captured (offline at the time).</div>
+        )}
+      </Card>
+
+      {c.notes && (
+        <Card style={{ marginBottom: 12 }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Notes</SectionLabel>
+          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.notes}</div>
+        </Card>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+        <GhostButton onClick={onEdit} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Pencil size={14} /> Edit
+        </GhostButton>
+        <button onClick={confirming ? remove : () => setConfirming(true)} style={{
+          flex: 1, background: confirming ? T.closed : 'transparent',
+          color: confirming ? '#fff' : T.closed,
+          border: `1.5px solid ${T.closed}`, padding: '10px 14px', borderRadius: 6,
+          fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <Trash2 size={14} /> {confirming ? 'Tap again to confirm' : 'Delete'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId }) {
+  const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
+  const isEdit = !!existing;
+  const [speciesId, setSpeciesId] = useState(existing?.speciesId || '');
+  const [length, setLength] = useState(existing?.length != null ? String(existing.length) : '');
+  const [weight, setWeight] = useState(existing?.weight != null ? String(existing.weight) : '');
+  const [notes, setNotes] = useState(existing?.notes || '');
+  const [photo, setPhoto] = useState(existing?.photo || null);
+  const [loc, setLoc] = useState(
+    existing && existing.lat != null
+      ? { lat: existing.lat, lon: existing.lon, error: null, loading: false }
+      : { lat: null, lon: null, error: null, loading: true }
+  );
+  const [weather, setWeather] = useState(existing?.weather || null);
+  const [wxStatus, setWxStatus] = useState(existing?.weather ? 'ok' : 'idle');
+  const now = useMemo(() => existing ? new Date(existing.dateIso) : new Date(), [existing]);
 
   // Native iOS via Capacitor when wrapped; web geolocation otherwise.
   // Longer timeout handles offshore cold-start (no A-GPS assist).
@@ -1078,11 +1157,13 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       .then(({ lat, lon }) => setLoc({ lat, lon, error: null, loading: false }))
       .catch(err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }));
   };
-  useEffect(() => { fetchGps(); }, []);
+  useEffect(() => { if (!isEdit) fetchGps(); }, []);
 
   // Weather fetch once we have coords (best effort; offline = skipped).
+  // In edit mode we keep the original weather unless the user re-fetches GPS.
   useEffect(() => {
     if (loc.lat == null || loc.lon == null) return;
+    if (isEdit && weather) return;
     setWxStatus('loading');
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl&temperature_unit=fahrenheit&wind_speed_unit=mph`;
     fetch(url).then(r => r.ok ? r.json() : Promise.reject()).then(j => {
@@ -1106,7 +1187,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const canSave = !!speciesId;
   const save = () => {
     const entry = {
-      id: 'c_' + now.getTime(),
+      id: existing ? existing.id : 'c_' + Date.now(),
       speciesId,
       dateIso: now.toISOString(),
       lat: loc.lat, lon: loc.lon,
@@ -1118,9 +1199,13 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       sunAz: sun ? sun.azimuthDeg : null,
       moonPhase: moon.phase, moonIllum: moon.illumination, moonName: moon.name,
       weather: weather || null,
-      jurisdiction: jurisdiction ? jurisdiction.id : null,
+      jurisdiction: jurisdiction ? jurisdiction.id : (existing?.jurisdiction || null),
     };
-    update({ catchLog: [entry, ...(state.catchLog || [])] });
+    if (existing) {
+      update({ catchLog: (state.catchLog || []).map(c => c.id === existing.id ? entry : c) });
+    } else {
+      update({ catchLog: [entry, ...(state.catchLog || [])] });
+    }
     onDone();
   };
 
@@ -1128,7 +1213,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   return (
     <div style={{ padding: '16px 16px 24px' }}>
-      <H1 size={22} style={{ marginBottom: 14 }}>Log a catch</H1>
+      <H1 size={22} style={{ marginBottom: 14 }}>{isEdit ? 'Edit catch' : 'Log a catch'}</H1>
 
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Photo</SectionLabel>
@@ -1179,7 +1264,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
       <div style={{ display: 'flex', gap: 8 }}>
         <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
-        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>Save catch</PrimaryButton>
+        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'Save catch'}</PrimaryButton>
       </div>
     </div>
   );
