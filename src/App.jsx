@@ -208,12 +208,20 @@ export default function App() {
           <button
             onClick={() => reset([{ name: 'home' }])}
             aria-label="ReelIntel — home"
-            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}
+            style={{
+              background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
+              height: 72, overflow: 'hidden',
+            }}
           >
             <img
               src={`${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`}
               alt="ReelIntel — identify, check rules, log catch, find better spots"
-              style={{ height: 112, width: 'auto', maxWidth: '100%', display: 'block', objectFit: 'contain' }}
+              style={{
+                height: 140, width: 'auto', maxWidth: '100%',
+                display: 'block', objectFit: 'contain',
+                marginLeft: -10,
+              }}
             />
           </button>
         ) : (
