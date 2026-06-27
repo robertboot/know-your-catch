@@ -232,3 +232,114 @@ export function moonPhase(date) {
     : 'New Moon';
   return { phase, illumination, name };
 }
+
+/* ------------------------------------------------------------------
+   Share / quick report
+   ------------------------------------------------------------------ */
+
+const _compass = (deg) => {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+};
+
+function _both(pb, units) {
+  const out = [];
+  if (pb.weight != null) out.push(formatWeight(pb.weight, units));
+  if (pb.length != null) out.push(formatSize(pb.length, units));
+  return out;
+}
+
+export function buildPBReport({ anglerName, species, pb, units }) {
+  const name = (anglerName || '').trim() || 'Angler';
+  const primary = pb.primaryMetric === 'weight'
+    ? formatWeight(pb.weight, units)
+    : formatSize(pb.length, units);
+  const secondary = pb.primaryMetric === 'weight'
+    ? (pb.length != null ? formatSize(pb.length, units) : null)
+    : (pb.weight != null ? formatWeight(pb.weight, units) : null);
+  const jur = jurisdictionById(pb.jurisdiction);
+  const lines = [
+    `${name}'s ${species.commonName} — Personal Best`,
+    '',
+    `🏆 ${primary}${secondary ? ` · ${secondary}` : ''}`,
+    `📅 ${pb.date || ''}`.trim(),
+  ];
+  if (jur) lines.push(`📍 ${jur.name}`);
+  if (pb.location) lines.push(`   ${pb.location}`);
+  if (pb.gearBait) lines.push(`🎣 ${pb.gearBait}`);
+  if (pb.notes) { lines.push(''); lines.push(pb.notes); }
+  lines.push('');
+  lines.push('Logged with Know Your Catch');
+  return lines.filter(l => l != null).join('\n');
+}
+
+export function buildCatchReport({ anglerName, species, c, units }) {
+  const name = (anglerName || '').trim() || 'Angler';
+  const speciesName = species ? species.commonName : (c.speciesId || 'Unknown species');
+  const lines = [
+    `${name}'s ${speciesName}`,
+    '',
+  ];
+  const measured = [];
+  if (c.weight != null) measured.push(`${c.weight} ${units === 'metric' ? 'kg' : 'lb'}`);
+  if (c.length != null) measured.push(`${c.length} ${units === 'metric' ? 'cm' : 'in'}`);
+  if (measured.length) lines.push(`🐟 ${measured.join(' · ')}`);
+  if (c.dateIso) {
+    const d = new Date(c.dateIso);
+    lines.push(`📅 ${d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
+  }
+  const jur = jurisdictionById(c.jurisdiction);
+  if (jur) lines.push(`📍 ${jur.name}`);
+  if (c.lat != null && c.lon != null) lines.push(`   ${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°`);
+  if (c.sunAlt != null) lines.push(`🌅 Sun ${c.sunAlt.toFixed(0)}° ${_compass(c.sunAz || 0)}`);
+  if (c.moonName) lines.push(`🌙 ${c.moonName} · ${Math.round((c.moonIllum || 0) * 100)}%`);
+  if (c.weather) {
+    const w = c.weather;
+    const wbits = [];
+    if (w.tempF != null) wbits.push(`${Math.round(w.tempF)}°F`);
+    if (w.windMph != null) wbits.push(`${_compass(w.windDir || 0)} ${Math.round(w.windMph)} mph`);
+    if (w.cloudPct != null) wbits.push(`${Math.round(w.cloudPct)}% clouds`);
+    if (w.pressureMb != null) wbits.push(`${Math.round(w.pressureMb)} mb`);
+    if (wbits.length) lines.push(`🌤  ${wbits.join(' · ')}`);
+  }
+  if (c.notes) { lines.push(''); lines.push(c.notes); }
+  lines.push('');
+  lines.push('Logged with Know Your Catch');
+  return lines.join('\n');
+}
+
+async function _dataUrlToFile(dataUrl, name) {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    return new File([blob], name, { type: blob.type || 'image/jpeg' });
+  } catch {
+    return null;
+  }
+}
+
+/* Share via Web Share API; falls back to clipboard.
+   Returns: 'shared' | 'copied' | 'cancelled' | 'failed' */
+export async function shareReport({ title, text, photoDataUrl, fileName = 'catch.jpg' }) {
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      if (photoDataUrl && navigator.canShare) {
+        const file = await _dataUrlToFile(photoDataUrl, fileName);
+        if (file && navigator.canShare({ files: [file], text, title })) {
+          await navigator.share({ files: [file], text, title });
+          return 'shared';
+        }
+      }
+      await navigator.share({ text, title });
+      return 'shared';
+    } catch (e) {
+      if (e && e.name === 'AbortError') return 'cancelled';
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+}

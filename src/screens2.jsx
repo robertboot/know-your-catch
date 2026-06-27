@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench, Ruler, Star,
+  Wrench, Ruler, Star, Share2,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -12,11 +12,11 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
-  sunPosition, moonPhase,
+  sunPosition, moonPhase, buildPBReport, buildCatchReport,
 } from './helpers.js';
 import {
   StatusPill, FishMark, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
-  DetailRow, Field, PickButton, SpeciesRow, StarButton,
+  DetailRow, Field, PickButton, SpeciesRow, StarButton, ShareReportModal,
   inputStyle,
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
@@ -754,6 +754,7 @@ export function PBsScreen({ state, onAdd, onView }) {
 
 export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const s = speciesById(speciesId); const pb = state.pbs[speciesId];
+  const [shareOpen, setShareOpen] = useState(false);
   if (!s || !pb) return <div style={{ padding: 20 }}>No PB.</div>;
   const remove = () => {
     if (!window.confirm('Delete this personal best and all its history?')) return;
@@ -767,6 +768,15 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const secondary = pb.primaryMetric === 'weight'
     ? { val: formatSize(pb.length, state.units), label: 'Length' }
     : { val: formatWeight(pb.weight, state.units), label: 'Weight' };
+  const reportText = buildPBReport({ anglerName: state.anglerName, species: s, pb, units: state.units });
+  const speciesFallbackPhoto = speciesPhoto(s.id);
+  const reportPhotoUrl = pb.photo || (speciesFallbackPhoto ? speciesFallbackPhoto.url : null);
+  const meta = [
+    { label: 'Date', value: pb.date },
+    pb.jurisdiction && { label: 'Waters', value: jurisdictionById(pb.jurisdiction)?.name || pb.jurisdiction },
+    pb.location && { label: 'Location', value: pb.location },
+    pb.gearBait && { label: 'Gear / bait', value: pb.gearBait },
+  ].filter(Boolean);
   return (
     <div style={{ padding: '16px 16px' }}>
       <Card style={{ background: T.oceanDeep, color: T.parchment, border: `1.5px solid ${T.brass}`, textAlign: 'center', padding: 18, marginBottom: 12 }}>
@@ -807,9 +817,28 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         </Card>
       )}
       <div style={{ display: 'flex', gap: 8 }}>
-        <PrimaryButton onClick={onEdit}><Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Update / replace</PrimaryButton>
+        <PrimaryButton onClick={onEdit} style={{ flex: 1 }}><Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Update</PrimaryButton>
+        <GhostButton onClick={() => setShareOpen(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Share2 size={14} /> Share
+        </GhostButton>
         <GhostButton onClick={remove} style={{ color: T.closed, borderColor: T.closed, padding: '14px 14px' }}><Trash2 size={16} /></GhostButton>
       </div>
+
+      <ShareReportModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title="Personal Best"
+        anglerName={state.anglerName}
+        species={s}
+        photoUrl={reportPhotoUrl}
+        photoDataUrl={pb.photo}
+        primary={{ label: primary.label, value: primary.val }}
+        secondary={{ label: secondary.label, value: secondary.val }}
+        meta={meta}
+        notes={pb.notes}
+        reportText={reportText}
+        reportTitle={`${(state.anglerName || 'My').trim() || 'My'} ${s.commonName} PB`}
+      />
     </div>
   );
 }
@@ -1003,6 +1032,18 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
+      <Card style={{ marginBottom: 10 }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Your name</SectionLabel>
+        <input
+          value={state.anglerName || ''}
+          onChange={(e) => update({ anglerName: e.target.value })}
+          placeholder="e.g. Captain Bob"
+          style={{ ...inputStyle, background: T.card }}
+        />
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.45 }}>
+          Shown on your shared catch and Personal Best report cards. Stays on this device.
+        </div>
+      </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Fishing waters</SectionLabel>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1274,6 +1315,7 @@ function CatchMapView({ items, onView }) {
 export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }) {
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   useEffect(() => {
     if (!confirming) return;
     const t = setTimeout(() => setConfirming(false), 4000);
@@ -1337,6 +1379,9 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+        <GhostButton onClick={() => setShareOpen(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Share2 size={14} /> Share
+        </GhostButton>
         <GhostButton onClick={onEdit} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Pencil size={14} /> Edit
         </GhostButton>
@@ -1347,9 +1392,53 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }
           fontSize: 14, fontWeight: 700, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
-          <Trash2 size={14} /> {confirming ? 'Tap again to confirm' : 'Delete'}
+          <Trash2 size={14} /> {confirming ? 'Confirm' : 'Delete'}
         </button>
       </div>
+
+      {(() => {
+        const speciesFallback = s ? speciesPhoto(s.id) : null;
+        const reportPhotoUrl = c.photo || (speciesFallback ? speciesFallback.url : null);
+        const measurements = [];
+        if (c.weight != null) measurements.push(`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`);
+        if (c.length != null) measurements.push(`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`);
+        const primary = measurements[0]
+          ? { label: c.weight != null ? 'Weight' : 'Length', value: measurements[0] }
+          : { label: 'Logged', value: '—' };
+        const secondary = measurements[1]
+          ? { label: c.weight != null && c.length != null ? 'Length' : '—', value: measurements[1] }
+          : null;
+        const meta = [
+          { label: 'Date', value: when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) },
+          c.jurisdiction && { label: 'Waters', value: (jurisdictionById(c.jurisdiction) || { name: c.jurisdiction }).name },
+          (c.lat != null && c.lon != null) && { label: 'Location', value: `${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°` },
+        ].filter(Boolean);
+        const conditions = [];
+        if (c.sunAlt != null) conditions.push({ label: 'Sun', value: `${c.sunAlt.toFixed(0)}° ${compassDir(c.sunAz || 0)}` });
+        if (c.moonName) conditions.push({ label: 'Moon', value: `${c.moonName} · ${Math.round((c.moonIllum || 0) * 100)}%` });
+        if (c.weather?.tempF != null) conditions.push({ label: 'Temp', value: `${Math.round(c.weather.tempF)}°F` });
+        if (c.weather?.windMph != null) conditions.push({ label: 'Wind', value: `${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph` });
+        if (c.weather?.cloudPct != null) conditions.push({ label: 'Clouds', value: `${Math.round(c.weather.cloudPct)}%` });
+        if (c.weather?.pressureMb != null) conditions.push({ label: 'Pressure', value: `${Math.round(c.weather.pressureMb)} mb` });
+        return (
+          <ShareReportModal
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            title="Catch Report"
+            anglerName={state.anglerName}
+            species={s}
+            photoUrl={reportPhotoUrl}
+            photoDataUrl={c.photo}
+            primary={primary}
+            secondary={secondary}
+            meta={meta}
+            conditions={conditions}
+            notes={c.notes}
+            reportText={buildCatchReport({ anglerName: state.anglerName, species: s, c, units: state.units })}
+            reportTitle={`${(state.anglerName || 'My').trim() || 'My'} ${s ? s.commonName : 'catch'}`}
+          />
+        );
+      })()}
     </div>
   );
 }

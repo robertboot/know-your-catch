@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search } from 'lucide-react';
+import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
-import { speciesPhoto } from './helpers.js';
+import { speciesPhoto, shareReport } from './helpers.js';
 
 /* ============================================================
    STATUS PILL — colorblind-safe via shape + color
@@ -272,6 +272,146 @@ export function KeepConfirmModal({ species, onClose }) {
           You are responsible for: confirming the species, checking the current season, measuring length correctly (fork vs. total), counting against bag and vessel limits, and carrying required gear.
         </div>
         <PrimaryButton onClick={onClose}>I've verified — close</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SHARE REPORT — visual quick-report card for a PB or a catch
+   ============================================================ */
+export function ShareReportModal({
+  open, onClose,
+  title, // header chip above the species name, e.g. "Personal Best" or "Catch Report"
+  anglerName,
+  species,
+  photoUrl,           // string or null
+  primary,            // { label, value } main metric
+  secondary,          // { label, value } supporting metric, optional
+  meta = [],          // [{ label, value }] — date, waters, etc.
+  conditions = [],    // [{ label, value }] — sun, moon, weather
+  notes,
+  reportText,
+  reportTitle,
+  photoDataUrl,       // for sharing
+}) {
+  const [status, setStatus] = useState(null);
+  if (!open) return null;
+  const displayName = (anglerName || '').trim() || 'Angler';
+  const handleShare = async () => {
+    setStatus('working');
+    const r = await shareReport({ title: reportTitle || title, text: reportText, photoDataUrl });
+    setStatus(r);
+  };
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalStyle, padding: 0, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 8px' }}>
+          <H1 size={18}>Share report</H1>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkMute, padding: 4 }}><X size={20} /></button>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, padding: '4px 16px 12px' }}>
+          {/* The card — designed to look good as a screenshot */}
+          <div style={{
+            background: T.oceanDeep, color: T.parchment,
+            border: `1.5px solid ${T.brass}`, borderRadius: 12,
+            overflow: 'hidden',
+          }}>
+            <div style={{ padding: '14px 16px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, letterSpacing: 2, color: T.brass, fontWeight: 800, textTransform: 'uppercase' }}>
+                {displayName}
+              </div>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, color: '#B8C5CD', fontWeight: 600, marginTop: 2 }}>
+                {title}
+              </div>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700, marginTop: 6, color: T.parchment, lineHeight: 1.2 }}>
+                {species ? species.commonName : 'Unknown species'}
+              </div>
+              {species?.scientific && (
+                <div style={{ fontStyle: 'italic', fontSize: 12, color: '#B8C5CD', marginTop: 2 }}>{species.scientific}</div>
+              )}
+            </div>
+
+            {photoUrl && (
+              <img src={photoUrl} alt="" style={{ width: '100%', display: 'block', maxHeight: 260, objectFit: 'cover' }} />
+            )}
+
+            <div style={{ padding: 14 }}>
+              <div style={{ background: 'rgba(244, 227, 193, 0.1)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 10, letterSpacing: 1.6, color: T.brass, fontWeight: 800, textTransform: 'uppercase' }}>
+                  {primary?.label}
+                </div>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 32, fontWeight: 700, color: T.parchment, marginTop: 4, lineHeight: 1 }}>
+                  {primary?.value || '—'}
+                </div>
+                {secondary?.value && (
+                  <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 6 }}>
+                    {secondary.label}: {secondary.value}
+                  </div>
+                )}
+              </div>
+
+              {meta.length > 0 && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {meta.map((m, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+                      <span style={{ color: '#B8C5CD' }}>{m.label}</span>
+                      <span style={{ color: T.parchment, fontWeight: 600, textAlign: 'right', maxWidth: '65%' }}>{m.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {conditions.length > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(244, 227, 193, 0.18)' }}>
+                  <div style={{ fontSize: 10, letterSpacing: 1.5, color: T.brass, fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+                    Conditions
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {conditions.map((c, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
+                        <span style={{ color: '#B8C5CD' }}>{c.label}</span>
+                        <span style={{ color: T.parchment, fontWeight: 600, textAlign: 'right', maxWidth: '65%' }}>{c.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {notes && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(244, 227, 193, 0.18)', fontSize: 12, color: '#D8E0E4', lineHeight: 1.5, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>
+                  "{notes}"
+                </div>
+              )}
+
+              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(244, 227, 193, 0.18)', textAlign: 'center', fontSize: 10, letterSpacing: 1.5, color: T.brass, fontWeight: 700 }}>
+                KNOW YOUR CATCH
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.5, textAlign: 'center' }}>
+            Tip: long-press the card to screenshot, or tap Share to send the summary{photoDataUrl ? ' with the photo' : ''}.
+          </div>
+        </div>
+
+        <div style={{ padding: '10px 16px 14px', borderTop: `1px solid ${T.cardEdge}` }}>
+          {status === 'copied' && (
+            <div style={{ fontSize: 12, color: T.brassDeep, marginBottom: 8, textAlign: 'center' }}>
+              Copied to clipboard — paste anywhere.
+            </div>
+          )}
+          {status === 'failed' && (
+            <div style={{ fontSize: 12, color: T.closed, marginBottom: 8, textAlign: 'center' }}>
+              Couldn't share or copy. Take a screenshot instead.
+            </div>
+          )}
+          <PrimaryButton onClick={handleShare}>
+            <Share2 size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />
+            {status === 'working' ? 'Working…' : 'Share…'}
+          </PrimaryButton>
+        </div>
       </div>
     </div>
   );

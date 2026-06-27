@@ -134,7 +134,7 @@ function FeaturedCard({ species, status, bag, onClick }) {
 
 export function HomeScreen({
   state, jurisdiction, stale, onChangeJurisdiction,
-  onIdentify, onRegulations, onReport, onSpecies, onSpeciesList,
+  onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
 }) {
   const jurId = jurisdiction?.id || 'fed_gulf';
   const featured = FEATURED_IDS
@@ -185,6 +185,22 @@ export function HomeScreen({
         <ActionTile icon={<ClipboardList size={22} />} title="Check Regulations" subtitle="View rules, limits and seasons" onClick={onRegulations} />
         <div style={{ gridColumn: '1 / -1' }}>
           <ActionTile icon={<Camera size={22} />} title="Log Catch" subtitle="Photo + GPS + conditions — build your map" onClick={onReport} />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <button onClick={onPBs} style={{
+            width: '100%', background: 'transparent', color: T.brass,
+            border: `1.5px dashed ${T.brass}`, borderRadius: 10,
+            padding: '10px 14px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+          }}>
+            <Trophy size={16} /> My Personal Bests
+            {state?.pbs && Object.keys(state.pbs).length > 0 && (
+              <span style={{ background: T.brass, color: T.oceanDeep, fontSize: 11, fontWeight: 800, padding: '1px 8px', borderRadius: 999 }}>
+                {Object.keys(state.pbs).length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 

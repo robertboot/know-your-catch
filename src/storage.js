@@ -6,6 +6,7 @@ const STORAGE_KEY = 'kyc_app_state_v1';
 export const defaultState = {
   jurisdiction: null,
   units: 'imperial',
+  anglerName: '', // Used in shared catch/PB report cards. Empty falls back to "Angler".
   disclaimerAcceptedVersion: null,
   pbs: {},     // speciesId -> { length, weight, primaryMetric, date, location, notes, jurisdiction, gearBait, photo, history }
   notes: {},   // speciesId -> string

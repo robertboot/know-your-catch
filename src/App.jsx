@@ -83,6 +83,7 @@ export default function App() {
     onReport:     () => push({ name: 'catch_entry' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
+    onPBs:        () => push({ name: 'pbs' }),
   };
 
   // Build the body based on current screen.
