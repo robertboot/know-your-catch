@@ -291,7 +291,7 @@ export function HomeScreen({
         />
         <QuickTile
           icon={<Camera size={28} strokeWidth={1.8} />}
-          titleA="LOG" titleB="CATCH"
+          titleA="LOG YOUR" titleB="CATCH"
           subtitle="Photo, GPS and conditions"
           onClick={onReport}
         />
