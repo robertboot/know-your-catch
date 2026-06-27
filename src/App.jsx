@@ -154,7 +154,7 @@ export default function App() {
       body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} onAddPB={() => push({ name: 'pb_entry', speciesId: screen.id })} />;
       break;
     case 'species_list':
-      body = <SpeciesListScreen state={state} update={update} onPick={(id) => push({ name: 'species', id })} />;
+      body = <SpeciesListScreen state={state} jurisdiction={jurisdiction} update={update} onPick={(id) => push({ name: 'species', id })} />;
       break;
     case 'pbs':
       body = <PBsScreen state={state} onAdd={(id) => push({ name: 'pb_entry', speciesId: id })} onView={(id) => push({ name: 'pb_detail', speciesId: id })} />;

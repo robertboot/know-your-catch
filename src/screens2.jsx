@@ -595,9 +595,9 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
 /* ============================================================
    SPECIES LIST
    ============================================================ */
-export function SpeciesListScreen({ state, update, onPick }) {
+export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState('type'); // 'type' | 'name'
+  const [sort, setSort] = useState('type'); // 'type' | 'name' | 'status'
   const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
   const toggleFav = (id) => {
     if (!update) return;
@@ -608,23 +608,31 @@ export function SpeciesListScreen({ state, update, onPick }) {
   const catOrder = useMemo(() => Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i])), []);
   const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
 
-  const sorted = useMemo(() => {
-    const base = [...SPECIES];
-    base.sort((a, b) => {
-      if (sort === 'type') return ((catOrder[a.category] ?? 99) - (catOrder[b.category] ?? 99)) || a.commonName.localeCompare(b.commonName);
-      return a.commonName.localeCompare(b.commonName);
+  const rows = useMemo(() => {
+    const statusRank = { open: 0, upcoming: 1, closed: 2, unknown: 3 };
+    const list = SPECIES.map(s => {
+      const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+      const status = reg ? seasonState(reg.open).status : 'unknown';
+      return { s, reg, status };
     });
-    return base;
-  }, [sort, catOrder]);
+    list.sort((a, b) => {
+      if (sort === 'status') return (statusRank[a.status] - statusRank[b.status]) || a.s.commonName.localeCompare(b.s.commonName);
+      if (sort === 'type')   return ((catOrder[a.s.category] ?? 99) - (catOrder[b.s.category] ?? 99)) || a.s.commonName.localeCompare(b.s.commonName);
+      return a.s.commonName.localeCompare(b.s.commonName);
+    });
+    return list;
+  }, [sort, catOrder, jurisdiction]);
 
   const filtered = useMemo(() => {
     const lower = q.toLowerCase().trim();
-    if (!lower) return sorted;
-    return sorted.filter(s => s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)) || s.scientific.toLowerCase().includes(lower));
-  }, [q, sorted]);
+    if (!lower) return rows;
+    return rows.filter(r => r.s.commonName.toLowerCase().includes(lower)
+      || r.s.altNames.some(a => a.toLowerCase().includes(lower))
+      || r.s.scientific.toLowerCase().includes(lower));
+  }, [q, rows]);
 
-  const favRows = filtered.filter(s => favSet.has(s.id));
-  const otherRows = filtered.filter(s => !favSet.has(s.id));
+  const favRows = filtered.filter(r => favSet.has(r.s.id));
+  const otherRows = filtered.filter(r => !favSet.has(r.s.id));
 
   const segBtn = (key, label) => (
     <button onClick={() => setSort(key)} style={{
@@ -635,6 +643,8 @@ export function SpeciesListScreen({ state, update, onPick }) {
       border: `1.5px solid ${sort === key ? T.brass : T.cardEdge}`,
     }}>{label}</button>
   );
+
+  const statusLabel = { open: 'Open now', upcoming: 'Opens soon', closed: 'Closed', unknown: 'No data' };
 
   return (
     <div style={{ padding: '16px 16px' }}>
@@ -647,6 +657,7 @@ export function SpeciesListScreen({ state, update, onPick }) {
         <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
         {segBtn('type', 'Type')}
         {segBtn('name', 'A–Z')}
+        {segBtn('status', 'Status')}
       </div>
 
       {favRows.length > 0 && (
@@ -655,22 +666,33 @@ export function SpeciesListScreen({ state, update, onPick }) {
             <Star size={12} fill={T.brass} color={T.brass} /> Your fish
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
-            {favRows.map(s => <SpeciesRow key={'fav-' + s.id} species={s} onClick={() => onPick(s.id)} favorited={true} onToggleFavorite={() => toggleFav(s.id)} />)}
+            {favRows.map(({ s }) => <SpeciesRow key={'fav-' + s.id} species={s} onClick={() => onPick(s.id)} favorited={true} onToggleFavorite={() => toggleFav(s.id)} />)}
           </div>
         </>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {(() => {
-          const out = []; let lastCat = null;
-          for (const s of otherRows) {
-            if (sort === 'type' && s.category !== lastCat) {
-              lastCat = s.category;
-              out.push(
-                <div key={'h-' + s.category} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
-                  {catName(s.category)}
-                </div>
-              );
+          const out = []; let lastGroup = null;
+          for (const { s, status } of otherRows) {
+            if (sort === 'type') {
+              if (s.category !== lastGroup) {
+                lastGroup = s.category;
+                out.push(
+                  <div key={'h-' + s.category} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                    {catName(s.category)}
+                  </div>
+                );
+              }
+            } else if (sort === 'status') {
+              if (status !== lastGroup) {
+                lastGroup = status;
+                out.push(
+                  <div key={'h-' + status} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                    {statusLabel[status]}
+                  </div>
+                );
+              }
             }
             out.push(<SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={false} onToggleFavorite={() => toggleFav(s.id)} />);
           }
