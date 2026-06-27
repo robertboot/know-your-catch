@@ -155,10 +155,14 @@
     },
     "spanish_mackerel": {
       "name": "Spanish Mackerel",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Mackerel-Spanish-NOAAFisheries.png?itok=cVL9x4ET",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "king_mackerel": {
       "name": "King Mackerel",
@@ -406,6 +410,17 @@
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-atlantic-sturgeon.png?itok=IoNWHq8G",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "summer_flounder": {
+      "name": "Summer Flounder",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Flounder-Summer-NOAAFisheries.png?itok=wtEaG1bU",
         "credit": "NOAA Fisheries",
         "license": "Public domain"
       },

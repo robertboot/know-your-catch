@@ -28,6 +28,7 @@ export const CATEGORIES = [
   { id: 'cobia', name: 'Cobia' }, { id: 'wahoo', name: 'Wahoo' },
   { id: 'cod', name: 'Cod' },
   { id: 'sturgeon', name: 'Sturgeon' },
+  { id: 'flatfish', name: 'Flatfish' },
   { id: 'bait', name: 'Bait Fish' },
   { id: 'reef', name: 'Reef Fish' },
 ];
@@ -189,6 +190,10 @@ export const SPECIES = [
     keyIds: ['Five rows of bony plates (scutes) along the body', 'Long pointed snout with four barbels in front of the mouth', 'Heterocercal (shark-like) tail with upper lobe much longer', 'Olive-brown back fading to pale belly', 'No scales — armored with scutes instead'],
     lookalikes: [],
     habitat: 'Anadromous — Atlantic coast rivers, estuaries, and nearshore ocean. Federally endangered. Not a Gulf of America species.', typicalSize: '60–120 in' },
+  { id: 'summer_flounder', commonName: 'Summer Flounder', altNames: ['Fluke'], scientific: 'Paralichthys dentatus', category: 'flatfish',
+    keyIds: ['Left-eyed flatfish — both eyes on the left side of the body when viewed from above', 'Large mouth with prominent teeth', 'Brown to gray-brown upper side with 10–14 dark ocelli (eye spots)', 'White underside', 'Capable of rapid color/pattern changes to match bottom'],
+    lookalikes: [],
+    habitat: 'Sandy and muddy bottoms, 10–500 ft. Mid-Atlantic and Northeast — not a Gulf of America species.', typicalSize: '15–24 in' },
   { id: 'scup', commonName: 'Scup', altNames: ['Porgy'], scientific: 'Stenotomus chrysops', category: 'reef',
     keyIds: ['Deep, oval, laterally compressed body', 'Silvery iridescent flanks with bluish back and faint vertical bars', 'Spiny dorsal fin with a sharp first spine', 'Small mouth with strong, blunt teeth for crushing', 'Forked tail with dark margin'],
     lookalikes: [],
@@ -614,6 +619,10 @@ function buildRegs() {
     }),
     atlantic_sturgeon: R({
       default: { open: 'Closed — federally endangered, no take', minSize: null, bagLimit: 0, notes: 'Atlantic Sturgeon is listed under the Endangered Species Act (most U.S. DPSs endangered, Gulf of Maine DPS threatened). Take is prohibited. If hooked incidentally, release immediately without removing from water when possible. Not a Gulf of America species.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    summer_flounder: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'Summer Flounder (fluke) is managed by ASMFC and the Mid-Atlantic Council with state-by-state limits (typical 17–19 in size, 3–5 bag). Primarily Mid-Atlantic/Northeast — not a Gulf of America species. Verify with the appropriate region.' },
       source: 'fisheries.noaa.gov',
     }),
     scup: R({
