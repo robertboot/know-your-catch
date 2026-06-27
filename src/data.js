@@ -197,6 +197,10 @@ export const SPECIES = [
     keyIds: ['Small, very deep, laterally compressed silver body', 'Forked tail; no pelvic fins', 'Single long dorsal fin; row of pores below dorsal', 'Bluish back fading to silver — looks like a coin'],
     lookalikes: [],
     habitat: 'Atlantic continental shelf, surface to 600 ft. Schools over sandy bottoms.', typicalSize: '6–9 in' },
+  { id: 'nassau_grouper', commonName: 'Nassau Grouper', altNames: [], scientific: 'Epinephelus striatus', category: 'grouper',
+    keyIds: ['Distinct dark "tuning fork" mark on top of head between the eyes (key feature)', 'Black saddle blotch on the caudal peduncle (just before the tail)', 'Five irregular dark vertical bars on a pale tan body', 'Can change color rapidly to match surroundings', 'Federally threatened — catch-and-release only'],
+    lookalikes: ['black_grouper', 'gag_grouper', 'red_grouper'],
+    habitat: 'Coral reefs and rocky areas, 10–300 ft. Primarily Caribbean and South Florida; rare in Gulf proper.', typicalSize: '20–36 in', reefFish: true },
   { id: 'warsaw_grouper', commonName: 'Warsaw Grouper', altNames: ['Warsaw', 'Black Jewfish'], scientific: 'Hyporthodus nigritus', category: 'grouper',
     keyIds: ['Massive deep-water grouper — can exceed 400 lb', 'Dark reddish-brown to nearly black body', 'Second dorsal spine very long and stout (key feature)', 'Square tail; juveniles show yellow blotches that fade with age', 'Found very deep — 300–1,700 ft'],
     lookalikes: ['snowy_grouper', 'black_grouper'],
@@ -590,6 +594,10 @@ function buildRegs() {
     }),
     butterfish: R({
       default: { open: 'Bait/forage species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Butterfish is managed by the Mid-Atlantic Council, primarily as a commercial small-mesh fishery. Common as cut bait and forage for predators. No recreational size/bag on file — verify any state-specific bait-fish rules.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    nassau_grouper: R({
+      default: { open: 'Closed — federally threatened, catch-and-release only', minSize: null, bagLimit: 0, gear: reefGear, notes: 'Nassau Grouper is listed as threatened under the Endangered Species Act. Harvest and possession are prohibited in U.S. waters. Release immediately, ideally without removing from the water. Use descending device for barotrauma.' },
       source: 'fisheries.noaa.gov',
     }),
     warsaw_grouper: R({

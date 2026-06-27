@@ -444,6 +444,17 @@
       },
       "updated": "2026-06-27"
     },
+    "nassau_grouper": {
+      "name": "Nassau Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-nassau-grouper.jpg?itok=h87q7k11",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "warsaw_grouper": {
       "name": "Warsaw Grouper",
       "primary": "fallback",
