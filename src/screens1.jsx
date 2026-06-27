@@ -214,7 +214,7 @@ export function HomeScreen({
           aria-hidden
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: '60% center',
+            objectFit: 'cover', objectPosition: 'right center',
             pointerEvents: 'none',
           }}
         />
