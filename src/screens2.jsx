@@ -597,6 +597,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
    ============================================================ */
 export function SpeciesListScreen({ state, update, onPick }) {
   const [q, setQ] = useState('');
+  const [sort, setSort] = useState('type'); // 'type' | 'name'
   const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
   const toggleFav = (id) => {
     if (!update) return;
@@ -604,35 +605,77 @@ export function SpeciesListScreen({ state, update, onPick }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     update({ favorites: Array.from(next) });
   };
+  const catOrder = useMemo(() => Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i])), []);
+  const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
+
   const sorted = useMemo(() => {
-    const base = [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName));
-    return base.sort((a, b) => (favSet.has(b.id) ? 1 : 0) - (favSet.has(a.id) ? 1 : 0));
-  }, [favSet]);
+    const base = [...SPECIES];
+    base.sort((a, b) => {
+      if (sort === 'type') return ((catOrder[a.category] ?? 99) - (catOrder[b.category] ?? 99)) || a.commonName.localeCompare(b.commonName);
+      return a.commonName.localeCompare(b.commonName);
+    });
+    return base;
+  }, [sort, catOrder]);
+
   const filtered = useMemo(() => {
     const lower = q.toLowerCase().trim();
     if (!lower) return sorted;
     return sorted.filter(s => s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)) || s.scientific.toLowerCase().includes(lower));
   }, [q, sorted]);
+
   const favRows = filtered.filter(s => favSet.has(s.id));
   const otherRows = filtered.filter(s => !favSet.has(s.id));
+
+  const segBtn = (key, label) => (
+    <button onClick={() => setSort(key)} style={{
+      flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+      fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+      background: sort === key ? T.brass : T.parchmentDeep,
+      color: sort === key ? T.oceanDeep : T.inkSoft,
+      border: `1.5px solid ${sort === key ? T.brass : T.cardEdge}`,
+    }}>{label}</button>
+  );
+
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 12 }}>All species</H1>
-      <div style={{ position: 'relative', marginBottom: 14 }}>
+      <div style={{ position: 'relative', marginBottom: 10 }}>
         <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
+        {segBtn('type', 'Type')}
+        {segBtn('name', 'A–Z')}
+      </div>
+
       {favRows.length > 0 && (
         <>
-          <SectionLabel style={{ marginBottom: 8 }}>Your fish</SectionLabel>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-            {favRows.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={true} onToggleFavorite={() => toggleFav(s.id)} />)}
+          <div style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Star size={12} fill={T.brass} color={T.brass} /> Your fish
           </div>
-          <SectionLabel style={{ marginBottom: 8 }}>All other species</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+            {favRows.map(s => <SpeciesRow key={'fav-' + s.id} species={s} onClick={() => onPick(s.id)} favorited={true} onToggleFavorite={() => toggleFav(s.id)} />)}
+          </div>
         </>
       )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {otherRows.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={false} onToggleFavorite={() => toggleFav(s.id)} />)}
+        {(() => {
+          const out = []; let lastCat = null;
+          for (const s of otherRows) {
+            if (sort === 'type' && s.category !== lastCat) {
+              lastCat = s.category;
+              out.push(
+                <div key={'h-' + s.category} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                  {catName(s.category)}
+                </div>
+              );
+            }
+            out.push(<SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={false} onToggleFavorite={() => toggleFav(s.id)} />);
+          }
+          return out;
+        })()}
       </div>
     </div>
   );

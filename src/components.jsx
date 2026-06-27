@@ -303,7 +303,7 @@ export function StarButton({ favorited, onToggle, size = 22, ariaLabel }) {
 export function SpeciesRow({ species, onClick, favorited, onToggleFavorite }) {
   return (
     <Card onClick={onClick} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12 }}>
-      <div style={{ flexShrink: 0 }}><FishMark species={species} size={50} /></div>
+      <div style={{ flexShrink: 0 }}><SpeciesImage species={species} size={50} /></div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 600, color: T.ink }}>{species.commonName}</div>
         <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{species.scientific}</div>
