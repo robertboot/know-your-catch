@@ -108,6 +108,10 @@ export const SPECIES = [
     keyIds: ['Dark dusky finlets (NOT yellow)', 'Smaller than yellowfin — rarely over 40 lb', 'Bronze tint to body'],
     lookalikes: ['yellowfin_tuna'],
     habitat: 'Offshore, near rigs and shelf edges.', typicalSize: '20–28 in', hms: true },
+  { id: 'albacore_tuna', commonName: 'Albacore Tuna', altNames: ['Longfin Tuna', 'Tombo'], scientific: 'Thunnus alalunga', category: 'tuna',
+    keyIds: ['Extremely long pectoral fins — extend past the second dorsal fin (key feature)', 'Dark blue back fading to silvery-white belly', 'White trailing edge on the tail', 'Smaller, rounded body relative to other tunas', 'Yellow finlets without distinct black edges'],
+    lookalikes: ['yellowfin_tuna', 'blackfin_tuna', 'bigeye_tuna'],
+    habitat: 'Offshore temperate and tropical waters, surface to 1,300 ft. Less common in the Gulf — more typical of Atlantic offshore.', typicalSize: '30–50 in', hms: true },
   { id: 'bigeye_tuna', commonName: 'Bigeye Tuna', altNames: ['Ahi'], scientific: 'Thunnus obesus', category: 'tuna',
     keyIds: ['Very large eye relative to head', 'Pectoral fins reach past second dorsal in juveniles', 'Yellow finlets edged in black (similar to yellowfin)', 'Deeper, more rounded body than yellowfin'],
     lookalikes: ['yellowfin_tuna'],
@@ -116,6 +120,10 @@ export const SPECIES = [
     keyIds: ['Cobalt blue back, silvery-white belly', 'First dorsal pointed, lower than body depth', 'Round bill in cross-section'],
     lookalikes: ['white_marlin', 'sailfish'],
     habitat: 'Blue water offshore.', typicalSize: '80–150 in', hms: true },
+  { id: 'swordfish', commonName: 'Swordfish', altNames: ['Broadbill'], scientific: 'Xiphias gladius', category: 'billfish',
+    keyIds: ['Long, broad, flat bill (sword) — wider and flatter than marlins', 'No pelvic fins (key feature — separates from all marlins/sailfish)', 'Large eye, scaleless adult body', 'Single keel on each side of caudal peduncle', 'Crescent-shaped tail'],
+    lookalikes: ['blue_marlin', 'white_marlin', 'sailfish'],
+    habitat: 'Offshore blue water, surface to 2,000+ ft (feeds deep, often surfaces at night).', typicalSize: '60–120 in', hms: true },
   { id: 'sailfish', commonName: 'Atlantic Sailfish', altNames: ['Sail'], scientific: 'Istiophorus albicans', category: 'billfish',
     keyIds: ['Huge sail-like first dorsal, taller than body', 'Dark blue back with vertical light blue bars', 'Slender body'],
     lookalikes: ['blue_marlin', 'white_marlin'],
@@ -542,6 +550,14 @@ function buildRegs() {
     }),
     short_bigeye: R({
       default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'No species-specific recreational size or bag limit on file. Verify with the agency before keeping.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    albacore_tuna: R({
+      default: { open: 'Year-round (verify)', minSize: 27, bagLimit: null, hms: true, notes: 'Federally managed HMS — HMS Angling or Charter/Headboat permit required. Curved fork length. Counted within the Atlantic HMS bluefin/yellowfin/albacore/bigeye aggregate where applicable. Verify current rules with NOAA.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    swordfish: R({
+      default: { open: 'Year-round (verify)', minSize: 47, bagLimit: 1, hms: true, notes: 'Federally managed HMS — HMS Angling or Charter/Headboat permit + swordfish endorsement required. 47 in lower jaw fork length (or 29 in cleithrum-to-keel / 33 in dressed). 1 swordfish/person/day, vessel limits apply for charter/headboat. Verify with NOAA HMS.' },
       source: 'fisheries.noaa.gov',
     }),
     bigeye_tuna: R({

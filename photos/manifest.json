@@ -301,6 +301,28 @@
       "fallback": null,
       "updated": "2026-05-15"
     },
+    "albacore_tuna": {
+      "name": "Albacore Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Tuna-Albacore-NOAAFisheries.png?itok=juwiBfWn",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "swordfish": {
+      "name": "Swordfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Swordfish-NOAAFisheries.png?itok=_U6aj-6A",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "bigeye_tuna": {
       "name": "Bigeye Tuna",
       "primary": "fallback",
