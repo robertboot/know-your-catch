@@ -45,10 +45,14 @@
     },
     "mutton_snapper": {
       "name": "Mutton Snapper",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_gAqUiAeehOQ3.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "yellowtail_snapper": {
       "name": "Yellowtail Snapper",
@@ -442,6 +446,17 @@
       "proprietary": null,
       "fallback": {
         "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_oKcUrEgwcOP0.jpg?1564019856",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blackfin_snapper": {
+      "name": "Blackfin Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_Q8TExuF8uKZ4.jpg?1564020398",
         "credit": "NOAA Fisheries",
         "license": "Public domain"
       },
