@@ -222,7 +222,7 @@ export function HomeScreen({
           pointerEvents: 'none',
         }} />
 
-        <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 230 }}>
+        <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 270 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>IDENTIFY YOUR</div>
           <div style={{
             fontSize: 44, fontWeight: 900, color: T.brass, letterSpacing: 2.5,
@@ -243,18 +243,18 @@ export function HomeScreen({
             <Camera size={16} strokeWidth={2.4} /> SNAP A PHOTO
           </button>
 
-          <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
             <button onClick={onIdentify} style={{
               background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
-              fontSize: 11, fontWeight: 700, letterSpacing: 1.1,
+              fontSize: 11, fontWeight: 700, letterSpacing: 0.8, whiteSpace: 'nowrap',
             }}>
               <ImageIcon size={14} color={T.ink} /> UPLOAD PHOTO
             </button>
             <button onClick={onBrowse || onSpeciesList} style={{
               background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
-              fontSize: 11, fontWeight: 700, letterSpacing: 1.1,
+              fontSize: 11, fontWeight: 700, letterSpacing: 0.8, whiteSpace: 'nowrap',
             }}>
               <Search size={14} color={T.ink} /> BROWSE SPECIES
             </button>
