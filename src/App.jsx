@@ -145,10 +145,10 @@ export default function App() {
       body = <CatchEntryScreen state={state} jurisdiction={jurisdiction} update={update} editingId={screen.editingId} onDone={() => reset([{ name: 'catch_log' }])} onCancel={pop} />;
       break;
     case 'catch_detail':
-      body = <CatchDetailScreen id={screen.id} state={state} update={update} onEdit={() => push({ name: 'catch_entry', editingId: screen.id })} onBack={pop} />;
+      body = <CatchDetailScreen id={screen.id} state={state} update={update} onEdit={() => push({ name: 'catch_entry', editingId: screen.id })} onBack={pop} onAddPB={(c) => push({ name: 'pb_entry', speciesId: c.speciesId })} />;
       break;
     case 'regulation':
-      body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} />;
+      body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} onAddPB={() => push({ name: 'pb_entry', speciesId: screen.id })} />;
       break;
     case 'species_list':
       body = <SpeciesListScreen onPick={(id) => push({ name: 'species', id })} />;

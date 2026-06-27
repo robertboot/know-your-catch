@@ -65,6 +65,13 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           {s.hms && <span style={{ background: T.warnBg, color: T.brassDeep, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1, marginRight: 6 }}>HMS PERMIT</span>}
           {s.reefFish && <span style={{ background: T.openBg, color: T.open, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>REEF FISH</span>}
         </div>
+        <button onClick={onAddPB} style={{
+          marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
+          padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+          letterSpacing: 0.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}>
+          <Trophy size={14} /> {pb ? 'Update Personal Best' : 'Add Personal Best'}
+        </button>
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
@@ -498,15 +505,16 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
   );
 }
 
-export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpecies }) {
+export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpecies, onAddPB }) {
   const s = speciesById(id);
   if (!s) return <div style={{ padding: 20 }}>Not found.</div>;
   const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
   const fedReg = REGULATIONS[id]?.fed_gulf;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
+  const pb = state.pbs?.[id];
   return (
     <div style={{ padding: '16px 16px' }}>
-      <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }} onClick={onSpecies}>
+      <Card style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }} onClick={onSpecies}>
         <SpeciesImage species={s} size={56} />
         <div style={{ flex: 1 }}>
           <H1 size={20}>{s.commonName}</H1>
@@ -514,6 +522,15 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
           <div style={{ fontSize: 11, color: T.brass, marginTop: 4, fontWeight: 600 }}>View species details →</div>
         </div>
       </Card>
+      {onAddPB && (
+        <button onClick={(e) => { e.stopPropagation(); onAddPB(); }} style={{
+          width: '100%', marginBottom: 12, background: T.brass, color: T.oceanDeep, border: 'none',
+          padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <Trophy size={14} /> {pb ? 'Update Personal Best' : 'Add Personal Best'}
+        </button>
+      )}
       {!jurisdiction ? (
         <Card><div style={{ color: T.inkMute, fontSize: 13 }}>Select your fishing waters first.</div></Card>
       ) : !reg ? (
@@ -1114,7 +1131,7 @@ function CatchMapView({ items, onView }) {
   );
 }
 
-export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
+export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }) {
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
   useEffect(() => {
@@ -1136,7 +1153,17 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
         : <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>}
 
       <H1 size={22}>{s ? s.commonName : (c.speciesId || 'Unknown')}</H1>
-      {s && <div style={{ fontStyle: 'italic', fontSize: 13, color: T.inkSoft, marginBottom: 14 }}>{s.scientific}</div>}
+      {s && <div style={{ fontStyle: 'italic', fontSize: 13, color: T.inkSoft, marginBottom: 12 }}>{s.scientific}</div>}
+
+      {s && onAddPB && (
+        <button onClick={() => onAddPB(c)} style={{
+          width: '100%', marginBottom: 14, background: T.brass, color: T.oceanDeep, border: 'none',
+          padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <Trophy size={14} /> {state.pbs?.[c.speciesId] ? 'Update Personal Best' : 'Add Personal Best'}
+        </button>
+      )}
 
       <Card style={{ marginBottom: 12 }}>
         <DetailRow label="When" value={when.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })} />
