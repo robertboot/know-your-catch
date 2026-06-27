@@ -398,6 +398,39 @@
         "license": "Public domain"
       },
       "updated": "2026-06-27"
+    },
+    "bonnethead_shark": {
+      "name": "Bonnethead Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-10/640x427-Bonnethead-Shark-NOAAFisheries.png?itok=xxOu9y4E",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "bluefish": {
+      "name": "Bluefish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Bluefish-NOAAFisheries.png?itok=CZZFQ7NZ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "butterfish": {
+      "name": "Butterfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Butterfish-NOAAFisheries.png?itok=YzIy_I5r",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     }
   }
 }

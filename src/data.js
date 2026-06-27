@@ -185,6 +185,18 @@ export const SPECIES = [
     keyIds: ['Distinct dark smudge on the tip of the snout (key feature)', 'Slender body, yellow-brown to gray above with pale belly', 'Second dorsal fin small, well behind anal fin origin', 'Smaller coastal shark — usually under 4 ft'],
     lookalikes: ['atlantic_sharpnose_shark', 'blacktip_shark'],
     habitat: 'Coastal Gulf and South Atlantic waters, 30–200 ft. Common over sandy and shell bottoms.', typicalSize: '36–48 in', hms: true },
+  { id: 'bonnethead_shark', commonName: 'Bonnethead Shark', altNames: ['Shovelhead', 'Bonnet Shark'], scientific: 'Sphyrna tiburo', category: 'sharks',
+    keyIds: ['Shovel-shaped head (mini hammerhead) — rounded, not wing-like', 'Gray-brown back, pale belly, small dark spots sometimes present', 'Small, slender body — rarely over 4 ft', 'Found in shallow coastal flats, bays, and estuaries'],
+    lookalikes: [],
+    habitat: 'Shallow bays, flats, and inshore waters, 5–80 ft. Common across the Gulf and southeast Atlantic.', typicalSize: '30–42 in', hms: true },
+  { id: 'bluefish', commonName: 'Bluefish', altNames: ['Tailor', 'Snapper Blue'], scientific: 'Pomatomus saltatrix', category: 'reef',
+    keyIds: ['Stout body, blue-green back fading to silvery sides', 'Large mouth with prominent, sharp triangular teeth', 'Forked tail; black blotch at base of pectoral fin', 'Aggressive schooling predator — often blitzes bait at the surface'],
+    lookalikes: [],
+    habitat: 'Coastal Atlantic and northern Gulf, surf zone to offshore. Primarily Atlantic — occasional in Gulf.', typicalSize: '12–24 in' },
+  { id: 'butterfish', commonName: 'Butterfish', altNames: ['Dollarfish'], scientific: 'Peprilus triacanthus', category: 'bait',
+    keyIds: ['Small, very deep, laterally compressed silver body', 'Forked tail; no pelvic fins', 'Single long dorsal fin; row of pores below dorsal', 'Bluish back fading to silver — looks like a coin'],
+    lookalikes: [],
+    habitat: 'Atlantic continental shelf, surface to 600 ft. Schools over sandy bottoms.', typicalSize: '6–9 in' },
 ];
 
 export const COMPARISONS = {
@@ -534,6 +546,18 @@ function buildRegs() {
     }),
     blacknose_shark: R({
       default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'HMS Angling or Charter/Headboat permit + shark endorsement required. Atlantic blacknose is part of the small coastal shark complex with restricted harvest; verify regional retention rules with NOAA HMS.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    bonnethead_shark: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'HMS Angling or Charter/Headboat permit + shark endorsement required. Bonnethead is a small coastal shark in the SCS complex — counted in the 1 additional shark (sharpnose/bonnethead) federal allowance. Verify with NOAA HMS.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    bluefish: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'Bluefish is primarily an Atlantic species, jointly managed by ASMFC and the Mid-Atlantic Council with regional bag limits (typically 3 fish private rec, 5 for-hire). Not a Gulf of America management species — verify with the appropriate region.' },
+      source: 'asmfc.org',
+    }),
+    butterfish: R({
+      default: { open: 'Bait/forage species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Butterfish is managed by the Mid-Atlantic Council, primarily as a commercial small-mesh fishery. Common as cut bait and forage for predators. No recreational size/bag on file — verify any state-specific bait-fish rules.' },
       source: 'fisheries.noaa.gov',
     }),
   };
