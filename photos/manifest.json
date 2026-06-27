@@ -433,6 +433,28 @@
       },
       "updated": "2026-06-27"
     },
+    "oceanic_whitetip_shark": {
+      "name": "Oceanic Whitetip Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-oceanic-whitetip-shark.png?itok=9tscNcu1",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "opah": {
+      "name": "Opah",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Opah-Moonfish-NOAAFisheries.png?itok=Z_SnIOGt",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "bonnethead_shark": {
       "name": "Bonnethead Shark",
       "primary": "fallback",

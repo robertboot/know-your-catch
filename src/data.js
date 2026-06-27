@@ -145,6 +145,10 @@ export const SPECIES = [
     keyIds: ['Long slender torpedo body', 'Bright vertical blue bars on sides', 'Razor-sharp teeth', 'Long pointed snout'],
     lookalikes: ['king_mackerel'],
     habitat: 'Offshore blue water, near current edges and rigs.', typicalSize: '40–60 in' },
+  { id: 'opah', commonName: 'Opah', altNames: ['Moonfish'], scientific: 'Lampris guttatus', category: 'reef',
+    keyIds: ['Large, round, deeply compressed disc-shaped body', 'Brilliant orange-red fins; silvery body covered in pale spots', 'Small mouth, large eye', 'Only known fully warm-blooded fish (regional endothermy)', 'Found deep in open ocean — rare incidental catch'],
+    lookalikes: [],
+    habitat: 'Offshore open ocean, 300–1,300 ft. Solitary pelagic.', typicalSize: '40–60 in' },
   { id: 'mahi', commonName: 'Mahi-Mahi', altNames: ['Dolphinfish', 'Dolphin', 'Dorado'], scientific: 'Coryphaena hippurus', category: 'reef',
     keyIds: ['Brilliant green, blue, and gold coloration', 'Adult males: steep blunt forehead', 'Long continuous dorsal fin', 'Deeply forked tail'],
     lookalikes: [], habitat: 'Offshore, under floating debris, weed lines, sargassum.', typicalSize: '20–40 in' },
@@ -193,6 +197,10 @@ export const SPECIES = [
     keyIds: ['Distinct dark smudge on the tip of the snout (key feature)', 'Slender body, yellow-brown to gray above with pale belly', 'Second dorsal fin small, well behind anal fin origin', 'Smaller coastal shark — usually under 4 ft'],
     lookalikes: ['atlantic_sharpnose_shark', 'blacktip_shark'],
     habitat: 'Coastal Gulf and South Atlantic waters, 30–200 ft. Common over sandy and shell bottoms.', typicalSize: '36–48 in', hms: true },
+  { id: 'oceanic_whitetip_shark', commonName: 'Oceanic Whitetip Shark', altNames: ['Whitetip'], scientific: 'Carcharhinus longimanus', category: 'sharks',
+    keyIds: ['Large, paddle-like rounded first dorsal fin tipped in white (key feature)', 'Long, broad, rounded pectoral fins also tipped in white', 'Stocky brown to bronze body, mottled appearance', 'Wide-ranging pelagic offshore shark', 'Federally threatened — catch-and-release only'],
+    lookalikes: [],
+    habitat: 'Open ocean, blue water, surface to 500 ft. Highly pelagic.', typicalSize: '70–120 in', hms: true },
   { id: 'bonnethead_shark', commonName: 'Bonnethead Shark', altNames: ['Shovelhead', 'Bonnet Shark'], scientific: 'Sphyrna tiburo', category: 'sharks',
     keyIds: ['Shovel-shaped head (mini hammerhead) — rounded, not wing-like', 'Gray-brown back, pale belly, small dark spots sometimes present', 'Small, slender body — rarely over 4 ft', 'Found in shallow coastal flats, bays, and estuaries'],
     lookalikes: [],
@@ -598,6 +606,14 @@ function buildRegs() {
     }),
     blacknose_shark: R({
       default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'HMS Angling or Charter/Headboat permit + shark endorsement required. Atlantic blacknose is part of the small coastal shark complex with restricted harvest; verify regional retention rules with NOAA HMS.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    oceanic_whitetip_shark: R({
+      default: { open: 'Closed — federally threatened, catch-and-release only', minSize: null, bagLimit: 0, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'Oceanic Whitetip Shark is listed as threatened under the Endangered Species Act. Harvest and possession prohibited in U.S. waters. Release immediately, do not remove from water. HMS permit required if targeting sharks.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    opah: R({
+      default: { open: 'Year-round (verify)', minSize: null, bagLimit: null, notes: 'Opah is a rare incidental catch in the Atlantic/Gulf — no species-specific recreational size or bag limit on file. Verify with the appropriate agency before keeping.' },
       source: 'fisheries.noaa.gov',
     }),
     bonnethead_shark: R({
