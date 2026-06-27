@@ -1,6 +1,6 @@
 {
   "schema": "kyc-photos/v1",
-  "updated": "2026-05-15",
+  "updated": "2026-06-27",
   "note": "primary: proprietary | fallback | none. Proprietary = repo file under photos/proprietary/. Fallback = a licensed external photo (url + credit + license). none = app shows the FishMark illustration.",
   "species": {
     "red_snapper": {
@@ -34,14 +34,14 @@
     },
     "mangrove_snapper": {
       "name": "Gray Snapper",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_c6eYwd8Es617.jpg?1564020942",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/federally-managed-gulf-america-reef-fish"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "mutton_snapper": {
       "name": "Mutton Snapper",
@@ -52,14 +52,14 @@
     },
     "yellowtail_snapper": {
       "name": "Yellowtail Snapper",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_c5z77GXVQnA5.jpg?1564016177",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/federally-managed-gulf-america-reef-fish"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "red_grouper": {
       "name": "Red Grouper",
@@ -85,14 +85,14 @@
     },
     "black_grouper": {
       "name": "Black Grouper",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Grouper-Black-NOAAFisheries.png?itok=f6jBXPqQ",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/black-grouper"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "scamp": {
       "name": "Scamp",
@@ -103,47 +103,47 @@
     },
     "greater_amberjack": {
       "name": "Greater Amberjack",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Amberjack-Greater-NOAAFisheries.png?itok=2uGqXs4W",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/greater-amberjack"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "lesser_amberjack": {
       "name": "Lesser Amberjack",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_MVN4Jxu6Ymt9.jpg?1564016030",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/federally-managed-gulf-america-reef-fish"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "almaco_jack": {
       "name": "Almaco Jack",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-02/640x427-Almaco-Jack-NOAAFisheries.png?itok=R7QNSttH",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/almaco-jack"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "banded_rudderfish": {
       "name": "Banded Rudderfish",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_MeYdapnDJ966.jpg?-62169955200",
         "credit": "NOAA Fisheries",
-        "license": "http://sedarweb.org/sedar-49"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "spanish_mackerel": {
       "name": "Spanish Mackerel",
@@ -203,14 +203,14 @@
     },
     "gray_triggerfish": {
       "name": "Gray Triggerfish",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Triggerfish-Gray-NOAAFisheries.png?itok=kgwLtS0L",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/gray-triggerfish"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "blacktip_shark": {
       "name": "Blacktip Shark",
@@ -221,14 +221,14 @@
     },
     "cobia": {
       "name": "Cobia",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Cobia-NOAAFisheries.png?itok=ZbQQ_f85",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/cobia"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "wahoo": {
       "name": "Wahoo",
@@ -244,31 +244,31 @@
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Mahimahi-NOAAFisheries.png?itok=tp6TjGnu",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/atlantic-mahi-mahi"
+        "license": "Public domain"
       },
       "updated": "2026-05-15"
     },
     "golden_tilefish": {
       "name": "Golden Tilefish",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tilefish-Golden-NOAAFisheries.png?itok=Q2j3ywYb",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/golden-tilefish"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "blueline_tilefish": {
       "name": "Blueline Tilefish",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tilefish-Blueline-NOAAFisheries.png?itok=TENdZZdA",
         "credit": "NOAA Fisheries",
-        "license": "https://www.fisheries.noaa.gov/species/blueline-tilefish"
+        "license": "Public domain"
       },
-      "updated": "2026-05-15"
+      "updated": "2026-06-27"
     },
     "short_bigeye": {
       "name": "Short Bigeye",
