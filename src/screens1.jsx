@@ -616,6 +616,30 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetak
 /* ============================================================
    CATEGORIES & CATEGORY
    ============================================================ */
+// Representative species for each category's browse tile. Chosen as the
+// most iconic Gulf-of-America (or, for non-Gulf categories, the most
+// recognisable) member with a NOAA photo on file. If a representative
+// has no photo, the tile falls back to the first species in the
+// category that does.
+const CATEGORY_REP_SPECIES = {
+  snapper:  'red_snapper',
+  grouper:  'red_grouper',
+  tilefish: 'golden_tilefish',
+  jacks:    'greater_amberjack',
+  mackerel: 'king_mackerel',
+  tuna:     'yellowfin_tuna',
+  billfish: 'swordfish',
+  trigger:  'gray_triggerfish',
+  sharks:   'blacktip_shark',
+  cobia:    'cobia',
+  wahoo:    'wahoo',
+  cod:      'atlantic_cod',
+  sturgeon: 'atlantic_sturgeon',
+  flatfish: 'summer_flounder',
+  bait:     'atlantic_menhaden',
+  reef:     'mahi',
+};
+
 export function CategoriesScreen({ onPick }) {
   const counts = useMemo(() => {
     const map = {};
@@ -625,14 +649,30 @@ export function CategoriesScreen({ onPick }) {
   return (
     <div style={{ padding: '18px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Browse by category</H1>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {CATEGORIES.map(c => (
-          <Card key={c.id} onClick={() => onPick(c.id)} style={{ textAlign: 'center', padding: '14px 8px' }}>
-            <SpeciesImage species={{ category: c.id }} size={48} />
-            <div style={{ marginTop: 8, fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{c.name}</div>
-            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{counts[c.id] || 0} species</div>
-          </Card>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {CATEGORIES.map(c => {
+          const repId = CATEGORY_REP_SPECIES[c.id];
+          const rep = (repId && speciesById(repId))
+            || SPECIES.find(s => s.category === c.id) // fallback: first in category
+            || null;
+          return (
+            <Card key={c.id} onClick={() => onPick(c.id)} style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{
+                height: 110,
+                background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+              }}>
+                {rep ? (
+                  <SpeciesImage species={rep} size={180} style={{ borderRadius: 0, height: 110 }} />
+                ) : null}
+              </div>
+              <div style={{ padding: '10px 12px 12px' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 700, color: T.ink }}>{c.name}</div>
+                <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{counts[c.id] || 0} species</div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
