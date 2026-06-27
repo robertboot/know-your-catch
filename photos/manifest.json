@@ -168,10 +168,14 @@
     },
     "yellowfin_tuna": {
       "name": "Yellowfin Tuna",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tuna-Yellowfin-NOAAFisheries.png?itok=wQ7Q4GIZ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "blackfin_tuna": {
       "name": "Blackfin Tuna",
@@ -236,10 +240,14 @@
     },
     "wahoo": {
       "name": "Wahoo",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Wahoo-NOAAFisheries.png?itok=0Aw3meE3",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "mahi": {
       "name": "Mahi-Mahi",
@@ -298,6 +306,94 @@
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-07/640x427-Cod-Atlantic-NOAAFisheries.png?itok=LaaW5W6M",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "goliath_grouper": {
+      "name": "Goliath Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Goliath-Grouper-NOAAFisheries.png?itok=R5b8YGwS",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_mackerel": {
+      "name": "Atlantic Mackerel",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Mackerel-Atlantic-NOAAFisheries.png?itok=jSV2Bm5b",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_menhaden": {
+      "name": "Atlantic Menhaden",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Menhaden-Atlantic-NOAAFisheries.png?itok=oTzVz2yQ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_sharpnose_shark": {
+      "name": "Atlantic Sharpnose Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Shark-Atlantic-Sharpnose-NOAAFisheries.png?itok=2YBYqfsX",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "shortfin_mako_shark": {
+      "name": "Shortfin Mako Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Shortfin-Mako-Shark-NOAAFisheries.png?itok=EwXL5SCD",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_sturgeon": {
+      "name": "Atlantic Sturgeon",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-atlantic-sturgeon.png?itok=IoNWHq8G",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "black_sea_bass": {
+      "name": "Black Sea Bass",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Black-Sea-Bass-NOAAFisheries.png?itok=ZYwb9K_D",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blacknose_shark": {
+      "name": "Blacknose Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-01/640x427-Blacknose-Shark-NOAAFisheries.png?itok=xK662Omw",
         "credit": "NOAA Fisheries",
         "license": "Public domain"
       },

@@ -27,6 +27,8 @@ export const CATEGORIES = [
   { id: 'trigger', name: 'Triggerfish' }, { id: 'sharks', name: 'Sharks' },
   { id: 'cobia', name: 'Cobia' }, { id: 'wahoo', name: 'Wahoo' },
   { id: 'cod', name: 'Cod' },
+  { id: 'sturgeon', name: 'Sturgeon' },
+  { id: 'bait', name: 'Bait Fish' },
   { id: 'reef', name: 'Reef Fish' },
 ];
 
@@ -151,6 +153,38 @@ export const SPECIES = [
     keyIds: ['Chin barbel (single whisker under the jaw)', 'Three dorsal fins and two anal fins (gadoid arrangement)', 'Mottled brown / gray / olive with pale belly', 'Pale, curved lateral line'],
     lookalikes: [],
     habitat: 'Cold North Atlantic — rocky and gravel bottoms, 30–600 ft. Not a Gulf of America species.', typicalSize: '20–48 in' },
+  { id: 'goliath_grouper', commonName: 'Goliath Grouper', altNames: ['Jewfish (former name)'], scientific: 'Epinephelus itajara', category: 'grouper',
+    keyIds: ['Massive size — adults often exceed 400 lb', 'Brown-yellow to gray-green with small dark spots', 'Five irregular dark bars across body (clearer in juveniles)', 'Broadly rounded tail, small eyes', 'Often found near structure — wrecks, rigs, ledges'],
+    lookalikes: [],
+    habitat: 'Shallow reefs, mangroves, wrecks, oil rigs, 5–150 ft.', typicalSize: '50–96 in', reefFish: true },
+  { id: 'atlantic_mackerel', commonName: 'Atlantic Mackerel', altNames: ['Boston Mackerel'], scientific: 'Scomber scombrus', category: 'mackerel',
+    keyIds: ['Steel-blue/green back with dark wavy bars or lines', 'Silvery sides, no spots', 'Series of small finlets behind dorsal and anal fins', 'Deeply forked tail', 'Smaller and more slender than king or Spanish mackerel'],
+    lookalikes: ['spanish_mackerel'],
+    habitat: 'Northwest Atlantic, coastal to offshore. Not a Gulf of America species.', typicalSize: '12–18 in' },
+  { id: 'atlantic_menhaden', commonName: 'Atlantic Menhaden', altNames: ['Bunker', 'Pogy', 'Mossbunker'], scientific: 'Brevoortia tyrannus', category: 'bait',
+    keyIds: ['Deep, laterally compressed body', 'Sharp scutes along the belly (saw-edged)', 'Large dark shoulder spot followed by smaller spots along the side', 'Silvery with bluish-green back', 'Large head, no teeth'],
+    lookalikes: [],
+    habitat: 'Atlantic coast estuaries and nearshore waters; schools heavily in summer.', typicalSize: '6–12 in' },
+  { id: 'atlantic_sharpnose_shark', commonName: 'Atlantic Sharpnose Shark', altNames: ['Sharpnose'], scientific: 'Rhizoprionodon terraenovae', category: 'sharks',
+    keyIds: ['Slender body with long pointed snout', 'Brown to olive-gray, often with scattered small white spots on sides', 'Second dorsal fin originates over the middle of the anal fin (key feature)', 'Labial furrows long and obvious', 'Smaller — rarely over 4 ft'],
+    lookalikes: ['blacktip_shark'],
+    habitat: 'Coastal Gulf and Atlantic waters, shallow to 200 ft. Common around piers and beaches.', typicalSize: '30–42 in', hms: true },
+  { id: 'shortfin_mako_shark', commonName: 'Shortfin Mako Shark', altNames: ['Mako', 'Bonito Shark'], scientific: 'Isurus oxyrinchus', category: 'sharks',
+    keyIds: ['Streamlined fusiform body — built for speed', 'Bright metallic blue back fading to silvery-white belly', 'Pointed conical snout', 'Long, curved, visible teeth (even when mouth is closed)', 'Crescent-shaped tail with strong keel at base'],
+    lookalikes: ['blacktip_shark'],
+    habitat: 'Offshore pelagic, surface to 500 ft. Atlantic and Gulf blue water.', typicalSize: '60–130 in', hms: true },
+  { id: 'atlantic_sturgeon', commonName: 'Atlantic Sturgeon', altNames: [], scientific: 'Acipenser oxyrinchus oxyrinchus', category: 'sturgeon',
+    keyIds: ['Five rows of bony plates (scutes) along the body', 'Long pointed snout with four barbels in front of the mouth', 'Heterocercal (shark-like) tail with upper lobe much longer', 'Olive-brown back fading to pale belly', 'No scales — armored with scutes instead'],
+    lookalikes: [],
+    habitat: 'Anadromous — Atlantic coast rivers, estuaries, and nearshore ocean. Federally endangered. Not a Gulf of America species.', typicalSize: '60–120 in' },
+  { id: 'black_sea_bass', commonName: 'Black Sea Bass', altNames: ['Sea Bass'], scientific: 'Centropristis striata', category: 'reef',
+    keyIds: ['Stocky black to dusky-blue body with pale spots arranged in rows', 'Large mouth, broad dorsal fin with elongated trailing rays', 'Rounded tail; top ray often extended in mature males', 'Mature males develop a fleshy nuchal hump behind the head'],
+    lookalikes: [],
+    habitat: 'Reefs, wrecks, and hard bottom from 10–400 ft. Primarily an Atlantic species (Cape Cod to Florida); rare in the Gulf.', typicalSize: '10–18 in', reefFish: true },
+  { id: 'blacknose_shark', commonName: 'Blacknose Shark', altNames: [], scientific: 'Carcharhinus acronotus', category: 'sharks',
+    keyIds: ['Distinct dark smudge on the tip of the snout (key feature)', 'Slender body, yellow-brown to gray above with pale belly', 'Second dorsal fin small, well behind anal fin origin', 'Smaller coastal shark — usually under 4 ft'],
+    lookalikes: ['atlantic_sharpnose_shark', 'blacktip_shark'],
+    habitat: 'Coastal Gulf and South Atlantic waters, 30–200 ft. Common over sandy and shell bottoms.', typicalSize: '36–48 in', hms: true },
 ];
 
 export const COMPARISONS = {
@@ -468,6 +502,38 @@ function buildRegs() {
     }),
     atlantic_cod: R({
       default: { open: 'Not a Gulf of America species', minSize: null, bagLimit: null, notes: 'Atlantic Cod is managed by NOAA in the Northeast region (Gulf of Maine / Georges Bank). Outside the Gulf of America scope of this app — rules differ by region. Verify with the appropriate agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    goliath_grouper: R({
+      default: { open: 'Closed — catch-and-release only', minSize: null, bagLimit: 0, notes: 'Goliath Grouper has been protected in federal Gulf waters since 1990 (state rules vary). Catch-and-release only with limited exceptions — Florida runs a small permitted state-water harvest. Verify before keeping; default to release.', gear: reefGear },
+      source: 'fisheries.noaa.gov',
+    }),
+    atlantic_mackerel: R({
+      default: { open: 'Not a Gulf of America species', minSize: null, bagLimit: null, notes: 'Atlantic Mackerel is managed by the New England Fishery Management Council. Outside the Gulf of America scope of this app — rules differ by region. Verify with the appropriate agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    atlantic_menhaden: R({
+      default: { open: 'Bait species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Atlantic Menhaden is managed by ASMFC under an interstate plan. Common as bait; commercial reduction fishery rules apply where relevant. Verify any state-specific bait-fish rules.' },
+      source: 'asmfc.org',
+    }),
+    atlantic_sharpnose_shark: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'HMS Angling or Charter/Headboat permit + shark endorsement required. Counted within the 1 additional Atlantic sharpnose per angler federal allowance. Verify with NOAA HMS.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    shortfin_mako_shark: R({
+      default: { open: 'Retention prohibited (Atlantic)', minSize: null, bagLimit: 0, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'Atlantic shortfin mako is overfished. NOAA prohibits retention of shortfin mako in Atlantic HMS recreational and commercial fisheries — release alive. HMS permit + shark endorsement required if targeting sharks. Verify with NOAA HMS.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    atlantic_sturgeon: R({
+      default: { open: 'Closed — federally endangered, no take', minSize: null, bagLimit: 0, notes: 'Atlantic Sturgeon is listed under the Endangered Species Act (most U.S. DPSs endangered, Gulf of Maine DPS threatened). Take is prohibited. If hooked incidentally, release immediately without removing from water when possible. Not a Gulf of America species.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    black_sea_bass: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Black Sea Bass is primarily an Atlantic species (Cape Cod to Florida) and is managed by the Mid-Atlantic and South Atlantic councils with seasonal closures and possession limits. Not a Gulf of America management species — verify with the appropriate region before keeping.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    blacknose_shark: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'HMS Angling or Charter/Headboat permit + shark endorsement required. Atlantic blacknose is part of the small coastal shark complex with restricted harvest; verify regional retention rules with NOAA HMS.' },
       source: 'fisheries.noaa.gov',
     }),
   };
