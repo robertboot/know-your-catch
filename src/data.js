@@ -201,6 +201,10 @@ export const SPECIES = [
     keyIds: ['Distinct dark smudge on the tip of the snout (key feature)', 'Slender body, yellow-brown to gray above with pale belly', 'Second dorsal fin small, well behind anal fin origin', 'Smaller coastal shark — usually under 4 ft'],
     lookalikes: ['atlantic_sharpnose_shark', 'blacktip_shark'],
     habitat: 'Coastal Gulf and South Atlantic waters, 30–200 ft. Common over sandy and shell bottoms.', typicalSize: '36–48 in', hms: true },
+  { id: 'smalltooth_sawfish', commonName: 'Smalltooth Sawfish', altNames: ['Sawfish'], scientific: 'Pristis pectinata', category: 'sharks',
+    keyIds: ['Long, flat saw-like rostrum lined with paired tooth-like denticles (key feature)', 'Shark-like body but actually a ray — gill slits on the underside', 'Olive-gray to brown above, pale belly', 'Two dorsal fins; tail similar to a shark', 'Federally endangered — no take, do not remove from water'],
+    lookalikes: [],
+    habitat: 'Shallow coastal waters, estuaries, and mangroves in South Florida; very rare elsewhere in the Gulf.', typicalSize: '120–200 in', hms: true },
   { id: 'scalloped_hammerhead', commonName: 'Scalloped Hammerhead', altNames: ['Hammerhead'], scientific: 'Sphyrna lewini', category: 'sharks',
     keyIds: ['Hammer-shaped head (cephalofoil) with a distinct CENTRAL notch (key feature — separates from great and smooth hammerheads)', 'Scalloped, indented front margin of the cephalofoil', 'Bronze-gray to olive above, pale below', 'Tall, sickle-shaped first dorsal fin', 'Some U.S. DPSs are ESA-listed — check region'],
     lookalikes: ['bonnethead_shark'],
@@ -626,6 +630,10 @@ function buildRegs() {
     }),
     sandbar_shark: R({
       default: { open: 'Closed — recreational retention prohibited', minSize: null, bagLimit: 0, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'Sandbar Shark recreational retention is PROHIBITED in Atlantic HMS recreational fisheries. Catch-and-release only. HMS permit required if targeting sharks. Limited commercial research fishery only.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    smalltooth_sawfish: R({
+      default: { open: 'Closed — federally endangered, no take', minSize: null, bagLimit: 0, notes: 'Smalltooth Sawfish is listed as ENDANGERED under the Endangered Species Act. Possession, capture, or harm is prohibited. If incidentally hooked: do NOT remove from water, cut the line as close to the hook as safely possible, and report the encounter to NOAA at 1-844-4-SAWFISH.' },
       source: 'fisheries.noaa.gov',
     }),
     scalloped_hammerhead: R({
