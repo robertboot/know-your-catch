@@ -16,10 +16,14 @@
     },
     "vermilion_snapper": {
       "name": "Vermilion Snapper",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Snapper-Vermilion-NOAAFisheries.png?itok=le6cWMtw",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "lane_snapper": {
       "name": "Lane Snapper",
