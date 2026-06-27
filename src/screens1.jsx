@@ -67,21 +67,25 @@ const STATUS_TEXT = {
   unknown:  { label: 'Check Source',  color: T.inkSoft },
 };
 
-// Small square action tile used in the 4-column quick-actions grid on home.
+// Action tile used in the horizontally scrolling quick-actions row on
+// home. Fixed flex-basis so each tile keeps a comfortable size and the
+// row scrolls instead of squeezing.
 function QuickTile({ icon, titleA, titleB, subtitle, onClick }) {
   return (
     <button onClick={onClick} style={{
+      flex: '0 0 168px',
       background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
-      padding: '14px 12px 12px', cursor: 'pointer', textAlign: 'left',
-      display: 'flex', flexDirection: 'column', gap: 8, minHeight: 168,
+      padding: '16px 14px 14px', cursor: 'pointer', textAlign: 'left',
+      display: 'flex', flexDirection: 'column', gap: 10, minHeight: 176,
+      scrollSnapAlign: 'start',
       boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
     }}>
       <div style={{ color: T.brass, marginBottom: 4 }}>{icon}</div>
-      <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase' }}>
         {titleA}
         {titleB && <><br />{titleB}</>}
       </div>
-      <div style={{ fontSize: 11.5, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
+      <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
       <ChevronRight size={16} color={T.brass} style={{ alignSelf: 'flex-end' }} />
     </button>
   );
@@ -262,8 +266,17 @@ export function HomeScreen({
         </div>
       </div>
 
-      {/* Quick Actions — 4 tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 14 }}>
+      {/* Quick Actions — each tile sized for its content; whole row
+          scrolls horizontally so titles and subtitles aren't squeezed. */}
+      <div
+        className="kyc-hscroll"
+        style={{
+          display: 'flex', gap: 10,
+          overflowX: 'auto', overflowY: 'hidden',
+          margin: '14px -16px 0', padding: '0 16px 6px',
+          scrollSnapType: 'x proximity',
+        }}
+      >
         <QuickTile
           icon={<ClipboardList size={28} strokeWidth={1.8} />}
           titleA="CHECK" titleB="REGULATIONS"
