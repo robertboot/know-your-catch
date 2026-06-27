@@ -197,6 +197,14 @@ export const SPECIES = [
     keyIds: ['Distinct dark smudge on the tip of the snout (key feature)', 'Slender body, yellow-brown to gray above with pale belly', 'Second dorsal fin small, well behind anal fin origin', 'Smaller coastal shark — usually under 4 ft'],
     lookalikes: ['atlantic_sharpnose_shark', 'blacktip_shark'],
     habitat: 'Coastal Gulf and South Atlantic waters, 30–200 ft. Common over sandy and shell bottoms.', typicalSize: '36–48 in', hms: true },
+  { id: 'scalloped_hammerhead', commonName: 'Scalloped Hammerhead', altNames: ['Hammerhead'], scientific: 'Sphyrna lewini', category: 'sharks',
+    keyIds: ['Hammer-shaped head (cephalofoil) with a distinct CENTRAL notch (key feature — separates from great and smooth hammerheads)', 'Scalloped, indented front margin of the cephalofoil', 'Bronze-gray to olive above, pale below', 'Tall, sickle-shaped first dorsal fin', 'Some U.S. DPSs are ESA-listed — check region'],
+    lookalikes: ['bonnethead_shark'],
+    habitat: 'Coastal to offshore, surface to 1,000 ft. Common in Gulf and Atlantic; often schools.', typicalSize: '60–120 in', hms: true },
+  { id: 'sandbar_shark', commonName: 'Sandbar Shark', altNames: ['Brown Shark'], scientific: 'Carcharhinus plumbeus', category: 'sharks',
+    keyIds: ['Very tall, triangular first dorsal fin set far forward (key feature)', 'Stocky, robust body — gray-brown to bronze above, pale below', 'Prominent interdorsal ridge (low ridge of skin between the dorsal fins)', 'Rounded snout, shorter than other large coastal sharks'],
+    lookalikes: ['blacktip_shark'],
+    habitat: 'Coastal waters over sandy and muddy bottoms, 30–250 ft. Common in Gulf and Atlantic.', typicalSize: '60–84 in', hms: true },
   { id: 'oceanic_whitetip_shark', commonName: 'Oceanic Whitetip Shark', altNames: ['Whitetip'], scientific: 'Carcharhinus longimanus', category: 'sharks',
     keyIds: ['Large, paddle-like rounded first dorsal fin tipped in white (key feature)', 'Long, broad, rounded pectoral fins also tipped in white', 'Stocky brown to bronze body, mottled appearance', 'Wide-ranging pelagic offshore shark', 'Federally threatened — catch-and-release only'],
     lookalikes: [],
@@ -606,6 +614,14 @@ function buildRegs() {
     }),
     blacknose_shark: R({
       default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'HMS Angling or Charter/Headboat permit + shark endorsement required. Atlantic blacknose is part of the small coastal shark complex with restricted harvest; verify regional retention rules with NOAA HMS.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    sandbar_shark: R({
+      default: { open: 'Closed — recreational retention prohibited', minSize: null, bagLimit: 0, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'Sandbar Shark recreational retention is PROHIBITED in Atlantic HMS recreational fisheries. Catch-and-release only. HMS permit required if targeting sharks. Limited commercial research fishery only.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    scalloped_hammerhead: R({
+      default: { open: 'Check current season', minSize: 78, bagLimit: 1, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: '78 in (6 ft 6 in) fork length federal minimum for hammerheads. HMS Angling/Charter permit + shark endorsement required. Some Pacific DPSs are ESA-listed; Atlantic stock is NOT currently ESA-listed but is heavily managed — verify regional rules.' },
       source: 'fisheries.noaa.gov',
     }),
     oceanic_whitetip_shark: R({

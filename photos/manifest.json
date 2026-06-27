@@ -433,6 +433,28 @@
       },
       "updated": "2026-06-27"
     },
+    "sandbar_shark": {
+      "name": "Sandbar Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2023-09/640x427-Shark-Sandbar-NOAAFisheries.png?itok=P6Qzy66B",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "scalloped_hammerhead": {
+      "name": "Scalloped Hammerhead",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-scalloped-hammerhead.png?itok=mnttWSNA",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "oceanic_whitetip_shark": {
       "name": "Oceanic Whitetip Shark",
       "primary": "fallback",
