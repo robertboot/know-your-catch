@@ -436,6 +436,28 @@
       },
       "updated": "2026-06-27"
     },
+    "warsaw_grouper": {
+      "name": "Warsaw Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_oKcUrEgwcOP0.jpg?1564019856",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "queen_snapper": {
+      "name": "Queen Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_gO2eAaLngJS4.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "yellowmouth_grouper": {
       "name": "Yellowmouth Grouper",
       "primary": "fallback",

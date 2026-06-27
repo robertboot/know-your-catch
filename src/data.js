@@ -197,6 +197,14 @@ export const SPECIES = [
     keyIds: ['Small, very deep, laterally compressed silver body', 'Forked tail; no pelvic fins', 'Single long dorsal fin; row of pores below dorsal', 'Bluish back fading to silver — looks like a coin'],
     lookalikes: [],
     habitat: 'Atlantic continental shelf, surface to 600 ft. Schools over sandy bottoms.', typicalSize: '6–9 in' },
+  { id: 'warsaw_grouper', commonName: 'Warsaw Grouper', altNames: ['Warsaw', 'Black Jewfish'], scientific: 'Hyporthodus nigritus', category: 'grouper',
+    keyIds: ['Massive deep-water grouper — can exceed 400 lb', 'Dark reddish-brown to nearly black body', 'Second dorsal spine very long and stout (key feature)', 'Square tail; juveniles show yellow blotches that fade with age', 'Found very deep — 300–1,700 ft'],
+    lookalikes: ['snowy_grouper', 'black_grouper'],
+    habitat: 'Deep rocky bottoms, ledges, drop-offs, 300–1,700 ft.', typicalSize: '40–80 in', reefFish: true },
+  { id: 'queen_snapper', commonName: 'Queen Snapper', altNames: ['Brim', 'Carde'], scientific: 'Etelis oculatus', category: 'snapper',
+    keyIds: ['Brilliant rose-red body with silvery sheen', 'Very large eye (deep-water adaptation)', 'Deeply forked tail with elongated, trailing tips', 'Slender body — more elongate than red snapper', 'Deep-water snapper, 400–1,500 ft'],
+    lookalikes: ['red_snapper'],
+    habitat: 'Deep rocky bottoms and steep drop-offs, 400–1,500 ft.', typicalSize: '20–36 in', reefFish: true },
   { id: 'yellowmouth_grouper', commonName: 'Yellowmouth Grouper', altNames: ['Yellowmouth'], scientific: 'Mycteroperca interstitialis', category: 'grouper',
     keyIds: ['Bright yellow corners and lining of the mouth (key feature)', 'Body tan to brown with small dark spots and pale blotches', 'Caudal rays extended slightly ("broomtail"-like, less than scamp)', 'Yellow margin on pectoral and caudal fins'],
     lookalikes: ['scamp', 'gag_grouper'],
@@ -570,6 +578,14 @@ function buildRegs() {
     }),
     butterfish: R({
       default: { open: 'Bait/forage species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Butterfish is managed by the Mid-Atlantic Council, primarily as a commercial small-mesh fishery. Common as cut bait and forage for predators. No recreational size/bag on file — verify any state-specific bait-fish rules.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    warsaw_grouper: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: reefGear, notes: 'Gulf deep-water grouper aggregate. Federal limit typically 1 fish/vessel/day for Warsaw (separate from the aggregate count). Slow growth, late maturity — handle carefully. South Atlantic has additional restrictions (often catch-and-release). Verify with the agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    queen_snapper: R({
+      default: { open: 'Year-round (verify)', minSize: null, bagLimit: 10, gear: reefGear, notes: 'Gulf deep-water snapper. Part of the snapper aggregate (10/person/day federal Gulf, minus the 2 red snapper and 10 vermilion). No species-specific size limit on file. Verify before keeping.' },
       source: 'fisheries.noaa.gov',
     }),
     yellowmouth_grouper: R({
