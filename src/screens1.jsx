@@ -167,23 +167,23 @@ export function HomeScreen({
   return (
     <div style={{ padding: '14px 16px' }}>
       {/* Current Location */}
-      <Card style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 }}>
-        <div style={{ color: T.brass, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}>
-          <MapPin size={28} strokeWidth={2.2} />
+      <Card style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 14 }}>
+        <div style={{ color: T.brass, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32 }}>
+          <MapPin size={22} strokeWidth={2.2} />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.8, color: T.brass, fontWeight: 800 }}>CURRENT LOCATION</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.ink, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ flex: 1, minWidth: 0, lineHeight: 1.15 }}>
+          <div style={{ fontSize: 9.5, letterSpacing: 1.6, color: T.brass, fontWeight: 800 }}>CURRENT LOCATION</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {jurisdiction ? jurisdiction.name : 'Select fishing waters'}
           </div>
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 10.5, color: T.inkMute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {jurisdiction ? jurisdiction.agency : 'Tap change to pick your waters'}
           </div>
         </div>
         <button onClick={onChangeJurisdiction} style={{
           background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
-          padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 800,
-          letterSpacing: 1.5, cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0,
+          padding: '5px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 800,
+          letterSpacing: 1.3, cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0,
         }}>Change</button>
       </Card>
 
