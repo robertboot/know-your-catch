@@ -109,6 +109,10 @@ export const SPECIES = [
     keyIds: ['Dark dusky finlets (NOT yellow)', 'Smaller than yellowfin — rarely over 40 lb', 'Bronze tint to body'],
     lookalikes: ['yellowfin_tuna'],
     habitat: 'Offshore, near rigs and shelf edges.', typicalSize: '20–28 in', hms: true },
+  { id: 'bluefin_tuna', commonName: 'Atlantic Bluefin Tuna', altNames: ['Bluefin', 'Giant'], scientific: 'Thunnus thynnus', category: 'tuna',
+    keyIds: ['Massive, robust torpedo-shaped body — adults exceed 1,000 lb', 'Dark metallic blue-black back, silvery-gray sides, white belly', 'Short pectoral fins (do not reach past the start of the second dorsal)', 'Yellow finlets edged in BLACK (not pure yellow like yellowfin)', 'Tight federal quota — verify category and current limits before targeting'],
+    lookalikes: ['yellowfin_tuna', 'bigeye_tuna'],
+    habitat: 'Offshore blue water, surface to 1,500 ft. Highly migratory across Atlantic.', typicalSize: '60–120 in', hms: true },
   { id: 'albacore_tuna', commonName: 'Albacore Tuna', altNames: ['Longfin Tuna', 'Tombo'], scientific: 'Thunnus alalunga', category: 'tuna',
     keyIds: ['Extremely long pectoral fins — extend past the second dorsal fin (key feature)', 'Dark blue back fading to silvery-white belly', 'White trailing edge on the tail', 'Smaller, rounded body relative to other tunas', 'Yellow finlets without distinct black edges'],
     lookalikes: ['yellowfin_tuna', 'blackfin_tuna', 'bigeye_tuna'],
@@ -206,6 +210,10 @@ export const SPECIES = [
     keyIds: ['Distinct dark smudge on the tip of the snout (key feature)', 'Slender body, yellow-brown to gray above with pale belly', 'Second dorsal fin small, well behind anal fin origin', 'Smaller coastal shark — usually under 4 ft'],
     lookalikes: ['atlantic_sharpnose_shark', 'blacktip_shark'],
     habitat: 'Coastal Gulf and South Atlantic waters, 30–200 ft. Common over sandy and shell bottoms.', typicalSize: '36–48 in', hms: true },
+  { id: 'great_white_shark', commonName: 'Great White Shark', altNames: ['White Shark'], scientific: 'Carcharodon carcharias', category: 'sharks',
+    keyIds: ['Heavy, fusiform body — counter-shaded slate gray above, sharply demarcated white below', 'Large, conical, blunt snout', 'Black eye; large triangular serrated teeth', 'Strong caudal keels and crescent-shaped (lunate) tail', 'Recreational retention is PROHIBITED — release immediately'],
+    lookalikes: ['shortfin_mako_shark'],
+    habitat: 'Coastal to offshore, surface to 1,000+ ft. Migratory; increasing presence in northern Atlantic; rare in Gulf.', typicalSize: '120–192 in', hms: true },
   { id: 'smalltooth_sawfish', commonName: 'Smalltooth Sawfish', altNames: ['Sawfish'], scientific: 'Pristis pectinata', category: 'sharks',
     keyIds: ['Long, flat saw-like rostrum lined with paired tooth-like denticles (key feature)', 'Shark-like body but actually a ray — gill slits on the underside', 'Olive-gray to brown above, pale belly', 'Two dorsal fins; tail similar to a shark', 'Federally endangered — no take, do not remove from water'],
     lookalikes: [],
@@ -579,6 +587,14 @@ function buildRegs() {
     }),
     short_bigeye: R({
       default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'No species-specific recreational size or bag limit on file. Verify with the agency before keeping.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    bluefin_tuna: R({
+      default: { open: 'Check current season/category', minSize: 73, bagLimit: 1, hms: true, notes: 'Atlantic Bluefin Tuna is tightly quota-managed by NOAA HMS under multiple permit categories (Angling, Charter/Headboat, General, Trophy). Minimum 73 in curved fork length for "school" category; trophy category has its own size class. HMS permit + General Category bluefin endorsement REQUIRED for any retention. Daily/season retention varies by category — verify before fishing.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    great_white_shark: R({
+      default: { open: 'Closed — recreational retention prohibited', minSize: null, bagLimit: 0, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'Great White Shark recreational retention is PROHIBITED in U.S. waters under HMS regulations. Release immediately, ideally without removing from the water. Atlantic stock is not currently ESA-listed but population research is ongoing.' },
       source: 'fisheries.noaa.gov',
     }),
     albacore_tuna: R({

@@ -305,6 +305,17 @@
       "fallback": null,
       "updated": "2026-05-15"
     },
+    "bluefin_tuna": {
+      "name": "Atlantic Bluefin Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Tuna-Bluefin-NOAAFisheries.png?itok=xC7NNr5_",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "albacore_tuna": {
       "name": "Albacore Tuna",
       "primary": "fallback",
@@ -465,6 +476,17 @@
       "proprietary": null,
       "fallback": {
         "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2023-09/640x427-Shark-Sandbar-NOAAFisheries.png?itok=P6Qzy66B",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "great_white_shark": {
+      "name": "Great White Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2021-11/640x427-Shark_Great_White_NB_W.jpg?itok=au9jev1E",
         "credit": "NOAA Fisheries",
         "license": "Public domain"
       },
