@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy } from 'lucide-react';
+import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport } from './helpers.js';
@@ -32,73 +32,34 @@ export function StatusPill({ status, size = 'normal' }) {
 /* ============================================================
    FISH MARK — stylized field-guide silhouette by category
    ============================================================ */
-export function FishMark({ species, size = 56 }) {
-  const cat = species?.category || 'reef';
-  const palette = {
-    snapper: ['#B8423A', '#7A2A22'], grouper: ['#6B5132', '#3D2D17'],
-    jacks: ['#7A8A2C', '#4D5818'], mackerel: ['#3B6A8B', '#1F3B4E'],
-    tuna: ['#244A66', '#0F2532'], billfish: ['#1B4D6B', '#0B2A3C'],
-    trigger: ['#6E6248', '#3D3622'], sharks: ['#5A6772', '#2F3942'],
-    cobia: ['#3D4849', '#1E2628'], wahoo: ['#2D5666', '#143240'],
-    reef: ['#4E8C5A', '#26512E'],
-  };
-  const [body, accent] = palette[cat] || palette.reef;
-  const isBill = cat === 'billfish';
-  const isShark = cat === 'sharks';
-  const isLong = cat === 'mackerel' || cat === 'wahoo' || cat === 'cobia';
-  const id = `g-${cat}-${species?.id || 'x'}`;
-  return (
-    <svg width={size} height={size * 0.65} viewBox="0 0 100 65" style={{ display: 'block' }}>
-      <defs>
-        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={body} />
-          <stop offset="100%" stopColor={accent} />
-        </linearGradient>
-      </defs>
-      {isBill && <line x1="0" y1="32" x2="22" y2="32" stroke={accent} strokeWidth="2" strokeLinecap="round" />}
-      <path
-        d={isLong
-          ? 'M 18 32 Q 30 18, 60 22 Q 78 25, 85 32 Q 78 39, 60 42 Q 30 46, 18 32 Z'
-          : isShark
-          ? 'M 18 32 Q 30 16, 55 20 Q 75 24, 84 32 Q 75 40, 55 44 Q 30 48, 18 32 Z'
-          : 'M 22 32 Q 32 12, 58 18 Q 78 22, 84 32 Q 78 42, 58 46 Q 32 52, 22 32 Z'}
-        fill={`url(#${id})`} stroke={accent} strokeWidth="1.2"
-      />
-      <path d={isLong ? 'M 84 32 L 96 22 L 92 32 L 96 42 Z' : 'M 84 32 L 96 20 L 90 32 L 96 44 Z'} fill={accent} />
-      {isShark
-        ? <path d="M 50 22 L 56 8 L 60 22 Z" fill={accent} />
-        : <path d="M 40 20 L 50 10 L 62 14 L 66 20 Z" fill={accent} opacity="0.85" />}
-      <path d="M 50 46 L 58 54 L 64 46 Z" fill={accent} opacity="0.7" />
-      <circle cx="28" cy="28" r="2.5" fill={T.parchment} />
-      <circle cx="28" cy="28" r="1.3" fill={T.ink} />
-      <path d="M 34 24 Q 36 32, 34 40" stroke={accent} strokeWidth="0.9" fill="none" />
-      {species?.id === 'spanish_mackerel' && <>
-        <circle cx="45" cy="35" r="1.4" fill={T.brass} />
-        <circle cx="55" cy="29" r="1.4" fill={T.brass} />
-        <circle cx="65" cy="37" r="1.4" fill={T.brass} />
-      </>}
-      {species?.id === 'king_mackerel' && <path d="M 30 31 Q 48 31, 55 38 Q 70 38, 82 33" stroke={accent} strokeWidth="0.7" fill="none" />}
-      {species?.id === 'wahoo' && <>
-        <line x1="42" y1="22" x2="42" y2="44" stroke={accent} strokeWidth="0.9" opacity="0.6" />
-        <line x1="52" y1="22" x2="52" y2="44" stroke={accent} strokeWidth="0.9" opacity="0.6" />
-        <line x1="62" y1="22" x2="62" y2="44" stroke={accent} strokeWidth="0.9" opacity="0.6" />
-        <line x1="72" y1="22" x2="72" y2="44" stroke={accent} strokeWidth="0.9" opacity="0.6" />
-      </>}
-    </svg>
-  );
-}
-
-/* Real photo when one is set in the manifest; the FishMark
-   illustration otherwise (or if the photo fails to load). */
+/* Real photo when one is set in the manifest; a neutral "no photo yet"
+   placeholder otherwise. Per product direction we no longer render the
+   old illustrated FishMark cartoons — NOAA imagery only. */
 export function SpeciesImage({ species, size = 56, style }) {
   const [err, setErr] = useState(false);
   const p = species && species.id ? speciesPhoto(species.id) : null;
+  const w = size;
+  const h = Math.round(size * 0.7);
   if (p && p.url && !err) {
-    return <img src={p.url} alt={species.commonName || ''} loading="lazy"
+    return <img src={p.url} alt={species?.commonName || ''} loading="lazy"
       onError={() => setErr(true)}
-      style={{ width: size, height: Math.round(size * 0.7), objectFit: 'cover', borderRadius: 6, display: 'block', ...style }} />;
+      style={{ width: w, height: h, objectFit: 'cover', borderRadius: 6, display: 'block', ...style }} />;
   }
-  return <FishMark species={species} size={size} />;
+  return (
+    <div
+      aria-label={species?.commonName ? `${species.commonName} — photo coming soon` : 'Photo coming soon'}
+      style={{
+        width: w, height: h, borderRadius: 6, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(160deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+        border: `1px solid ${T.cardEdge}`,
+        color: T.inkMute,
+        ...style,
+      }}
+    >
+      <ImageOff size={Math.max(14, Math.round(size * 0.32))} strokeWidth={1.6} />
+    </div>
+  );
 }
 
 /* ============================================================

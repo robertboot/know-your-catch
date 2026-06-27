@@ -15,7 +15,7 @@ import {
   sunPosition, moonPhase, buildPBReport, buildCatchReport,
 } from './helpers.js';
 import {
-  StatusPill, FishMark, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
+  StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow, StarButton, ShareReportModal,
   inputStyle,
 } from './components.jsx';

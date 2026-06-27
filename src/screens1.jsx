@@ -17,7 +17,7 @@ import {
   formatSize, formatWeight, regStatus, differs, seasonState,
 } from './helpers.js';
 import {
-  StatusPill, FishMark, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
+  StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
   inputStyle,
 } from './components.jsx';
