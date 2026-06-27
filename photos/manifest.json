@@ -451,6 +451,17 @@
       },
       "updated": "2026-06-27"
     },
+    "cubera_snapper": {
+      "name": "Cubera Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_gGWvrjNvqge6.jpg?1564016043",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "blackfin_snapper": {
       "name": "Blackfin Snapper",
       "primary": "fallback",

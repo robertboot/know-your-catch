@@ -201,6 +201,10 @@ export const SPECIES = [
     keyIds: ['Massive deep-water grouper — can exceed 400 lb', 'Dark reddish-brown to nearly black body', 'Second dorsal spine very long and stout (key feature)', 'Square tail; juveniles show yellow blotches that fade with age', 'Found very deep — 300–1,700 ft'],
     lookalikes: ['snowy_grouper', 'black_grouper'],
     habitat: 'Deep rocky bottoms, ledges, drop-offs, 300–1,700 ft.', typicalSize: '40–80 in', reefFish: true },
+  { id: 'cubera_snapper', commonName: 'Cubera Snapper', altNames: ['Cuban Snapper'], scientific: 'Lutjanus cyanopterus', category: 'snapper',
+    keyIds: ['Largest snapper in the Atlantic — adults can exceed 100 lb', 'Dark gray to brownish body, often with a purple sheen', 'Very large head and prominent fang-like canine teeth', 'Vomerine teeth patch triangular (no posterior extension) — separates from gray snapper', 'Anal fin rounded'],
+    lookalikes: ['mangrove_snapper', 'mutton_snapper'],
+    habitat: 'Mangroves as juveniles; offshore reefs, wrecks, and ledges as adults, 60–300 ft.', typicalSize: '24–60 in', reefFish: true },
   { id: 'blackfin_snapper', commonName: 'Blackfin Snapper', altNames: ['Hambone'], scientific: 'Lutjanus buccanella', category: 'snapper',
     keyIds: ['Distinct black blotch at the base of the pectoral fin (key feature)', 'Reddish body with yellow-tinged tail and fins', 'Anal fin rounded, similar to vermilion', 'Deep-water snapper, 200–700 ft'],
     lookalikes: ['red_snapper', 'vermilion_snapper', 'queen_snapper'],
@@ -586,6 +590,11 @@ function buildRegs() {
     }),
     warsaw_grouper: R({
       default: { open: 'Check current season', minSize: null, bagLimit: 1, gear: reefGear, notes: 'Gulf deep-water grouper aggregate. Federal limit typically 1 fish/vessel/day for Warsaw (separate from the aggregate count). Slow growth, late maturity — handle carefully. South Atlantic has additional restrictions (often catch-and-release). Verify with the agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    cubera_snapper: R({
+      default: { open: 'Year-round (verify)', minSize: 12, bagLimit: 10, gear: reefGear, notes: 'Gulf snapper aggregate (10/person/day federal Gulf, minus the 2 red snapper and 10 vermilion). Florida Atlantic side has additional rules — only 2 cubera over 30 in per vessel/day. Verify before keeping.' },
+      fl_state: { notes: 'Florida: 2 cubera ≥ 30 in/vessel/day on Atlantic side; Gulf side follows aggregate rule.' },
       source: 'fisheries.noaa.gov',
     }),
     blackfin_snapper: R({
