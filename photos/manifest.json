@@ -411,6 +411,17 @@
       },
       "updated": "2026-06-27"
     },
+    "scup": {
+      "name": "Scup",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Scup-NOAAFisheries_0.png?itok=TFoWqRrr",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "black_sea_bass": {
       "name": "Black Sea Bass",
       "primary": "fallback",

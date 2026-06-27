@@ -189,6 +189,10 @@ export const SPECIES = [
     keyIds: ['Five rows of bony plates (scutes) along the body', 'Long pointed snout with four barbels in front of the mouth', 'Heterocercal (shark-like) tail with upper lobe much longer', 'Olive-brown back fading to pale belly', 'No scales — armored with scutes instead'],
     lookalikes: [],
     habitat: 'Anadromous — Atlantic coast rivers, estuaries, and nearshore ocean. Federally endangered. Not a Gulf of America species.', typicalSize: '60–120 in' },
+  { id: 'scup', commonName: 'Scup', altNames: ['Porgy'], scientific: 'Stenotomus chrysops', category: 'reef',
+    keyIds: ['Deep, oval, laterally compressed body', 'Silvery iridescent flanks with bluish back and faint vertical bars', 'Spiny dorsal fin with a sharp first spine', 'Small mouth with strong, blunt teeth for crushing', 'Forked tail with dark margin'],
+    lookalikes: [],
+    habitat: 'Atlantic continental shelf, 10–600 ft. Hard bottoms, wrecks, and reefs. Primarily Mid-Atlantic — not a Gulf species.', typicalSize: '8–14 in', reefFish: true },
   { id: 'black_sea_bass', commonName: 'Black Sea Bass', altNames: ['Sea Bass'], scientific: 'Centropristis striata', category: 'reef',
     keyIds: ['Stocky black to dusky-blue body with pale spots arranged in rows', 'Large mouth, broad dorsal fin with elongated trailing rays', 'Rounded tail; top ray often extended in mature males', 'Mature males develop a fleshy nuchal hump behind the head'],
     lookalikes: [],
@@ -606,6 +610,10 @@ function buildRegs() {
     }),
     atlantic_sturgeon: R({
       default: { open: 'Closed — federally endangered, no take', minSize: null, bagLimit: 0, notes: 'Atlantic Sturgeon is listed under the Endangered Species Act (most U.S. DPSs endangered, Gulf of Maine DPS threatened). Take is prohibited. If hooked incidentally, release immediately without removing from water when possible. Not a Gulf of America species.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    scup: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'Scup (porgy) is managed by ASMFC and the Mid-Atlantic Council with seasonal limits. Primarily an Atlantic fishery — not a Gulf of America management species. Verify with the appropriate region.' },
       source: 'fisheries.noaa.gov',
     }),
     black_sea_bass: R({
