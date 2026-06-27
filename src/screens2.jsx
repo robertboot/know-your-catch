@@ -902,18 +902,20 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const fileRef = useRef(null);
   const now = useMemo(() => new Date(), []);
 
-  // Geolocation on mount.
-  useEffect(() => {
+  // Get GPS. Longer timeout for offshore "cold start" (no cell A-GPS).
+  const fetchGps = () => {
     if (!('geolocation' in navigator)) {
       setLoc({ lat: null, lon: null, error: 'GPS not available', loading: false });
       return;
     }
+    setLoc(l => ({ ...l, loading: true, error: null }));
     navigator.geolocation.getCurrentPosition(
       pos => setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude, error: null, loading: false }),
       err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 60000, maximumAge: 60000 }
     );
-  }, []);
+  };
+  useEffect(() => { fetchGps(); }, []);
 
   // Weather fetch once we have coords (best effort; offline = skipped).
   useEffect(() => {
@@ -999,9 +1001,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <SectionLabel style={{ marginBottom: 8 }}>Auto-captured</SectionLabel>
         <DetailRow label="Time" value={now.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} />
         <DetailRow label="Location" value={
-          loc.loading ? 'Getting GPS…'
-          : loc.error ? `Unavailable — ${loc.error}`
-          : `${loc.lat.toFixed(5)}°, ${loc.lon.toFixed(5)}°`
+          loc.loading ? 'Acquiring GPS… (up to ~1 min offshore)'
+          : loc.error ? (
+            <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button></span>
+          ) : (
+            <span>{loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}° <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Refresh</button></span>
+          )
         } />
         {sun && <DetailRow label="Sun" value={`${sun.altitudeDeg.toFixed(1)}° altitude · ${compassDir(sun.azimuthDeg)} (${sun.azimuthDeg.toFixed(0)}°)`} />}
         <DetailRow label="Moon" value={`${moon.name} · ${Math.round(moon.illumination * 100)}% illum`} />
