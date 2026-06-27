@@ -34,7 +34,12 @@ export function StatusPill({ status, size = 'normal' }) {
    ============================================================ */
 /* Real photo when one is set in the manifest; a neutral "no photo yet"
    placeholder otherwise. Per product direction we no longer render the
-   old illustrated FishMark cartoons — NOAA imagery only. */
+   old illustrated FishMark cartoons — NOAA imagery only.
+
+   objectFit:contain + max-width/height 99% keeps the fish whole inside
+   the cell. NOAA images with a white background will breathe with a hair
+   of whitespace instead of getting cropped to fit the container's
+   aspect. */
 export function SpeciesImage({ species, size = 56, style }) {
   const [err, setErr] = useState(false);
   const p = species && species.id ? speciesPhoto(species.id) : null;
@@ -43,13 +48,20 @@ export function SpeciesImage({ species, size = 56, style }) {
   if (p && p.url && !err) {
     return <img src={p.url} alt={species?.commonName || ''} loading="lazy"
       onError={() => setErr(true)}
-      style={{ width: w, height: h, objectFit: 'cover', borderRadius: 6, display: 'block', ...style }} />;
+      style={{
+        width: w, height: h,
+        maxWidth: '99%', maxHeight: '99%',
+        objectFit: 'contain',
+        borderRadius: 6, display: 'block',
+        ...style,
+      }} />;
   }
   return (
     <div
       aria-label={species?.commonName ? `${species.commonName} — photo coming soon` : 'Photo coming soon'}
       style={{
-        width: w, height: h, borderRadius: 6, display: 'flex',
+        width: w, height: h, maxWidth: '99%', maxHeight: '99%',
+        borderRadius: 6, display: 'flex',
         alignItems: 'center', justifyContent: 'center',
         background: 'linear-gradient(160deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
         border: `1px solid ${T.cardEdge}`,
