@@ -144,7 +144,7 @@ function FeaturedCard({ species, status, bag, onClick }) {
 
 export function HomeScreen({
   state, jurisdiction, stale, onChangeJurisdiction,
-  onIdentify, onRegulations, onMeasure, onReport, onSpecies, onSpeciesList,
+  onIdentify, onRegulations, onReport, onSpecies, onSpeciesList,
 }) {
   const jurId = jurisdiction?.id || 'fed_gulf';
   const featured = FEATURED_IDS
@@ -193,8 +193,9 @@ export function HomeScreen({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
         <ActionTile icon={<Fish size={22} />} title="Identify Fish" subtitle="Browse species and ID guide" onClick={onIdentify} />
         <ActionTile icon={<ClipboardList size={22} />} title="Check Regulations" subtitle="View rules, limits and seasons" onClick={onRegulations} />
-        <ActionTile icon={<Ruler size={22} />} title="Measure Fish" subtitle="Check size limits and possession" onClick={onMeasure} />
-        <ActionTile icon={<Camera size={22} />} title="Report Catch" subtitle="Log your catch and keep records" onClick={onReport} />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <ActionTile icon={<Camera size={22} />} title="Log Catch" subtitle="Photo + GPS + conditions — build your map" onClick={onReport} />
+        </div>
       </div>
 
       {/* Today's conditions */}

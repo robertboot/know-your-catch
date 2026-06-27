@@ -18,7 +18,7 @@ import {
 import {
   SpeciesDetailScreen, CompareScreen, RegulationsListScreen, RegulationDetailScreen,
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
-  MeasureScreen,
+  CatchLogScreen, CatchEntryScreen,
 } from './screens2.jsx';
 
 const ALERT_COUNT = 2;
@@ -77,8 +77,7 @@ export default function App() {
     onChangeJurisdiction: () => setShowJur(true),
     onIdentify:   () => push({ name: 'identify' }),
     onRegulations:() => push({ name: 'regulations' }),
-    onMeasure:    () => push({ name: 'measure' }),
-    onReport:     () => push({ name: 'pbs' }),
+    onReport:     () => push({ name: 'catch_entry' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
   };
@@ -139,12 +138,11 @@ export default function App() {
     case 'regulations':
       body = <RegulationsListScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} />;
       break;
-    case 'measure':
-      body = <MeasureScreen
-        state={state} jurisdiction={jurisdiction}
-        onChangeJurisdiction={() => setShowJur(true)}
-        onPick={(id) => push({ name: 'species', id })}
-      />;
+    case 'catch_log':
+      body = <CatchLogScreen state={state} onNew={() => push({ name: 'catch_entry' })} onView={(id) => push({ name: 'catch_detail', id })} />;
+      break;
+    case 'catch_entry':
+      body = <CatchEntryScreen state={state} jurisdiction={jurisdiction} update={update} onDone={() => reset([{ name: 'catch_log' }])} onCancel={pop} />;
       break;
     case 'regulation':
       body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} />;
@@ -176,7 +174,7 @@ export default function App() {
   const activeTab =
     isHome ? 'home' :
     ['regulations', 'regulation'].includes(screen.name) ? 'regulations' :
-    ['pbs', 'pb_detail', 'pb_entry'].includes(screen.name) ? 'logbook' :
+    ['catch_log', 'catch_entry', 'catch_detail', 'pbs', 'pb_detail', 'pb_entry'].includes(screen.name) ? 'logbook' :
     screen.name === 'settings' ? '' :
     'species';
 
@@ -238,7 +236,7 @@ export default function App() {
         <TabBtn label="Home" active={activeTab === 'home'} onClick={() => reset([{ name: 'home' }])} icon={<HomeIcon size={20} />} />
         <TabBtn label="Species" active={activeTab === 'species'} onClick={() => reset([{ name: 'species_list' }])} icon={<Fish size={20} />} />
         <TabBtn label="Regulations" active={activeTab === 'regulations'} onClick={() => reset([{ name: 'regulations' }])} icon={<ClipboardList size={20} />} />
-        <TabBtn label="Logbook" active={activeTab === 'logbook'} onClick={() => reset([{ name: 'pbs' }])} icon={<BookOpen size={20} />} />
+        <TabBtn label="Logbook" active={activeTab === 'logbook'} onClick={() => reset([{ name: 'catch_log' }])} icon={<BookOpen size={20} />} />
       </div>
 
       {showDisclaimer && (

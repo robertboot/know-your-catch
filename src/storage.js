@@ -9,6 +9,7 @@ export const defaultState = {
   disclaimerAcceptedVersion: null,
   pbs: {},     // speciesId -> { length, weight, primaryMetric, date, location, notes, jurisdiction, gearBait, photo, history }
   notes: {},   // speciesId -> string
+  catchLog: [], // [{ id, speciesId, dateIso, lat, lon, length, weight, photo, notes, sunAlt, sunAz, moonPhase, moonIllum, weather }]
   syncMeta: { lastSyncDate: DATA_BUILD_DATE },
 };
 
@@ -22,6 +23,7 @@ export function loadState() {
       ...parsed,
       pbs: parsed.pbs || {},
       notes: parsed.notes || {},
+      catchLog: Array.isArray(parsed.catchLog) ? parsed.catchLog : [],
       syncMeta: parsed.syncMeta || defaultState.syncMeta,
     };
   } catch (e) {

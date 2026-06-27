@@ -182,3 +182,53 @@ export function differs(a, b) {
     || a.bagLimit !== b.bagLimit
     || a.vesselLimit !== b.vesselLimit;
 }
+
+/* ------------------------------------------------------------------
+   Sun + moon position (offline, pure math).
+   sunPosition(date, lat, lon)  -> { altitudeDeg, azimuthDeg }
+     altitude: -90..+90; azimuth: 0=N, 90=E, 180=S, 270=W
+   moonPhase(date)              -> { phase, illumination, name }
+     phase 0..1 (0=new); illumination 0..1; name e.g. "Waxing Gibbous"
+   ------------------------------------------------------------------ */
+const _RAD = Math.PI / 180;
+function _daysJ2000(d) { return d.getTime() / 86400000 - 0.5 + 2440588 - 2451545; }
+function _sunRaDec(d) {
+  const n = _daysJ2000(d);
+  const M = (357.5291 + 0.98560028 * n) * _RAD;
+  const L = (280.4665 + 0.98564736 * n) * _RAD;
+  const C = (1.9148 * Math.sin(M) + 0.0200 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) * _RAD;
+  const lambda = L + C, eps = 23.4397 * _RAD;
+  return {
+    dec: Math.asin(Math.sin(eps) * Math.sin(lambda)),
+    ra: Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda)),
+  };
+}
+export function sunPosition(date, lat, lon) {
+  const n = _daysJ2000(date);
+  const { dec, ra } = _sunRaDec(date);
+  const lst = (280.16 + 360.9856235 * n) * _RAD + lon * _RAD;
+  const H = lst - ra;
+  const phi = lat * _RAD;
+  const alt = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
+  const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
+  return { altitudeDeg: alt / _RAD, azimuthDeg: ((az / _RAD + 180) % 360 + 360) % 360 };
+}
+
+export function moonPhase(date) {
+  // Synodic month from a known new moon (2000-01-06 18:14 UTC).
+  const ref = Date.UTC(2000, 0, 6, 18, 14, 0);
+  const SYN = 29.530588853;
+  const days = (date.getTime() - ref) / 86400000;
+  const phase = ((days / SYN) % 1 + 1) % 1;
+  const illumination = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+  const name = phase < 0.03 ? 'New Moon'
+    : phase < 0.22 ? 'Waxing Crescent'
+    : phase < 0.28 ? 'First Quarter'
+    : phase < 0.47 ? 'Waxing Gibbous'
+    : phase < 0.53 ? 'Full Moon'
+    : phase < 0.72 ? 'Waning Gibbous'
+    : phase < 0.78 ? 'Last Quarter'
+    : phase < 0.97 ? 'Waning Crescent'
+    : 'New Moon';
+  return { phase, illumination, name };
+}

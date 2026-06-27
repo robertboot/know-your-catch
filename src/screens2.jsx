@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
   Wrench, Ruler,
@@ -12,6 +12,7 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
+  sunPosition, moonPhase,
 } from './helpers.js';
 import {
   StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -816,6 +817,206 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
           Clear all local data
         </button>
       </Card>
+    </div>
+  );
+}
+
+/* ============================================================
+   CATCH LOG — personal "what & where" dataset
+   ============================================================ */
+
+function compassDir(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(((deg % 360) / 22.5)) % 16];
+}
+
+export function CatchLogScreen({ state, onNew, onView }) {
+  const items = (state.catchLog || []).slice().sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
+  return (
+    <div style={{ padding: '16px 16px 8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <H1 size={22}>Catch Log</H1>
+        <button onClick={onNew} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer' }}>
+          <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW CATCH
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <Card>
+          <div style={{ textAlign: 'center', padding: 18, color: T.inkSoft }}>
+            <Camera size={36} color={T.brass} style={{ display: 'block', margin: '0 auto 10px' }} />
+            <div style={{ fontWeight: 700, color: T.ink, marginBottom: 6 }}>No catches logged yet</div>
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tap <b>NEW CATCH</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
+          </div>
+        </Card>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map(c => {
+            const s = speciesById(c.speciesId);
+            const when = new Date(c.dateIso);
+            return (
+              <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ display: 'flex', gap: 12, alignItems: 'stretch', padding: 10 }}>
+                {c.photo
+                  ? <img src={c.photo} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 6 }} />
+                  : <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={26} color={T.inkMute} /></div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{s ? s.commonName : (c.speciesId || 'Unknown')}</div>
+                  <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
+                    {when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </div>
+                  {c.lat != null && c.lon != null && (
+                    <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                      {c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                    {c.length ? `${c.length} in · ` : ''}
+                    {c.sunAlt != null ? `Sun ${c.sunAlt.toFixed(0)}° ${compassDir(c.sunAz || 0)} · ` : ''}
+                    {c.moonIllum != null ? `${c.moonName || 'Moon'} ${Math.round(c.moonIllum * 100)}%` : ''}
+                  </div>
+                  {c.weather && (
+                    <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
+                      {c.weather.tempF != null ? `${Math.round(c.weather.tempF)}°F · ` : ''}
+                      {c.weather.windMph != null ? `Wind ${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph · ` : ''}
+                      {c.weather.cloudPct != null ? `${Math.round(c.weather.cloudPct)}% cloud` : ''}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel }) {
+  const [speciesId, setSpeciesId] = useState('');
+  const [length, setLength] = useState('');
+  const [weight, setWeight] = useState('');
+  const [notes, setNotes] = useState('');
+  const [photo, setPhoto] = useState(null);
+  const [loc, setLoc] = useState({ lat: null, lon: null, error: null, loading: true });
+  const [weather, setWeather] = useState(null);
+  const [wxStatus, setWxStatus] = useState('idle');
+  const fileRef = useRef(null);
+  const now = useMemo(() => new Date(), []);
+
+  // Geolocation on mount.
+  useEffect(() => {
+    if (!('geolocation' in navigator)) {
+      setLoc({ lat: null, lon: null, error: 'GPS not available', loading: false });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude, error: null, loading: false }),
+      err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, []);
+
+  // Weather fetch once we have coords (best effort; offline = skipped).
+  useEffect(() => {
+    if (loc.lat == null || loc.lon == null) return;
+    setWxStatus('loading');
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+    fetch(url).then(r => r.ok ? r.json() : Promise.reject()).then(j => {
+      const c = j.current || {};
+      setWeather({
+        tempF: c.temperature_2m, windMph: c.wind_speed_10m, windDir: c.wind_direction_10m,
+        cloudPct: c.cloud_cover, precipMm: c.precipitation, pressureMb: c.pressure_msl,
+      });
+      setWxStatus('ok');
+    }).catch(() => setWxStatus('offline'));
+  }, [loc.lat, loc.lon]);
+
+  const sun = loc.lat != null && loc.lon != null ? sunPosition(now, loc.lat, loc.lon) : null;
+  const moon = moonPhase(now);
+
+  const pickPhoto = e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => setPhoto(String(r.result));
+    r.readAsDataURL(f);
+  };
+
+  const canSave = !!speciesId;
+  const save = () => {
+    const entry = {
+      id: 'c_' + now.getTime(),
+      speciesId,
+      dateIso: now.toISOString(),
+      lat: loc.lat, lon: loc.lon,
+      length: length ? +length : null,
+      weight: weight ? +weight : null,
+      notes: notes.trim() || null,
+      photo,
+      sunAlt: sun ? sun.altitudeDeg : null,
+      sunAz: sun ? sun.azimuthDeg : null,
+      moonPhase: moon.phase, moonIllum: moon.illumination, moonName: moon.name,
+      weather: weather || null,
+      jurisdiction: jurisdiction ? jurisdiction.id : null,
+    };
+    update({ catchLog: [entry, ...(state.catchLog || [])] });
+    onDone();
+  };
+
+  const speciesSorted = useMemo(() => SPECIES.slice().sort((a, b) => a.commonName.localeCompare(b.commonName)), []);
+
+  return (
+    <div style={{ padding: '16px 16px 24px' }}>
+      <H1 size={22} style={{ marginBottom: 14 }}>Log a catch</H1>
+
+      <Card style={{ marginBottom: 12 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Photo</SectionLabel>
+        {photo
+          ? <img src={photo} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
+          : <div style={{ height: 140, background: T.parchmentDeep, border: `1px dashed ${T.cardEdge}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>No photo yet</div>}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pickPhoto} style={{ display: 'none' }} />
+        <button onClick={() => fileRef.current && fileRef.current.click()} style={{ marginTop: 10, background: T.brass, color: T.oceanDeep, border: 'none', padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+          <Camera size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> {photo ? 'Replace photo' : 'Take or choose photo'}
+        </button>
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Species</SectionLabel>
+        <select value={speciesId} onChange={e => setSpeciesId(e.target.value)} style={{ ...inputStyle, padding: '10px 12px' }}>
+          <option value="">— pick a species —</option>
+          {speciesSorted.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <Field label={`Length (${state.units === 'metric' ? 'cm' : 'in'})`} value={length} onChange={setLength} type="number" placeholder="—" />
+          <Field label={`Weight (${state.units === 'metric' ? 'kg' : 'lb'})`} value={weight} onChange={setWeight} type="number" placeholder="—" />
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Notes</SectionLabel>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Lure, depth, bite, anything memorable…" style={{ ...inputStyle, resize: 'vertical' }} />
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 12 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Auto-captured</SectionLabel>
+        <DetailRow label="Time" value={now.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} />
+        <DetailRow label="Location" value={
+          loc.loading ? 'Getting GPS…'
+          : loc.error ? `Unavailable — ${loc.error}`
+          : `${loc.lat.toFixed(5)}°, ${loc.lon.toFixed(5)}°`
+        } />
+        {sun && <DetailRow label="Sun" value={`${sun.altitudeDeg.toFixed(1)}° altitude · ${compassDir(sun.azimuthDeg)} (${sun.azimuthDeg.toFixed(0)}°)`} />}
+        <DetailRow label="Moon" value={`${moon.name} · ${Math.round(moon.illumination * 100)}% illum`} />
+        <DetailRow label="Weather" value={
+          wxStatus === 'loading' ? 'Fetching…'
+          : wxStatus === 'offline' ? 'Offline — skipped'
+          : weather ? `${Math.round(weather.tempF)}°F · ${Math.round(weather.windMph)} mph ${compassDir(weather.windDir || 0)} · ${Math.round(weather.cloudPct)}% cloud`
+          : 'Waiting for GPS…'
+        } />
+      </Card>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
+        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>Save catch</PrimaryButton>
+      </div>
     </div>
   );
 }
