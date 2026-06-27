@@ -335,7 +335,6 @@ export function CompareScreen({ aId, bId, onPick }) {
 export function RegulationsListScreen({ state, jurisdiction, onPick }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('type'); // 'type' | 'name' | 'status'
-  const [view, setView] = useState('compact'); // 'compact' | 'detailed'
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
     const list = SPECIES
@@ -382,12 +381,7 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
         {segBtn(sort, setSort, 'name', 'A–Z')}
         {segBtn(sort, setSort, 'status', 'Status')}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>View</span>
-        {segBtn(view, setView, 'compact', 'Compact')}
-        {segBtn(view, setView, 'detailed', 'Detailed')}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: view === 'compact' ? 4 : 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
         {(() => {
           const out = []; let lastCat = null;
           for (const { s, reg, status } of rows) {
@@ -399,14 +393,7 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
                 </div>
               );
             }
-            out.push(view === 'compact' ? (
-              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px' }}>
-                <SpeciesImage species={s} size={32} />
-                <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.commonName}</div>
-                <StatusPill status={status} size="small" />
-                <ChevronRight size={14} color={T.brass} />
-              </Card>
-            ) : (
+            out.push((
               <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
                 <SpeciesImage species={s} size={38} />
                 <div style={{ flex: 1, minWidth: 0 }}>
