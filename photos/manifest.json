@@ -27,10 +27,14 @@
     },
     "lane_snapper": {
       "name": "Lane Snapper",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_oIvT89saRSg3.jpg?1564021409",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "mangrove_snapper": {
       "name": "Gray Snapper",
