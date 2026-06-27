@@ -200,7 +200,7 @@ export default function App() {
     }}>
       {/* Top app bar */}
       <div style={{
-        background: T.oceanDeep, color: T.parchment, padding: '8px 12px',
+        background: T.oceanDeep, color: T.parchment, padding: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         borderBottom: `1px solid ${T.cardEdge}`, position: 'sticky', top: 0, zIndex: 50,
       }}>
@@ -221,7 +221,7 @@ export default function App() {
             <ChevronLeft size={20} /> Back
           </button>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingRight: 12, flexShrink: 0 }}>
           {isHome && (
             <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
               <Bell size={24} strokeWidth={1.8} />
