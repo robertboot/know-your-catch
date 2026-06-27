@@ -451,6 +451,17 @@
       },
       "updated": "2026-06-27"
     },
+    "silk_snapper": {
+      "name": "Silk Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_QJFHmyVDbJQ0.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "cubera_snapper": {
       "name": "Cubera Snapper",
       "primary": "fallback",
