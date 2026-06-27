@@ -218,6 +218,10 @@ export const SPECIES = [
     keyIds: ['Heavy, fusiform body — counter-shaded slate gray above, sharply demarcated white below', 'Large, conical, blunt snout', 'Black eye; large triangular serrated teeth', 'Strong caudal keels and crescent-shaped (lunate) tail', 'Recreational retention is PROHIBITED — release immediately'],
     lookalikes: ['shortfin_mako_shark'],
     habitat: 'Coastal to offshore, surface to 1,000+ ft. Migratory; increasing presence in northern Atlantic; rare in Gulf.', typicalSize: '120–192 in', hms: true },
+  { id: 'winter_skate', commonName: 'Winter Skate', altNames: ['Big Skate (NE)', 'Eyed Skate'], scientific: 'Leucoraja ocellata', category: 'sharks',
+    keyIds: ['Flat, diamond-shaped pectoral disc (skate, not a shark)', 'Brown to gray upper side with many small dark spots scattered across the disc', 'One or more distinct dark eyespots (ocelli) near the rear of each pectoral fin', 'Short, broad snout; thorny patch along the midline of the back', 'Stout tail with two small dorsal fins near the tip'],
+    lookalikes: [],
+    habitat: 'Sandy and gravel bottoms, 5–500 ft. Atlantic — Nova Scotia to North Carolina; not a Gulf species.', typicalSize: '24–36 in' },
   { id: 'smalltooth_sawfish', commonName: 'Smalltooth Sawfish', altNames: ['Sawfish'], scientific: 'Pristis pectinata', category: 'sharks',
     keyIds: ['Long, flat saw-like rostrum lined with paired tooth-like denticles (key feature)', 'Shark-like body but actually a ray — gill slits on the underside', 'Olive-gray to brown above, pale belly', 'Two dorsal fins; tail similar to a shark', 'Federally endangered — no take, do not remove from water'],
     lookalikes: [],
@@ -667,6 +671,10 @@ function buildRegs() {
     }),
     sandbar_shark: R({
       default: { open: 'Closed — recreational retention prohibited', minSize: null, bagLimit: 0, gear: ['Non-offset non-stainless circle hooks (sharks)'], notes: 'Sandbar Shark recreational retention is PROHIBITED in Atlantic HMS recreational fisheries. Catch-and-release only. HMS permit required if targeting sharks. Limited commercial research fishery only.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    winter_skate: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'Winter Skate is managed by the New England Council under the Northeast Skate Complex, primarily as a commercial fishery. No federal recreational size or bag limit on file. Not a Gulf of America species — verify with the appropriate region.' },
       source: 'fisheries.noaa.gov',
     }),
     smalltooth_sawfish: R({

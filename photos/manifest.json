@@ -503,6 +503,17 @@
       },
       "updated": "2026-06-27"
     },
+    "winter_skate": {
+      "name": "Winter Skate",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-skate-winter.jpg?itok=1DgNVhtG",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "smalltooth_sawfish": {
       "name": "Smalltooth Sawfish",
       "primary": "fallback",
