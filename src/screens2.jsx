@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
-  JURISDICTIONS, SPECIES, REGULATIONS,
+  JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
 import { defaultState, saveState } from './storage.js';
@@ -331,7 +331,7 @@ export function CompareScreen({ aId, bId, onPick }) {
    ============================================================ */
 export function RegulationsListScreen({ state, jurisdiction, onPick }) {
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState('name'); // 'name' | 'status'
+  const [sort, setSort] = useState('type'); // 'type' | 'name' | 'status'
   const [view, setView] = useState('compact'); // 'compact' | 'detailed'
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
@@ -341,15 +341,19 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
         const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
         return { s, reg, status: reg ? seasonState(reg.open).status : 'unknown' };
       });
-    // Sort by status puts what you can keep right now on top.
-    const rank = { open: 0, upcoming: 1, closed: 2, unknown: 3 };
-    list.sort((a, b) =>
-      sort === 'status'
-        ? (rank[a.status] - rank[b.status]) || a.s.commonName.localeCompare(b.s.commonName)
-        : a.s.commonName.localeCompare(b.s.commonName)
-    );
+    // Sort: by-type groups by family (CATEGORIES order, alpha within);
+    // by-status floats what you can keep right now to the top; by-name is A–Z.
+    const statusRank = { open: 0, upcoming: 1, closed: 2, unknown: 3 };
+    const catOrder = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
+    list.sort((a, b) => {
+      if (sort === 'status') return (statusRank[a.status] - statusRank[b.status]) || a.s.commonName.localeCompare(b.s.commonName);
+      if (sort === 'type')   return ((catOrder[a.s.category] ?? 99) - (catOrder[b.s.category] ?? 99)) || a.s.commonName.localeCompare(b.s.commonName);
+      return a.s.commonName.localeCompare(b.s.commonName);
+    });
     return list;
   }, [q, sort, jurisdiction]);
+
+  const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
 
   const segBtn = (state, set, key, label) => (
     <button onClick={() => set(key)} style={{
@@ -369,8 +373,9 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
         <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search species…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
+        {segBtn(sort, setSort, 'type', 'Type')}
         {segBtn(sort, setSort, 'name', 'A–Z')}
         {segBtn(sort, setSort, 'status', 'Status')}
       </div>
@@ -380,26 +385,40 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
         {segBtn(view, setView, 'detailed', 'Detailed')}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: view === 'compact' ? 4 : 6 }}>
-        {rows.map(({ s, reg, status }) => view === 'compact' ? (
-          <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px' }}>
-            <SpeciesImage species={s} size={32} />
-            <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.commonName}</div>
-            <StatusPill status={status} size="small" />
-            <ChevronRight size={14} color={T.brass} />
-          </Card>
-        ) : (
-          <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
-            <SpeciesImage species={s} size={38} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-              <div style={{ fontSize: 11, color: T.inkMute }}>
-                {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
-              </div>
-            </div>
-            <StatusPill status={status} size="small" />
-            <ChevronRight size={16} color={T.brass} />
-          </Card>
-        ))}
+        {(() => {
+          const out = []; let lastCat = null;
+          for (const { s, reg, status } of rows) {
+            if (sort === 'type' && s.category !== lastCat) {
+              lastCat = s.category;
+              out.push(
+                <div key={'h-' + s.category} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                  {catName(s.category)}
+                </div>
+              );
+            }
+            out.push(view === 'compact' ? (
+              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px' }}>
+                <SpeciesImage species={s} size={32} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.commonName}</div>
+                <StatusPill status={status} size="small" />
+                <ChevronRight size={14} color={T.brass} />
+              </Card>
+            ) : (
+              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
+                <SpeciesImage species={s} size={38} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                  <div style={{ fontSize: 11, color: T.inkMute }}>
+                    {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
+                  </div>
+                </div>
+                <StatusPill status={status} size="small" />
+                <ChevronRight size={16} color={T.brass} />
+              </Card>
+            ));
+          }
+          return out;
+        })()}
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ export const JURISDICTIONS = [
 
 export const CATEGORIES = [
   { id: 'snapper', name: 'Snapper' }, { id: 'grouper', name: 'Grouper' },
+  { id: 'tilefish', name: 'Tilefish' },
   { id: 'jacks', name: 'Jacks' }, { id: 'mackerel', name: 'Mackerel' },
   { id: 'tuna', name: 'Tuna' }, { id: 'billfish', name: 'Billfish' },
   { id: 'trigger', name: 'Triggerfish' }, { id: 'sharks', name: 'Sharks' },
@@ -132,10 +133,10 @@ export const SPECIES = [
   { id: 'mahi', commonName: 'Mahi-Mahi', altNames: ['Dolphinfish', 'Dolphin', 'Dorado'], scientific: 'Coryphaena hippurus', category: 'reef',
     keyIds: ['Brilliant green, blue, and gold coloration', 'Adult males: steep blunt forehead', 'Long continuous dorsal fin', 'Deeply forked tail'],
     lookalikes: [], habitat: 'Offshore, under floating debris, weed lines, sargassum.', typicalSize: '20–40 in' },
-  { id: 'golden_tilefish', commonName: 'Golden Tilefish', altNames: ['Tilefish', 'Golden Tile'], scientific: 'Lopholatilus chamaeleonticeps', category: 'reef',
+  { id: 'golden_tilefish', commonName: 'Golden Tilefish', altNames: ['Tilefish', 'Golden Tile'], scientific: 'Lopholatilus chamaeleonticeps', category: 'tilefish',
     keyIds: ['Blue-green back fading to yellow then white belly', 'Bright yellow spots scattered over the body', 'Fleshy crest (adipose flap) on top of the head', 'Large blunt head; deep clay-bottom fish'],
     lookalikes: ['blueline_tilefish'], habitat: 'Deep clay and mud bottoms with burrows, 250–1,500 ft.', typicalSize: '20–40 in', reefFish: true },
-  { id: 'blueline_tilefish', commonName: 'Blueline Tilefish', altNames: ['Gray Tilefish', 'Blueline Tile'], scientific: 'Caulolatilus microps', category: 'reef',
+  { id: 'blueline_tilefish', commonName: 'Blueline Tilefish', altNames: ['Gray Tilefish', 'Blueline Tile'], scientific: 'Caulolatilus microps', category: 'tilefish',
     keyIds: ['Blue line running just beneath the eye', 'Pale gray to olive body with a gold midline', 'No fleshy crest on the head (unlike golden tilefish)', 'Deep rocky and rubble bottoms'],
     lookalikes: ['golden_tilefish'], habitat: 'Deep rocky and rubble bottoms, 250–800 ft.', typicalSize: '15–30 in', reefFish: true },
   { id: 'short_bigeye', commonName: 'Short Bigeye', altNames: ['Toro', 'Big Eye Toro', 'Bigeye'], scientific: 'Pristigenys alta', category: 'reef',
