@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench, Ruler,
+  Wrench, Ruler, Star,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -16,7 +16,7 @@ import {
 } from './helpers.js';
 import {
   StatusPill, FishMark, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
-  DetailRow, Field, PickButton, SpeciesRow,
+  DetailRow, Field, PickButton, SpeciesRow, StarButton,
   inputStyle,
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
@@ -43,9 +43,23 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
     setShowNoteEdit(false);
   };
 
+  const favorited = (state.favorites || []).includes(id);
+  const toggleFav = () => {
+    const list = state.favorites || [];
+    const next = favorited ? list.filter(x => x !== id) : [...list, id];
+    update({ favorites: next });
+  };
+
   return (
     <div style={{ padding: '16px 16px 8px' }}>
-      <Card style={{ background: T.oceanDeep, color: T.parchment, border: `1.5px solid ${T.brass}`, padding: 18, marginBottom: 14, textAlign: 'center' }}>
+      <Card style={{ background: T.oceanDeep, color: T.parchment, border: `1.5px solid ${T.brass}`, padding: 18, marginBottom: 14, textAlign: 'center', position: 'relative' }}>
+        <button onClick={toggleFav} aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'} style={{
+          position: 'absolute', top: 10, right: 10,
+          background: 'transparent', border: 'none', padding: 6, cursor: 'pointer',
+          color: favorited ? T.brass : T.parchment,
+        }}>
+          <Star size={24} fill={favorited ? T.brass : 'transparent'} strokeWidth={favorited ? 1.5 : 2} />
+        </button>
         {photo ? (
           <>
             <img src={photo.url} alt={s.commonName} loading="lazy" style={{ width: '100%', maxWidth: 300, height: 190, objectFit: 'cover', borderRadius: 8, display: 'block', margin: '0 auto' }} />
@@ -339,9 +353,16 @@ export function CompareScreen({ aId, bId, onPick }) {
 /* ============================================================
    REGULATIONS LIST + DETAIL
    ============================================================ */
-export function RegulationsListScreen({ state, jurisdiction, onPick }) {
+export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('type'); // 'type' | 'name' | 'status'
+  const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
+  const toggleFav = (id) => {
+    if (!update) return;
+    const next = new Set(favSet);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    update({ favorites: Array.from(next) });
+  };
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
     const list = SPECIES
@@ -361,6 +382,9 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
     });
     return list;
   }, [q, sort, jurisdiction]);
+
+  const favRows = rows.filter(r => favSet.has(r.s.id));
+  const otherRows = rows.filter(r => !favSet.has(r.s.id));
 
   const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
 
@@ -389,9 +413,20 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
         {segBtn(sort, setSort, 'status', 'Status')}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+        {favRows.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Star size={12} fill={T.brass} color={T.brass} /> Your fish
+            </div>
+            {favRows.map(({ s, reg, status }) => (
+              <RegRow key={'fav-' + s.id} s={s} reg={reg} status={status} state={state}
+                      favorited={true} onToggleFav={() => toggleFav(s.id)} onPick={onPick} />
+            ))}
+          </>
+        )}
         {(() => {
           const out = []; let lastCat = null;
-          for (const { s, reg, status } of rows) {
+          for (const { s, reg, status } of otherRows) {
             if (sort === 'type' && s.category !== lastCat) {
               lastCat = s.category;
               out.push(
@@ -401,23 +436,30 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
               );
             }
             out.push((
-              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
-                <SpeciesImage species={s} size={38} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                  <div style={{ fontSize: 11, color: T.inkMute }}>
-                    {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
-                  </div>
-                </div>
-                <StatusPill status={status} size="small" />
-                <ChevronRight size={16} color={T.brass} />
-              </Card>
+              <RegRow key={s.id} s={s} reg={reg} status={status} state={state}
+                      favorited={false} onToggleFav={() => toggleFav(s.id)} onPick={onPick} />
             ));
           }
           return out;
         })()}
       </div>
     </div>
+  );
+}
+
+function RegRow({ s, reg, status, state, favorited, onToggleFav, onPick }) {
+  return (
+    <Card onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 10 }}>
+      <SpeciesImage species={s} size={38} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+        <div style={{ fontSize: 11, color: T.inkMute }}>
+          {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
+        </div>
+      </div>
+      <StatusPill status={status} size="small" />
+      <StarButton favorited={favorited} onToggle={onToggleFav} size={18} />
+    </Card>
   );
 }
 
@@ -553,14 +595,26 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
 /* ============================================================
    SPECIES LIST
    ============================================================ */
-export function SpeciesListScreen({ onPick }) {
+export function SpeciesListScreen({ state, update, onPick }) {
   const [q, setQ] = useState('');
-  const sorted = useMemo(() => [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName)), []);
+  const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
+  const toggleFav = (id) => {
+    if (!update) return;
+    const next = new Set(favSet);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    update({ favorites: Array.from(next) });
+  };
+  const sorted = useMemo(() => {
+    const base = [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName));
+    return base.sort((a, b) => (favSet.has(b.id) ? 1 : 0) - (favSet.has(a.id) ? 1 : 0));
+  }, [favSet]);
   const filtered = useMemo(() => {
     const lower = q.toLowerCase().trim();
     if (!lower) return sorted;
     return sorted.filter(s => s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)) || s.scientific.toLowerCase().includes(lower));
   }, [q, sorted]);
+  const favRows = filtered.filter(s => favSet.has(s.id));
+  const otherRows = filtered.filter(s => !favSet.has(s.id));
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 12 }}>All species</H1>
@@ -568,8 +622,17 @@ export function SpeciesListScreen({ onPick }) {
         <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
       </div>
+      {favRows.length > 0 && (
+        <>
+          <SectionLabel style={{ marginBottom: 8 }}>Your fish</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+            {favRows.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={true} onToggleFavorite={() => toggleFav(s.id)} />)}
+          </div>
+          <SectionLabel style={{ marginBottom: 8 }}>All other species</SectionLabel>
+        </>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {filtered.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} />)}
+        {otherRows.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={false} onToggleFavorite={() => toggleFav(s.id)} />)}
       </div>
     </div>
   );
@@ -810,7 +873,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
 /* ============================================================
    SETTINGS
    ============================================================ */
-export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdiction, onShowDisclaimer }) {
+export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdiction, onShowDisclaimer, onEditFavorites }) {
   const setUnits = (u) => update({ units: u });
   const clearAll = () => {
     if (window.confirm('Clear all PBs, notes, and settings? This cannot be undone.')) {
@@ -880,6 +943,18 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 14, color: T.ink, fontWeight: 600 }}>{jurisdiction?.name || 'Not set'}</div>
           <GhostButton onClick={onChangeJurisdiction} style={{ padding: '6px 12px', fontSize: 12 }}>Change</GhostButton>
+        </div>
+      </Card>
+      <Card style={{ marginBottom: 10 }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Your fish</SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 14, color: T.ink, fontWeight: 600 }}>
+            {(state.favorites || []).length} starred
+          </div>
+          <GhostButton onClick={onEditFavorites} style={{ padding: '6px 12px', fontSize: 12 }}>Edit</GhostButton>
+        </div>
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.45 }}>
+          Starred species pin to the top of every species and regulation list.
         </div>
       </Card>
       <Card style={{ marginBottom: 10 }}>

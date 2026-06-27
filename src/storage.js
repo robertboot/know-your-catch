@@ -10,6 +10,10 @@ export const defaultState = {
   pbs: {},     // speciesId -> { length, weight, primaryMetric, date, location, notes, jurisdiction, gearBait, photo, history }
   notes: {},   // speciesId -> string
   catchLog: [], // [{ id, speciesId, dateIso, lat, lon, length, weight, photo, notes, sunAlt, sunAz, moonPhase, moonIllum, weather }]
+  favorites: [], // [speciesId] — the species the angler keeps coming back to.
+                 // Pinned to the top of every species/regulation list and seeded
+                 // during onboarding right after the jurisdiction picker.
+  onboardingFavoritesComplete: false,
   research: {
     // Consent is set by the (forthcoming) account-creation flow, not in
     // the app settings. Until set, cloud sync stays dormant.
@@ -32,6 +36,7 @@ export function loadState() {
       pbs: parsed.pbs || {},
       notes: parsed.notes || {},
       catchLog: Array.isArray(parsed.catchLog) ? parsed.catchLog : [],
+      favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
       research: { ...defaultState.research, ...(parsed.research || {}) },
       syncMeta: parsed.syncMeta || defaultState.syncMeta,
     };

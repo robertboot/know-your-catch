@@ -495,15 +495,26 @@ export function CategoriesScreen({ onPick }) {
   );
 }
 
-export function CategoryScreen({ catId, onPick }) {
+export function CategoryScreen({ catId, state, update, onPick }) {
   const cat = CATEGORIES.find(c => c.id === catId);
-  const list = SPECIES.filter(s => s.category === catId);
+  const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
+  const toggleFav = (id) => {
+    if (!update) return;
+    const next = new Set(favSet);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    update({ favorites: Array.from(next) });
+  };
+  const list = useMemo(() => {
+    const base = SPECIES.filter(s => s.category === catId)
+      .sort((a, b) => a.commonName.localeCompare(b.commonName));
+    return base.sort((a, b) => (favSet.has(b.id) ? 1 : 0) - (favSet.has(a.id) ? 1 : 0));
+  }, [catId, favSet]);
   return (
     <div style={{ padding: '18px 16px' }}>
       <H1 size={22} style={{ marginBottom: 4 }}>{cat?.name || 'Category'}</H1>
       <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 14 }}>{list.length} species</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {list.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} />)}
+        {list.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={favSet.has(s.id)} onToggleFavorite={() => toggleFav(s.id)} />)}
       </div>
     </div>
   );
@@ -512,8 +523,9 @@ export function CategoryScreen({ catId, onPick }) {
 /* ============================================================
    SEARCH
    ============================================================ */
-export function SearchScreen({ onPick }) {
+export function SearchScreen({ state, onPick }) {
   const [q, setQ] = useState('');
+  const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
   const results = useMemo(() => {
     if (!q.trim()) return [];
     const lower = q.toLowerCase().trim();
@@ -525,9 +537,10 @@ export function SearchScreen({ onPick }) {
         if (a.toLowerCase().includes(lower)) { score += 8; matchedAlt = a; }
       });
       if (s.category.toLowerCase().includes(lower)) score += 2;
+      if (favSet.has(s.id)) score += 1; // tie-breaker: starred fish surface first
       return { s, score, matchedAlt };
     }).filter(r => r.score > 0).sort((a, b) => b.score - a.score);
-  }, [q]);
+  }, [q, favSet]);
   return (
     <div style={{ padding: '18px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Search</H1>

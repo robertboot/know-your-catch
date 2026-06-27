@@ -10,6 +10,7 @@ import { refreshFeeds } from './regsync.js';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
+  FavoritePickerModal,
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
@@ -31,6 +32,7 @@ export default function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showJur, setShowJur] = useState(false);
   const [showBoundaryInfo, setShowBoundaryInfo] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
   const [keepFor, setKeepFor] = useState(null);
 
   // Load persisted state on mount.
@@ -40,6 +42,7 @@ export default function App() {
     setLoaded(true);
     if (s.disclaimerAcceptedVersion !== DISCLAIMER_VERSION) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
+    else if (!s.onboardingFavoritesComplete) setShowFavorites(true);
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
     refreshFeeds().catch(() => {});
@@ -114,10 +117,10 @@ export default function App() {
       body = <CategoriesScreen onPick={(catId) => push({ name: 'category', catId })} />;
       break;
     case 'category':
-      body = <CategoryScreen catId={screen.catId} onPick={(id) => push({ name: 'species', id })} />;
+      body = <CategoryScreen catId={screen.catId} state={state} update={update} onPick={(id) => push({ name: 'species', id })} />;
       break;
     case 'search':
-      body = <SearchScreen onPick={(id) => push({ name: 'species', id })} />;
+      body = <SearchScreen state={state} onPick={(id) => push({ name: 'species', id })} />;
       break;
     case 'species':
       body = <SpeciesDetailScreen
@@ -136,7 +139,7 @@ export default function App() {
       />;
       break;
     case 'regulations':
-      body = <RegulationsListScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} />;
+      body = <RegulationsListScreen state={state} jurisdiction={jurisdiction} update={update} onPick={(id) => push({ name: 'regulation', id })} />;
       break;
     case 'catch_log':
       body = <CatchLogScreen state={state} onNew={() => push({ name: 'catch_entry' })} onView={(id) => push({ name: 'catch_detail', id })} />;
@@ -151,7 +154,7 @@ export default function App() {
       body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} onAddPB={() => push({ name: 'pb_entry', speciesId: screen.id })} />;
       break;
     case 'species_list':
-      body = <SpeciesListScreen onPick={(id) => push({ name: 'species', id })} />;
+      body = <SpeciesListScreen state={state} update={update} onPick={(id) => push({ name: 'species', id })} />;
       break;
     case 'pbs':
       body = <PBsScreen state={state} onAdd={(id) => push({ name: 'pb_entry', speciesId: id })} onView={(id) => push({ name: 'pb_detail', speciesId: id })} />;
@@ -167,7 +170,8 @@ export default function App() {
     case 'settings':
       body = <SettingsScreen state={state} jurisdiction={jurisdiction} update={update}
                 onChangeJurisdiction={() => setShowJur(true)}
-                onShowDisclaimer={() => setShowDisclaimer(true)} />;
+                onShowDisclaimer={() => setShowDisclaimer(true)}
+                onEditFavorites={() => setShowFavorites(true)} />;
       break;
     default:
       body = <HomeScreen {...homeProps} />;
@@ -247,16 +251,35 @@ export default function App() {
           update({ disclaimerAcceptedVersion: DISCLAIMER_VERSION });
           setShowDisclaimer(false);
           if (!state.jurisdiction) setShowJur(true);
+          else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
         }} />
       )}
 
       {showJur && (
         <JurisdictionPickerModal
           current={state.jurisdiction}
-          onPick={(id) => { update({ jurisdiction: id }); setShowJur(false); }}
+          onPick={(id) => {
+            update({ jurisdiction: id });
+            setShowJur(false);
+            if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+          }}
           onClose={() => state.jurisdiction && setShowJur(false)}
           canCancel={!!state.jurisdiction}
           onShowBoundary={() => setShowBoundaryInfo(true)}
+        />
+      )}
+
+      {showFavorites && (
+        <FavoritePickerModal
+          favorites={state.favorites}
+          onDone={(picked) => {
+            update({ favorites: picked, onboardingFavoritesComplete: true });
+            setShowFavorites(false);
+          }}
+          onSkip={() => {
+            update({ onboardingFavoritesComplete: true });
+            setShowFavorites(false);
+          }}
         />
       )}
 

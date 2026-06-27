@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search } from 'lucide-react';
 import { T } from './theme.js';
-import { JURISDICTIONS, DISCLAIMER_TEXT } from './data.js';
+import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto } from './helpers.js';
 
 /* ============================================================
@@ -278,9 +278,29 @@ export function KeepConfirmModal({ species, onClose }) {
 }
 
 /* ============================================================
+   STAR / FAVORITE TOGGLE
+   ============================================================ */
+export function StarButton({ favorited, onToggle, size = 22, ariaLabel }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      aria-label={ariaLabel || (favorited ? 'Remove from favorites' : 'Add to favorites')}
+      style={{
+        background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: favorited ? T.brass : T.inkMute,
+      }}
+    >
+      <Star size={size} fill={favorited ? T.brass : 'transparent'} strokeWidth={favorited ? 1.5 : 2} />
+    </button>
+  );
+}
+
+/* ============================================================
    SHARED SPECIES ROW (used by category, search, list screens)
    ============================================================ */
-export function SpeciesRow({ species, onClick }) {
+export function SpeciesRow({ species, onClick, favorited, onToggleFavorite }) {
   return (
     <Card onClick={onClick} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12 }}>
       <div style={{ flexShrink: 0 }}><FishMark species={species} size={50} /></div>
@@ -289,7 +309,100 @@ export function SpeciesRow({ species, onClick }) {
         <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{species.scientific}</div>
         <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4, lineHeight: 1.3 }}>{species.keyIds[0]}</div>
       </div>
+      {onToggleFavorite && (
+        <StarButton favorited={!!favorited} onToggle={onToggleFavorite} />
+      )}
     </Card>
+  );
+}
+
+/* ============================================================
+   FAVORITE PICKER — onboarding step + revisitable from Settings
+   ============================================================ */
+export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = true, title = 'Star your common catches' }) {
+  const [picked, setPicked] = useState(() => new Set(favorites || []));
+  const [q, setQ] = useState('');
+  const toggle = (id) => {
+    setPicked(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const filteredByCategory = useMemo(() => {
+    const lower = q.toLowerCase().trim();
+    const matches = SPECIES.filter(s => !lower
+      || s.commonName.toLowerCase().includes(lower)
+      || s.altNames.some(a => a.toLowerCase().includes(lower)));
+    const buckets = new Map();
+    for (const s of matches) {
+      if (!buckets.has(s.category)) buckets.set(s.category, []);
+      buckets.get(s.category).push(s);
+    }
+    return CATEGORIES
+      .filter(c => buckets.has(c.id))
+      .map(c => ({ cat: c, list: buckets.get(c.id).sort((a, b) => a.commonName.localeCompare(b.commonName)) }));
+  }, [q]);
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalStyle, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <H1 size={20}>{title}</H1>
+          <div style={{ fontSize: 11, color: T.brass, fontWeight: 700, letterSpacing: 1 }}>{picked.size} STARRED</div>
+        </div>
+        <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 12px', lineHeight: 1.5 }}>
+          Tap the species you target most. They'll pin to the top of every list so they're one tap away.
+        </p>
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1, paddingRight: 2, marginBottom: 12 }}>
+          {filteredByCategory.length === 0 && (
+            <div style={{ fontSize: 13, color: T.inkMute, padding: 12, textAlign: 'center' }}>No matches.</div>
+          )}
+          {filteredByCategory.map(({ cat, list }) => (
+            <div key={cat.id} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '6px 4px 4px' }}>
+                {cat.name}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {list.map(s => {
+                  const on = picked.has(s.id);
+                  return (
+                    <button key={s.id} type="button" onClick={() => toggle(s.id)} style={{
+                      background: on ? T.parchmentDeep : T.card,
+                      border: `1.5px solid ${on ? T.brass : T.cardEdge}`,
+                      borderRadius: 6, padding: '8px 10px', cursor: 'pointer', textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                    }}>
+                      <FishMark species={s} size={36} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.ink, fontFamily: 'Georgia, serif' }}>{s.commonName}</div>
+                        <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{s.scientific}</div>
+                      </div>
+                      <Star size={20} fill={on ? T.brass : 'transparent'} color={on ? T.brass : T.inkMute} strokeWidth={on ? 1.5 : 2} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {allowSkip && (
+            <button onClick={onSkip} style={{
+              flex: 1, background: 'transparent', color: T.inkSoft,
+              border: `1.5px solid ${T.cardEdge}`, padding: '12px', borderRadius: 6,
+              fontSize: 13, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
+            }}>Skip for now</button>
+          )}
+          <PrimaryButton style={{ flex: 1 }} onClick={() => onDone(Array.from(picked))}>
+            {picked.size === 0 ? 'Done' : `Save ${picked.size} favorite${picked.size === 1 ? '' : 's'}`}
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
   );
 }
 
