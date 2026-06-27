@@ -290,47 +290,49 @@ export function HomeScreen({
         />
       </div>
 
-      {/* Conditions + Regulation Alerts (side-by-side) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+      {/* Conditions + Regulation Alerts — equal width (50/50), equal height,
+          no overflow. minWidth:0 prevents grid blowout when inner content
+          would otherwise expand past its column. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14, alignItems: 'stretch' }}>
         {/* Conditions */}
-        <Card style={{ padding: 14, borderRadius: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
-            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST</button>
+        <Card style={{ padding: 12, borderRadius: 18, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 6 }}>
+            <span style={{ fontSize: 10.5, color: T.ink, fontWeight: 800, letterSpacing: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>TODAY'S CONDITIONS</span>
+            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 9.5, fontWeight: 800, letterSpacing: 1, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>FORECAST</button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <div style={{ textAlign: 'center', flexShrink: 0 }}>
-              <CloudSun size={32} color={T.warn} strokeWidth={1.8} />
-              <div style={{ fontSize: 26, fontWeight: 900, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
-              <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4 }}>Partly Cloudy</div>
+              <CloudSun size={28} color={T.warn} strokeWidth={1.8} />
+              <div style={{ fontSize: 22, fontWeight: 900, color: T.ink, marginTop: 2, lineHeight: 1 }}>82°</div>
+              <div style={{ fontSize: 9.5, color: T.inkMute, marginTop: 3 }}>Partly Cloudy</div>
             </div>
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ConditionStat label="WIND"  value="SE 14 mph" />
+            <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <ConditionStat label="WIND"  value="SE 14" />
               <ConditionStat label="WATER" value="79°" />
               <ConditionStat label="WAVES" value="2.1 ft" />
-              <ConditionStat label="PRESSURE" value="30.12 in" />
+              <ConditionStat label="PRESSURE" value="30.12" />
             </div>
           </div>
         </Card>
 
         {/* Regulation Alerts */}
-        <Card style={{ padding: 14, borderRadius: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>REGULATION ALERTS</span>
-            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
+        <Card style={{ padding: 12, borderRadius: 18, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 6 }}>
+            <span style={{ fontSize: 10.5, color: T.ink, fontWeight: 800, letterSpacing: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>REGULATION ALERTS</span>
+            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 9.5, fontWeight: 800, letterSpacing: 1, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <ShieldCheck size={36} color={anyClosed ? T.warn : T.open} strokeWidth={1.6} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <div style={{ fontSize: 14, color: T.ink, fontWeight: 800, lineHeight: 1.25 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
+            <ShieldCheck size={32} color={anyClosed ? T.warn : T.open} strokeWidth={1.6} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, color: T.ink, fontWeight: 800, lineHeight: 1.2 }}>
                 {anyClosed ? 'Active closure' : 'No Active Closures'}
               </div>
-              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 4, lineHeight: 1.35 }}>
                 {anyClosed
                   ? 'A featured species is closed in these waters.'
                   : `All clear in ${jurisdiction ? jurisdiction.name : 'these waters'}.`}
               </div>
-              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 6, lineHeight: 1.35 }}>
                 Always check before you head out.
               </div>
             </div>
