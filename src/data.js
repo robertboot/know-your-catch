@@ -197,6 +197,10 @@ export const SPECIES = [
     keyIds: ['Small, very deep, laterally compressed silver body', 'Forked tail; no pelvic fins', 'Single long dorsal fin; row of pores below dorsal', 'Bluish back fading to silver — looks like a coin'],
     lookalikes: [],
     habitat: 'Atlantic continental shelf, surface to 600 ft. Schools over sandy bottoms.', typicalSize: '6–9 in' },
+  { id: 'snowy_grouper', commonName: 'Snowy Grouper', altNames: ['Snowy'], scientific: 'Hyporthodus niveatus', category: 'grouper',
+    keyIds: ['Dark chocolate-brown body covered in scattered white spots (juveniles especially)', 'White spots fade with age — large adults often nearly uniform dark', 'Square or slightly concave tail with pale margin', 'Black saddle blotch on caudal peduncle', 'Deep-water grouper — typically 300–1,500 ft'],
+    lookalikes: ['gag_grouper', 'red_grouper'],
+    habitat: 'Deep rocky bottoms and ledges, 300–1,500 ft. Gulf and South Atlantic deep-water grouper complex.', typicalSize: '24–40 in', reefFish: true },
   { id: 'hogfish', commonName: 'Hogfish', altNames: ['Hog Snapper'], scientific: 'Lachnolaimus maximus', category: 'reef',
     keyIds: ['Long pig-like snout (key feature)', 'First three dorsal spines very long and trailing', 'Pinkish to reddish body; large males show a dark blotch behind pectoral fin', 'Sharp protruding canine teeth at the front of the mouth', 'A wrasse — not a snapper despite the "hog snapper" name'],
     lookalikes: [],
@@ -562,6 +566,10 @@ function buildRegs() {
     }),
     butterfish: R({
       default: { open: 'Bait/forage species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Butterfish is managed by the Mid-Atlantic Council, primarily as a commercial small-mesh fishery. Common as cut bait and forage for predators. No recreational size/bag on file — verify any state-specific bait-fish rules.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    snowy_grouper: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Gulf deep-water grouper aggregate. Federal Gulf deep-water grouper aggregate limit applies (typically 4 fish, with snowy/yellowedge/warsaw/speckled hind combined). South Atlantic management is stricter with seasonal closures. Verify with the agency.' },
       source: 'fisheries.noaa.gov',
     }),
     hogfish: R({

@@ -436,6 +436,17 @@
       },
       "updated": "2026-06-27"
     },
+    "snowy_grouper": {
+      "name": "Snowy Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_ITZIFUpyQxt0.jpg?1538059461",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "hogfish": {
       "name": "Hogfish",
       "primary": "fallback",
