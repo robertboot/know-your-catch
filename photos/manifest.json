@@ -436,6 +436,17 @@
       },
       "updated": "2026-06-27"
     },
+    "yellowmouth_grouper": {
+      "name": "Yellowmouth Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_IRKMi4RU9iM9.jpg?1564016009",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
     "snowy_grouper": {
       "name": "Snowy Grouper",
       "primary": "fallback",

@@ -197,6 +197,10 @@ export const SPECIES = [
     keyIds: ['Small, very deep, laterally compressed silver body', 'Forked tail; no pelvic fins', 'Single long dorsal fin; row of pores below dorsal', 'Bluish back fading to silver — looks like a coin'],
     lookalikes: [],
     habitat: 'Atlantic continental shelf, surface to 600 ft. Schools over sandy bottoms.', typicalSize: '6–9 in' },
+  { id: 'yellowmouth_grouper', commonName: 'Yellowmouth Grouper', altNames: ['Yellowmouth'], scientific: 'Mycteroperca interstitialis', category: 'grouper',
+    keyIds: ['Bright yellow corners and lining of the mouth (key feature)', 'Body tan to brown with small dark spots and pale blotches', 'Caudal rays extended slightly ("broomtail"-like, less than scamp)', 'Yellow margin on pectoral and caudal fins'],
+    lookalikes: ['scamp', 'gag_grouper'],
+    habitat: 'Reefs, ledges, and hard bottom, 80–500 ft.', typicalSize: '15–24 in', reefFish: true },
   { id: 'snowy_grouper', commonName: 'Snowy Grouper', altNames: ['Snowy'], scientific: 'Hyporthodus niveatus', category: 'grouper',
     keyIds: ['Dark chocolate-brown body covered in scattered white spots (juveniles especially)', 'White spots fade with age — large adults often nearly uniform dark', 'Square or slightly concave tail with pale margin', 'Black saddle blotch on caudal peduncle', 'Deep-water grouper — typically 300–1,500 ft'],
     lookalikes: ['gag_grouper', 'red_grouper'],
@@ -566,6 +570,11 @@ function buildRegs() {
     }),
     butterfish: R({
       default: { open: 'Bait/forage species — no recreational size/bag', minSize: null, bagLimit: null, notes: 'Butterfish is managed by the Mid-Atlantic Council, primarily as a commercial small-mesh fishery. Common as cut bait and forage for predators. No recreational size/bag on file — verify any state-specific bait-fish rules.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    yellowmouth_grouper: R({
+      default: { open: 'Year-round (verify)', minSize: 20, bagLimit: 2, gear: reefGear, notes: 'Gulf shallow-water grouper aggregate (with gag, red, black, scamp, yellowfin). Aggregate bag and seasonal closures apply. Verify before keeping.' },
+      tx_state: { minSize: 18, bagLimit: 4 },
       source: 'fisheries.noaa.gov',
     }),
     snowy_grouper: R({
