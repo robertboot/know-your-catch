@@ -280,6 +280,28 @@
       "proprietary": null,
       "fallback": null,
       "updated": "2026-05-15"
+    },
+    "bigeye_tuna": {
+      "name": "Bigeye Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-07/640x427-Tuna-Bigeye-NOAAFisheries.png?itok=94aSx4Gc",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_cod": {
+      "name": "Atlantic Cod",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-07/640x427-Cod-Atlantic-NOAAFisheries.png?itok=LaaW5W6M",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     }
   }
 }

@@ -26,6 +26,7 @@ export const CATEGORIES = [
   { id: 'tuna', name: 'Tuna' }, { id: 'billfish', name: 'Billfish' },
   { id: 'trigger', name: 'Triggerfish' }, { id: 'sharks', name: 'Sharks' },
   { id: 'cobia', name: 'Cobia' }, { id: 'wahoo', name: 'Wahoo' },
+  { id: 'cod', name: 'Cod' },
   { id: 'reef', name: 'Reef Fish' },
 ];
 
@@ -105,6 +106,10 @@ export const SPECIES = [
     keyIds: ['Dark dusky finlets (NOT yellow)', 'Smaller than yellowfin — rarely over 40 lb', 'Bronze tint to body'],
     lookalikes: ['yellowfin_tuna'],
     habitat: 'Offshore, near rigs and shelf edges.', typicalSize: '20–28 in', hms: true },
+  { id: 'bigeye_tuna', commonName: 'Bigeye Tuna', altNames: ['Ahi'], scientific: 'Thunnus obesus', category: 'tuna',
+    keyIds: ['Very large eye relative to head', 'Pectoral fins reach past second dorsal in juveniles', 'Yellow finlets edged in black (similar to yellowfin)', 'Deeper, more rounded body than yellowfin'],
+    lookalikes: ['yellowfin_tuna'],
+    habitat: 'Deep offshore blue water, cooler thermocline depths.', typicalSize: '40–80 in', hms: true },
   { id: 'blue_marlin', commonName: 'Blue Marlin', altNames: [], scientific: 'Makaira nigricans', category: 'billfish',
     keyIds: ['Cobalt blue back, silvery-white belly', 'First dorsal pointed, lower than body depth', 'Round bill in cross-section'],
     lookalikes: ['white_marlin', 'sailfish'],
@@ -142,6 +147,10 @@ export const SPECIES = [
   { id: 'short_bigeye', commonName: 'Short Bigeye', altNames: ['Toro', 'Big Eye Toro', 'Bigeye'], scientific: 'Pristigenys alta', category: 'reef',
     keyIds: ['Bright red to rosy body', 'Very large eye', 'Deep, oval, strongly compressed body', 'Rough scales; single continuous spiny dorsal fin'],
     lookalikes: [], habitat: 'Reefs, rocky ledges and drop-offs, 50–600 ft.', typicalSize: '6–12 in' },
+  { id: 'atlantic_cod', commonName: 'Atlantic Cod', altNames: ['Cod'], scientific: 'Gadus morhua', category: 'cod',
+    keyIds: ['Chin barbel (single whisker under the jaw)', 'Three dorsal fins and two anal fins (gadoid arrangement)', 'Mottled brown / gray / olive with pale belly', 'Pale, curved lateral line'],
+    lookalikes: [],
+    habitat: 'Cold North Atlantic — rocky and gravel bottoms, 30–600 ft. Not a Gulf of America species.', typicalSize: '20–48 in' },
 ];
 
 export const COMPARISONS = {
@@ -451,6 +460,14 @@ function buildRegs() {
     }),
     short_bigeye: R({
       default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'No species-specific recreational size or bag limit on file. Verify with the agency before keeping.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    bigeye_tuna: R({
+      default: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'Federally managed HMS — HMS Angling or Charter/Headboat permit required. No fixed rec size limit on file; verify current rules with NOAA.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    atlantic_cod: R({
+      default: { open: 'Not a Gulf of America species', minSize: null, bagLimit: null, notes: 'Atlantic Cod is managed by NOAA in the Northeast region (Gulf of Maine / Georges Bank). Outside the Gulf of America scope of this app — rules differ by region. Verify with the appropriate agency.' },
       source: 'fisheries.noaa.gov',
     }),
   };
