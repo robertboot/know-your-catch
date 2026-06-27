@@ -34,20 +34,6 @@ function client() {
 
 export const isConfigured = () => !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-// === COORDINATE FUZZING ================================================
-// Reduces resolution by snapping to a grid. 1 km ≈ 0.009° lat, 0.01° at
-// 30° N for lon; 10 km ≈ 0.09°. Anglers' precise spots stay private.
-const GRID = { exact: 0, grid_1km: 0.01, grid_10km: 0.1 };
-export function applyLocPrecision(lat, lon, precision) {
-  if (lat == null || lon == null) return { lat: null, lon: null };
-  const g = GRID[precision] || 0;
-  if (!g) return { lat, lon };
-  return {
-    lat: Math.round(lat / g) * g,
-    lon: Math.round(lon / g) * g,
-  };
-}
-
 // === CONSENT + ANGLER SIGN-UP ==========================================
 /**
  * Idempotently register an anonymous angler and store the angler row id.
@@ -78,13 +64,12 @@ export async function ensureAngler({ jurisdiction, appVersion } = {}) {
 /** Best-effort: failures are swallowed; local log is canonical. */
 export async function publishCatch(catchEntry, research) {
   const c = client(); if (!c || !research?.consented || !research.anglerId) return { skipped: true };
-  const { lat, lon } = applyLocPrecision(catchEntry.lat, catchEntry.lon, research.locPrecision || 'grid_1km');
   const row = {
     angler_id:      research.anglerId,
     species_id:     catchEntry.speciesId,
     caught_at:      catchEntry.dateIso,
-    lat, lon,
-    loc_precision:  research.locPrecision || 'grid_1km',
+    lat: catchEntry.lat ?? null,
+    lon: catchEntry.lon ?? null,
     jurisdiction:   catchEntry.jurisdiction || null,
     length_in:      catchEntry.length ?? null,
     weight_lb:      catchEntry.weight ?? null,
