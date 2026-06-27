@@ -155,8 +155,17 @@ function ScrollDots({ count, active }) {
 export function HomeScreen({
   state, jurisdiction, stale, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
-  onCompare, onBrowse,
+  onCompare, onBrowse, onUploadPhoto,
 }) {
+  const uploadRef = useRef(null);
+  const handleUploadPick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file || !onUploadPhoto) return;
+    const reader = new FileReader();
+    reader.onload = () => onUploadPhoto(reader.result);
+    reader.readAsDataURL(file);
+  };
   const jurId = jurisdiction?.id || 'fed_gulf';
   const featured = FEATURED_IDS
     .map(id => {
@@ -248,7 +257,7 @@ export function HomeScreen({
           </button>
 
           <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-            <button onClick={onIdentify} style={{
+            <button onClick={() => uploadRef.current?.click()} style={{
               background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
               fontSize: 11, fontWeight: 700, letterSpacing: 0.8, whiteSpace: 'nowrap',
@@ -264,6 +273,15 @@ export function HomeScreen({
             </button>
           </div>
         </div>
+        {/* Hidden file input for the UPLOAD PHOTO action — no capture
+            attribute, so iOS opens the photo library instead of camera. */}
+        <input
+          ref={uploadRef}
+          type="file"
+          accept="image/*"
+          onChange={handleUploadPick}
+          style={{ display: 'none' }}
+        />
       </div>
 
       {/* Quick Actions — each tile sized for its content; whole row

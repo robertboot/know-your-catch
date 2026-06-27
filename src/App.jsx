@@ -79,6 +79,7 @@ export default function App() {
     state, jurisdiction, stale,
     onChangeJurisdiction: () => setShowJur(true),
     onIdentify:   () => push({ name: 'identify' }),
+    onUploadPhoto:(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl }),
     onBrowse:     () => push({ name: 'categories' }),
     onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
