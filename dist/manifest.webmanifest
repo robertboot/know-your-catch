@@ -1,0 +1,16 @@
+{
+  "name": "Know Your Catch",
+  "short_name": "Know Your Catch",
+  "description": "Identify it. Know the rules. Stay legal. Built for the Gulf of America.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#00081b",
+  "theme_color": "#00081b",
+  "icons": [
+    { "src": "brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
