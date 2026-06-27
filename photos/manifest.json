@@ -162,10 +162,14 @@
     },
     "king_mackerel": {
       "name": "King Mackerel",
-      "primary": "none",
+      "primary": "fallback",
       "proprietary": null,
-      "fallback": null,
-      "updated": "2026-05-15"
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Mackerel-King-NOAAFisheries.png?itok=4HMsizeA",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
     },
     "cero_mackerel": {
       "name": "Cero Mackerel",
