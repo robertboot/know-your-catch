@@ -60,11 +60,11 @@ function regForSpecies(id, jurId) {
 }
 
 const STATUS_TEXT = {
-  open:     { label: 'Season Open*',   color: T.open },
-  closed:   { label: 'Season Closed*', color: T.closed },
-  upcoming: { label: 'Opens Soon*',    color: T.warn },
-  caution:  { label: 'Season Open*',   color: T.open },
-  unknown:  { label: 'Check Source',   color: T.inkSoft },
+  open:     { label: 'Season Open',   color: T.open },
+  closed:   { label: 'Season Closed', color: T.closed },
+  upcoming: { label: 'Opens Soon',    color: T.warn },
+  caution:  { label: 'Season Open',   color: T.open },
+  unknown:  { label: 'Check Source',  color: T.inkSoft },
 };
 
 function ActionTile({ icon, title, subtitle, onClick }) {
@@ -120,22 +120,12 @@ function FeaturedCard({ species, status, bag, onClick }) {
         boxShadow: `inset 0 0 0 1px ${T.cardEdge}`,
       }}>
         <SpeciesImage species={species} size={130} />
-        <span style={{
-          position: 'absolute', top: 8, left: 8, display: 'inline-flex', alignItems: 'center', gap: 5,
-          background: 'rgba(6,19,32,0.78)', padding: '3px 8px', borderRadius: 999,
-          fontSize: 10, fontWeight: 800, letterSpacing: 0.4, color: st.color,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }} />
-          {st.label.toUpperCase()}
-        </span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {species.commonName}
       </div>
-      <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
-        {species.scientific}
-      </div>
-      <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, fontWeight: 600 }}>
+      <div style={{ fontSize: 12, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
+      <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>
         Bag Limit: <span style={{ color: T.ink }}>{bag != null ? bag : '—'}</span>
       </div>
     </button>
@@ -239,12 +229,7 @@ export function HomeScreen({
         ))}
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
-        * Based on seed data (v{DATA_VERSION}, {DATA_BUILD_DATE}) — not yet officially verified.
-        Open a species to see the rule and a one-tap link to the official agency.
-      </div>
-
-      <div style={{ marginTop: 18, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
+      <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
         Built for the Gulf of America · For anglers, by anglers · v{DATA_VERSION}
       </div>
     </div>
