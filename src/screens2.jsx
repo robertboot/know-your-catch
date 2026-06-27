@@ -813,6 +813,60 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
       window.location.reload();
     }
   };
+
+  const exportData = () => {
+    const payload = {
+      schema: 'kyc-backup/v1',
+      exportedAt: new Date().toISOString(),
+      units: state.units,
+      jurisdiction: state.jurisdiction,
+      catchLog: state.catchLog || [],
+      pbs: state.pbs || {},
+      notes: state.notes || {},
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `know-your-catch-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = () => {
+      const f = input.files && input.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const payload = JSON.parse(String(r.result));
+          if (payload.schema !== 'kyc-backup/v1') { window.alert('Not a Know Your Catch backup file.'); return; }
+          const ncatches = (payload.catchLog || []).length;
+          const npbs = Object.keys(payload.pbs || {}).length;
+          if (!window.confirm(`Restore ${ncatches} catch${ncatches === 1 ? '' : 'es'} and ${npbs} personal best${npbs === 1 ? '' : 's'}?\n\nYour current data will be replaced.`)) return;
+          update({
+            catchLog: Array.isArray(payload.catchLog) ? payload.catchLog : [],
+            pbs: payload.pbs || {},
+            notes: payload.notes || {},
+            units: payload.units || state.units,
+            jurisdiction: payload.jurisdiction || state.jurisdiction,
+          });
+          window.alert('Restored.');
+        } catch (e) {
+          window.alert('Could not read backup file.');
+        }
+      };
+      r.readAsText(f);
+    };
+    input.click();
+  };
+
+  const nCatches = (state.catchLog || []).length;
+  const nPBs = Object.keys(state.pbs || {}).length;
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
@@ -835,6 +889,19 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
         <DetailRow label="Version" value={DATA_VERSION} />
         <DetailRow label="Built" value={DATA_BUILD_DATE} />
         <DetailRow label="Last sync" value={state.syncMeta?.lastSyncDate || '—'} />
+      </Card>
+      <Card style={{ marginBottom: 10 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Your fishing data</SectionLabel>
+        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 10 }}>
+          {nCatches} catch{nCatches === 1 ? '' : 'es'} logged · {nPBs} personal best{nPBs === 1 ? '' : 's'}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <GhostButton onClick={exportData} style={{ flex: 1 }}>Export backup</GhostButton>
+          <GhostButton onClick={importData} style={{ flex: 1 }}>Restore backup</GhostButton>
+        </div>
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
+          Backup is a single JSON file with catches (photos included), personal bests, notes, and settings. Save it to Files / iCloud Drive so you don't lose your log if you reset the app or change phones.
+        </div>
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Report or contact</SectionLabel>
