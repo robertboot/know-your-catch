@@ -15,7 +15,7 @@ import {
   sunPosition, moonPhase,
 } from './helpers.js';
 import {
-  StatusPill, FishMark, Card, PrimaryButton, GhostButton, SectionLabel, H1,
+  StatusPill, FishMark, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow,
   inputStyle,
 } from './components.jsx';
@@ -202,7 +202,9 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
     <>
       <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <StatusPill status={status} />
-        <span style={{ fontSize: 14, fontWeight: 700, color: ssColor }}>{ss.reason}</span>
+        {ss.reason && !/^(open|closed)$/i.test(ss.reason.trim()) && (
+          <span style={{ fontSize: 14, fontWeight: 700, color: ssColor }}>{ss.reason}</span>
+        )}
       </div>
       <div style={{ border: `1px solid ${T.cardEdge}`, borderRadius: 4, overflow: 'hidden' }}>
         {fedColumn && (
@@ -330,6 +332,7 @@ export function CompareScreen({ aId, bId, onPick }) {
 export function RegulationsListScreen({ state, jurisdiction, onPick }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('name'); // 'name' | 'status'
+  const [view, setView] = useState('compact'); // 'compact' | 'detailed'
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
     const list = SPECIES
@@ -348,13 +351,13 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
     return list;
   }, [q, sort, jurisdiction]);
 
-  const sortBtn = (key, label) => (
-    <button onClick={() => setSort(key)} style={{
+  const segBtn = (state, set, key, label) => (
+    <button onClick={() => set(key)} style={{
       flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
       fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
-      background: sort === key ? T.brass : T.parchmentDeep,
-      color: sort === key ? T.oceanDeep : T.inkSoft,
-      border: `1.5px solid ${sort === key ? T.brass : T.cardEdge}`,
+      background: state === key ? T.brass : T.parchmentDeep,
+      color: state === key ? T.oceanDeep : T.inkSoft,
+      border: `1.5px solid ${state === key ? T.brass : T.cardEdge}`,
     }}>{label}</button>
   );
 
@@ -366,15 +369,27 @@ export function RegulationsListScreen({ state, jurisdiction, onPick }) {
         <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search species…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
-        {sortBtn('name', 'A–Z')}
-        {sortBtn('status', 'Status')}
+        {segBtn(sort, setSort, 'name', 'A–Z')}
+        {segBtn(sort, setSort, 'status', 'Status')}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {rows.map(({ s, reg, status }) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>View</span>
+        {segBtn(view, setView, 'compact', 'Compact')}
+        {segBtn(view, setView, 'detailed', 'Detailed')}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: view === 'compact' ? 4 : 6 }}>
+        {rows.map(({ s, reg, status }) => view === 'compact' ? (
+          <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px' }}>
+            <SpeciesImage species={s} size={32} />
+            <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.commonName}</div>
+            <StatusPill status={status} size="small" />
+            <ChevronRight size={14} color={T.brass} />
+          </Card>
+        ) : (
           <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
-            <FishMark species={s} size={38} />
+            <SpeciesImage species={s} size={38} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
               <div style={{ fontSize: 11, color: T.inkMute }}>
