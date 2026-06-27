@@ -203,21 +203,25 @@ export function HomeScreen({
         background: '#031B33',
         minHeight: 360,
       }}>
-        {/* Underwater hero photo */}
+        {/* Underwater hero photo — scaled to cover the card, fish anchored
+            to the right portion. object-position 'center' aligns the
+            picture's center with the card's center, so the fish lands in
+            the right half (around 55% of card width) instead of being
+            cropped behind the headline. */}
         <img
           src={`${import.meta.env.BASE_URL}brand/hero-tuna.png`}
           alt=""
           aria-hidden
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: 'right center',
+            objectFit: 'cover', objectPosition: '60% center',
             pointerEvents: 'none',
           }}
         />
-        {/* Left-side gradient overlay to keep copy legible */}
+        {/* Left-side gradient overlay — fades out before reaching the fish */}
         <div aria-hidden style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.92) 28%, rgba(3, 27, 51, 0.55) 48%, rgba(3, 27, 51, 0) 70%)',
+          background: 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.92) 18%, rgba(3, 27, 51, 0.55) 32%, rgba(3, 27, 51, 0) 50%)',
           pointerEvents: 'none',
         }} />
 
