@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench, Ruler, Star, Share2,
+  Wrench, Ruler, Star, Share2, Image as ImageIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
