@@ -723,6 +723,26 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
 export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
   const recorded = Object.keys(state.pbs || {});
   const hasCatches = (state.catchLog || []).length > 0;
+
+  // Persistent action buttons. Always available so an angler can jump
+  // straight to the Logbook to promote an already-logged catch, or
+  // start a fresh catch entry, regardless of how many PBs they have.
+  const actions = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <PrimaryButton onClick={onLogCatch}>
+        <Camera size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+        Log a fish
+      </PrimaryButton>
+      <GhostButton
+        onClick={onViewCatches}
+        disabled={!hasCatches}
+      >
+        <Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+        {hasCatches ? 'Promote a logged catch from the Logbook' : 'No catches logged yet'}
+      </GhostButton>
+    </div>
+  );
+
   return (
     <div style={{ padding: '16px 16px' }}>
       <div style={{ marginBottom: 14 }}>
@@ -738,54 +758,45 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
           </div>
           <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 14 }}>
             Personal bests come from your logged catches. Log a new fish, or
-            promote one you've already logged.
+            promote one you've already logged in the Logbook.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <PrimaryButton onClick={onLogCatch}>
-              <Camera size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-              Log a fish
-            </PrimaryButton>
-            <GhostButton
-              onClick={onViewCatches}
-              disabled={!hasCatches}
-              style={{ opacity: hasCatches ? 1 : 0.5, cursor: hasCatches ? 'pointer' : 'not-allowed' }}
-            >
-              <Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-              {hasCatches ? 'Edit an existing logged fish' : 'No catches logged yet'}
-            </GhostButton>
-          </div>
+          {actions}
         </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {recorded.map(id => {
-            const s = speciesById(id); const pb = state.pbs[id];
-            if (!s) return null;
-            const photos = pbPhotos(pb);
-            const thumb = photos[0];
-            return (
-              <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
-                <Trophy size={20} color={T.brass} />
-                {thumb
-                  ? <div style={{ width: 56, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
-                      <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      {photos.length > 1 && (
-                        <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(3, 27, 51, 0.85)', color: T.parchment, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>
-                          +{photos.length - 1}
-                        </span>
-                      )}
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            {recorded.map(id => {
+              const s = speciesById(id); const pb = state.pbs[id];
+              if (!s) return null;
+              const photos = pbPhotos(pb);
+              const thumb = photos[0];
+              return (
+                <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
+                  <Trophy size={20} color={T.brass} />
+                  {thumb
+                    ? <div style={{ width: 56, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+                        <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        {photos.length > 1 && (
+                          <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(3, 27, 51, 0.85)', color: T.parchment, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>
+                            +{photos.length - 1}
+                          </span>
+                        )}
+                      </div>
+                    : <SpeciesImage species={s} size={44} />}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                    <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+                      {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date}
                     </div>
-                  : <SpeciesImage species={s} size={44} />}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                  <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
-                    {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date}
                   </div>
-                </div>
-                <ChevronRight size={16} color={T.brass} />
-              </Card>
-            );
-          })}
-        </div>
+                  <ChevronRight size={16} color={T.brass} />
+                </Card>
+              );
+            })}
+          </div>
+          <SectionLabel style={{ marginBottom: 8 }}>Add another PB</SectionLabel>
+          {actions}
+        </>
       )}
     </div>
   );
