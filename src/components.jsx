@@ -95,11 +95,14 @@ export function PrimaryButton({ children, onClick, disabled, style }) {
     }}>{children}</button>
   );
 }
-export function GhostButton({ children, onClick, style }) {
+export function GhostButton({ children, onClick, style, disabled }) {
   return (
-    <button onClick={onClick} style={{
-      background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
-      padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+    <button onClick={onClick} disabled={disabled} style={{
+      background: 'transparent',
+      color: disabled ? T.inkMute : T.brass,
+      border: `1.5px solid ${disabled ? T.cardEdge : T.brass}`,
+      padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 600,
+      cursor: disabled ? 'not-allowed' : 'pointer',
       ...style,
     }}>{children}</button>
   );

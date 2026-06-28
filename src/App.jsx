@@ -173,8 +173,9 @@ export default function App() {
       break;
     case 'pbs':
       body = <PBsScreen state={state}
-        onAdd={(id) => push({ name: 'catch_entry', preselectSpeciesId: id })}
-        onView={(id) => push({ name: 'pb_detail', speciesId: id })} />;
+        onView={(id) => push({ name: 'pb_detail', speciesId: id })}
+        onLogCatch={() => push({ name: 'catch_entry' })}
+        onViewCatches={() => push({ name: 'catch_log' })} />;
       break;
     case 'pb_detail':
       body = <PBDetailScreen speciesId={screen.speciesId} state={state} update={update}
