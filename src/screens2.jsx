@@ -1255,6 +1255,29 @@ function compassDir(deg) {
   return dirs[Math.round(((deg % 360) / 22.5)) % 16];
 }
 
+// EXIF dates come in three shapes:
+//  - a real Date (when exifr's reviveValues kicked in)
+//  - "YYYY:MM:DD HH:MM:SS" — the literal EXIF format, with colons in
+//    the date part that JavaScript's Date() can't parse natively
+//  - an ISO-ish string that Date() *can* parse
+// Returns a valid Date or null.
+function parseExifDate(v) {
+  if (v == null) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v === 'number') {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v !== 'string') return null;
+  const exif = v.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (exif) {
+    const d = new Date(+exif[1], +exif[2] - 1, +exif[3], +exif[4], +exif[5], +exif[6]);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function moonGroup(phase) {
   if (phase == null) return null;
   if (phase < 0.03 || phase >= 0.97) return 'new';
@@ -1799,17 +1822,28 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     };
     r.readAsDataURL(f);
     if (!isFirst) return; // additional shots — don't touch location/time
-    exifr.parse(f).then((meta) => {
+    // Force the parser to include GPS + the main EXIF date tags and to
+    // translate them. Some photos return DateTimeOriginal as a string
+    // like "2024:03:15 12:30:45" (EXIF uses colons in the date part,
+    // which JS's Date constructor can't parse), so we handle both Date
+    // and string forms explicitly.
+    exifr.parse(f, {
+      tiff: true, exif: true, gps: true,
+      translateValues: true, reviveValues: true, sanitize: true, mergeOutput: true,
+      pick: ['latitude', 'longitude', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef',
+             'DateTimeOriginal', 'CreateDate', 'ModifyDate', 'OffsetTimeOriginal'],
+    }).then((meta) => {
       const gotGps = !!(meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude));
-      const exifDate = meta?.DateTimeOriginal || meta?.CreateDate || meta?.ModifyDate;
-      const gotTime = exifDate instanceof Date && !isNaN(exifDate.getTime());
+      const parsed = parseExifDate(meta?.DateTimeOriginal)
+        || parseExifDate(meta?.CreateDate)
+        || parseExifDate(meta?.ModifyDate);
       if (gotGps) setLoc({ lat: meta.latitude, lon: meta.longitude, error: null, loading: false });
-      if (gotTime) setWhen(exifDate);
-      if (gotGps || gotTime) setMetaSource('photo');
+      if (parsed) setWhen(parsed);
+      if (gotGps || parsed) setMetaSource('photo');
       setPhotoExifStatus(
-        gotGps && gotTime ? 'gps+time' :
+        gotGps && parsed ? 'gps+time' :
         gotGps ? 'gps' :
-        gotTime ? 'time' :
+        parsed ? 'time' :
         'none'
       );
     }).catch(() => setPhotoExifStatus('none'));
