@@ -236,7 +236,7 @@ export function HomeScreen({
         }} />
 
         <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 270 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>IDENTIFY YOUR</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>LOG YOUR</div>
           <div style={{
             fontSize: 44, fontWeight: 900, color: T.brass, letterSpacing: 2.5,
             lineHeight: 1, marginTop: 2,
@@ -244,7 +244,7 @@ export function HomeScreen({
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
           }}>CATCH</div>
           <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4, marginTop: 12, maxWidth: 200 }}>
-            Snap a photo and identify your fish in seconds.
+            Snap, log, identify your fish in seconds.
           </div>
           <button onClick={onIdentify} style={{
             marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
