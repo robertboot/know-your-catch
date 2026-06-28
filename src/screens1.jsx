@@ -155,7 +155,7 @@ function ScrollDots({ count, active }) {
 export function HomeScreen({
   state, jurisdiction, stale, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
-  onCompare, onBrowse, onUploadPhoto,
+  onCompare, onBrowse, onUploadPhoto, onRegulationAlerts,
 }) {
   const uploadRef = useRef(null);
   const handleUploadPick = (e) => {
@@ -364,7 +364,7 @@ export function HomeScreen({
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
             <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
-            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
+            <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <ShieldCheck size={36} color={anyClosed ? T.warn : T.open} strokeWidth={1.6} style={{ flexShrink: 0, marginTop: 2 }} />

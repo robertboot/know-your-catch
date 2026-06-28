@@ -18,6 +18,7 @@ import {
 } from './screens1.jsx';
 import {
   SpeciesDetailScreen, CompareScreen, RegulationsListScreen, RegulationDetailScreen,
+  RegulationAlertsScreen,
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
   CatchLogScreen, CatchEntryScreen, CatchDetailScreen,
 } from './screens2.jsx';
@@ -83,6 +84,7 @@ export default function App() {
     onBrowse:     () => push({ name: 'categories' }),
     onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
+    onRegulationAlerts: () => push({ name: 'regulation_alerts' }),
     onReport:     () => push({ name: 'catch_entry' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
@@ -144,6 +146,9 @@ export default function App() {
       break;
     case 'regulations':
       body = <RegulationsListScreen state={state} jurisdiction={jurisdiction} update={update} onPick={(id) => push({ name: 'regulation', id })} />;
+      break;
+    case 'regulation_alerts':
+      body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} />;
       break;
     case 'catch_log':
       body = <CatchLogScreen

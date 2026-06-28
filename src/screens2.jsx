@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen,
+  Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -557,6 +557,91 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   REGULATION ALERTS — closed-now + lacking-data, for current jurisdiction
+   ============================================================ */
+export function RegulationAlertsScreen({ state, jurisdiction, onPick }) {
+  const buckets = useMemo(() => {
+    if (!jurisdiction) return { closed: [], unknown: [] };
+    const closed = [], unknown = [];
+    for (const s of SPECIES) {
+      const reg = REGULATIONS[s.id]?.[jurisdiction.id];
+      const status = reg ? seasonState(reg.open).status : 'unknown';
+      if (status === 'closed') closed.push({ s, reg });
+      else if (status === 'unknown') unknown.push({ s, reg });
+    }
+    closed.sort((a, b) => a.s.commonName.localeCompare(b.s.commonName));
+    unknown.sort((a, b) => a.s.commonName.localeCompare(b.s.commonName));
+    return { closed, unknown };
+  }, [jurisdiction]);
+
+  return (
+    <div style={{ padding: '16px 16px' }}>
+      <H1 size={22} style={{ marginBottom: 4 }}>Regulation Alerts</H1>
+      {jurisdiction && <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600, marginBottom: 14 }}>{jurisdiction.name}</div>}
+
+      {/* Closed species */}
+      {buckets.closed.length > 0 ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
+            <AlertTriangle size={16} color={T.closed} />
+            <SectionLabel style={{ color: T.closed }}>Closed in these waters ({buckets.closed.length})</SectionLabel>
+          </div>
+          <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.closedBg, borderRadius: 6, border: `1px solid ${T.closed}55` }}>
+            Do not retain these species — a closed season or moratorium is currently in effect. Tap a row to open the rule.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+            {buckets.closed.map(({ s, reg }) => (
+              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10, borderColor: T.closed }}>
+                <SpeciesImage species={s} size={40} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                  <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{cleanSeason(reg.open) || 'Season closed'}</div>
+                </div>
+                <StatusPill status="closed" size="small" />
+                <ChevronRight size={14} color={T.brass} />
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : (
+        <Card style={{ marginBottom: 22, padding: 16, textAlign: 'center', borderColor: T.open }}>
+          <CheckCircle2 size={32} color={T.open} style={{ display: 'block', margin: '0 auto 8px' }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 4 }}>No active closures</div>
+          <div style={{ fontSize: 12, color: T.inkSoft }}>
+            All species with available rules are open in {jurisdiction ? jurisdiction.name : 'these waters'}.
+          </div>
+        </Card>
+      )}
+
+      {/* Confirm source — species without verifiable status */}
+      {buckets.unknown.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
+            <AlertTriangle size={16} color={T.warn} />
+            <SectionLabel style={{ color: T.warn }}>Confirm source ({buckets.unknown.length})</SectionLabel>
+          </div>
+          <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.warnBg, borderRadius: 6, border: `1px solid ${T.warn}55` }}>
+            These species are flagged <strong>Confirm Source</strong> because we don't yet have verified status data for them in {jurisdiction ? jurisdiction.name : 'these waters'}. Check the official source before keeping any.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {buckets.unknown.map(({ s }) => (
+              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
+                <SpeciesImage species={s} size={38} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                </div>
+                <StatusPill status="unknown" size="small" />
+                <ChevronRight size={14} color={T.brass} />
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
