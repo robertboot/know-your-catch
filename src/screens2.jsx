@@ -1716,7 +1716,13 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   );
   const [weather, setWeather] = useState(existing?.weather || null);
   const [wxStatus, setWxStatus] = useState(existing?.weather ? 'ok' : 'idle');
-  const now = useMemo(() => existing ? new Date(existing.dateIso) : new Date(), [existing]);
+  // `when` is the catch's authoritative timestamp. Defaults to right
+  // now, but can be set from Photo #1's EXIF DateTimeOriginal so an
+  // uploaded photo from yesterday produces a yesterday-dated catch.
+  const [when, setWhen] = useState(() => existing ? new Date(existing.dateIso) : new Date());
+  // Tracks where the catch location & time came from so we can show
+  // the angler what's driving them (and what to edit if it's wrong).
+  const [metaSource, setMetaSource] = useState(null); // 'photo' | 'device' | null
 
   // Native iOS via Capacitor when wrapped; web geolocation otherwise.
   // Longer timeout handles offshore cold-start (no A-GPS assist).
@@ -1745,59 +1751,73 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     }).catch(() => setWxStatus('offline'));
   }, [loc.lat, loc.lon]);
 
-  const sun = loc.lat != null && loc.lon != null ? sunPosition(now, loc.lat, loc.lon) : null;
-  const moon = moonPhase(now);
+  const sun = loc.lat != null && loc.lon != null ? sunPosition(when, loc.lat, loc.lon) : null;
+  const moon = moonPhase(when);
 
   const cameraRef = React.useRef(null);
   const uploadRef = React.useRef(null);
   const [photoSource, setPhotoSource] = useState(null); // 'camera' | 'upload' | null
 
+  // Only Photo #1 drives the catch's location & time. Photos #2 and
+  // #3 are just additional shots — they don't change anything.
   const handleCameraPick = (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f || photos.length >= 3) return;
+    const isFirst = photos.length === 0;
     const r = new FileReader();
     r.onload = () => {
       setPhotos(p => [...p, r.result].slice(0, 3));
       setPhotoSource('camera');
     };
     r.readAsDataURL(f);
-    // Camera-captured: refresh device GPS so the catch is pinned to the
-    // angler's current spot rather than wherever the entry started.
-    fetchGps();
+    if (isFirst) {
+      fetchGps();          // re-acquire current device GPS
+      setWhen(new Date()); // catch time = the moment we took the photo
+      setMetaSource('device');
+    }
   };
 
   const handleUploadPick = (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f || photos.length >= 3) return;
+    const isFirst = photos.length === 0;
     const r = new FileReader();
     r.onload = () => {
       setPhotos(p => [...p, r.result].slice(0, 3));
       setPhotoSource('upload');
     };
     r.readAsDataURL(f);
-    // Upload: pull GPS from the photo's EXIF so the catch is pinned to
-    // where the photo was actually taken — not where the angler is now.
-    // Only auto-fill if we don't already have coords (don't clobber a
-    // previously set location).
-    if (loc.lat == null || loc.lon == null) {
-      exifr.gps(f).then((g) => {
-        if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude)) {
-          setLoc({ lat: g.latitude, lon: g.longitude, error: null, loading: false });
-        }
-      }).catch(() => { /* missing EXIF — keep whatever location we already had */ });
-    }
+    if (!isFirst) return; // additional shots — don't touch location/time
+    exifr.parse(f).then((meta) => {
+      let updatedAny = false;
+      if (meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude)) {
+        setLoc({ lat: meta.latitude, lon: meta.longitude, error: null, loading: false });
+        updatedAny = true;
+      }
+      const exifDate = meta?.DateTimeOriginal || meta?.CreateDate || meta?.ModifyDate;
+      if (exifDate instanceof Date && !isNaN(exifDate.getTime())) {
+        setWhen(exifDate);
+        updatedAny = true;
+      }
+      if (updatedAny) setMetaSource('photo');
+    }).catch(() => { /* missing EXIF — keep whatever we had */ });
   };
 
   const removePhotoAt = (i) => setPhotos(p => p.filter((_, idx) => idx !== i));
+  // Manually overrides the photo-derived location with a fresh device GPS.
+  const useDeviceGps = () => {
+    fetchGps();
+    setMetaSource('device');
+  };
 
   const canSave = !!speciesId;
   const save = () => {
     const entry = {
       id: existing ? existing.id : 'c_' + Date.now(),
       speciesId,
-      dateIso: now.toISOString(),
+      dateIso: when.toISOString(),
       lat: loc.lat, lon: loc.lon,
       length: length ? +length : null,
       weight: weight ? +weight : null,
@@ -1840,7 +1860,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           ...(state.pbs || {}),
           [entry.speciesId]: {
             length: entry.length, weight: entry.weight,
-            primaryMetric, date: now.toISOString().slice(0, 10),
+            primaryMetric, date: when.toISOString().slice(0, 10),
             location: (entry.lat != null && entry.lon != null) ? `${entry.lat.toFixed(5)}°, ${entry.lon.toFixed(5)}°` : (currentPB?.location || ''),
             lat: entry.lat, lon: entry.lon,
             notes: entry.notes || '',
@@ -1873,13 +1893,23 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           <SectionLabel>Photos</SectionLabel>
           <span style={{ fontSize: 11, color: T.inkMute }}>{photos.length} / 3</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
           {[0, 1, 2].map(i => {
             const p = photos[i];
             if (p) {
               return (
-                <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
+                <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: i === 0 ? `1.5px solid ${T.brass}` : `1px solid ${T.cardEdge}` }}>
                   <img src={p} alt={`Catch photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {i === 0 && (
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      background: 'rgba(25, 212, 242, 0.92)', color: T.oceanDeep,
+                      fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textAlign: 'center',
+                      padding: '3px 4px',
+                    }}>
+                      LOCATION + TIME
+                    </div>
+                  )}
                   <button onClick={() => removePhotoAt(i)} aria-label="Remove photo" style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 24, height: 24, borderRadius: '50%',
@@ -1906,6 +1936,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
               </div>
             );
           })}
+        </div>
+        <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 10, lineHeight: 1.45, padding: '6px 8px', background: T.parchmentDeep, borderRadius: 6 }}>
+          <strong style={{ color: T.brass }}>Photo 1</strong> sets the catch's location &amp; time. If Photo 1 was taken away from the catch spot (e.g. at the dock), edit the location and time below.
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => cameraRef.current?.click()} disabled={photos.length >= 3} style={{
@@ -1959,13 +1992,22 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Auto-captured</SectionLabel>
-        <DetailRow label="Time" value={now.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} />
+        <DetailRow label="Time" value={
+          <span>
+            {when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+            {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
+          </span>
+        } />
         <DetailRow label="Location" value={
           loc.loading ? 'Acquiring GPS… (up to ~1 min offshore)'
           : loc.error ? (
             <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button></span>
           ) : (
-            <span>{loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}° <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Refresh</button></span>
+            <span>
+              {loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}°
+              {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
+              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Use device GPS</button>
+            </span>
           )
         } />
         {sun && <DetailRow label="Sun" value={`${sun.altitudeDeg.toFixed(1)}° altitude · ${compassDir(sun.azimuthDeg)} (${sun.azimuthDeg.toFixed(0)}°)`} />}
