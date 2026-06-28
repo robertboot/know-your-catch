@@ -64,7 +64,7 @@ const STATUS_TEXT = {
   closed:   { label: 'Season Closed', color: T.closed },
   upcoming: { label: 'Opens Soon',    color: T.warn },
   caution:  { label: 'Season Open',   color: T.open },
-  unknown:  { label: 'Check Source',  color: T.inkSoft },
+  unknown:  { label: 'Confirm Source', color: T.inkSoft },
 };
 
 // Action tile used in the horizontally scrolling quick-actions row on

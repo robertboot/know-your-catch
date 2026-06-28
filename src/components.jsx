@@ -13,8 +13,8 @@ export function StatusPill({ status, size = 'normal' }) {
     closed:   { label: 'CLOSED',      bg: T.closedBg, fg: T.closed,    shape: 'square' },
     upcoming: { label: 'OPENS SOON',  bg: T.warnBg,   fg: T.warn,      shape: 'triangle' },
     caution:  { label: 'VERIFY',      bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
-    unknown: { label: 'CHECK SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
-  }[status] || { label: 'CHECK SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
+    unknown: { label: 'CONFIRM SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
+  }[status] || { label: 'CONFIRM SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
   const pad = size === 'small' ? '2px 8px' : '4px 10px';
   const fs = size === 'small' ? 10 : 11;
   const shape = m.shape === 'circle'

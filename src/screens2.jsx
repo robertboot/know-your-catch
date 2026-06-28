@@ -387,7 +387,7 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
       });
     // Sort: by-type groups by family (CATEGORIES order, alpha within);
     // by-status floats what you can keep right now to the top; by-name is A–Z.
-    const statusRank = { open: 0, upcoming: 1, closed: 2, unknown: 3 };
+    const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
     const catOrder = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
     list.sort((a, b) => {
       if (sort === 'status') return (statusRank[a.status] - statusRank[b.status]) || a.s.commonName.localeCompare(b.s.commonName);
@@ -623,7 +623,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
   const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
 
   const rows = useMemo(() => {
-    const statusRank = { open: 0, upcoming: 1, closed: 2, unknown: 3 };
+    const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
     const list = SPECIES.map(s => {
       const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
       const status = reg ? seasonState(reg.open).status : 'unknown';
@@ -658,7 +658,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
     }}>{label}</button>
   );
 
-  const statusLabel = { open: 'Open now', upcoming: 'Opens soon', closed: 'Closed', unknown: 'No data' };
+  const statusLabel = { unknown: 'Confirm Source', closed: 'Closed', upcoming: 'Opens soon', open: 'Open now' };
 
   return (
     <div style={{ padding: '16px 16px' }}>
