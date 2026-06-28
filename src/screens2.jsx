@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench, Ruler, Star, Share2, Image as ImageIcon,
+  Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -733,12 +733,9 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
         <Camera size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
         Log a fish
       </PrimaryButton>
-      <GhostButton
-        onClick={onViewCatches}
-        disabled={!hasCatches}
-      >
-        <Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-        {hasCatches ? 'Promote a logged catch from the Logbook' : 'No catches logged yet'}
+      <GhostButton onClick={onViewCatches}>
+        <BookOpen size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+        {hasCatches ? 'Promote a catch from the Logbook' : 'Open the Logbook'}
       </GhostButton>
     </div>
   );
