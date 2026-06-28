@@ -562,53 +562,81 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
 }
 
 /* ============================================================
-   REGULATION ALERTS — closed-now + lacking-data, for current jurisdiction
+   REGULATION ALERTS — your-starred-first, additional, confirm-source.
    ============================================================ */
 export function RegulationAlertsScreen({ state, jurisdiction, onPick }) {
   const buckets = useMemo(() => {
-    if (!jurisdiction) return { closed: [], unknown: [] };
-    const closed = [], unknown = [];
+    const favSet = new Set(state?.favorites || []);
+    if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
+    const yourClosed = [], otherClosed = [], yourUnknown = [], otherUnknown = [];
     for (const s of SPECIES) {
       const reg = REGULATIONS[s.id]?.[jurisdiction.id];
       const status = reg ? seasonState(reg.open).status : 'unknown';
-      if (status === 'closed') closed.push({ s, reg });
-      else if (status === 'unknown') unknown.push({ s, reg });
+      const isFav = favSet.has(s.id);
+      const row = { s, reg };
+      if (status === 'closed') (isFav ? yourClosed : otherClosed).push(row);
+      else if (status === 'unknown') (isFav ? yourUnknown : otherUnknown).push(row);
     }
-    closed.sort((a, b) => a.s.commonName.localeCompare(b.s.commonName));
-    unknown.sort((a, b) => a.s.commonName.localeCompare(b.s.commonName));
-    return { closed, unknown };
-  }, [jurisdiction]);
+    [yourClosed, otherClosed, yourUnknown, otherUnknown].forEach(list =>
+      list.sort((a, b) => a.s.commonName.localeCompare(b.s.commonName))
+    );
+    return { yourClosed, otherClosed, yourUnknown, otherUnknown, favSet };
+  }, [jurisdiction, state?.favorites]);
+
+  const hasAnyFavorites = buckets.favSet.size > 0;
+  const totalClosed = buckets.yourClosed.length + buckets.otherClosed.length;
+  const totalUnknown = buckets.yourUnknown.length + buckets.otherUnknown.length;
+
+  const renderRow = ({ s, reg }, opts = {}) => (
+    <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10, borderColor: opts.accentBorder || T.cardEdge }}>
+      <SpeciesImage species={s} size={opts.imgSize || 38} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</span>
+          {buckets.favSet.has(s.id) && <Star size={12} fill={T.brass} color={T.brass} />}
+        </div>
+        {opts.showSeason && <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{cleanSeason(reg?.open) || 'Season closed'}</div>}
+      </div>
+      <StatusPill status={opts.status} size="small" />
+      <ChevronRight size={14} color={T.brass} />
+    </Card>
+  );
 
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 4 }}>Regulation Alerts</H1>
       {jurisdiction && <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600, marginBottom: 14 }}>{jurisdiction.name}</div>}
 
-      {/* Closed species */}
-      {buckets.closed.length > 0 ? (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
-            <AlertTriangle size={16} color={T.closed} />
-            <SectionLabel style={{ color: T.closed }}>Closed in these waters ({buckets.closed.length})</SectionLabel>
-          </div>
-          <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.closedBg, borderRadius: 6, border: `1px solid ${T.closed}55` }}>
-            Do not retain these species — a closed season or moratorium is currently in effect. Tap a row to open the rule.
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-            {buckets.closed.map(({ s, reg }) => (
-              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10, borderColor: T.closed }}>
-                <SpeciesImage species={s} size={40} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                  <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{cleanSeason(reg.open) || 'Season closed'}</div>
-                </div>
-                <StatusPill status="closed" size="small" />
-                <ChevronRight size={14} color={T.brass} />
-              </Card>
-            ))}
-          </div>
-        </>
-      ) : (
+      {/* PRIORITY: Your starred fish that are closed right now. */}
+      {hasAnyFavorites && (
+        buckets.yourClosed.length > 0 ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
+              <Star size={14} fill={T.brass} color={T.brass} />
+              <SectionLabel style={{ color: T.closed }}>Your fish — closed ({buckets.yourClosed.length})</SectionLabel>
+            </div>
+            <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.closedBg, borderRadius: 6, border: `1px solid ${T.closed}55` }}>
+              The species you star are closed in {jurisdiction ? jurisdiction.name : 'these waters'} right now. Do not retain.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+              {buckets.yourClosed.map(row => renderRow(row, { status: 'closed', accentBorder: T.closed, showSeason: true, imgSize: 40 }))}
+            </div>
+          </>
+        ) : totalClosed > 0 ? (
+          <Card style={{ marginBottom: 22, padding: 14, borderColor: T.open, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <CheckCircle2 size={24} color={T.open} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>None of your starred fish are closed</div>
+              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4 }}>
+                See "Additional closures" below for {totalClosed} other species closed in these waters.
+              </div>
+            </div>
+          </Card>
+        ) : null
+      )}
+
+      {/* No favourites at all + no closures: show the existing all-clear card. */}
+      {totalClosed === 0 && (
         <Card style={{ marginBottom: 22, padding: 16, textAlign: 'center', borderColor: T.open }}>
           <CheckCircle2 size={32} color={T.open} style={{ display: 'block', margin: '0 auto 8px' }} />
           <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 4 }}>No active closures</div>
@@ -618,28 +646,52 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick }) {
         </Card>
       )}
 
-      {/* Confirm source — species without verifiable status */}
-      {buckets.unknown.length > 0 && (
+      {/* ADDITIONAL: Other closed species the angler hasn't starred. */}
+      {buckets.otherClosed.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
-            <AlertTriangle size={16} color={T.warn} />
-            <SectionLabel style={{ color: T.warn }}>Confirm source ({buckets.unknown.length})</SectionLabel>
+            <AlertTriangle size={14} color={T.closed} />
+            <SectionLabel style={{ color: T.inkSoft }}>
+              {hasAnyFavorites ? 'Additional closures' : 'Closed in these waters'} ({buckets.otherClosed.length})
+            </SectionLabel>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 22 }}>
+            {buckets.otherClosed.map(row => renderRow(row, { status: 'closed', showSeason: true }))}
+          </div>
+        </>
+      )}
+
+      {/* CONFIRM SOURCE: your-starred first, then the rest. */}
+      {totalUnknown > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
+            <AlertTriangle size={14} color={T.warn} />
+            <SectionLabel style={{ color: T.warn }}>Confirm source ({totalUnknown})</SectionLabel>
           </div>
           <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.warnBg, borderRadius: 6, border: `1px solid ${T.warn}55` }}>
-            These species are flagged <strong>Confirm Source</strong> because we don't yet have verified status data for them in {jurisdiction ? jurisdiction.name : 'these waters'}. Check the official source before keeping any.
+            Flagged <strong>Confirm Source</strong> because we don't yet have verified status data for them in {jurisdiction ? jurisdiction.name : 'these waters'}. Check the official source before keeping any.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {buckets.unknown.map(({ s }) => (
-              <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
-                <SpeciesImage species={s} size={38} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                </div>
-                <StatusPill status="unknown" size="small" />
-                <ChevronRight size={14} color={T.brass} />
-              </Card>
-            ))}
-          </div>
+          {buckets.yourUnknown.length > 0 && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 8px' }}>
+                <Star size={12} fill={T.brass} color={T.brass} />
+                <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800 }}>Your fish</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                {buckets.yourUnknown.map(row => renderRow(row, { status: 'unknown', accentBorder: T.warn }))}
+              </div>
+            </>
+          )}
+          {buckets.otherUnknown.length > 0 && (
+            <>
+              {buckets.yourUnknown.length > 0 && (
+                <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: T.inkMute, fontWeight: 800, display: 'block', margin: '4px 2px 8px' }}>All other species</span>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {buckets.otherUnknown.map(row => renderRow(row, { status: 'unknown' }))}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
