@@ -1722,7 +1722,16 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [when, setWhen] = useState(() => existing ? new Date(existing.dateIso) : new Date());
   // Tracks where the catch location & time came from so we can show
   // the angler what's driving them (and what to edit if it's wrong).
-  const [metaSource, setMetaSource] = useState(null); // 'photo' | 'device' | null
+  const [metaSource, setMetaSource] = useState(null); // 'photo' | 'device' | 'manual' | null
+  // Tracks what EXIF was actually found on the first uploaded photo so
+  // the UI can tell the angler if their photo had no metadata.
+  const [photoExifStatus, setPhotoExifStatus] = useState(null); // 'gps+time' | 'gps' | 'time' | 'none' | null
+  // Manual edit inputs.
+  const [editingLoc, setEditingLoc] = useState(false);
+  const [latInput, setLatInput] = useState('');
+  const [lonInput, setLonInput] = useState('');
+  const [editingWhen, setEditingWhen] = useState(false);
+  const [whenInput, setWhenInput] = useState('');
 
   // Native iOS via Capacitor when wrapped; web geolocation otherwise.
   // Longer timeout handles offshore cold-start (no A-GPS assist).
@@ -1791,25 +1800,65 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     r.readAsDataURL(f);
     if (!isFirst) return; // additional shots — don't touch location/time
     exifr.parse(f).then((meta) => {
-      let updatedAny = false;
-      if (meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude)) {
-        setLoc({ lat: meta.latitude, lon: meta.longitude, error: null, loading: false });
-        updatedAny = true;
-      }
+      const gotGps = !!(meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude));
       const exifDate = meta?.DateTimeOriginal || meta?.CreateDate || meta?.ModifyDate;
-      if (exifDate instanceof Date && !isNaN(exifDate.getTime())) {
-        setWhen(exifDate);
-        updatedAny = true;
-      }
-      if (updatedAny) setMetaSource('photo');
-    }).catch(() => { /* missing EXIF — keep whatever we had */ });
+      const gotTime = exifDate instanceof Date && !isNaN(exifDate.getTime());
+      if (gotGps) setLoc({ lat: meta.latitude, lon: meta.longitude, error: null, loading: false });
+      if (gotTime) setWhen(exifDate);
+      if (gotGps || gotTime) setMetaSource('photo');
+      setPhotoExifStatus(
+        gotGps && gotTime ? 'gps+time' :
+        gotGps ? 'gps' :
+        gotTime ? 'time' :
+        'none'
+      );
+    }).catch(() => setPhotoExifStatus('none'));
   };
 
-  const removePhotoAt = (i) => setPhotos(p => p.filter((_, idx) => idx !== i));
+  const removePhotoAt = (i) => {
+    setPhotos(p => p.filter((_, idx) => idx !== i));
+    // If we removed the first photo, the source tag no longer reflects
+    // what's on screen — clear it so the angler isn't misled.
+    if (i === 0) {
+      setPhotoExifStatus(null);
+      if (metaSource === 'photo') setMetaSource(null);
+    }
+  };
   // Manually overrides the photo-derived location with a fresh device GPS.
   const useDeviceGps = () => {
     fetchGps();
     setMetaSource('device');
+  };
+
+  const startEditLoc = () => {
+    setLatInput(loc.lat != null ? String(loc.lat) : '');
+    setLonInput(loc.lon != null ? String(loc.lon) : '');
+    setEditingLoc(true);
+  };
+  const saveEditLoc = () => {
+    const la = parseFloat(latInput);
+    const lo = parseFloat(lonInput);
+    if (Number.isFinite(la) && la >= -90 && la <= 90 &&
+        Number.isFinite(lo) && lo >= -180 && lo <= 180) {
+      setLoc({ lat: la, lon: lo, error: null, loading: false });
+      setMetaSource('manual');
+    }
+    setEditingLoc(false);
+  };
+
+  const startEditWhen = () => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const d = when;
+    setWhenInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    setEditingWhen(true);
+  };
+  const saveEditWhen = () => {
+    const d = new Date(whenInput);
+    if (!isNaN(d.getTime())) {
+      setWhen(d);
+      setMetaSource('manual');
+    }
+    setEditingWhen(false);
   };
 
   const canSave = !!speciesId;
@@ -1992,21 +2041,58 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Auto-captured</SectionLabel>
+        {photoExifStatus === 'none' && (
+          <div style={{ fontSize: 11, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+            Photo 1 had no location or time metadata — set them manually below or use device GPS.
+          </div>
+        )}
+        {photoExifStatus === 'gps' && (
+          <div style={{ fontSize: 11, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+            Photo 1 had location but no time — set the time manually below if needed.
+          </div>
+        )}
+        {photoExifStatus === 'time' && (
+          <div style={{ fontSize: 11, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+            Photo 1 had time but no location — use device GPS or enter coordinates manually.
+          </div>
+        )}
         <DetailRow label="Time" value={
-          <span>
-            {when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-            {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
-          </span>
+          editingWhen ? (
+            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <input type="datetime-local" value={whenInput} onChange={e => setWhenInput(e.target.value)} style={{ padding: '4px 6px', fontSize: 12, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
+              <button onClick={saveEditWhen} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>Save</button>
+              <button onClick={() => setEditingWhen(false)} style={{ background: 'transparent', color: T.inkMute, border: `1px solid ${T.cardEdge}`, padding: '3px 6px', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+            </span>
+          ) : (
+            <span>
+              {when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+              {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
+              {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· manual</span>}
+              <button onClick={startEditWhen} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Edit</button>
+            </span>
+          )
         } />
         <DetailRow label="Location" value={
-          loc.loading ? 'Acquiring GPS… (up to ~1 min offshore)'
-          : loc.error ? (
-            <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button></span>
+          editingLoc ? (
+            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} placeholder="Lat" style={{ width: 80, padding: '4px 6px', fontSize: 12, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
+              <input type="number" step="any" value={lonInput} onChange={e => setLonInput(e.target.value)} placeholder="Lon" style={{ width: 90, padding: '4px 6px', fontSize: 12, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
+              <button onClick={saveEditLoc} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>Save</button>
+              <button onClick={() => setEditingLoc(false)} style={{ background: 'transparent', color: T.inkMute, border: `1px solid ${T.cardEdge}`, padding: '3px 6px', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+            </span>
+          ) : loc.loading ? (
+            <span>Acquiring GPS… <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
+          ) : loc.error ? (
+            <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button> <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
+          ) : (loc.lat == null || loc.lon == null) ? (
+            <span>Not set — <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button> or <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Use device GPS</button></span>
           ) : (
             <span>
               {loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}°
               {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
-              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Use device GPS</button>
+              {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· manual</span>}
+              <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Edit</button>
+              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Device GPS</button>
             </span>
           )
         } />
