@@ -1247,7 +1247,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
 /* ============================================================
    SETTINGS
    ============================================================ */
-export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdiction, onShowDisclaimer, onEditFavorites }) {
+export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
   const setUnits = (u) => update({ units: u });
   const clearAll = () => {
     if (window.confirm('Clear all PBs, notes, and settings? This cannot be undone.')) {
@@ -1313,15 +1313,18 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
       <Card style={{ marginBottom: 10 }}>
-        <SectionLabel style={{ marginBottom: 6 }}>Your name</SectionLabel>
-        <input
-          value={state.anglerName || ''}
-          onChange={(e) => update({ anglerName: e.target.value })}
-          placeholder="e.g. Captain Bob"
-          style={{ ...inputStyle, background: T.card }}
-        />
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.45 }}>
-          Shown on your shared catch and Personal Best report cards. Stays on this device.
+        <SectionLabel style={{ marginBottom: 6 }}>Angler profile</SectionLabel>
+        <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>
+          {state.anglerName || <span style={{ color: T.inkMute, fontWeight: 500 }}>No name set</span>}
+        </div>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2, wordBreak: 'break-all' }}>
+          {state.anglerEmail || <span style={{ color: T.inkMute }}>No email set</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
+            Name appears on your shared catch and Personal Best report cards. Email is the future magic-link login when cloud sync goes live.
+          </div>
+          <GhostButton onClick={onEditAccount} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Edit</GhostButton>
         </div>
       </Card>
       <Card style={{ marginBottom: 10 }}>

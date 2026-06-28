@@ -7,6 +7,11 @@ export const defaultState = {
   jurisdiction: null,
   units: 'imperial',
   anglerName: '', // Used in shared catch/PB report cards. Empty falls back to "Angler".
+  anglerEmail: '',
+  // Account is captured during onboarding; the email is the future
+  // anchor for magic-link auth once Supabase is provisioned. Until then
+  // we store it locally only.
+  onboardingAccountComplete: false,
   disclaimerAcceptedVersion: null,
   pbs: {},     // speciesId -> { length, weight, primaryMetric, date, location, notes, jurisdiction, gearBait, photo, history }
   notes: {},   // speciesId -> string

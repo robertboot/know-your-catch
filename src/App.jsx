@@ -10,7 +10,7 @@ import { refreshFeeds } from './regsync.js';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
-  FavoritePickerModal,
+  FavoritePickerModal, AccountSetupModal,
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
@@ -33,6 +33,7 @@ export default function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showJur, setShowJur] = useState(false);
   const [showBoundaryInfo, setShowBoundaryInfo] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [keepFor, setKeepFor] = useState(null);
 
@@ -41,8 +42,10 @@ export default function App() {
     const s = loadState();
     setState(s);
     setLoaded(true);
+    // Onboarding chain: disclaimer → jurisdiction → account → favorites.
     if (s.disclaimerAcceptedVersion !== DISCLAIMER_VERSION) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
+    else if (!s.onboardingAccountComplete) setShowAccount(true);
     else if (!s.onboardingFavoritesComplete) setShowFavorites(true);
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
@@ -210,7 +213,8 @@ export default function App() {
       body = <SettingsScreen state={state} jurisdiction={jurisdiction} update={update}
                 onChangeJurisdiction={() => setShowJur(true)}
                 onShowDisclaimer={() => setShowDisclaimer(true)}
-                onEditFavorites={() => setShowFavorites(true)} />;
+                onEditFavorites={() => setShowFavorites(true)}
+                onEditAccount={() => setShowAccount(true)} />;
       break;
     default:
       body = <HomeScreen {...homeProps} />;
@@ -326,6 +330,7 @@ export default function App() {
           update({ disclaimerAcceptedVersion: DISCLAIMER_VERSION });
           setShowDisclaimer(false);
           if (!state.jurisdiction) setShowJur(true);
+          else if (!state.onboardingAccountComplete) setShowAccount(true);
           else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
         }} />
       )}
@@ -336,11 +341,26 @@ export default function App() {
           onPick={(id) => {
             update({ jurisdiction: id });
             setShowJur(false);
-            if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+            if (!state.onboardingAccountComplete) setShowAccount(true);
+            else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
           }}
           onClose={() => state.jurisdiction && setShowJur(false)}
           canCancel={!!state.jurisdiction}
           onShowBoundary={() => setShowBoundaryInfo(true)}
+        />
+      )}
+
+      {showAccount && (
+        <AccountSetupModal
+          initialName={state.anglerName}
+          initialEmail={state.anglerEmail}
+          allowDismiss={state.onboardingAccountComplete}
+          onDismiss={() => setShowAccount(false)}
+          onSave={({ name, email }) => {
+            update({ anglerName: name, anglerEmail: email, onboardingAccountComplete: true });
+            setShowAccount(false);
+            if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+          }}
         />
       )}
 

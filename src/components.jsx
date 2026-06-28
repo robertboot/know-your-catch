@@ -394,6 +394,76 @@ export function ShareReportModal({
 }
 
 /* ============================================================
+   ACCOUNT SETUP — name + email collected during onboarding
+   ============================================================ */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function AccountSetupModal({ initialName = '', initialEmail = '', onSave, allowDismiss = false, onDismiss }) {
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
+  const [touched, setTouched] = useState(false);
+  const nameOk = name.trim().length >= 2;
+  const emailOk = EMAIL_RE.test(email.trim());
+  const canSave = nameOk && emailOk;
+  const submit = () => {
+    setTouched(true);
+    if (!canSave) return;
+    onSave({ name: name.trim(), email: email.trim() });
+  };
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        <div style={{ textAlign: 'center', marginBottom: 6 }}>
+          <Anchor size={26} color={T.brass} style={{ margin: '0 auto 6px', display: 'block' }} />
+          <H1 size={20}>Set up your angler profile</H1>
+        </div>
+        <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5, textAlign: 'center' }}>
+          We use this to attach your catches and Personal Bests to you, and to keep you in the loop on ReelIntel updates. Your email stays private.
+        </p>
+
+        <SectionLabel style={{ marginBottom: 6 }}>Your name</SectionLabel>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Captain Bob"
+          style={{ ...inputStyle, background: T.card, marginBottom: 4 }}
+        />
+        {touched && !nameOk && (
+          <div style={{ fontSize: 11, color: T.closed, marginBottom: 8 }}>Name is required (at least 2 characters).</div>
+        )}
+
+        <SectionLabel style={{ marginTop: 10, marginBottom: 6 }}>Email</SectionLabel>
+        <input
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          style={{ ...inputStyle, background: T.card, marginBottom: 4 }}
+        />
+        {touched && !emailOk && (
+          <div style={{ fontSize: 11, color: T.closed, marginBottom: 8 }}>Enter a valid email address.</div>
+        )}
+
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.45 }}>
+          Stored on this device for now. When ReelIntel cloud sync goes live, this email becomes the magic-link login for your account — no password to remember.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          {allowDismiss && (
+            <GhostButton onClick={onDismiss} style={{ flex: 1 }}>Cancel</GhostButton>
+          )}
+          <PrimaryButton onClick={submit} disabled={!canSave} style={{ flex: allowDismiss ? 2 : 1 }}>
+            Save &amp; continue
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    STAR / FAVORITE TOGGLE
    ============================================================ */
 export function StarButton({ favorited, onToggle, size = 22, ariaLabel }) {
