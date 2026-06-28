@@ -793,7 +793,7 @@ export const FEEDS = [
   { file: 'gulf-federal-2026.json', jurisdiction: gulfFederal2026.jurisdiction, verifiedDate: gulfFederal2026.verifiedDate },
 ];
 
-export const DATA_VERSION = '1.0.0-seed';
+export const DATA_VERSION = '1.0.0-beta.1';
 export const DATA_BUILD_DATE = '2025-04-01';
 export const DISCLAIMER_VERSION = 1;
 export const DISCLAIMER_TEXT = `This app is intended as an informational tool only. Fishing regulations change frequently — often without notice — and may differ from what is shown here. You are responsible for verifying current regulations with the appropriate state or federal agency before harvesting any fish. The publisher accepts no liability for citations, fines, or other consequences arising from reliance on the information provided. Use this app as a starting point. Verify everything.`;

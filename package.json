@@ -1,15 +1,19 @@
 {
-  "name": "know-your-catch",
+  "name": "reelintel",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "type": "module",
-  "description": "Gulf Coast offshore angler tool — identify it, know the rules, stay legal.",
+  "description": "ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "validate-feeds": "node regulations/validate.mjs",
-    "validate-photos": "node photos/validate.mjs"
+    "validate-photos": "node photos/validate.mjs",
+    "ios:init": "cap add ios && npm run ios:sync",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:assets": "capacitor-assets generate --ios",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@capacitor/camera": "^8.2.0",
@@ -23,6 +27,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.1",
     "@capacitor/ios": "^8.4.1",
     "@vitejs/plugin-react": "^4.3.4",
