@@ -233,6 +233,15 @@ export function moonPhase(date) {
   return { phase, illumination, name };
 }
 
+/* Normalize a PB's photos into an array (max 3). Honours the legacy
+   single `photo` field so old records keep displaying after the upgrade. */
+export function pbPhotos(pb) {
+  if (!pb) return [];
+  if (Array.isArray(pb.photos)) return pb.photos.filter(Boolean).slice(0, 3);
+  if (pb.photo) return [pb.photo];
+  return [];
+}
+
 /* ------------------------------------------------------------------
    Share / quick report
    ------------------------------------------------------------------ */

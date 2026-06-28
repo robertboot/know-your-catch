@@ -12,7 +12,7 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
-  sunPosition, moonPhase, buildPBReport, buildCatchReport,
+  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos,
 } from './helpers.js';
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -21,6 +21,7 @@ import {
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
 import { publishCatch } from './cloudsync.js';
+import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -721,10 +722,21 @@ export function PBsScreen({ state, onAdd, onView }) {
             {recorded.map(id => {
               const s = speciesById(id); const pb = state.pbs[id];
               if (!s) return null;
+              const photos = pbPhotos(pb);
+              const thumb = photos[0];
               return (
                 <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
                   <Trophy size={20} color={T.brass} />
-                  <SpeciesImage species={s} size={44} />
+                  {thumb
+                    ? <div style={{ width: 56, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+                        <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        {photos.length > 1 && (
+                          <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(3, 27, 51, 0.85)', color: T.parchment, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>
+                            +{photos.length - 1}
+                          </span>
+                        )}
+                      </div>
+                    : <SpeciesImage species={s} size={44} />}
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
                     <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
@@ -768,13 +780,15 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const secondary = pb.primaryMetric === 'weight'
     ? { val: formatSize(pb.length, state.units), label: 'Length' }
     : { val: formatWeight(pb.weight, state.units), label: 'Weight' };
+  const photos = pbPhotos(pb);
   const reportText = buildPBReport({ anglerName: state.anglerName, species: s, pb, units: state.units });
   const speciesFallbackPhoto = speciesPhoto(s.id);
-  const reportPhotoUrl = pb.photo || (speciesFallbackPhoto ? speciesFallbackPhoto.url : null);
+  const reportPhotoUrl = photos[0] || (speciesFallbackPhoto ? speciesFallbackPhoto.url : null);
   const meta = [
     { label: 'Date', value: pb.date },
     pb.jurisdiction && { label: 'Waters', value: jurisdictionById(pb.jurisdiction)?.name || pb.jurisdiction },
     pb.location && { label: 'Location', value: pb.location },
+    (pb.lat != null && pb.lon != null) && { label: 'Coords', value: `${pb.lat.toFixed(5)}°, ${pb.lon.toFixed(5)}°` },
     pb.gearBait && { label: 'Gear / bait', value: pb.gearBait },
   ].filter(Boolean);
   return (
@@ -788,16 +802,31 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
           <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 4 }}>{secondary.label}: {secondary.val}</div>
         </div>
       </Card>
-      {pb.photo && (
-        <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-          <img src={pb.photo} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
-        </Card>
+      {photos.length > 0 && (
+        photos.length === 1 ? (
+          <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+            <img src={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
+          </Card>
+        ) : (
+          <div className="kyc-hscroll" style={{
+            display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
+            margin: '0 -16px 12px', padding: '0 16px 4px',
+            scrollSnapType: 'x proximity',
+          }}>
+            {photos.map((p, i) => (
+              <div key={i} style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}` }}>
+                <img src={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+              </div>
+            ))}
+          </div>
+        )
       )}
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Details</SectionLabel>
         <DetailRow label="Date" value={pb.date} />
         {pb.jurisdiction && <DetailRow label="Waters" value={jurisdictionById(pb.jurisdiction)?.name || pb.jurisdiction} />}
         {pb.location && <DetailRow label="Location" value={pb.location} />}
+        {(pb.lat != null && pb.lon != null) && <DetailRow label="Coords" value={`${pb.lat.toFixed(5)}°, ${pb.lon.toFixed(5)}°`} />}
         {pb.gearBait && <DetailRow label="Gear / bait" value={pb.gearBait} />}
         {pb.notes && <DetailRow label="Notes" value={pb.notes} />}
       </Card>
@@ -831,7 +860,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         anglerName={state.anglerName}
         species={s}
         photoUrl={reportPhotoUrl}
-        photoDataUrl={pb.photo}
+        photoDataUrl={photos[0]}
         primary={{ label: primary.label, value: primary.val }}
         secondary={{ label: secondary.label, value: secondary.val }}
         meta={meta}
@@ -854,7 +883,10 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
   const [notes, setNotes] = useState(existing?.notes || '');
   const [gearBait, setGearBait] = useState(existing?.gearBait || '');
   const [jurId, setJurId] = useState(existing?.jurisdiction || jurisdiction?.id || '');
-  const [photo, setPhoto] = useState(existing?.photo || null);
+  const [photos, setPhotos] = useState(() => pbPhotos(existing));
+  const [lat, setLat] = useState(existing?.lat ?? null);
+  const [lon, setLon] = useState(existing?.lon ?? null);
+  const [locFromPhoto, setLocFromPhoto] = useState(false);
   const fileRef = React.useRef(null);
   if (!s) return <div style={{ padding: 20 }}>Species not found.</div>;
 
@@ -862,19 +894,47 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
   const beats = existing && ((primaryMetric === 'weight' && wtNum > (existing.weight || 0)) || (primaryMetric === 'length' && lenNum > (existing.length || 0)));
   const canSave = (lenNum > 0 || wtNum > 0);
 
-  const handlePhoto = (e) => {
+  const handleAddPhoto = (e) => {
     const f = e.target.files?.[0];
-    if (!f) return;
+    e.target.value = ''; // allow re-selecting the same file
+    if (!f || photos.length >= 3) return;
+    // 1) Add the photo to the slot
     const r = new FileReader();
-    r.onload = () => setPhoto(r.result);
+    r.onload = () => setPhotos(p => [...p, r.result].slice(0, 3));
     r.readAsDataURL(f);
+    // 2) Try to pull GPS from EXIF. Auto-fill only if we don't already
+    //    have coords (don't clobber a manual entry).
+    if (lat == null || lon == null) {
+      exifr.gps(f).then((g) => {
+        if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude)) {
+          setLat(g.latitude);
+          setLon(g.longitude);
+          setLocFromPhoto(true);
+          // Backfill the text location field if the user hasn't typed one.
+          if (!location.trim()) {
+            setLocation(`${g.latitude.toFixed(5)}°, ${g.longitude.toFixed(5)}°`);
+          }
+        }
+      }).catch(() => { /* no EXIF / non-jpeg / corrupt — silent */ });
+    }
+  };
+  const removePhotoAt = (i) => setPhotos(p => p.filter((_, idx) => idx !== i));
+  const clearLocation = () => {
+    setLat(null); setLon(null); setLocFromPhoto(false);
   };
 
   const save = () => {
     const entry = {
       length: lenNum > 0 ? lenNum : null, weight: wtNum > 0 ? wtNum : null,
       primaryMetric, date, location: location.trim(), notes: notes.trim(),
-      gearBait: gearBait.trim(), jurisdiction: jurId, photo,
+      gearBait: gearBait.trim(), jurisdiction: jurId,
+      lat: lat != null ? lat : null,
+      lon: lon != null ? lon : null,
+      photos: photos.slice(0, 3),
+      // Mirror the first photo into the legacy `photo` field so existing
+      // surfaces that still read `pb.photo` keep working until they're
+      // migrated to `pbPhotos()`.
+      photo: photos[0] || null,
     };
     let history = existing?.history || [];
     if (existing && beats) {
@@ -930,6 +990,14 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
           </select>
         </div>
         <Field label="Location (optional)" value={location} onChange={setLocation} placeholder="e.g. 30 mi south of Dauphin Island" />
+        {(lat != null && lon != null) && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: -4, marginBottom: 6, fontSize: 11, color: T.brass }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              📍 {lat.toFixed(5)}°, {lon.toFixed(5)}°{locFromPhoto && <span style={{ color: T.inkMute, marginLeft: 4 }}>— from photo</span>}
+            </span>
+            <button onClick={clearLocation} style={{ background: 'transparent', border: 'none', color: T.inkMute, fontSize: 11, cursor: 'pointer', padding: 2 }}>Clear coords</button>
+          </div>
+        )}
         <Field label="Gear / bait (optional)" value={gearBait} onChange={setGearBait} placeholder="e.g. live cigar minnow, 80 ft" />
         <div style={{ marginTop: 10 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Notes</SectionLabel>
@@ -938,22 +1006,54 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
-        <SectionLabel style={{ marginBottom: 8 }}>Photo</SectionLabel>
-        {photo ? (
-          <>
-            <img src={photo} alt="PB" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 4, marginBottom: 8 }} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <GhostButton onClick={() => fileRef.current?.click()} style={{ flex: 1, fontSize: 13, padding: '8px' }}>Replace</GhostButton>
-              <GhostButton onClick={() => setPhoto(null)} style={{ flex: 1, fontSize: 13, padding: '8px', color: T.closed, borderColor: T.closed }}>Remove</GhostButton>
-            </div>
-          </>
-        ) : (
-          <GhostButton onClick={() => fileRef.current?.click()} style={{ width: '100%' }}>
-            <Camera size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-            Take or upload photo
-          </GhostButton>
-        )}
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} style={{ display: 'none' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <SectionLabel>Photos</SectionLabel>
+          <span style={{ fontSize: 11, color: T.inkMute }}>{photos.length} / 3</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {[0, 1, 2].map(i => {
+            const p = photos[i];
+            if (p) {
+              return (
+                <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
+                  <img src={p} alt={`PB photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <button onClick={() => removePhotoAt(i)} aria-label="Remove photo" style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 24, height: 24, borderRadius: '50%',
+                    background: 'rgba(3, 27, 51, 0.85)', color: T.parchment,
+                    border: `1px solid ${T.cardEdge}`, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                  }}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            }
+            const isNext = i === photos.length;
+            return (
+              <button
+                key={i}
+                onClick={isNext ? () => fileRef.current?.click() : undefined}
+                disabled={!isNext}
+                aria-label={isNext ? 'Add photo' : 'Empty photo slot'}
+                style={{
+                  aspectRatio: '1 / 1', borderRadius: 8,
+                  border: `1.5px dashed ${isNext ? T.brass : T.cardEdge}`,
+                  background: 'transparent', cursor: isNext ? 'pointer' : 'default',
+                  color: isNext ? T.brass : T.inkMute,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 4, opacity: isNext ? 1 : 0.5,
+                }}
+              >
+                <Camera size={20} />
+                <span style={{ fontSize: 10.5, letterSpacing: 0.8, fontWeight: 700 }}>
+                  {isNext ? 'ADD' : ''}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleAddPhoto} style={{ display: 'none' }} />
       </Card>
 
       <PrimaryButton onClick={save} disabled={!canSave}>
