@@ -130,7 +130,7 @@ export default function App() {
       body = <SpeciesDetailScreen
         id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale}
         onLookalike={(otherId) => push({ name: 'compare', aId: screen.id, bId: otherId })}
-        onAddPB={() => push({ name: 'pb_entry', speciesId: screen.id })}
+        onAddPB={() => push({ name: 'catch_entry', preselectSpeciesId: screen.id })}
         onFullRegs={() => push({ name: 'regulation', id: screen.id })}
         onKeep={setKeepFor}
         update={update}
@@ -154,10 +154,16 @@ export default function App() {
       />;
       break;
     case 'catch_entry':
-      body = <CatchEntryScreen state={state} jurisdiction={jurisdiction} update={update} editingId={screen.editingId} onDone={() => reset([{ name: 'catch_log' }])} onCancel={pop} />;
+      body = <CatchEntryScreen
+        state={state} jurisdiction={jurisdiction} update={update}
+        editingId={screen.editingId}
+        preselectSpeciesId={screen.preselectSpeciesId}
+        onDone={() => reset([{ name: 'catch_log' }])}
+        onCancel={pop}
+      />;
       break;
     case 'catch_detail':
-      body = <CatchDetailScreen id={screen.id} state={state} update={update} onEdit={() => push({ name: 'catch_entry', editingId: screen.id })} onBack={pop} onAddPB={(c) => push({ name: 'pb_entry', speciesId: c.speciesId })} />;
+      body = <CatchDetailScreen id={screen.id} state={state} update={update} onEdit={() => push({ name: 'catch_entry', editingId: screen.id })} onBack={pop} />;
       break;
     case 'regulation':
       body = <RegulationDetailScreen id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale} onSpecies={() => push({ name: 'species', id: screen.id })} onAddPB={() => push({ name: 'pb_entry', speciesId: screen.id })} />;
@@ -166,11 +172,23 @@ export default function App() {
       body = <SpeciesListScreen state={state} jurisdiction={jurisdiction} update={update} onPick={(id) => push({ name: 'species', id })} />;
       break;
     case 'pbs':
-      body = <PBsScreen state={state} onAdd={(id) => push({ name: 'pb_entry', speciesId: id })} onView={(id) => push({ name: 'pb_detail', speciesId: id })} />;
+      body = <PBsScreen state={state}
+        onAdd={(id) => push({ name: 'catch_entry', preselectSpeciesId: id })}
+        onView={(id) => push({ name: 'pb_detail', speciesId: id })} />;
       break;
     case 'pb_detail':
       body = <PBDetailScreen speciesId={screen.speciesId} state={state} update={update}
-                onEdit={() => push({ name: 'pb_entry', speciesId: screen.speciesId, edit: true })}
+                onEdit={() => {
+                  // PBs are now derived from logged catches. If we know
+                  // which catch this PB came from, edit that catch.
+                  // Otherwise fall back to the legacy PB Entry editor.
+                  const pb = state.pbs?.[screen.speciesId];
+                  if (pb?.catchId && (state.catchLog || []).some(c => c.id === pb.catchId)) {
+                    push({ name: 'catch_entry', editingId: pb.catchId });
+                  } else {
+                    push({ name: 'pb_entry', speciesId: screen.speciesId, edit: true });
+                  }
+                }}
                 onBack={pop} />;
       break;
     case 'pb_entry':

@@ -1471,7 +1471,7 @@ function CatchMapView({ items, onView }) {
   );
 }
 
-export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }) {
+export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -1483,9 +1483,53 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }
   if (!c) return <div style={{ padding: 20, color: T.inkSoft }}>Catch not found.</div>;
   const s = speciesById(c.speciesId);
   const when = new Date(c.dateIso);
+  const currentPB = c.speciesId ? state.pbs?.[c.speciesId] : null;
+  const isAlreadyPB = !!currentPB && currentPB.catchId === c.id;
   const remove = () => {
     update({ catchLog: (state.catchLog || []).filter(x => x.id !== c.id) });
     onBack();
+  };
+  // Promote this catch to the species' Personal Best in-place. Used
+  // when auto-promotion on save didn't apply (e.g. measurements added
+  // later) or the angler wants to override the existing PB explicitly.
+  const promoteToPB = () => {
+    if (!c.speciesId) return;
+    if (currentPB && !isAlreadyPB) {
+      const beats = (c.weight != null && c.weight > (currentPB.weight || 0))
+                 || (c.length != null && c.length > (currentPB.length || 0));
+      if (!beats && !window.confirm(
+        `${s ? s.commonName : 'This species'} already has a Personal Best on file. Replace it with this catch?`
+      )) return;
+    }
+    const primaryMetric = c.weight != null && (currentPB?.primaryMetric !== 'length' || c.length == null)
+      ? 'weight'
+      : (c.length != null ? 'length' : (currentPB?.primaryMetric || 'weight'));
+    let history = currentPB?.history || [];
+    if (currentPB && !isAlreadyPB) {
+      history = [...history, {
+        length: currentPB.length, weight: currentPB.weight,
+        primaryMetric: currentPB.primaryMetric, date: currentPB.date,
+        catchId: currentPB.catchId, beatenOn: new Date().toISOString().slice(0, 10),
+      }];
+    }
+    update({
+      pbs: {
+        ...(state.pbs || {}),
+        [c.speciesId]: {
+          length: c.length, weight: c.weight,
+          primaryMetric, date: (c.dateIso || '').slice(0, 10),
+          location: (c.lat != null && c.lon != null) ? `${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°` : (currentPB?.location || ''),
+          lat: c.lat, lon: c.lon,
+          notes: c.notes || '',
+          gearBait: currentPB?.gearBait || '',
+          jurisdiction: c.jurisdiction,
+          photos: c.photo ? [c.photo] : [],
+          photo: c.photo || null, // legacy mirror
+          catchId: c.id,
+          history,
+        },
+      },
+    });
   };
   return (
     <div style={{ padding: '16px 16px 24px' }}>
@@ -1496,14 +1540,25 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }
       <H1 size={22}>{s ? s.commonName : (c.speciesId || 'Unknown')}</H1>
       {s && <div style={{ fontStyle: 'italic', fontSize: 13, color: T.inkSoft, marginBottom: 12 }}>{s.scientific}</div>}
 
-      {s && onAddPB && (
-        <button onClick={() => onAddPB(c)} style={{
-          width: '100%', marginBottom: 14, background: T.brass, color: T.oceanDeep, border: 'none',
-          padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
-          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-        }}>
-          <Trophy size={14} /> {state.pbs?.[c.speciesId] ? 'Update Personal Best' : 'Add Personal Best'}
-        </button>
+      {s && (
+        isAlreadyPB ? (
+          <div style={{
+            width: '100%', marginBottom: 14, background: T.parchmentDeep, color: T.brass,
+            border: `1.5px solid ${T.brass}`,
+            padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <Trophy size={14} /> This catch is your Personal Best
+          </div>
+        ) : (
+          <button onClick={promoteToPB} style={{
+            width: '100%', marginBottom: 14, background: T.brass, color: T.oceanDeep, border: 'none',
+            padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <Trophy size={14} /> {currentPB ? 'Make this my Personal Best' : 'Mark as Personal Best'}
+          </button>
+        )
       )}
 
       <Card style={{ marginBottom: 12 }}>
@@ -1602,10 +1657,10 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
-  const [speciesId, setSpeciesId] = useState(existing?.speciesId || '');
+  const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
   const [length, setLength] = useState(existing?.length != null ? String(existing.length) : '');
   const [weight, setWeight] = useState(existing?.weight != null ? String(existing.weight) : '');
   const [notes, setNotes] = useState(existing?.notes || '');
@@ -1649,9 +1704,36 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const sun = loc.lat != null && loc.lon != null ? sunPosition(now, loc.lat, loc.lon) : null;
   const moon = moonPhase(now);
 
-  const takePhoto = async () => {
-    const dataUrl = await getPhoto(); // native camera prompt or web file picker
-    if (dataUrl) setPhoto(dataUrl);
+  const cameraRef = React.useRef(null);
+  const uploadRef = React.useRef(null);
+  const [photoSource, setPhotoSource] = useState(null); // 'camera' | 'upload' | null
+
+  const handleCameraPick = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { setPhoto(r.result); setPhotoSource('camera'); };
+    r.readAsDataURL(f);
+    // Camera-captured: refresh device GPS so the catch is pinned to the
+    // angler's current spot rather than wherever the entry started.
+    fetchGps();
+  };
+
+  const handleUploadPick = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { setPhoto(r.result); setPhotoSource('upload'); };
+    r.readAsDataURL(f);
+    // Upload: pull GPS from the photo's EXIF so the catch is pinned to
+    // where the photo was actually taken — not where the angler is now.
+    exifr.gps(f).then((g) => {
+      if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude)) {
+        setLoc({ lat: g.latitude, lon: g.longitude, error: null, loading: false });
+      }
+    }).catch(() => { /* missing EXIF — keep whatever location we already had */ });
   };
 
   const canSave = !!speciesId;
@@ -1671,11 +1753,51 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       weather: weather || null,
       jurisdiction: jurisdiction ? jurisdiction.id : (existing?.jurisdiction || null),
     };
-    if (existing) {
-      update({ catchLog: (state.catchLog || []).map(c => c.id === existing.id ? entry : c) });
-    } else {
-      update({ catchLog: [entry, ...(state.catchLog || [])] });
+
+    const nextCatchLog = existing
+      ? (state.catchLog || []).map(c => c.id === existing.id ? entry : c)
+      : [entry, ...(state.catchLog || [])];
+
+    // Auto-promote to a Personal Best if this catch beats the existing
+    // PB for the species (by either weight or length). The PB record
+    // references the source catch so the two stay linked.
+    const patch = { catchLog: nextCatchLog };
+    if (entry.speciesId) {
+      const currentPB = state.pbs?.[entry.speciesId];
+      const beatsWeight = entry.weight != null && entry.weight > (currentPB?.weight || 0);
+      const beatsLength = entry.length != null && entry.length > (currentPB?.length || 0);
+      if (!currentPB || beatsWeight || beatsLength) {
+        const primaryMetric = beatsWeight || (entry.weight != null && entry.length == null)
+          ? 'weight'
+          : (entry.length != null ? 'length' : (currentPB?.primaryMetric || 'weight'));
+        let history = currentPB?.history || [];
+        if (currentPB && (beatsWeight || beatsLength)) {
+          history = [...history, {
+            length: currentPB.length, weight: currentPB.weight,
+            primaryMetric: currentPB.primaryMetric, date: currentPB.date,
+            catchId: currentPB.catchId, beatenOn: new Date().toISOString().slice(0, 10),
+          }];
+        }
+        patch.pbs = {
+          ...(state.pbs || {}),
+          [entry.speciesId]: {
+            length: entry.length, weight: entry.weight,
+            primaryMetric, date: now.toISOString().slice(0, 10),
+            location: (entry.lat != null && entry.lon != null) ? `${entry.lat.toFixed(5)}°, ${entry.lon.toFixed(5)}°` : (currentPB?.location || ''),
+            lat: entry.lat, lon: entry.lon,
+            notes: entry.notes || '',
+            gearBait: currentPB?.gearBait || '',
+            jurisdiction: entry.jurisdiction,
+            photos: entry.photo ? [entry.photo] : [],
+            photo: entry.photo || null, // legacy mirror
+            catchId: entry.id,
+            history,
+          },
+        };
+      }
     }
+
+    update(patch);
     // Best-effort research publish — no-op if cloud not configured or
     // the angler hasn't opted in. Local log is canonical regardless.
     publishCatch(entry, state.research).catch(() => {});
@@ -1693,9 +1815,34 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         {photo
           ? <img src={photo} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
           : <div style={{ height: 140, background: T.parchmentDeep, border: `1px dashed ${T.cardEdge}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>No photo yet</div>}
-        <button onClick={takePhoto} style={{ marginTop: 10, background: T.brass, color: T.oceanDeep, border: 'none', padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
-          <Camera size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> {photo ? 'Replace photo' : 'Take or choose photo'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button onClick={() => cameraRef.current?.click()} style={{
+            flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
+            padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+            letterSpacing: 0.4, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <Camera size={16} /> {photo && photoSource === 'camera' ? 'Retake' : 'Take photo'}
+          </button>
+          <button onClick={() => uploadRef.current?.click()} style={{
+            flex: 1, background: 'transparent', color: T.brass,
+            border: `1.5px solid ${T.brass}`,
+            padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+            letterSpacing: 0.4, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <ImageIcon size={16} /> {photo && photoSource === 'upload' ? 'Choose another' : 'Upload photo'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
+          {photoSource === 'upload'
+            ? 'Location read from the photo where the picture was taken.'
+            : photoSource === 'camera'
+              ? 'Location set from your current GPS.'
+              : 'Take a photo to use your current location, or upload an existing photo to use the location from the file.'}
+        </div>
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
+        <input ref={uploadRef} type="file" accept="image/*" onChange={handleUploadPick} style={{ display: 'none' }} />
       </Card>
 
       <Card style={{ marginBottom: 12 }}>

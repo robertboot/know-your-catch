@@ -243,17 +243,17 @@ export function HomeScreen({
             textShadow: '0 0 22px rgba(25, 212, 242, 0.45)',
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
           }}>CATCH</div>
-          <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4, marginTop: 12, maxWidth: 200 }}>
-            Snap, log, identify your fish in seconds.
+          <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4, marginTop: 12, maxWidth: 220 }}>
+            Capture, log, identify your catch in seconds.
           </div>
-          <button onClick={onIdentify} style={{
+          <button onClick={onReport} style={{
             marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
             padding: '11px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800,
             letterSpacing: 1.6, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: 10,
             boxShadow: '0 8px 24px rgba(25, 212, 242, 0.35)',
           }}>
-            <Camera size={16} strokeWidth={2.4} /> SNAP A PHOTO
+            <Camera size={16} strokeWidth={2.4} /> LOG YOUR CATCH
           </button>
 
           <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
