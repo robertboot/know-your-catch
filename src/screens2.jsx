@@ -76,7 +76,15 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
         </button>
         {photo ? (
           <>
-            <img src={photo.url} alt={s.commonName} loading="lazy" style={{ width: '100%', maxWidth: 300, height: 190, objectFit: 'cover', borderRadius: 8, display: 'block', margin: '0 auto' }} />
+            <div style={{
+              width: '100%', maxWidth: 360, height: 220, margin: '0 auto',
+              background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+              borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
+            }}>
+              <img src={photo.url} alt={s.commonName} loading="lazy"
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+            </div>
             {photo.credit && <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
           </>
         ) : (
