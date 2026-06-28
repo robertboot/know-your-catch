@@ -20,7 +20,7 @@ import {
   SpeciesDetailScreen, CompareScreen, RegulationsListScreen, RegulationDetailScreen,
   RegulationAlertsScreen,
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
-  CatchLogScreen, CatchEntryScreen, CatchDetailScreen,
+  CatchLogScreen, CatchEntryScreen, CatchDetailScreen, QuizScreen,
 } from './screens2.jsx';
 
 const ALERT_COUNT = 2;
@@ -85,6 +85,7 @@ export default function App() {
     onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
     onRegulationAlerts: () => push({ name: 'regulation_alerts' }),
+    onQuiz:        () => push({ name: 'quiz' }),
     onReport:     () => push({ name: 'catch_entry' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
@@ -149,6 +150,11 @@ export default function App() {
       break;
     case 'regulation_alerts':
       body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} />;
+      break;
+    case 'quiz':
+      body = <QuizScreen state={state} jurisdiction={jurisdiction}
+        onPickSpecies={(id) => push({ name: 'species', id })}
+        onBack={pop} />;
       break;
     case 'catch_log':
       body = <CatchLogScreen

@@ -155,7 +155,7 @@ function ScrollDots({ count, active }) {
 export function HomeScreen({
   state, jurisdiction, stale, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
-  onCompare, onBrowse, onUploadPhoto, onRegulationAlerts,
+  onCompare, onBrowse, onUploadPhoto, onRegulationAlerts, onQuiz,
 }) {
   const uploadRef = useRef(null);
   const handleUploadPick = (e) => {
@@ -318,6 +318,12 @@ export function HomeScreen({
           titleA="SPECIES" titleB="LIBRARY"
           subtitle="Explore species and ID guide"
           onClick={onSpeciesList}
+        />
+        <QuickTile
+          icon={<Sparkles size={28} strokeWidth={1.8} />}
+          titleA="FISH ID" titleB="QUIZ"
+          subtitle="Test your ID, limits, and seasons"
+          onClick={onQuiz}
         />
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
-  Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2,
+  Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -2289,6 +2289,281 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
         <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'Save catch'}</PrimaryButton>
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   QUIZ — Fish ID + regulation knowledge flashcards
+   ============================================================ */
+
+const _shuffle = (arr) => arr.slice().sort(() => Math.random() - 0.5);
+
+// Species-ID question: a photo, pick the species. Distractors are
+// pulled from the same category first so the question actually tests
+// telling lookalikes apart instead of "tuna or shark".
+function pickSpeciesQuestion(prevSpeciesId = null) {
+  const candidates = SPECIES.filter(s => {
+    const p = speciesPhoto(s.id);
+    return p && p.url && s.id !== prevSpeciesId;
+  });
+  if (candidates.length < 4) return null;
+  const correct = candidates[Math.floor(Math.random() * candidates.length)];
+  const pool = candidates.filter(s => s.id !== correct.id);
+  const sameCat = pool.filter(s => s.category === correct.category);
+  const distractors = [..._shuffle(sameCat).slice(0, 2), ..._shuffle(pool.filter(s => s.category !== correct.category))].slice(0, 3);
+  for (const s of _shuffle(pool)) {
+    if (distractors.length >= 3) break;
+    if (!distractors.some(d => d.id === s.id)) distractors.push(s);
+  }
+  return {
+    type: 'species',
+    species: correct,
+    prompt: 'What species is this?',
+    options: _shuffle([correct, ...distractors]).map(s => ({
+      key: s.id, label: s.commonName, isCorrect: s.id === correct.id,
+    })),
+  };
+}
+
+const _BAG_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 10, 15, 20];
+
+function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
+  const candidates = SPECIES.filter(s => {
+    if (s.id === prevSpeciesId) return false;
+    const reg = REGULATIONS[s.id]?.[jurisdiction.id];
+    return reg && reg.bagLimit != null;
+  });
+  if (candidates.length === 0) return null;
+  const correct = candidates[Math.floor(Math.random() * candidates.length)];
+  const limit = REGULATIONS[correct.id][jurisdiction.id].bagLimit;
+  const distractors = _shuffle(_BAG_OPTIONS.filter(n => n !== limit)).slice(0, 3);
+  const opts = _shuffle([limit, ...distractors]).map(n => ({
+    key: 'bag-' + n, label: n === 0 ? '0 (no take)' : `${n} per angler`, isCorrect: n === limit,
+  }));
+  return {
+    type: 'bag', species: correct,
+    prompt: <>What's the daily bag limit for <strong>{correct.commonName}</strong> in {jurisdiction.short}?</>,
+    options: opts,
+  };
+}
+
+function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
+  const candidates = SPECIES.filter(s => {
+    if (s.id === prevSpeciesId) return false;
+    const reg = REGULATIONS[s.id]?.[jurisdiction.id];
+    return reg && reg.minSize != null;
+  });
+  if (candidates.length === 0) return null;
+  const correct = candidates[Math.floor(Math.random() * candidates.length)];
+  const size = REGULATIONS[correct.id][jurisdiction.id].minSize;
+  const pool = [size - 6, size - 4, size - 2, size + 2, size + 4, size + 6, 12, 14, 16, 18, 20, 24, 28];
+  const distractors = _shuffle([...new Set(pool)].filter(n => n !== size && n > 0)).slice(0, 3);
+  const opts = _shuffle([size, ...distractors]).map(n => ({
+    key: 'size-' + n, label: formatSize(n, units), isCorrect: n === size,
+  }));
+  return {
+    type: 'size', species: correct,
+    prompt: <>What's the minimum size for <strong>{correct.commonName}</strong> in {jurisdiction.short}?</>,
+    options: opts,
+  };
+}
+
+function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null) {
+  // Without a jurisdiction set we can't ask reg questions — fall back
+  // to species ID only.
+  if (!jurisdiction) return pickSpeciesQuestion(prevSpeciesId);
+  const types = ['species', 'bag', 'size'];
+  const pick = types[Math.floor(Math.random() * types.length)];
+  const q = pick === 'bag' ? pickBagLimitQuestion(jurisdiction, prevSpeciesId)
+          : pick === 'size' ? pickSizeLimitQuestion(jurisdiction, state.units, prevSpeciesId)
+          : pickSpeciesQuestion(prevSpeciesId);
+  // If a reg-question pool is empty for the chosen jurisdiction,
+  // fall back to species so the angler always gets something.
+  return q || pickSpeciesQuestion(prevSpeciesId);
+}
+
+export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
+  const [question, setQuestion] = useState(() => pickQuizQuestion(state, jurisdiction));
+  const [selectedKey, setSelectedKey] = useState(null);
+  const [score, setScore] = useState({ right: 0, total: 0 });
+  const [streak, setStreak] = useState(0);
+
+  const next = () => {
+    setSelectedKey(null);
+    setQuestion(pickQuizQuestion(state, jurisdiction, question?.species?.id));
+  };
+
+  const pick = (opt) => {
+    if (selectedKey) return;
+    setSelectedKey(opt.key);
+    setScore(({ right, total }) => ({ right: right + (opt.isCorrect ? 1 : 0), total: total + 1 }));
+    setStreak(prev => opt.isCorrect ? prev + 1 : 0);
+  };
+
+  if (!question) {
+    return (
+      <div style={{ padding: 20, color: T.inkSoft }}>
+        Quiz needs at least 4 species with photos on file. Check back once more photos are uploaded.
+      </div>
+    );
+  }
+
+  const sp = question.species;
+  const photo = speciesPhoto(sp.id);
+  const selectedOpt = question.options.find(o => o.key === selectedKey);
+  const correctOpt = question.options.find(o => o.isCorrect);
+  const isCorrect = !!selectedOpt?.isCorrect;
+  const reg = jurisdiction ? REGULATIONS[sp.id]?.[jurisdiction.id] : null;
+  const status = reg ? seasonState(reg.open).status : 'unknown';
+
+  const typeLabel = {
+    species: 'Spot the species from the photo.',
+    bag: 'Recall the daily bag limit for this species in your waters.',
+    size: 'Recall the minimum legal size for this species in your waters.',
+  }[question.type];
+
+  // For bag / size questions we show the species photo + name in the
+  // prompt (so the angler knows what fish they're answering about).
+  // For the species-ID question we hide the name until they answer.
+  const revealSpeciesName = question.type !== 'species';
+
+  return (
+    <div style={{ padding: '16px 16px 24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+        <H1 size={22}>Fish ID Quiz</H1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.inkSoft }}>
+          <span>{score.right} / {score.total}</span>
+          {streak >= 2 && <span style={{ color: T.brass, fontWeight: 800 }}>{streak} streak</span>}
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 14 }}>
+        {typeLabel}
+      </div>
+
+      {/* Photo */}
+      <div style={{
+        background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+        borderRadius: 14, border: `1px solid ${T.cardEdge}`,
+        height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', marginBottom: revealSpeciesName ? 6 : 14,
+        position: 'relative',
+      }}>
+        {photo?.url
+          ? <img src={photo.url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+          : <SpeciesImage species={sp} size={200} style={{ height: 200 }} />}
+      </div>
+      {revealSpeciesName && (
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: T.ink, marginBottom: 14, textAlign: 'center' }}>
+          {sp.commonName}
+        </div>
+      )}
+
+      {/* Prompt */}
+      <div style={{ fontSize: 13, color: T.inkSoft, margin: '0 2px 10px', lineHeight: 1.5 }}>
+        {question.prompt}
+      </div>
+
+      {/* Options */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {question.options.map(opt => {
+          const isPicked = selectedKey === opt.key;
+          let bg = T.card, border = T.cardEdge, color = T.ink, iconNode = null;
+          if (selectedKey) {
+            if (opt.isCorrect) { bg = T.openBg; border = T.open; color = T.open; iconNode = <CheckCircle2 size={18} color={T.open} />; }
+            else if (isPicked) { bg = T.closedBg; border = T.closed; color = T.closed; iconNode = <X size={18} color={T.closed} />; }
+            else { color = T.inkMute; }
+          }
+          return (
+            <button key={opt.key} onClick={() => pick(opt)} disabled={!!selectedKey} style={{
+              background: bg, border: `1.5px solid ${border}`, borderRadius: 10,
+              padding: '12px 14px', cursor: selectedKey ? 'default' : 'pointer',
+              textAlign: 'left', color, fontSize: 14, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            }}>
+              <span>{opt.label}</span>
+              {iconNode}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Result + species review */}
+      {selectedKey && (
+        <Card style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: isCorrect ? T.open : T.closed, marginBottom: 10 }}>
+            {isCorrect
+              ? '✓ Correct!'
+              : question.type === 'species'
+                ? `✗ It's a ${sp.commonName}`
+                : `✗ The answer is ${correctOpt?.label}`}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+            <SpeciesImage species={sp} size={64} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: T.ink }}>
+                {sp.commonName}
+              </div>
+              <div style={{ fontStyle: 'italic', fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+                {sp.scientific}
+              </div>
+              {sp.altNames?.length > 0 && (
+                <div style={{ fontSize: 11, color: T.brass, marginTop: 4, letterSpacing: 0.5 }}>
+                  also: {sp.altNames.join(' · ')}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 12 }}>
+            {sp.habitat}
+          </div>
+
+          <SectionLabel style={{ marginBottom: 6 }}>Key IDs</SectionLabel>
+          <ul style={{ margin: '0 0 12px', paddingLeft: 18, color: T.inkSoft, fontSize: 13, lineHeight: 1.55 }}>
+            {sp.keyIds.slice(0, 4).map((k, i) => <li key={i}>{k}</li>)}
+          </ul>
+
+          {jurisdiction && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <SectionLabel>Regulations — {jurisdiction.short}</SectionLabel>
+                <StatusPill status={status} size="small" />
+              </div>
+              {reg ? (
+                <>
+                  <DetailRow label="Season" value={cleanSeason(reg.open) || 'Check source'} />
+                  {reg.minSize != null && <DetailRow label="Min size" value={formatSize(reg.minSize, state.units)} />}
+                  {reg.maxSize != null && <DetailRow label="Max size" value={formatSize(reg.maxSize, state.units)} />}
+                  {reg.bagLimit != null && <DetailRow label="Bag limit" value={reg.bagLimit} />}
+                  {reg.notes && <DetailRow label="Notes" value={reg.notes} />}
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: T.inkMute, padding: 8 }}>
+                  No regulations on file for this species in {jurisdiction.name}.
+                </div>
+              )}
+            </>
+          )}
+
+          {onPickSpecies && (
+            <button onClick={() => onPickSpecies(sp.id)} style={{
+              marginTop: 12, background: 'transparent', color: T.brass,
+              border: 'none', padding: 0, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>
+              Full species page <ChevronRight size={12} />
+            </button>
+          )}
+        </Card>
+      )}
+
+      {selectedKey && (
+        <PrimaryButton onClick={next} style={{ marginTop: 14 }}>
+          Next question
+          <ChevronRight size={16} style={{ display: 'inline', marginLeft: 6, verticalAlign: 'middle' }} />
+        </PrimaryButton>
+      )}
     </div>
   );
 }
