@@ -98,7 +98,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 800,
           letterSpacing: 0.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
         }}>
-          <Trophy size={14} /> {pb ? 'Update Personal Best' : 'Add Personal Best'}
+          <Trophy size={14} /> {pb ? 'Edit Personal Best' : 'Add Personal Best'}
         </button>
       </Card>
 
@@ -584,7 +584,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
           padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
-          <Trophy size={14} /> {pb ? 'Update Personal Best' : 'Add Personal Best'}
+          <Trophy size={14} /> {pb ? 'Edit Personal Best' : 'Add Personal Best'}
         </button>
       )}
       {!jurisdiction ? (
