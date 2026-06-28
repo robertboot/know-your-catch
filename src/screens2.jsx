@@ -12,8 +12,21 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
-  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos,
+  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, appleMapsLink,
 } from './helpers.js';
+
+/* Render a coordinate value as a tappable Apple Maps link. */
+function CoordsLink({ lat, lon }) {
+  const href = appleMapsLink(lat, lon);
+  const label = `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`;
+  if (!href) return <>{label}</>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      style={{ color: T.brass, textDecoration: 'underline', textDecorationThickness: '1px' }}>
+      {label}
+    </a>
+  );
+}
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow, StarButton, ShareReportModal,
@@ -826,7 +839,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         <DetailRow label="Date" value={pb.date} />
         {pb.jurisdiction && <DetailRow label="Waters" value={jurisdictionById(pb.jurisdiction)?.name || pb.jurisdiction} />}
         {pb.location && <DetailRow label="Location" value={pb.location} />}
-        {(pb.lat != null && pb.lon != null) && <DetailRow label="Coords" value={`${pb.lat.toFixed(5)}°, ${pb.lon.toFixed(5)}°`} />}
+        {(pb.lat != null && pb.lon != null) && <DetailRow label="Coords" value={<CoordsLink lat={pb.lat} lon={pb.lon} />} />}
         {pb.gearBait && <DetailRow label="Gear / bait" value={pb.gearBait} />}
         {pb.notes && <DetailRow label="Notes" value={pb.notes} />}
       </Card>
@@ -1235,10 +1248,20 @@ function timeOfDay(sunAlt, dateIso) {
   return h < 12 ? 'dawn' : 'dusk';
 }
 
-export function CatchLogScreen({ state, onNew, onView }) {
+export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
   const [filters, setFilters] = useState({ speciesId: '', moon: '', tod: '' });
   const items = (state.catchLog || []).slice().sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
+
+  // Personal Bests aren't part of the catch log array — they live in
+  // state.pbs. Surface them at the top of the Logbook so an angler who's
+  // only ever recorded a PB still sees something here.
+  const pbList = useMemo(() => {
+    const ids = Object.keys(state.pbs || {});
+    return ids.map(id => ({ id, pb: state.pbs[id], s: speciesById(id) }))
+      .filter(x => x.s)
+      .sort((a, b) => (b.pb.date || '').localeCompare(a.pb.date || ''));
+  }, [state.pbs]);
 
   const filtered = useMemo(() => items.filter(c => {
     if (filters.speciesId && c.speciesId !== filters.speciesId) return false;
@@ -1272,11 +1295,47 @@ export function CatchLogScreen({ state, onNew, onView }) {
         </button>
       </div>
 
+      {pbList.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 8px' }}>
+            <Trophy size={14} color={T.brass} />
+            <SectionLabel>Personal Bests ({pbList.length})</SectionLabel>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            {pbList.map(({ id, pb, s }) => {
+              const photos = pbPhotos(pb);
+              const thumb = photos[0];
+              return (
+                <Card key={'pb-' + id}
+                  onClick={() => onViewPB && onViewPB(id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
+                  <Trophy size={20} color={T.brass} />
+                  {thumb
+                    ? <div style={{ width: 56, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </div>
+                    : <SpeciesImage species={s} size={44} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                    <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+                      {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date || ''}
+                    </div>
+                  </div>
+                  <ChevronRight size={16} color={T.brass} />
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+
       {items.length === 0 ? (
         <Card>
           <div style={{ textAlign: 'center', padding: 18, color: T.inkSoft }}>
             <Camera size={36} color={T.brass} style={{ display: 'block', margin: '0 auto 10px' }} />
-            <div style={{ fontWeight: 700, color: T.ink, marginBottom: 6 }}>No catches logged yet</div>
+            <div style={{ fontWeight: 700, color: T.ink, marginBottom: 6 }}>
+              {pbList.length > 0 ? 'No catches logged yet' : 'Nothing logged yet'}
+            </div>
             <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tap <b>NEW</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
           </div>
         </Card>
@@ -1449,7 +1508,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack, onAddPB }
 
       <Card style={{ marginBottom: 12 }}>
         <DetailRow label="When" value={when.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })} />
-        {c.lat != null && c.lon != null && <DetailRow label="Where" value={`${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°`} />}
+        {c.lat != null && c.lon != null && <DetailRow label="Where" value={<CoordsLink lat={c.lat} lon={c.lon} />} />}
         {c.length != null && <DetailRow label="Length" value={`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`} />}
         {c.weight != null && <DetailRow label="Weight" value={`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`} />}
         {c.jurisdiction && <DetailRow label="Waters" value={(jurisdictionById(c.jurisdiction) || { name: c.jurisdiction }).name} />}

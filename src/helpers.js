@@ -242,6 +242,15 @@ export function pbPhotos(pb) {
   return [];
 }
 
+/* Build a maps.apple.com universal link for a pair of coordinates.
+   Opens Apple Maps natively on iOS / macOS and maps.apple.com in the
+   browser elsewhere. Falls back to null for non-finite inputs. */
+export function appleMapsLink(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const q = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+  return `https://maps.apple.com/?ll=${q}&q=${encodeURIComponent(q)}`;
+}
+
 /* ------------------------------------------------------------------
    Share / quick report
    ------------------------------------------------------------------ */
