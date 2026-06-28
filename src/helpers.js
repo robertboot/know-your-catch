@@ -242,6 +242,14 @@ export function pbPhotos(pb) {
   return [];
 }
 
+/* Same idea for a catch log entry. */
+export function catchPhotos(c) {
+  if (!c) return [];
+  if (Array.isArray(c.photos)) return c.photos.filter(Boolean).slice(0, 3);
+  if (c.photo) return [c.photo];
+  return [];
+}
+
 /* Build a maps.apple.com universal link for a pair of coordinates.
    Opens Apple Maps natively on iOS / macOS and maps.apple.com in the
    browser elsewhere. Falls back to null for non-finite inputs. */

@@ -12,7 +12,7 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
-  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, appleMapsLink,
+  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
 } from './helpers.js';
 
 /* Render a coordinate value as a tappable Apple Maps link. */
@@ -859,7 +859,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         </Card>
       )}
       <div style={{ display: 'flex', gap: 8 }}>
-        <PrimaryButton onClick={onEdit} style={{ flex: 1 }}><Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Update</PrimaryButton>
+        <PrimaryButton onClick={onEdit} style={{ flex: 1 }}><Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Edit</PrimaryButton>
         <GhostButton onClick={() => setShareOpen(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Share2 size={14} /> Share
         </GhostButton>
@@ -1388,10 +1388,19 @@ function CatchListView({ items, onView }) {
       {items.map(c => {
         const s = speciesById(c.speciesId);
         const when = new Date(c.dateIso);
+        const cPhotos = catchPhotos(c);
+        const thumb = cPhotos[0];
         return (
           <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ display: 'flex', gap: 12, alignItems: 'stretch', padding: 10 }}>
-            {c.photo
-              ? <img src={c.photo} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 6 }} />
+            {thumb
+              ? <div style={{ position: 'relative', width: 84, height: 84, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                  <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {cPhotos.length > 1 && (
+                    <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(3, 27, 51, 0.85)', color: T.parchment, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>
+                      +{cPhotos.length - 1}
+                    </span>
+                  )}
+                </div>
               : <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={26} color={T.inkMute} /></div>}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{s ? s.commonName : (c.speciesId || 'Unknown')}</div>
@@ -1523,19 +1532,32 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
           notes: c.notes || '',
           gearBait: currentPB?.gearBait || '',
           jurisdiction: c.jurisdiction,
-          photos: c.photo ? [c.photo] : [],
-          photo: c.photo || null, // legacy mirror
+          photos: catchPhotos(c),
+          photo: catchPhotos(c)[0] || null, // legacy mirror
           catchId: c.id,
           history,
         },
       },
     });
   };
+  const cPhotos = catchPhotos(c);
   return (
     <div style={{ padding: '16px 16px 24px' }}>
-      {c.photo
-        ? <img src={c.photo} alt="" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14 }} />
-        : <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>}
+      {cPhotos.length === 0
+        ? <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>
+        : cPhotos.length === 1
+          ? <img src={cPhotos[0]} alt="" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14 }} />
+          : <div className="kyc-hscroll" style={{
+              display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
+              margin: '0 -16px 14px', padding: '0 16px 4px',
+              scrollSnapType: 'x proximity',
+            }}>
+              {cPhotos.map((p, i) => (
+                <div key={i} style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}` }}>
+                  <img src={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+                </div>
+              ))}
+            </div>}
 
       <H1 size={22}>{s ? s.commonName : (c.speciesId || 'Unknown')}</H1>
       {s && <div style={{ fontStyle: 'italic', fontSize: 13, color: T.inkSoft, marginBottom: 12 }}>{s.scientific}</div>}
@@ -1612,7 +1634,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
 
       {(() => {
         const speciesFallback = s ? speciesPhoto(s.id) : null;
-        const reportPhotoUrl = c.photo || (speciesFallback ? speciesFallback.url : null);
+        const reportPhotoUrl = cPhotos[0] || (speciesFallback ? speciesFallback.url : null);
         const measurements = [];
         if (c.weight != null) measurements.push(`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`);
         if (c.length != null) measurements.push(`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`);
@@ -1642,7 +1664,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
             anglerName={state.anglerName}
             species={s}
             photoUrl={reportPhotoUrl}
-            photoDataUrl={c.photo}
+            photoDataUrl={cPhotos[0]}
             primary={primary}
             secondary={secondary}
             meta={meta}
@@ -1664,7 +1686,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [length, setLength] = useState(existing?.length != null ? String(existing.length) : '');
   const [weight, setWeight] = useState(existing?.weight != null ? String(existing.weight) : '');
   const [notes, setNotes] = useState(existing?.notes || '');
-  const [photo, setPhoto] = useState(existing?.photo || null);
+  const [photos, setPhotos] = useState(() => catchPhotos(existing));
   const [loc, setLoc] = useState(
     existing && existing.lat != null
       ? { lat: existing.lat, lon: existing.lon, error: null, loading: false }
@@ -1711,9 +1733,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const handleCameraPick = (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
-    if (!f) return;
+    if (!f || photos.length >= 3) return;
     const r = new FileReader();
-    r.onload = () => { setPhoto(r.result); setPhotoSource('camera'); };
+    r.onload = () => {
+      setPhotos(p => [...p, r.result].slice(0, 3));
+      setPhotoSource('camera');
+    };
     r.readAsDataURL(f);
     // Camera-captured: refresh device GPS so the catch is pinned to the
     // angler's current spot rather than wherever the entry started.
@@ -1723,18 +1748,27 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const handleUploadPick = (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
-    if (!f) return;
+    if (!f || photos.length >= 3) return;
     const r = new FileReader();
-    r.onload = () => { setPhoto(r.result); setPhotoSource('upload'); };
+    r.onload = () => {
+      setPhotos(p => [...p, r.result].slice(0, 3));
+      setPhotoSource('upload');
+    };
     r.readAsDataURL(f);
     // Upload: pull GPS from the photo's EXIF so the catch is pinned to
     // where the photo was actually taken — not where the angler is now.
-    exifr.gps(f).then((g) => {
-      if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude)) {
-        setLoc({ lat: g.latitude, lon: g.longitude, error: null, loading: false });
-      }
-    }).catch(() => { /* missing EXIF — keep whatever location we already had */ });
+    // Only auto-fill if we don't already have coords (don't clobber a
+    // previously set location).
+    if (loc.lat == null || loc.lon == null) {
+      exifr.gps(f).then((g) => {
+        if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude)) {
+          setLoc({ lat: g.latitude, lon: g.longitude, error: null, loading: false });
+        }
+      }).catch(() => { /* missing EXIF — keep whatever location we already had */ });
+    }
   };
+
+  const removePhotoAt = (i) => setPhotos(p => p.filter((_, idx) => idx !== i));
 
   const canSave = !!speciesId;
   const save = () => {
@@ -1746,7 +1780,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       length: length ? +length : null,
       weight: weight ? +weight : null,
       notes: notes.trim() || null,
-      photo,
+      photos: photos.slice(0, 3),
+      // Legacy single `photo` mirror so unmigrated read paths keep working.
+      photo: photos[0] || null,
       sunAlt: sun ? sun.altitudeDeg : null,
       sunAz: sun ? sun.azimuthDeg : null,
       moonPhase: moon.phase, moonIllum: moon.illumination, moonName: moon.name,
@@ -1788,8 +1824,8 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             notes: entry.notes || '',
             gearBait: currentPB?.gearBait || '',
             jurisdiction: entry.jurisdiction,
-            photos: entry.photo ? [entry.photo] : [],
-            photo: entry.photo || null, // legacy mirror
+            photos: entry.photos.slice(0, 3),
+            photo: entry.photos[0] || null, // legacy mirror
             catchId: entry.id,
             history,
           },
@@ -1811,35 +1847,73 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       <H1 size={22} style={{ marginBottom: 14 }}>{isEdit ? 'Edit catch' : 'Log a catch'}</H1>
 
       <Card style={{ marginBottom: 12 }}>
-        <SectionLabel style={{ marginBottom: 8 }}>Photo</SectionLabel>
-        {photo
-          ? <img src={photo} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
-          : <div style={{ height: 140, background: T.parchmentDeep, border: `1px dashed ${T.cardEdge}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>No photo yet</div>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button onClick={() => cameraRef.current?.click()} style={{
-            flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <SectionLabel>Photos</SectionLabel>
+          <span style={{ fontSize: 11, color: T.inkMute }}>{photos.length} / 3</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+          {[0, 1, 2].map(i => {
+            const p = photos[i];
+            if (p) {
+              return (
+                <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
+                  <img src={p} alt={`Catch photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <button onClick={() => removePhotoAt(i)} aria-label="Remove photo" style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 24, height: 24, borderRadius: '50%',
+                    background: 'rgba(3, 27, 51, 0.85)', color: T.parchment,
+                    border: `1px solid ${T.cardEdge}`, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                  }}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            }
+            const isNext = i === photos.length;
+            return (
+              <div key={i} aria-label={isNext ? 'Add photo' : 'Empty photo slot'} style={{
+                aspectRatio: '1 / 1', borderRadius: 8,
+                border: `1.5px dashed ${isNext ? T.brass : T.cardEdge}`,
+                background: 'transparent',
+                color: isNext ? T.brass : T.inkMute,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: isNext ? 1 : 0.5,
+              }}>
+                <Camera size={20} />
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => cameraRef.current?.click()} disabled={photos.length >= 3} style={{
+            flex: 1, background: photos.length >= 3 ? '#2A3E4D' : T.brass,
+            color: photos.length >= 3 ? T.inkMute : T.oceanDeep, border: 'none',
             padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,
-            letterSpacing: 0.4, cursor: 'pointer',
+            letterSpacing: 0.4, cursor: photos.length >= 3 ? 'not-allowed' : 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
-            <Camera size={16} /> {photo && photoSource === 'camera' ? 'Retake' : 'Take photo'}
+            <Camera size={16} /> Take photo
           </button>
-          <button onClick={() => uploadRef.current?.click()} style={{
-            flex: 1, background: 'transparent', color: T.brass,
-            border: `1.5px solid ${T.brass}`,
+          <button onClick={() => uploadRef.current?.click()} disabled={photos.length >= 3} style={{
+            flex: 1, background: 'transparent',
+            color: photos.length >= 3 ? T.inkMute : T.brass,
+            border: `1.5px solid ${photos.length >= 3 ? T.cardEdge : T.brass}`,
             padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,
-            letterSpacing: 0.4, cursor: 'pointer',
+            letterSpacing: 0.4, cursor: photos.length >= 3 ? 'not-allowed' : 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
-            <ImageIcon size={16} /> {photo && photoSource === 'upload' ? 'Choose another' : 'Upload photo'}
+            <ImageIcon size={16} /> Upload photo
           </button>
         </div>
         <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
-          {photoSource === 'upload'
-            ? 'Location read from the photo where the picture was taken.'
-            : photoSource === 'camera'
-              ? 'Location set from your current GPS.'
-              : 'Take a photo to use your current location, or upload an existing photo to use the location from the file.'}
+          {photos.length >= 3
+            ? 'Maximum of 3 photos. Remove one to add a different photo.'
+            : photoSource === 'upload'
+              ? 'Location read from the most recently uploaded photo.'
+              : photoSource === 'camera'
+                ? 'Location set from your current GPS.'
+                : 'Take a photo to use your current location, or upload an existing photo to use the location from the file.'}
         </div>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
         <input ref={uploadRef} type="file" accept="image/*" onChange={handleUploadPick} style={{ display: 'none' }} />
