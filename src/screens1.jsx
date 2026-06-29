@@ -550,7 +550,7 @@ export function PhotoAnalyzingScreen({ imageDataUrl, onResult }) {
 /* ============================================================
    PHOTO — result
    ============================================================ */
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetake, onManual }) {
+export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onLogCatch, onRetake, onManual }) {
   const { confidence, candidates } = result || {};
 
   if (!candidates || candidates.length === 0 || confidence === 'low') {
@@ -626,7 +626,10 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onRetak
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <PrimaryButton onClick={() => onPickSpecies(top.speciesId)}>See full details & regulations</PrimaryButton>
+          {onLogCatch && (
+            <PrimaryButton onClick={() => onLogCatch(top.speciesId)}>Log this catch</PrimaryButton>
+          )}
+          <GhostButton onClick={() => onPickSpecies(top.speciesId)} style={{ width: '100%' }}>See full details & regulations</GhostButton>
           <GhostButton onClick={onRetake} style={{ width: '100%' }}><RotateCcw size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Try another photo</GhostButton>
         </div>
       </div>

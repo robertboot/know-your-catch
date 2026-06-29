@@ -2260,14 +2260,20 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
   const [length, setLength] = useState(existing?.length != null ? String(existing.length) : '');
   const [weight, setWeight] = useState(existing?.weight != null ? String(existing.weight) : '');
   const [notes, setNotes] = useState(existing?.notes || '');
-  const [photos, setPhotos] = useState(() => catchPhotos(existing));
+  // Seed photos from the catch we're editing, or from an identification
+  // photo handed in via prefilledPhoto (Identify → Log this catch flow).
+  const [photos, setPhotos] = useState(() => {
+    const seeded = catchPhotos(existing);
+    if (seeded.length === 0 && prefilledPhoto) return [prefilledPhoto];
+    return seeded;
+  });
   const [loc, setLoc] = useState(
     existing && existing.lat != null
       ? { lat: existing.lat, lon: existing.lon, error: null, loading: false }
@@ -2310,6 +2316,18 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       .catch(err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }));
   };
   useEffect(() => { if (!isEdit) fetchGps(); }, []);
+
+  // The Identify flow hands us a full-res data URL (FileReader output,
+  // no downscale step). Re-encode it so it fits inside localStorage.
+  useEffect(() => {
+    if (!prefilledPhoto) return;
+    let cancelled = false;
+    downscaleImageDataUrl(prefilledPhoto).then((small) => {
+      if (cancelled || small === prefilledPhoto) return;
+      setPhotos(p => p.map(url => url === prefilledPhoto ? small : url));
+    });
+    return () => { cancelled = true; };
+  }, [prefilledPhoto]);
 
   // Weather fetch once we have coords (best effort; offline = skipped).
   // In edit mode we keep the original weather unless the user re-fetches GPS.

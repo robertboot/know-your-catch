@@ -142,6 +142,7 @@ export default function App() {
         result={screen.result}
         imageDataUrl={screen.imageDataUrl}
         onPickSpecies={(id) => push({ name: 'species', id })}
+        onLogCatch={(id) => push({ name: 'catch_entry', preselectSpeciesId: id, prefilledPhoto: screen.imageDataUrl })}
         onRetake={() => setStack(st => st.filter(s => s.name !== 'photo_analyzing' && s.name !== 'photo_result'))}
         onManual={() => reset([{ name: 'home' }, { name: 'identify' }, { name: 'categories' }])}
       />;
@@ -195,6 +196,7 @@ export default function App() {
         state={state} jurisdiction={jurisdiction} update={update}
         editingId={screen.editingId}
         preselectSpeciesId={screen.preselectSpeciesId}
+        prefilledPhoto={screen.prefilledPhoto}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}
       />;
