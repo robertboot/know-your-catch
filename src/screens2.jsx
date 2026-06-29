@@ -972,6 +972,7 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
 export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const s = speciesById(speciesId); const pb = state.pbs[speciesId];
   const [shareOpen, setShareOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // photo URL or null
   if (!s || !pb) return <div style={{ padding: 20 }}>No PB.</div>;
   const remove = () => {
     if (!window.confirm('Delete this personal best and all its history?')) return;
@@ -1009,7 +1010,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
       </Card>
       {photos.length > 0 && (
         photos.length === 1 ? (
-          <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+          <Card onClick={() => setLightbox(photos[0])} className="kyc-tappable" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
             <img src={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
           </Card>
         ) : (
@@ -1019,7 +1020,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
             scrollSnapType: 'x proximity',
           }}>
             {photos.map((p, i) => (
-              <div key={i} style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}` }}>
+              <div key={i} onClick={() => setLightbox(p)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
                 <img src={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
               </div>
             ))}
@@ -1073,6 +1074,9 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         reportText={reportText}
         reportTitle={`${(state.anglerName || 'My').trim() || 'My'} ${s.commonName} PB`}
       />
+      {lightbox && (
+        <LightboxModal src={lightbox} alt={s.commonName} caption={s.commonName} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
@@ -1702,6 +1706,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
   useEffect(() => {
     if (!confirming) return;
     const t = setTimeout(() => setConfirming(false), 4000);
@@ -1764,14 +1769,14 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
       {cPhotos.length === 0
         ? <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>
         : cPhotos.length === 1
-          ? <img src={cPhotos[0]} alt="" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14 }} />
+          ? <img src={cPhotos[0]} alt="" onClick={() => setLightbox(cPhotos[0])} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
           : <div className="kyc-hscroll" style={{
               display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
               margin: '0 -16px 14px', padding: '0 16px 4px',
               scrollSnapType: 'x proximity',
             }}>
               {cPhotos.map((p, i) => (
-                <div key={i} style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}` }}>
+                <div key={i} onClick={() => setLightbox(p)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
                   <img src={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
                 </div>
               ))}
@@ -1893,6 +1898,9 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
           />
         );
       })()}
+      {lightbox && (
+        <LightboxModal src={lightbox} alt={s ? s.commonName : 'Catch'} caption={s ? s.commonName : 'Catch'} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
