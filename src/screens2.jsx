@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -1610,6 +1611,9 @@ function timeOfDay(sunAlt, dateIso) {
 export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
   const [filters, setFilters] = useState({ speciesId: '', moon: '', tod: '' });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilterCount = Object.values(filters).filter(v => v).length;
+  const clearFilters = () => setFilters({ speciesId: '', moon: '', tod: '' });
   const items = (state.catchLog || []).slice().sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
 
   // Set of catch ids that are currently the active PB for some species
@@ -1667,36 +1671,74 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
         </Card>
       ) : (
         <>
-          {/* List / Map toggle */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-            <button onClick={() => setView('list')} style={{ padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'list' ? T.brass : T.parchmentDeep, color: view === 'list' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'list' ? T.brass : T.cardEdge}` }}>List</button>
-            <button onClick={() => setView('map')} style={{ padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'map' ? T.brass : T.parchmentDeep, color: view === 'map' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'map' ? T.brass : T.cardEdge}` }}>Map</button>
+          {/* List / Map toggle + Filter toggle */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <button onClick={() => setView('list')} style={{ flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'list' ? T.brass : T.parchmentDeep, color: view === 'list' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'list' ? T.brass : T.cardEdge}` }}>List</button>
+            <button onClick={() => setView('map')} style={{ flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'map' ? T.brass : T.parchmentDeep, color: view === 'map' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'map' ? T.brass : T.cardEdge}` }}>Map</button>
+            <button
+              onClick={() => setFiltersOpen(o => !o)}
+              aria-label={filtersOpen ? 'Hide filters' : 'Show filters'}
+              aria-expanded={filtersOpen}
+              style={{
+                padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                fontSize: 12, fontWeight: 700,
+                background: (filtersOpen || activeFilterCount > 0) ? T.brass : T.parchmentDeep,
+                color: (filtersOpen || activeFilterCount > 0) ? T.oceanDeep : T.inkSoft,
+                border: `1.5px solid ${(filtersOpen || activeFilterCount > 0) ? T.brass : T.cardEdge}`,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <SlidersHorizontal size={14} />
+              {activeFilterCount > 0 && (
+                <span style={{
+                  background: T.oceanDeep, color: T.brass,
+                  fontSize: 10, fontWeight: 800,
+                  minWidth: 16, height: 16, borderRadius: 8,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 4px',
+                }}>{activeFilterCount}</span>
+              )}
+            </button>
           </div>
 
-          {/* Filters */}
-          <div style={{ marginBottom: 10 }}>
-            <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
-              <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Species</span>
-              {chip('', 'speciesId', 'All')}
-              {speciesInLog.map(s => chip(s.id, 'speciesId', s.commonName))}
+          {/* Collapsible filters */}
+          {filtersOpen && (
+            <div style={{
+              background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+              borderRadius: 8, padding: 10, marginBottom: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <SectionLabel>Filters</SectionLabel>
+                {activeFilterCount > 0 && (
+                  <button onClick={clearFilters} style={{
+                    background: 'transparent', border: 'none', color: T.brass,
+                    fontSize: 11, fontWeight: 800, letterSpacing: 0.6, cursor: 'pointer', padding: 0,
+                  }}>Clear all</button>
+                )}
+              </div>
+              <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Species</span>
+                {chip('', 'speciesId', 'All')}
+                {speciesInLog.map(s => chip(s.id, 'speciesId', s.commonName))}
+              </div>
+              <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Moon</span>
+                {chip('', 'moon', 'Any')}
+                {chip('new', 'moon', 'New')}
+                {chip('waxing', 'moon', 'Waxing')}
+                {chip('full', 'moon', 'Full')}
+                {chip('waning', 'moon', 'Waning')}
+              </div>
+              <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
+                {chip('', 'tod', 'Any')}
+                {chip('dawn', 'tod', 'Dawn')}
+                {chip('day', 'tod', 'Day')}
+                {chip('dusk', 'tod', 'Dusk')}
+                {chip('night', 'tod', 'Night')}
+              </div>
             </div>
-            <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
-              <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Moon</span>
-              {chip('', 'moon', 'Any')}
-              {chip('new', 'moon', 'New')}
-              {chip('waxing', 'moon', 'Waxing')}
-              {chip('full', 'moon', 'Full')}
-              {chip('waning', 'moon', 'Waning')}
-            </div>
-            <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-              <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
-              {chip('', 'tod', 'Any')}
-              {chip('dawn', 'tod', 'Dawn')}
-              {chip('day', 'tod', 'Day')}
-              {chip('dusk', 'tod', 'Dusk')}
-              {chip('night', 'tod', 'Night')}
-            </div>
-          </div>
+          )}
 
           {view === 'list'
             ? <CatchListView items={filtered} onView={onView} pbCatchIds={pbCatchIds} />
