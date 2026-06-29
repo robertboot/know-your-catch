@@ -1431,6 +1431,92 @@ function compassDir(deg) {
   return dirs[Math.round(((deg % 360) / 22.5)) % 16];
 }
 
+/* ============================================================
+   LOCATION PICKER — map-based pin drop, dark theme, draggable.
+   ============================================================ */
+export function LocationPickerModal({ initialLat, initialLon, onSave, onClose }) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+  // Gulf of America centre by default, zoomed in if we already have coords.
+  const startLat = Number.isFinite(initialLat) ? initialLat : 27.0;
+  const startLon = Number.isFinite(initialLon) ? initialLon : -88.0;
+  const startZoom = Number.isFinite(initialLat) ? 11 : 6;
+  const [coords, setCoords] = useState({ lat: startLat, lon: startLon });
+  const [placed, setPlaced] = useState(Number.isFinite(initialLat));
+
+  useEffect(() => {
+    if (mapRef.current || !containerRef.current) return;
+    const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true })
+      .setView([startLat, startLon], startZoom);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      subdomains: 'abcd', maxZoom: 19,
+    }).addTo(map);
+
+    const setPin = (lat, lng) => {
+      if (!markerRef.current) {
+        markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+        markerRef.current.on('dragend', (e) => {
+          const ll = e.target.getLatLng();
+          setCoords({ lat: ll.lat, lon: ll.lng });
+        });
+      } else {
+        markerRef.current.setLatLng([lat, lng]);
+      }
+      setCoords({ lat, lon: lng });
+      setPlaced(true);
+    };
+
+    if (placed) setPin(startLat, startLon);
+    map.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
+
+    mapRef.current = map;
+    return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const save = () => onSave({ lat: coords.lat, lon: coords.lon });
+
+  return (
+    <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, zIndex: 1000, background: T.bgDeep, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 14px', background: T.oceanDeep, borderBottom: `1px solid ${T.cardEdge}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <H1 size={17} style={{ marginBottom: 2 }}>Pin catch location</H1>
+          <div style={{ fontSize: 11, color: T.inkSoft }}>
+            Tap the map to drop a pin, or drag an existing one. Pinch to zoom.
+          </div>
+        </div>
+        <button onClick={onClose} aria-label="Close" style={{
+          width: 36, height: 36, borderRadius: '50%', background: 'transparent',
+          border: `1px solid ${T.cardEdge}`, color: T.parchment, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}><X size={20} /></button>
+      </div>
+      {/* Map */}
+      <div ref={containerRef} style={{ flex: 1, background: '#061320' }} />
+      {/* Footer */}
+      <div style={{ padding: '12px 14px', background: T.oceanDeep, borderTop: `1px solid ${T.cardEdge}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 10, color: T.brass, fontWeight: 800, letterSpacing: 1.4 }}>COORDS</span>
+          {placed ? (
+            <span style={{ fontSize: 13, color: T.ink, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+              {coords.lat.toFixed(5)}°, {coords.lon.toFixed(5)}°
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, color: T.inkMute, fontStyle: 'italic' }}>Tap the map to place a pin</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <GhostButton onClick={onClose} style={{ flex: 1 }}>Cancel</GhostButton>
+          <PrimaryButton onClick={save} disabled={!placed} style={{ flex: 2 }}>Save pin</PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // EXIF dates come in three shapes:
 //  - a real Date (when exifr's reviveValues kicked in)
 //  - "YYYY:MM:DD HH:MM:SS" — the literal EXIF format, with colons in
@@ -1974,6 +2060,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [lonInput, setLonInput] = useState('');
   const [editingWhen, setEditingWhen] = useState(false);
   const [whenInput, setWhenInput] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Native iOS via Capacitor when wrapped; web geolocation otherwise.
   // Longer timeout handles offshore cold-start (no A-GPS assist).
@@ -2338,14 +2425,23 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           ) : loc.error ? (
             <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button> <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
           ) : (loc.lat == null || loc.lon == null) ? (
-            <span>Not set — <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button> or <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Use device GPS</button></span>
+            <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
+              <span style={{ color: T.inkMute }}>Not set —</span>
+              <button onClick={() => setPickerOpen(true)} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Pin on map</button>
+              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Use device GPS</button>
+              <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Enter manually</button>
+            </span>
           ) : (
             <span>
               {loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}°
               {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
               {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· manual</span>}
-              <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Edit</button>
-              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Device GPS</button>
+              {metaSource === 'pin' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· pinned</span>}
+              <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
+                <button onClick={() => setPickerOpen(true)} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Pin on map</button>
+                <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Edit</button>
+                <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Device GPS</button>
+              </div>
             </span>
           )
         } />
@@ -2363,6 +2459,19 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
         <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'Save catch'}</PrimaryButton>
       </div>
+
+      {pickerOpen && (
+        <LocationPickerModal
+          initialLat={loc.lat}
+          initialLon={loc.lon}
+          onClose={() => setPickerOpen(false)}
+          onSave={({ lat, lon }) => {
+            setLoc({ lat, lon, error: null, loading: false });
+            setMetaSource('pin');
+            setPickerOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
