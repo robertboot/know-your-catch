@@ -394,6 +394,65 @@ export function ShareReportModal({
 }
 
 /* ============================================================
+   LIGHTBOX — tap a species photo to enlarge full-screen
+   ============================================================ */
+export function LightboxModal({ src, alt, caption, killWhite = false, onClose }) {
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  if (!src) return null;
+  return (
+    <div
+      onClick={onClose}
+      className="kyc-lightbox-enter"
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt || 'Enlarged photo'}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(3, 27, 51, 0.95)',
+        zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20, cursor: 'zoom-out',
+      }}
+    >
+      <img
+        src={src}
+        alt={alt || ''}
+        className={killWhite ? 'kyc-kill-white' : undefined}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '100%', maxHeight: caption ? '82vh' : '90vh',
+          objectFit: 'contain', display: 'block',
+          borderRadius: 8,
+        }}
+      />
+      {caption && (
+        <div style={{
+          position: 'absolute', bottom: 20, left: 20, right: 20,
+          textAlign: 'center', color: T.parchment,
+          fontSize: 12, lineHeight: 1.4, fontStyle: 'italic',
+          textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+        }}>{caption}</div>
+      )}
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        style={{
+          position: 'absolute', top: 16, right: 16,
+          width: 40, height: 40, borderRadius: '50%',
+          background: 'rgba(3, 27, 51, 0.7)', border: `1px solid ${T.cardEdge}`,
+          color: T.parchment, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <X size={22} />
+      </button>
+    </div>
+  );
+}
+
+/* ============================================================
    ACCOUNT SETUP — name + email collected during onboarding
    ============================================================ */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

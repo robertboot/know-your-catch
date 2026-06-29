@@ -16,6 +16,24 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      SVG colour-matrix filter that knocks near-white pixels out of NOAA
+      species photos so they sit cleanly on the dark marine cards. White
+      (1,1,1) -> alpha -1 (clamped to 0); anything coloured stays opaque
+      (alpha clamps to 1). Works across CORS since SVG filters run in the
+      GPU pipeline without needing to read the pixel data.
+    -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+      <defs>
+        <filter id="kyc-kill-white" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            -3 -3 -3 0 8" />
+        </filter>
+      </defs>
+    </svg>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

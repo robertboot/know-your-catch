@@ -29,7 +29,7 @@ function CoordsLink({ lat, lon }) {
 }
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
-  DetailRow, Field, PickButton, SpeciesRow, StarButton, ShareReportModal,
+  DetailRow, Field, PickButton, SpeciesRow, StarButton, ShareReportModal, LightboxModal,
   inputStyle,
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
@@ -45,6 +45,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
   const s = speciesById(id);
   const [showNoteEdit, setShowNoteEdit] = useState(false);
   const [noteDraft, setNoteDraft] = useState(state.notes[id] || '');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   if (!s) return <div style={{ padding: 20 }}>Species not found.</div>;
   const photo = speciesPhoto(s.id);
   const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
@@ -76,14 +77,28 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
         </button>
         {photo ? (
           <>
-            <div style={{
-              width: '100%', maxWidth: 360, height: 220, margin: '0 auto',
-              background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
-              borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              overflow: 'hidden',
-            }}>
+            <div
+              onClick={() => setLightboxOpen(true)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Enlarge ${s.commonName} photo`}
+              className="kyc-tappable"
+              style={{
+                width: '100%', maxWidth: 360, height: 220, margin: '0 auto',
+                background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+                borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', position: 'relative',
+              }}
+            >
               <img src={photo.url} alt={s.commonName} loading="lazy"
+                className="kyc-kill-white"
                 style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+              <div aria-hidden style={{
+                position: 'absolute', bottom: 6, right: 8,
+                background: 'rgba(3, 27, 51, 0.7)', color: T.brass,
+                fontSize: 10, fontWeight: 800, letterSpacing: 0.6,
+                padding: '3px 7px', borderRadius: 4,
+              }}>TAP TO ENLARGE</div>
             </div>
             {photo.credit && <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
           </>
@@ -322,6 +337,16 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
           <span>{reg.verified ? 'Verified' : 'Seed'} {reg.lastUpdated}</span>
         </div>
       </div>
+
+      {lightboxOpen && photo && (
+        <LightboxModal
+          src={photo.url}
+          alt={s.commonName}
+          caption={photo.credit ? `${s.commonName} · ${photo.credit} · ${photo.license}` : s.commonName}
+          killWhite
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </>
   );
 }
