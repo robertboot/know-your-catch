@@ -1604,28 +1604,59 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
 }
 
 function CatchListView({ items, onView }) {
+  const [lightbox, setLightbox] = useState(null); // { src, caption } or null
   if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
+  // Stop the row-level onClick (which navigates to the catch detail)
+  // when the angler taps an individual photo thumbnail to enlarge it.
+  const stop = (e) => { e.stopPropagation(); };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.map(c => {
         const s = speciesById(c.speciesId);
         const when = new Date(c.dateIso);
         const cPhotos = catchPhotos(c);
-        const thumb = cPhotos[0];
+        const speciesName = s ? s.commonName : (c.speciesId || 'Unknown');
         return (
-          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ display: 'flex', gap: 12, alignItems: 'stretch', padding: 10 }}>
-            {thumb
-              ? <div style={{ position: 'relative', width: 84, height: 84, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                  <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  {cPhotos.length > 1 && (
-                    <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(3, 27, 51, 0.85)', color: T.parchment, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>
-                      +{cPhotos.length - 1}
-                    </span>
-                  )}
-                </div>
-              : <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={26} color={T.inkMute} /></div>}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{s ? s.commonName : (c.speciesId || 'Unknown')}</div>
+          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Photo strip — full width, horizontal scroll for multi-photo
+                catches, single thumb for one, camera placeholder for zero. */}
+            {cPhotos.length === 0 ? (
+              <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' }}>
+                <Camera size={26} color={T.inkMute} />
+              </div>
+            ) : (
+              <div
+                className="kyc-hscroll"
+                onClick={stop}
+                style={{
+                  display: 'flex', gap: 6,
+                  overflowX: 'auto', overflowY: 'hidden',
+                  margin: '0 -10px', padding: '0 10px 4px',
+                  scrollSnapType: 'x proximity',
+                }}
+              >
+                {cPhotos.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => { e.stopPropagation(); setLightbox({ src: p, caption: `${speciesName} · photo ${i + 1} of ${cPhotos.length}` }); }}
+                    aria-label={`Enlarge ${speciesName} photo ${i + 1}`}
+                    className="kyc-tappable"
+                    style={{
+                      flex: '0 0 96px', width: 96, height: 96,
+                      padding: 0, border: `1px solid ${T.cardEdge}`, borderRadius: 6,
+                      background: T.parchmentDeep, overflow: 'hidden', cursor: 'zoom-in',
+                      scrollSnapAlign: 'start',
+                    }}
+                  >
+                    <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Content row */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{speciesName}</div>
               <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>{when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
               {c.lat != null && c.lon != null && <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°</div>}
               <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
@@ -1644,6 +1675,14 @@ function CatchListView({ items, onView }) {
           </Card>
         );
       })}
+      {lightbox && (
+        <LightboxModal
+          src={lightbox.src}
+          alt={lightbox.caption}
+          caption={lightbox.caption}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
