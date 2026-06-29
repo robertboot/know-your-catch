@@ -87,6 +87,37 @@ export function clearState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
 }
 
+/* Walks the full state and re-downscales every photo (catch log +
+   PBs, including the legacy `photo` mirror). Idempotent — a photo
+   already within the target dimensions is left alone. Used on boot
+   to recover state that was saved before downscaling shipped, so
+   future writes don't bump the localStorage cap. */
+export async function compactStatePhotos(state, maxDim = 1600, quality = 0.82) {
+  const compact = (url) => downscaleImageDataUrl(url, maxDim, quality);
+  const next = { ...state };
+  if (Array.isArray(state.catchLog)) {
+    next.catchLog = await Promise.all(state.catchLog.map(async (c) => {
+      const out = { ...c };
+      if (Array.isArray(c.photos)) out.photos = await Promise.all(c.photos.map(compact));
+      if (c.photo) out.photo = await compact(c.photo);
+      // Keep the legacy mirror in sync with the first slot.
+      if (Array.isArray(out.photos) && out.photos.length > 0) out.photo = out.photos[0];
+      return out;
+    }));
+  }
+  if (state.pbs && typeof state.pbs === 'object') {
+    const entries = await Promise.all(Object.entries(state.pbs).map(async ([id, pb]) => {
+      const out = { ...pb };
+      if (Array.isArray(pb.photos)) out.photos = await Promise.all(pb.photos.map(compact));
+      if (pb.photo) out.photo = await compact(pb.photo);
+      if (Array.isArray(out.photos) && out.photos.length > 0) out.photo = out.photos[0];
+      return [id, out];
+    }));
+    next.pbs = Object.fromEntries(entries);
+  }
+  return next;
+}
+
 /* Downscale an image File or data URL to a max longest-side dimension
    and re-encode as JPEG. Returns a data URL ready to persist.
    Default 1600px / 0.82 quality lands an iPhone photo at ~200-400KB

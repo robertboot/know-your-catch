@@ -9,7 +9,7 @@ import {
   JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
-import { defaultState, saveState, downscaleImageDataUrl } from './storage.js';
+import { defaultState, saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
@@ -1328,6 +1328,33 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
    ============================================================ */
 export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
   const setUnits = (u) => update({ units: u });
+  // Storage diagnostic — useful when the angler reports "edits aren't
+  // saving". Re-reads on every interaction so the meter stays current.
+  const [storage, setStorage] = useState({ bytes: storageBytes(), wrote: null, error: null });
+  const refreshStorage = () => setStorage(s => ({ ...s, bytes: storageBytes() }));
+  const testSave = () => {
+    const res = saveState(state);
+    setStorage({ bytes: storageBytes(), wrote: res.ok ? Date.now() : null, error: res.ok ? null : res.code });
+  };
+  const [compacting, setCompacting] = useState(false);
+  const runCompact = async () => {
+    setCompacting(true);
+    try {
+      const before = storageBytes();
+      const compacted = await compactStatePhotos(state);
+      const res = saveState(compacted);
+      if (res.ok) {
+        update({ ...compacted }); // refresh React state with shrunk photos
+        setStorage({ bytes: storageBytes(), wrote: Date.now(), error: null });
+        window.alert(`Compacted. ${(before / 1024).toFixed(0)} KB → ${(storageBytes() / 1024).toFixed(0)} KB.`);
+      } else {
+        setStorage(s => ({ ...s, error: res.code }));
+        window.alert("Couldn't save the compacted state. Try deleting some catches first.");
+      }
+    } finally {
+      setCompacting(false);
+    }
+  };
   const clearAll = () => {
     if (window.confirm('Clear all PBs, notes, and settings? This cannot be undone.')) {
       saveState(defaultState);
@@ -1449,6 +1476,50 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
         </div>
         <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
           Backup is a single JSON file with catches (photos included), personal bests, notes, and settings. Save it to Files / iCloud Drive so you don't lose your log if you reset the app or change phones.
+        </div>
+      </Card>
+
+      {/* Storage diagnostic — surfaces what's actually on disk + a
+          manual compact when in-browser localStorage is near full. */}
+      <Card style={{ marginBottom: 10 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Storage</SectionLabel>
+        {(() => {
+          const kb = storage.bytes / 1024;
+          const cap = 5 * 1024; // Safari iOS localStorage cap ≈ 5MB
+          const pct = Math.min(100, (kb / cap) * 100);
+          const barColor = pct > 90 ? T.closed : pct > 70 ? T.warn : T.open;
+          return (
+            <>
+              <div style={{ fontSize: 13, color: T.ink, fontWeight: 700 }}>
+                {kb < 1024 ? `${kb.toFixed(0)} KB` : `${(kb / 1024).toFixed(2)} MB`} used
+                <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 500, marginLeft: 6 }}>
+                  of ~{(cap / 1024).toFixed(0)} MB browser cap
+                </span>
+              </div>
+              <div style={{ height: 6, background: T.parchmentDeep, borderRadius: 4, marginTop: 6, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: barColor }} />
+              </div>
+              {storage.wrote && (
+                <div style={{ fontSize: 11, color: T.open, marginTop: 6 }}>
+                  Last test write succeeded {new Date(storage.wrote).toLocaleTimeString()}.
+                </div>
+              )}
+              {storage.error && (
+                <div style={{ fontSize: 11, color: T.closed, marginTop: 6 }}>
+                  Test write failed ({storage.error}). Compact or delete some catches.
+                </div>
+              )}
+            </>
+          );
+        })()}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <GhostButton onClick={testSave} style={{ flex: 1, fontSize: 12, padding: '8px' }}>Test save</GhostButton>
+          <GhostButton onClick={runCompact} disabled={compacting} style={{ flex: 2, fontSize: 12, padding: '8px' }}>
+            {compacting ? 'Compacting…' : 'Compact photos'}
+          </GhostButton>
+        </div>
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
+          Compact re-downscales every photo on file to ~1600px at 0.82 JPEG quality. Idempotent — no-op for photos already at that size. The native iOS build will move photos to filesystem storage and remove this constraint entirely.
         </div>
       </Card>
       <Card style={{ marginBottom: 10 }}>

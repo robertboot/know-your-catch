@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { T } from './theme.js';
 import { DISCLAIMER_VERSION } from './data.js';
-import { loadState, saveState, defaultState } from './storage.js';
+import { loadState, saveState, defaultState, compactStatePhotos } from './storage.js';
 import { refreshFeeds } from './regsync.js';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
@@ -47,6 +47,21 @@ export default function App() {
     else if (!s.jurisdiction) setShowJur(true);
     else if (!s.onboardingAccountComplete) setShowAccount(true);
     else if (!s.onboardingFavoritesComplete) setShowFavorites(true);
+
+    // Background: recompact any oversized photos that were saved
+    // before downscaling shipped. Idempotent — a no-op if everything
+    // is already at <=1600px. Only swaps in the compacted version
+    // when the angler hasn't already edited state.
+    const initialJson = JSON.stringify(s);
+    compactStatePhotos(s).then((compacted) => {
+      const compactedJson = JSON.stringify(compacted);
+      if (compactedJson === initialJson) return; // nothing to do
+      setState(prev => {
+        if (JSON.stringify(prev) !== initialJson) return prev; // user changed something — back off
+        saveState(compacted);
+        return compacted;
+      });
+    }).catch(() => {});
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
     refreshFeeds().catch(() => {});
