@@ -1148,13 +1148,20 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
   const canSave = (lenNum > 0 || wtNum > 0);
 
   const handleAddPhoto = (e) => {
-    const f = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = ''; // allow re-selecting the same file
-    if (!f || photos.length >= 3) return;
-    // 1) Add the photo to the slot
-    const r = new FileReader();
-    r.onload = () => setPhotos(p => [...p, r.result].slice(0, 3));
-    r.readAsDataURL(f);
+    if (files.length === 0 || photos.length >= 3) return;
+    const slotsLeft = 3 - photos.length;
+    const batch = files.slice(0, slotsLeft);
+    // 1) Read each file into the slots in order
+    Promise.all(batch.map(f => new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(f);
+    }))).then((dataUrls) => {
+      setPhotos(p => [...p, ...dataUrls].slice(0, 3));
+    });
+    const f = batch[0];
     // 2) Try to pull GPS from EXIF. Auto-fill only if we don't already
     //    have coords (don't clobber a manual entry).
     if (lat == null || lon == null) {
@@ -1306,7 +1313,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
             );
           })}
         </div>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleAddPhoto} style={{ display: 'none' }} />
+        <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleAddPhoto} style={{ display: 'none' }} />
       </Card>
 
       <PrimaryButton onClick={save} disabled={!canSave}>
@@ -2174,17 +2181,26 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   };
 
   const handleUploadPick = (e) => {
-    const f = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!f || photos.length >= 3) return;
-    const isFirst = photos.length === 0;
-    const r = new FileReader();
-    r.onload = () => {
-      setPhotos(p => [...p, r.result].slice(0, 3));
+    if (files.length === 0 || photos.length >= 3) return;
+    const slotsLeft = 3 - photos.length;
+    const batch = files.slice(0, slotsLeft);
+    // Was the catch empty before this batch? If so, the first file in
+    // the batch becomes Photo 1 and drives the location + time.
+    const wasEmpty = photos.length === 0;
+    // Read each file as a data URL in parallel, preserving the order
+    // the angler picked them in.
+    Promise.all(batch.map(f => new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(f);
+    }))).then((dataUrls) => {
+      setPhotos(p => [...p, ...dataUrls].slice(0, 3));
       setPhotoSource('upload');
-    };
-    r.readAsDataURL(f);
-    if (!isFirst) return; // additional shots — don't touch location/time
+    });
+    if (!wasEmpty) return; // additional shots — don't touch location/time
+    const f = batch[0];
     // Force the parser to include GPS + the main EXIF date tags and to
     // translate them. Some photos return DateTimeOriginal as a string
     // like "2024:03:15 12:30:45" (EXIF uses colons in the date part,
@@ -2376,16 +2392,26 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             }
             const isNext = i === photos.length;
             return (
-              <div key={i} aria-label={isNext ? 'Add photo' : 'Empty photo slot'} style={{
-                aspectRatio: '1 / 1', borderRadius: 8,
-                border: `1.5px dashed ${isNext ? T.brass : T.cardEdge}`,
-                background: 'transparent',
-                color: isNext ? T.brass : T.inkMute,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                opacity: isNext ? 1 : 0.5,
-              }}>
-                <Camera size={20} />
-              </div>
+              <button
+                key={i}
+                type="button"
+                onClick={isNext ? () => uploadRef.current?.click() : undefined}
+                disabled={!isNext}
+                aria-label={isNext ? 'Add photo' : 'Empty photo slot'}
+                style={{
+                  aspectRatio: '1 / 1', borderRadius: 8,
+                  border: `1.5px dashed ${isNext ? T.brass : T.cardEdge}`,
+                  background: 'transparent',
+                  color: isNext ? T.brass : T.inkMute,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  opacity: isNext ? 1 : 0.5,
+                  cursor: isNext ? 'pointer' : 'default',
+                  padding: 0, gap: 4,
+                }}
+              >
+                <Camera size={22} />
+                {isNext && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>ADD</span>}
+              </button>
             );
           })}
         </div>
@@ -2423,7 +2449,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                 : 'Take a photo to use your current location, or upload an existing photo to use the location from the file.'}
         </div>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
-        <input ref={uploadRef} type="file" accept="image/*" onChange={handleUploadPick} style={{ display: 'none' }} />
+        <input ref={uploadRef} type="file" accept="image/*" multiple onChange={handleUploadPick} style={{ display: 'none' }} />
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
