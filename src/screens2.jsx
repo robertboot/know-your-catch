@@ -1341,15 +1341,31 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
     setCompacting(true);
     try {
       const before = storageBytes();
-      const compacted = await compactStatePhotos(state);
-      const res = saveState(compacted);
+      // First pass: standard 1600px / 0.82. If localStorage still
+      // rejects the write afterwards, retry with an aggressive
+      // 1000px / 0.7 pass which roughly halves the per-photo bytes.
+      let compacted = await compactStatePhotos(state);
+      let res = saveState(compacted);
+      let tier = 'standard';
+      if (!res.ok && res.code === 'quota') {
+        tier = 'aggressive';
+        compacted = await compactStatePhotos(state, 1000, 0.7);
+        res = saveState(compacted);
+      }
       if (res.ok) {
-        update({ ...compacted }); // refresh React state with shrunk photos
+        update({ ...compacted });
         setStorage({ bytes: storageBytes(), wrote: Date.now(), error: null });
-        window.alert(`Compacted. ${(before / 1024).toFixed(0)} KB → ${(storageBytes() / 1024).toFixed(0)} KB.`);
+        const after = storageBytes();
+        window.alert(
+          `Compacted (${tier}).\n` +
+          `${(before * 2 / 1024).toFixed(0)} KB → ${(after * 2 / 1024).toFixed(0)} KB on disk.`
+        );
       } else {
         setStorage(s => ({ ...s, error: res.code }));
-        window.alert("Couldn't save the compacted state. Try deleting some catches first.");
+        window.alert(
+          "Even the aggressive compact couldn't fit in localStorage. " +
+          "Delete some catches to free space — or export a backup first if you want to keep them."
+        );
       }
     } finally {
       setCompacting(false);
@@ -1484,17 +1500,20 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Storage</SectionLabel>
         {(() => {
-          const kb = storage.bytes / 1024;
-          const cap = 5 * 1024; // Safari iOS localStorage cap ≈ 5MB
-          const pct = Math.min(100, (kb / cap) * 100);
+          // Safari stores localStorage internally as UTF-16, so each
+          // character takes ~2 bytes. The 5MB advertised cap is the
+          // on-disk byte count, not the string length.
+          const onDiskKb = (storage.bytes * 2) / 1024;
+          const cap = 5 * 1024;
+          const pct = Math.min(100, (onDiskKb / cap) * 100);
           const barColor = pct > 90 ? T.closed : pct > 70 ? T.warn : T.open;
           const stats = photoStats(state);
-          const photoKb = stats.bytes / 1024;
+          const photoKb = (stats.bytes * 2) / 1024;
           const avgKb = stats.count > 0 ? photoKb / stats.count : 0;
           return (
             <>
               <div style={{ fontSize: 13, color: T.ink, fontWeight: 700 }}>
-                {kb < 1024 ? `${kb.toFixed(0)} KB` : `${(kb / 1024).toFixed(2)} MB`} used
+                {onDiskKb < 1024 ? `${onDiskKb.toFixed(0)} KB` : `${(onDiskKb / 1024).toFixed(2)} MB`} used
                 <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 500, marginLeft: 6 }}>
                   of ~{(cap / 1024).toFixed(0)} MB browser cap
                 </span>
