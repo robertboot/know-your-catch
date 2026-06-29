@@ -11,7 +11,8 @@
     "validate-feeds": "node regulations/validate.mjs",
     "validate-photos": "node photos/validate.mjs",
     "ios:init": "cap add ios && npm run ios:sync",
-    "ios:sync": "npm run build && cap sync ios",
+    "ios:build": "KYC_BASE=./ vite build",
+    "ios:sync": "npm run ios:build && cap sync ios",
     "ios:assets": "capacitor-assets generate --ios",
     "ios:open": "cap open ios"
   },

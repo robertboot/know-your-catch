@@ -40,7 +40,8 @@ Once enrolled:
 
 ```bash
 npm install
-npm run ios:init        # cap add ios + cap sync
+npm run ios:init        # cap add ios + cap sync (uses KYC_BASE=./ so
+                        #   assets resolve inside the WKWebView)
 npm run ios:assets      # generates every iOS icon + splash size
                         # from resources/icon.png + splash.png
 npm run ios:open        # opens Xcode
@@ -48,6 +49,14 @@ npm run ios:open        # opens Xcode
 
 `npm run ios:init` creates `ios/App/App.xcworkspace`. Open that — **not**
 the `.xcodeproj`.
+
+**Heads-up on the base path:** `npm run build` produces a bundle with
+`base: /know-your-catch/` (for the raw.githack stable URL). The iOS
+WebView serves from `capacitor://localhost/`, so we need relative
+paths. `npm run ios:build` (called by `ios:sync` and `ios:init`) sets
+`KYC_BASE=./` to bake relative asset URLs into `dist/index.html`. Use
+those scripts — never `cap sync ios` directly after a plain
+`npm run build`, or the iOS bundle will 404 on every asset.
 
 ---
 
@@ -69,82 +78,31 @@ works (Cmd-R).
 
 ## 4. Info.plist privacy strings (**macOS** — `ios/App/App/Info.plist`)
 
-iOS rejects the build if any feature is exercised without its usage
-string. ReelIntel uses Camera, Photo Library, and Location, so all
-three are required:
+Pre-staged in `ios-templates/Info.plist.fragment.xml`. Open that file
+and paste every `<key>…</key><…/…>` block into `ios/App/App/Info.plist`
+between the top-level `<dict>…</dict>`.
 
-```xml
-<key>NSCameraUsageDescription</key>
-<string>ReelIntel uses the camera so you can photograph your catch.</string>
-
-<key>NSPhotoLibraryUsageDescription</key>
-<string>ReelIntel reads photos you select to log a catch and pull
-location and time from the photo's metadata.</string>
-
-<key>NSPhotoLibraryAddUsageDescription</key>
-<string>ReelIntel can save shared catch report images to your Photos.</string>
-
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>ReelIntel uses your location to record where each catch was
-made and to pull regional regulations.</string>
-```
-
-Add a `UISupportedInterfaceOrientations` entry restricted to portrait
-since the UI is portrait-only:
-
-```xml
-<key>UISupportedInterfaceOrientations</key>
-<array>
-  <string>UIInterfaceOrientationPortrait</string>
-</array>
-```
+Contains the four required `NS*UsageDescription` strings (Camera, Photo
+Library read, Photo Library add, Location When In Use) plus a
+portrait-only `UISupportedInterfaceOrientations` array. iOS rejects the
+upload if any feature is exercised without its usage string.
 
 ---
 
 ## 5. Apple privacy manifest
 
 iOS 17+ apps that use certain APIs must ship a
-`PrivacyInfo.xcprivacy` file. Create
-`ios/App/App/PrivacyInfo.xcprivacy` with:
+`PrivacyInfo.xcprivacy` file. Pre-staged in
+`ios-templates/PrivacyInfo.xcprivacy`.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>NSPrivacyTracking</key>
-  <false/>
-  <key>NSPrivacyCollectedDataTypes</key>
-  <array/>
-  <key>NSPrivacyTrackingDomains</key>
-  <array/>
-  <key>NSPrivacyAccessedAPITypes</key>
-  <array>
-    <dict>
-      <key>NSPrivacyAccessedAPIType</key>
-      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
-      <key>NSPrivacyAccessedAPITypeReasons</key>
-      <array><string>CA92.1</string></array>
-    </dict>
-    <dict>
-      <key>NSPrivacyAccessedAPIType</key>
-      <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
-      <key>NSPrivacyAccessedAPITypeReasons</key>
-      <array><string>C617.1</string></array>
-    </dict>
-    <dict>
-      <key>NSPrivacyAccessedAPIType</key>
-      <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
-      <key>NSPrivacyAccessedAPITypeReasons</key>
-      <array><string>35F9.1</string></array>
-    </dict>
-  </array>
-</dict>
-</plist>
+```bash
+cp ios-templates/PrivacyInfo.xcprivacy ios/App/App/PrivacyInfo.xcprivacy
 ```
 
-In Xcode, drag the file into the **App** group so it's added to the
-app target.
+Then in Xcode, drag the file into the **App** group so it's added to
+the app target. Declares the three categories Capacitor's WKWebView
+exercises (UserDefaults, FileTimestamp, SystemBootTime) with their
+documented reasons — no third-party tracking, no data collection.
 
 ---
 
@@ -186,28 +144,26 @@ in 5–30 minutes after Apple's processing.
 
 ## 8. App Store Connect — TestFlight metadata
 
-Under **TestFlight** → **Test Information**:
+All ready-to-paste copy lives in **`ios-templates/test-notes.md`** —
+beta description, "What to Test" for build 1, reviewer notes, feedback
+email, and known-gap callouts. Open that file alongside the App Store
+Connect tab and paste straight in.
 
-- **Beta App Description**:
-  > ReelIntel helps Gulf-of-America anglers identify their catch, check
-  > current regulations, log catches with photo/GPS/conditions, and
-  > track their personal bests. This beta is gathering feedback on the
-  > identification flow, regulation alerts, and catch logging UX.
-- **Feedback Email**: your address.
-- **Marketing URL** (optional): your landing page or repo.
-- **Privacy Policy URL** (required for external testers): you'll need
-  to host a privacy policy. Internal testers don't require one.
-- **What to Test** (per build): e.g. *"Try logging a catch from both
-  camera and photo library. Confirm location and time pull from the
-  uploaded photo's EXIF where available. Browse Regulation Alerts to
-  see your starred fish surface at the top."*
+Under **TestFlight → Test Information** the fields you'll fill in:
+
+- **Beta App Description** — paste from `test-notes.md`.
+- **Feedback Email** — `Robertb1023@me.com`.
+- **Marketing URL** (optional) — your landing page or repo URL.
+- **Privacy Policy URL** (required for *external* testers, optional
+  for internal) — host the policy somewhere (GitHub Pages, your
+  landing page) and link it.
 
 Under **Test Information → Beta App Review** (only for external
 testing groups beyond your team):
 - **Sign-in required**: No.
 - **Contact**: name, email, phone.
-- **Notes**: anything Apple's reviewer needs to know (e.g. "Cloud sync
-  is currently no-op; offline-first only").
+- **Notes**: paste the "Beta App Review notes" block from
+  `test-notes.md`.
 
 ---
 
@@ -231,14 +187,18 @@ testing groups beyond your team):
 - [ ] Repo at `1.0.0-beta.1` (this branch)
 - [ ] `npm install` ran on macOS without errors
 - [ ] `npm run ios:init` created `ios/App/App.xcworkspace`
+- [ ] `dist/index.html` references `./assets/...` (relative — confirms
+      `ios:build` used `KYC_BASE=./`)
 - [ ] `npm run ios:assets` populated `ios/App/App/Assets.xcassets/AppIcon.appiconset`
-- [ ] `Info.plist` has all four usage description strings
-- [ ] `PrivacyInfo.xcprivacy` added to the app target
+- [ ] `Info.plist` has all four usage description strings (from
+      `ios-templates/Info.plist.fragment.xml`)
+- [ ] `PrivacyInfo.xcprivacy` copied from `ios-templates/` into
+      `ios/App/App/` and added to the app target
 - [ ] Xcode "Automatically manage signing" green
 - [ ] Build runs on a real iPhone (Lightning/USB-C-attached) before archive
 - [ ] Archive uploaded to App Store Connect
 - [ ] Internal testers added
-- [ ] What-to-Test note filled in
+- [ ] What-to-Test note filled in (from `ios-templates/test-notes.md`)
 
 ---
 
