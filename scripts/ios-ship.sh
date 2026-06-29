@@ -10,14 +10,20 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKSPACE="ios/App/App.xcworkspace"
 SCHEME="App"
 ARCHIVE="$ROOT/build/App.xcarchive"
 EXPORT_DIR="$ROOT/build/export"
 EXPORT_OPTS="$ROOT/scripts/ExportOptions.plist"
 
-if [ ! -d "$WORKSPACE" ]; then
-  echo "ERROR: $WORKSPACE not found. Run 'npm run ios:init' first." >&2
+# Capacitor 8 with Swift Package Manager only generates an .xcodeproj
+# (no .xcworkspace). Older Cocoapods-era projects have the workspace.
+# Pick whichever exists.
+if [ -e "ios/App/App.xcworkspace" ]; then
+  XCODE_TARGET=(-workspace "ios/App/App.xcworkspace")
+elif [ -e "ios/App/App.xcodeproj" ]; then
+  XCODE_TARGET=(-project "ios/App/App.xcodeproj")
+else
+  echo "ERROR: no Xcode project under ios/App/. Run 'npm run ios:init' first." >&2
   exit 1
 fi
 
@@ -47,15 +53,7 @@ mkdir -p build
 
 echo "→ Archiving (this takes 2-4 min)"
 xcodebuild \
-  -workspace "$WORKSPACE" \
-  -scheme "$SCHEME" \
-  -configuration Release \
-  -destination 'generic/platform=iOS' \
-  -archivePath "$ARCHIVE" \
-  -allowProvisioningUpdates \
-  archive \
-  | xcpretty 2>/dev/null || xcodebuild \
-  -workspace "$WORKSPACE" \
+  "${XCODE_TARGET[@]}" \
   -scheme "$SCHEME" \
   -configuration Release \
   -destination 'generic/platform=iOS' \
