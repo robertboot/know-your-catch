@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#031B33" />
+    <meta name="description" content="ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America." />
+    <title>ReelIntel</title>
+    <link rel="icon" type="image/png" href="./brand/reelintel-icon.png" />
+    <link rel="apple-touch-icon" href="./brand/reelintel-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ReelIntel" />
+    <script type="module" crossorigin src="./assets/index-hLqmq0U2.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-9-SeWBAw.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <!--
+      SVG colour-matrix filter that knocks near-white pixels out of NOAA
+      species photos so they sit cleanly on the dark marine cards. White
+      (1,1,1) -> alpha -1 (clamped to 0); anything coloured stays opaque
+      (alpha clamps to 1). Works across CORS since SVG filters run in the
+      GPU pipeline without needing to read the pixel data.
+    -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+      <defs>
+        <filter id="kyc-kill-white" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            -3 -3 -3 0 8" />
+        </filter>
+      </defs>
+    </svg>
+  </body>
+</html>
