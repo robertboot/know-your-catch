@@ -51,8 +51,11 @@ upsert_string "NSLocationWhenInUseUsageDescription" \
 
 upsert_json "UISupportedInterfaceOrientations" \
   '["UIInterfaceOrientationPortrait"]'
+# Apple requires ALL FOUR orientations in UISupportedInterfaceOrientations~ipad
+# for iPad multitasking, even if the app is designed phone-first. iPhone
+# remains portrait-only above; iPad rotates because Apple says so.
 upsert_json "UISupportedInterfaceOrientations~ipad" \
-  '["UIInterfaceOrientationPortrait","UIInterfaceOrientationPortraitUpsideDown"]'
+  '["UIInterfaceOrientationPortrait","UIInterfaceOrientationPortraitUpsideDown","UIInterfaceOrientationLandscapeLeft","UIInterfaceOrientationLandscapeRight"]'
 
 echo "→ Copying PrivacyInfo.xcprivacy"
 cp "$PRIVACY_SRC" "$PRIVACY_DEST"
