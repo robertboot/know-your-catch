@@ -1,5 +1,7 @@
 node_modules
-dist
+# dist is intentionally tracked while we're in TestFlight prep so the
+# stable raw.githack branch URL always serves the latest build. Drop
+# this comment + re-add `dist` below before tagging a release.
 .DS_Store
 *.log
 .env
