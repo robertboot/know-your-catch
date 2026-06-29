@@ -15,6 +15,12 @@ ARCHIVE="$ROOT/build/App.xcarchive"
 EXPORT_DIR="$ROOT/build/export"
 EXPORT_OPTS="$ROOT/scripts/ExportOptions.plist"
 
+# Apple Developer Team ID for code signing. Env var wins so a second
+# developer on the project can override without touching the file.
+# (Team IDs aren't secrets — they're embedded in every signed binary
+# and visible to anyone with the IPA.)
+DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-74KJ5HVF4F}"
+
 # Capacitor 8 with Swift Package Manager only generates an .xcodeproj
 # (no .xcworkspace). Older Cocoapods-era projects have the workspace.
 # Pick whichever exists.
@@ -59,6 +65,8 @@ xcodebuild \
   -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" \
   -allowProvisioningUpdates \
+  DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+  CODE_SIGN_STYLE=Automatic \
   archive
 
 echo "→ Uploading to App Store Connect"
