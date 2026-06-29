@@ -40,6 +40,12 @@ upsert_json() {
 }
 
 echo "→ Patching Info.plist"
+# Declare export-compliance exemption upfront so App Store Connect
+# doesn't prompt on every upload. ReelIntel uses only iOS's built-in
+# HTTPS stack (URLSession via WKWebView) — no custom crypto, no
+# bundled OpenSSL — which qualifies as exempt under US export rules.
+upsert_json "ITSAppUsesNonExemptEncryption" "false"
+
 upsert_string "NSCameraUsageDescription" \
   "ReelIntel uses the camera so you can photograph your catch."
 upsert_string "NSPhotoLibraryUsageDescription" \

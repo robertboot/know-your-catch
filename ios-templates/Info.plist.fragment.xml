@@ -12,6 +12,9 @@
   reviewer-bait stretched layout.
 -->
 
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+
 <key>NSCameraUsageDescription</key>
 <string>ReelIntel uses the camera so you can photograph your catch.</string>
 
