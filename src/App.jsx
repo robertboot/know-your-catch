@@ -58,14 +58,22 @@ export default function App() {
     return () => clearTimeout(t);
   }, []);
 
-  // update() merges patch into state and persists.
+  const [saveError, setSaveError] = useState(null); // 'quota' | 'other' | null
+
+  // update() merges patch into state and persists. If localStorage
+  // refuses the write (quota or otherwise) we surface a banner so the
+  // angler knows their latest catch / PB / photo didn't actually
+  // persist — silent swallow was the old behaviour and it cost data.
   const update = useCallback((patch) => {
     setState(prev => {
       const next = { ...prev, ...patch };
-      saveState(next);
+      const res = saveState(next);
+      if (!res.ok) setSaveError(res.code);
+      else if (saveError) setSaveError(null);
       return next;
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveError]);
 
   const screen = stack[stack.length - 1];
   const push  = (s)    => setStack(st => [...st, s]);
@@ -288,6 +296,28 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div role="alert" style={{
+          position: 'sticky', top: 0, zIndex: 60,
+          background: '#3A0F12', borderBottom: `1px solid ${T.closed}`,
+          color: T.parchment, padding: '10px 14px',
+          fontSize: 12, lineHeight: 1.45,
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <div style={{ flex: 1 }}>
+            <strong style={{ color: T.closed }}>
+              {saveError === 'quota' ? "Storage is full." : "Couldn't save."}
+            </strong>{' '}
+            {saveError === 'quota'
+              ? 'Your browser is out of space for the app. Delete some catches or photos to free room, then try again.'
+              : 'Your last change may not have persisted. See Settings → Export backup to download what you have.'}
+          </div>
+          <button onClick={() => setSaveError(null)} aria-label="Dismiss" style={{
+            background: 'transparent', border: 'none', color: T.parchment, cursor: 'pointer', padding: 4,
+          }}>✕</button>
+        </div>
+      )}
 
       <div style={{ paddingBottom: 96, minHeight: 'calc(100vh - 132px)' }}>
         {body}

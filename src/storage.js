@@ -52,14 +52,75 @@ export function loadState() {
   }
 }
 
+/* Returns:
+   - { ok: true, bytes } on success
+   - { ok: false, error, code: 'quota' | 'other' } on failure
+   This used to swallow the error silently which is how oversized
+   photos were silently dropping new catches on the floor — Safari's
+   localStorage quota is ~5MB and a full-res iPhone JPEG encoded as a
+   data URL eats that with a single catch's three photos. */
 export function saveState(state) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const json = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, json);
+    return { ok: true, bytes: json.length };
   } catch (e) {
+    const code = (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014))
+      ? 'quota' : 'other';
     console.warn('Failed to save app state', e);
+    return { ok: false, error: e, code };
+  }
+}
+
+/* Approximate bytes currently held in localStorage under our key.
+   Used by the storage warning + Settings space meter. */
+export function storageBytes() {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v ? v.length : 0;
+  } catch (e) {
+    return 0;
   }
 }
 
 export function clearState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+}
+
+/* Downscale an image File or data URL to a max longest-side dimension
+   and re-encode as JPEG. Returns a data URL ready to persist.
+   Default 1600px / 0.82 quality lands an iPhone photo at ~200-400KB
+   instead of 5-7MB, keeping a few catches inside Safari's 5MB cap.
+   Skips work if the image is already smaller than the target. */
+export async function downscaleImageDataUrl(input, maxDim = 1600, quality = 0.82) {
+  const dataUrl = await (typeof input === 'string'
+    ? Promise.resolve(input)
+    : new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(input);
+      }));
+  return await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const longest = Math.max(img.width, img.height);
+      if (longest <= maxDim) { resolve(dataUrl); return; }
+      const ratio = maxDim / longest;
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch (e) {
+        // Cross-origin or canvas-tainted; fall back to the original.
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
 }

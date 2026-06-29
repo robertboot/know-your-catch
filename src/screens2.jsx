@@ -9,7 +9,7 @@ import {
   JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
-import { defaultState, saveState } from './storage.js';
+import { defaultState, saveState, downscaleImageDataUrl } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
@@ -1154,14 +1154,12 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
     if (files.length === 0 || photos.length >= 3) return;
     const slotsLeft = 3 - photos.length;
     const batch = files.slice(0, slotsLeft);
-    // 1) Read each file into the slots in order
-    Promise.all(batch.map(f => new Promise((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.readAsDataURL(f);
-    }))).then((dataUrls) => {
-      setPhotos(p => [...p, ...dataUrls].slice(0, 3));
-    });
+    // 1) Downscale + read each file into the slots in order — full-res
+    //    iPhone photos as data URLs blow Safari's 5MB localStorage cap.
+    Promise.all(batch.map(f => downscaleImageDataUrl(f)))
+      .then((dataUrls) => {
+        setPhotos(p => [...p, ...dataUrls].slice(0, 3));
+      });
     const f = batch[0];
     // 2) Try to pull GPS from EXIF. Auto-fill only if we don't already
     //    have coords (don't clobber a manual entry).
@@ -2204,17 +2202,16 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   // Only Photo #1 drives the catch's location & time. Photos #2 and
   // #3 are just additional shots — they don't change anything.
-  const handleCameraPick = (e) => {
+  const handleCameraPick = async (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f || photos.length >= 3) return;
     const isFirst = photos.length === 0;
-    const r = new FileReader();
-    r.onload = () => {
-      setPhotos(p => [...p, r.result].slice(0, 3));
-      setPhotoSource('camera');
-    };
-    r.readAsDataURL(f);
+    // Downscale before storing — full-res iPhone photos blow the
+    // localStorage cap after one catch.
+    const dataUrl = await downscaleImageDataUrl(f);
+    setPhotos(p => [...p, dataUrl].slice(0, 3));
+    setPhotoSource('camera');
     if (isFirst) {
       fetchGps();          // re-acquire current device GPS
       setWhen(new Date()); // catch time = the moment we took the photo
@@ -2231,16 +2228,13 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     // Was the catch empty before this batch? If so, the first file in
     // the batch becomes Photo 1 and drives the location + time.
     const wasEmpty = photos.length === 0;
-    // Read each file as a data URL in parallel, preserving the order
-    // the angler picked them in.
-    Promise.all(batch.map(f => new Promise((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.readAsDataURL(f);
-    }))).then((dataUrls) => {
-      setPhotos(p => [...p, ...dataUrls].slice(0, 3));
-      setPhotoSource('upload');
-    });
+    // Downscale each before storing — full-res iPhone photos as
+    // data URLs blow Safari's localStorage cap after one catch.
+    Promise.all(batch.map(f => downscaleImageDataUrl(f)))
+      .then((dataUrls) => {
+        setPhotos(p => [...p, ...dataUrls].slice(0, 3));
+        setPhotoSource('upload');
+      });
     if (!wasEmpty) return; // additional shots — don't touch location/time
     const f = batch[0];
     // Force the parser to include GPS + the main EXIF date tags and to
