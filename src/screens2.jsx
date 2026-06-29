@@ -1605,14 +1605,15 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   const [filters, setFilters] = useState({ speciesId: '', moon: '', tod: '' });
   const items = (state.catchLog || []).slice().sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
 
-  // Personal Bests aren't part of the catch log array — they live in
-  // state.pbs. Surface them at the top of the Logbook so an angler who's
-  // only ever recorded a PB still sees something here.
-  const pbList = useMemo(() => {
-    const ids = Object.keys(state.pbs || {});
-    return ids.map(id => ({ id, pb: state.pbs[id], s: speciesById(id) }))
-      .filter(x => x.s)
-      .sort((a, b) => (b.pb.date || '').localeCompare(a.pb.date || ''));
+  // Set of catch ids that are currently the active PB for some species
+  // — fed to the list row so each catch can show a trophy badge in
+  // line rather than getting its own section at the top.
+  const pbCatchIds = useMemo(() => {
+    const ids = new Set();
+    for (const pb of Object.values(state.pbs || {})) {
+      if (pb && pb.catchId) ids.add(pb.catchId);
+    }
+    return ids;
   }, [state.pbs]);
 
   const filtered = useMemo(() => items.filter(c => {
@@ -1646,40 +1647,6 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
           <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
       </div>
-
-      {pbList.length > 0 && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 8px' }}>
-            <Trophy size={14} color={T.brass} />
-            <SectionLabel>Personal Bests ({pbList.length})</SectionLabel>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-            {pbList.map(({ id, pb, s }) => {
-              const photos = pbPhotos(pb);
-              const thumb = photos[0];
-              return (
-                <Card key={'pb-' + id}
-                  onClick={() => onViewPB && onViewPB(id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
-                  <Trophy size={20} color={T.brass} />
-                  {thumb
-                    ? <div style={{ width: 56, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                        <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      </div>
-                    : <SpeciesImage species={s} size={44} />}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                    <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
-                      {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date || ''}
-                    </div>
-                  </div>
-                  <ChevronRight size={16} color={T.brass} />
-                </Card>
-              );
-            })}
-          </div>
-        </>
-      )}
 
       {items.length === 0 ? (
         <Card>
@@ -1725,7 +1692,7 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
           </div>
 
           {view === 'list'
-            ? <CatchListView items={filtered} onView={onView} />
+            ? <CatchListView items={filtered} onView={onView} pbCatchIds={pbCatchIds} />
             : <CatchMapView items={filtered} onView={onView} />}
         </>
       )}
@@ -1733,8 +1700,9 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   );
 }
 
-function CatchListView({ items, onView }) {
+function CatchListView({ items, onView, pbCatchIds }) {
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
+  const isPB = (id) => pbCatchIds && pbCatchIds.has(id);
   if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
   // Stop the row-level onClick (which navigates to the catch detail)
   // when the angler taps an individual photo thumbnail to enlarge it.
@@ -1786,7 +1754,20 @@ function CatchListView({ items, onView }) {
 
             {/* Content row */}
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{speciesName}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{speciesName}</span>
+                {isPB(c.id) && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    background: T.parchmentDeep, color: T.brass,
+                    border: `1px solid ${T.brass}`,
+                    fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+                    padding: '2px 6px', borderRadius: 4,
+                  }}>
+                    <Trophy size={10} /> PB
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>{when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
               {c.lat != null && c.lon != null && <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°</div>}
               <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
