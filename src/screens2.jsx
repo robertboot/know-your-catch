@@ -1957,13 +1957,29 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
 
       {s && (
         isAlreadyPB ? (
-          <div style={{
-            width: '100%', marginBottom: 14, background: T.parchmentDeep, color: T.brass,
-            border: `1.5px solid ${T.brass}`,
-            padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <Trophy size={14} /> This catch is your Personal Best
+          <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{
+              width: '100%', background: T.parchmentDeep, color: T.brass,
+              border: `1.5px solid ${T.brass}`,
+              padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              <Trophy size={14} /> This catch is your Personal Best
+            </div>
+            <button
+              onClick={() => {
+                if (!window.confirm(`Remove ${s.commonName} Personal Best status from this catch? The catch will stay in your log.`)) return;
+                const nextPbs = { ...(state.pbs || {}) };
+                delete nextPbs[c.speciesId];
+                update({ pbs: nextPbs });
+              }}
+              style={{
+                background: 'transparent', color: T.inkMute,
+                border: `1px solid ${T.cardEdge}`,
+                padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', alignSelf: 'center',
+              }}
+            >Remove PB status</button>
           </div>
         ) : (
           <button onClick={promoteToPB} style={{
@@ -2113,6 +2129,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [editingWhen, setEditingWhen] = useState(false);
   const [whenInput, setWhenInput] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Whether this catch should be / remain this species' Personal Best.
+  // Defaults to whatever the PB currently is on disk; the angler can
+  // toggle it. Replaces the old auto-promote-on-save behaviour.
+  const [isPB, setIsPB] = useState(() => {
+    if (!existing?.speciesId) return false;
+    const pb = state?.pbs?.[existing.speciesId];
+    return !!(pb && pb.catchId === existing.id);
+  });
 
   // Native iOS via Capacitor when wrapped; web geolocation otherwise.
   // Longer timeout handles offshore cold-start (no A-GPS assist).
@@ -2277,20 +2301,21 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       ? (state.catchLog || []).map(c => c.id === existing.id ? entry : c)
       : [entry, ...(state.catchLog || [])];
 
-    // Auto-promote to a Personal Best if this catch beats the existing
-    // PB for the species (by either weight or length). The PB record
-    // references the source catch so the two stay linked.
+    // PB is now fully under the angler's control via the isPB checkbox.
+    // - Checked: this catch becomes / stays the species' PB.
+    // - Unchecked: if it was the PB, the PB record is removed.
     const patch = { catchLog: nextCatchLog };
     if (entry.speciesId) {
       const currentPB = state.pbs?.[entry.speciesId];
-      const beatsWeight = entry.weight != null && entry.weight > (currentPB?.weight || 0);
-      const beatsLength = entry.length != null && entry.length > (currentPB?.length || 0);
-      if (!currentPB || beatsWeight || beatsLength) {
-        const primaryMetric = beatsWeight || (entry.weight != null && entry.length == null)
+      const isCurrentPB = currentPB && currentPB.catchId === entry.id;
+      if (isPB) {
+        // Build / replace the PB record from this catch's data.
+        const primaryMetric = entry.weight != null
           ? 'weight'
           : (entry.length != null ? 'length' : (currentPB?.primaryMetric || 'weight'));
         let history = currentPB?.history || [];
-        if (currentPB && (beatsWeight || beatsLength)) {
+        // Demote the previous PB into history if we're displacing it.
+        if (currentPB && currentPB.catchId !== entry.id) {
           history = [...history, {
             length: currentPB.length, weight: currentPB.weight,
             primaryMetric: currentPB.primaryMetric, date: currentPB.date,
@@ -2313,6 +2338,11 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             history,
           },
         };
+      } else if (isCurrentPB) {
+        // Un-check: this catch used to be the PB; drop the PB record.
+        const nextPbs = { ...(state.pbs || {}) };
+        delete nextPbs[entry.speciesId];
+        patch.pbs = nextPbs;
       }
     }
 
@@ -2429,6 +2459,47 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           <SectionLabel style={{ marginBottom: 6 }}>Notes</SectionLabel>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Lure, depth, bite, anything memorable…" style={{ ...inputStyle, resize: 'vertical' }} />
         </div>
+
+        {/* Personal Best toggle */}
+        {(() => {
+          if (!speciesId) return null;
+          const sName = speciesById(speciesId)?.commonName || 'this species';
+          const otherPB = state.pbs?.[speciesId];
+          const otherPBIsThisCatch = otherPB && existing && otherPB.catchId === existing.id;
+          const wouldReplace = isPB && otherPB && !otherPBIsThisCatch;
+          return (
+            <label style={{
+              marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 10,
+              padding: 10, borderRadius: 6,
+              background: isPB ? T.parchmentDeep : 'transparent',
+              border: `1px solid ${isPB ? T.brass : T.cardEdge}`,
+              cursor: 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={isPB}
+                onChange={(e) => setIsPB(e.target.checked)}
+                style={{ marginTop: 2, width: 18, height: 18, accentColor: T.brass, cursor: 'pointer' }}
+              />
+              <span style={{ flex: 1 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: T.ink }}>
+                  <Trophy size={14} color={T.brass} /> Personal Best for {sName}
+                </span>
+                <span style={{ display: 'block', fontSize: 11, color: T.inkMute, marginTop: 4, lineHeight: 1.4 }}>
+                  {wouldReplace
+                    ? `Saving will replace the current PB (${otherPB.primaryMetric === 'weight' ? formatWeight(otherPB.weight, state.units) : formatSize(otherPB.length, state.units)} on ${otherPB.date}) and move it to history.`
+                    : isPB && otherPBIsThisCatch
+                      ? 'This catch is currently your PB. Uncheck to remove the PB designation; the catch stays in your log.'
+                      : !isPB && otherPBIsThisCatch
+                        ? 'Unchecked — saving will remove this catch from being your PB.'
+                        : !isPB && otherPB
+                          ? `Existing PB on file: ${otherPB.primaryMetric === 'weight' ? formatWeight(otherPB.weight, state.units) : formatSize(otherPB.length, state.units)} (${otherPB.date}).`
+                          : 'Off by default — check this to mark the catch as your PB.'}
+                </span>
+              </span>
+            </label>
+          );
+        })()}
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
