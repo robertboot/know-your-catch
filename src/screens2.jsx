@@ -1608,10 +1608,19 @@ function timeOfDay(sunAlt, dateIso) {
 
 export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
-  const [filters, setFilters] = useState({ speciesId: '', moon: '', tod: '' });
+  // Each list-style filter holds an array of selected values — empty
+  // means "no filter on this dimension". pbOnly is a boolean toggle.
+  const [filters, setFilters] = useState({ speciesIds: [], moonPhases: [], timesOfDay: [], pbOnly: false });
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const activeFilterCount = Object.values(filters).filter(v => v).length;
-  const clearFilters = () => setFilters({ speciesId: '', moon: '', tod: '' });
+  const activeFilterCount =
+    (filters.speciesIds.length > 0 ? 1 : 0) +
+    (filters.moonPhases.length > 0 ? 1 : 0) +
+    (filters.timesOfDay.length > 0 ? 1 : 0) +
+    (filters.pbOnly ? 1 : 0);
+  const clearFilters = () => setFilters({ speciesIds: [], moonPhases: [], timesOfDay: [], pbOnly: false });
+  const toggleInGroup = (group, val) =>
+    setFilters(f => ({ ...f, [group]: f[group].includes(val) ? f[group].filter(v => v !== val) : [...f[group], val] }));
+  const clearGroup = (group) => setFilters(f => ({ ...f, [group]: [] }));
   const items = (state.catchLog || []).slice().sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
 
   // Set of catch ids that are currently the active PB for some species
@@ -1626,27 +1635,51 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   }, [state.pbs]);
 
   const filtered = useMemo(() => items.filter(c => {
-    if (filters.speciesId && c.speciesId !== filters.speciesId) return false;
-    if (filters.moon && moonGroup(c.moonPhase) !== filters.moon) return false;
-    if (filters.tod && timeOfDay(c.sunAlt, c.dateIso) !== filters.tod) return false;
+    if (filters.speciesIds.length > 0 && !filters.speciesIds.includes(c.speciesId)) return false;
+    if (filters.moonPhases.length > 0 && !filters.moonPhases.includes(moonGroup(c.moonPhase))) return false;
+    if (filters.timesOfDay.length > 0 && !filters.timesOfDay.includes(timeOfDay(c.sunAlt, c.dateIso))) return false;
+    if (filters.pbOnly && !pbCatchIds.has(c.id)) return false;
     return true;
-  }), [items, filters]);
+  }), [items, filters, pbCatchIds]);
 
   const speciesInLog = useMemo(() => {
     const ids = new Set(items.map(c => c.speciesId).filter(Boolean));
     return Array.from(ids).map(id => speciesById(id)).filter(Boolean).sort((a, b) => a.commonName.localeCompare(b.commonName));
   }, [items]);
 
-  const chip = (key, group, label) => {
-    const active = filters[group] === key;
+  // "All" / "Any" chip at the start of a row clears that group.
+  const allChip = (group, label = 'All') => {
+    const active = filters[group].length === 0;
     return (
-      <button onClick={() => setFilters(f => ({ ...f, [group]: active ? '' : key }))} style={{
+      <button onClick={() => clearGroup(group)} style={{
         background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
         border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
         fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
       }}>{label}</button>
     );
   };
+  // Individual value chip — toggles membership in the group's list.
+  const chip = (key, group, label) => {
+    const active = filters[group].includes(key);
+    return (
+      <button onClick={() => toggleInGroup(group, key)} style={{
+        background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
+        border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
+        fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
+      }}>{label}</button>
+    );
+  };
+  // PB filter is a boolean — own two-chip row.
+  const pbAllActive = !filters.pbOnly;
+  const pbOnlyActive = filters.pbOnly;
+  const pbChip = (active, label, onClick) => (
+    <button onClick={onClick} style={{
+      background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
+      border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
+      fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+    }}>{label}</button>
+  );
 
   return (
     <div style={{ padding: '16px 16px 8px' }}>
@@ -1706,7 +1739,7 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
               borderRadius: 8, padding: 10, marginBottom: 10,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <SectionLabel>Filters</SectionLabel>
+                <SectionLabel>Filters · tap to multi-select</SectionLabel>
                 {activeFilterCount > 0 && (
                   <button onClick={clearFilters} style={{
                     background: 'transparent', border: 'none', color: T.brass,
@@ -1716,24 +1749,29 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
                 <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Species</span>
-                {chip('', 'speciesId', 'All')}
-                {speciesInLog.map(s => chip(s.id, 'speciesId', s.commonName))}
+                {allChip('speciesIds', 'All')}
+                {speciesInLog.map(s => chip(s.id, 'speciesIds', s.commonName))}
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
                 <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Moon</span>
-                {chip('', 'moon', 'Any')}
-                {chip('new', 'moon', 'New')}
-                {chip('waxing', 'moon', 'Waxing')}
-                {chip('full', 'moon', 'Full')}
-                {chip('waning', 'moon', 'Waning')}
+                {allChip('moonPhases', 'Any')}
+                {chip('new', 'moonPhases', 'New')}
+                {chip('waxing', 'moonPhases', 'Waxing')}
+                {chip('full', 'moonPhases', 'Full')}
+                {chip('waning', 'moonPhases', 'Waning')}
+              </div>
+              <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
+                {allChip('timesOfDay', 'Any')}
+                {chip('dawn', 'timesOfDay', 'Dawn')}
+                {chip('day', 'timesOfDay', 'Day')}
+                {chip('dusk', 'timesOfDay', 'Dusk')}
+                {chip('night', 'timesOfDay', 'Night')}
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
-                {chip('', 'tod', 'Any')}
-                {chip('dawn', 'tod', 'Dawn')}
-                {chip('day', 'tod', 'Day')}
-                {chip('dusk', 'tod', 'Dusk')}
-                {chip('night', 'tod', 'Night')}
+                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>PB</span>
+                {pbChip(pbAllActive, 'All catches', () => setFilters(f => ({ ...f, pbOnly: false })))}
+                {pbChip(pbOnlyActive, <><Trophy size={11} /> Only PBs</>, () => setFilters(f => ({ ...f, pbOnly: true })))}
               </div>
             </div>
           )}
