@@ -244,6 +244,15 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           </button>
         </div>
       </Card>
+      {lightboxOpen && photo && (
+        <LightboxModal
+          src={photo.url}
+          alt={s.commonName}
+          caption={photo.credit ? `${s.commonName} · ${photo.credit} · ${photo.license}` : s.commonName}
+          killWhite
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -337,16 +346,6 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
           <span>{reg.verified ? 'Verified' : 'Seed'} {reg.lastUpdated}</span>
         </div>
       </div>
-
-      {lightboxOpen && photo && (
-        <LightboxModal
-          src={photo.url}
-          alt={s.commonName}
-          caption={photo.credit ? `${s.commonName} · ${photo.credit} · ${photo.license}` : s.commonName}
-          killWhite
-          onClose={() => setLightboxOpen(false)}
-        />
-      )}
     </>
   );
 }
