@@ -11,6 +11,9 @@ import {
 } from './data.js';
 import { defaultState, saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes, photoStats } from './storage.js';
 import {
+  savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl,
+} from './photos-store.js';
+import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
@@ -973,7 +976,7 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
                             scrollSnapAlign: 'start',
                           }}
                         >
-                          <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          <img src={photoThumbUrl(p)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                         </button>
                       ))}
                     </div>
@@ -1029,7 +1032,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const photos = pbPhotos(pb);
   const reportText = buildPBReport({ anglerName: state.anglerName, species: s, pb, units: state.units });
   const speciesFallbackPhoto = speciesPhoto(s.id);
-  const reportPhotoUrl = photos[0] || (speciesFallbackPhoto ? speciesFallbackPhoto.url : null);
+  const reportPhotoUrl = photoDisplayUrl(photos[0]) || (speciesFallbackPhoto ? speciesFallbackPhoto.url : null);
   const meta = [
     { label: 'Date', value: pb.date },
     pb.jurisdiction && { label: 'Waters', value: jurisdictionById(pb.jurisdiction)?.name || pb.jurisdiction },
@@ -1051,7 +1054,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
       {photos.length > 0 && (
         photos.length === 1 ? (
           <Card onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-            <img src={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
+            <img src={photoDisplayUrl(photos[0])} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
           </Card>
         ) : (
           <div className="kyc-hscroll" style={{
@@ -1061,7 +1064,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
           }}>
             {photos.map((p, i) => (
               <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
-                <img src={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+                <img src={photoDisplayUrl(p)} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
               </div>
             ))}
           </div>
@@ -1106,7 +1109,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         anglerName={state.anglerName}
         species={s}
         photoUrl={reportPhotoUrl}
-        photoDataUrl={photos[0]}
+        photoEntry={photos[0]}
         primary={{ label: primary.label, value: primary.val }}
         secondary={{ label: secondary.label, value: secondary.val }}
         meta={meta}
@@ -1154,12 +1157,14 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
     if (files.length === 0 || photos.length >= 3) return;
     const slotsLeft = 3 - photos.length;
     const batch = files.slice(0, slotsLeft);
-    // 1) Downscale + read each file into the slots in order — full-res
-    //    iPhone photos as data URLs blow Safari's 5MB localStorage cap.
-    Promise.all(batch.map(f => downscaleImageDataUrl(f)))
-      .then((dataUrls) => {
-        setPhotos(p => [...p, ...dataUrls].slice(0, 3));
-      });
+    // Downscale → savePhoto: full-res JPEG lands on the filesystem
+    // (iOS) or stays inline (web). State only carries thumb + URL.
+    Promise.all(batch.map(async (f) => {
+      const dataUrl = await downscaleImageDataUrl(f);
+      return savePhoto(dataUrl);
+    })).then((entries) => {
+      setPhotos(p => [...p, ...entries].slice(0, 3));
+    });
     const f = batch[0];
     // 2) Try to pull GPS from EXIF. Auto-fill only if we don't already
     //    have coords (don't clobber a manual entry).
@@ -1177,7 +1182,10 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
       }).catch(() => { /* no EXIF / non-jpeg / corrupt — silent */ });
     }
   };
-  const removePhotoAt = (i) => setPhotos(p => p.filter((_, idx) => idx !== i));
+  const removePhotoAt = (i) => setPhotos(p => {
+    deletePhoto(p[i]); // fire-and-forget disk cleanup
+    return p.filter((_, idx) => idx !== i);
+  });
   const clearLocation = () => {
     setLat(null); setLon(null); setLocFromPhoto(false);
   };
@@ -1275,7 +1283,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
             if (p) {
               return (
                 <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
-                  <img src={p} alt={`PB photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <img src={photoThumbUrl(p)} alt={`PB photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   <button onClick={() => removePhotoAt(i)} aria-label="Remove photo" style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 24, height: 24, borderRadius: '50%',
@@ -1928,7 +1936,7 @@ function CatchListView({ items, onView, pbCatchIds }) {
                       scrollSnapAlign: 'start',
                     }}
                   >
-                    <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <img src={photoThumbUrl(p)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   </button>
                 ))}
               </div>
@@ -2006,8 +2014,11 @@ function CatchMapView({ items, onView }) {
     const located = items.filter(c => c.lat != null && c.lon != null);
     for (const c of located) {
       const s = speciesById(c.speciesId);
-      const icon = c.photo
-        ? L.divIcon({ html: `<img class="kyc-pin-img" src="${c.photo}">`, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
+      // Map pin uses the thumbnail (URL) — works for both legacy
+      // string photos and new {thumb, src} entries.
+      const pinUrl = photoThumbUrl(c.photo);
+      const icon = pinUrl
+        ? L.divIcon({ html: `<img class="kyc-pin-img" src="${pinUrl}">`, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
         : L.divIcon({ html: `<div class="kyc-pin"></div>`, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
       const when = new Date(c.dateIso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const m = L.marker([c.lat, c.lon], { icon }).addTo(markersRef.current);
@@ -2102,7 +2113,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
       {cPhotos.length === 0
         ? <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>
         : cPhotos.length === 1
-          ? <img src={cPhotos[0]} alt="" onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
+          ? <img src={photoDisplayUrl(cPhotos[0])} alt="" onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
           : <div className="kyc-hscroll" style={{
               display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
               margin: '0 -16px 14px', padding: '0 16px 4px',
@@ -2110,7 +2121,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
             }}>
               {cPhotos.map((p, i) => (
                 <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
-                  <img src={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+                  <img src={photoDisplayUrl(p)} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
                 </div>
               ))}
             </div>}
@@ -2206,7 +2217,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
 
       {(() => {
         const speciesFallback = s ? speciesPhoto(s.id) : null;
-        const reportPhotoUrl = cPhotos[0] || (speciesFallback ? speciesFallback.url : null);
+        const reportPhotoUrl = photoDisplayUrl(cPhotos[0]) || (speciesFallback ? speciesFallback.url : null);
         const measurements = [];
         if (c.weight != null) measurements.push(`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`);
         if (c.length != null) measurements.push(`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`);
@@ -2236,7 +2247,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
             anglerName={state.anglerName}
             species={s}
             photoUrl={reportPhotoUrl}
-            photoDataUrl={cPhotos[0]}
+            photoEntry={cPhotos[0]}
             primary={primary}
             secondary={secondary}
             meta={meta}
@@ -2318,14 +2329,17 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   useEffect(() => { if (!isEdit) fetchGps(); }, []);
 
   // The Identify flow hands us a full-res data URL (FileReader output,
-  // no downscale step). Re-encode it so it fits inside localStorage.
+  // no downscale step). Downscale + savePhoto so the catch's slot 1
+  // entry is in the new shape from the start.
   useEffect(() => {
     if (!prefilledPhoto) return;
     let cancelled = false;
-    downscaleImageDataUrl(prefilledPhoto).then((small) => {
-      if (cancelled || small === prefilledPhoto) return;
-      setPhotos(p => p.map(url => url === prefilledPhoto ? small : url));
-    });
+    (async () => {
+      const small = await downscaleImageDataUrl(prefilledPhoto);
+      const entry = await savePhoto(small);
+      if (cancelled) return;
+      setPhotos(p => p.map(slot => slot === prefilledPhoto ? entry : slot));
+    })();
     return () => { cancelled = true; };
   }, [prefilledPhoto]);
 
@@ -2360,10 +2374,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     e.target.value = '';
     if (!f || photos.length >= 3) return;
     const isFirst = photos.length === 0;
-    // Downscale before storing — full-res iPhone photos blow the
-    // localStorage cap after one catch.
+    // Downscale, then hand to photos-store: native writes the JPEG to
+    // the app's Documents directory and we only keep a small thumb +
+    // capacitor:// URL inline. Web stays as before.
     const dataUrl = await downscaleImageDataUrl(f);
-    setPhotos(p => [...p, dataUrl].slice(0, 3));
+    const entry = await savePhoto(dataUrl);
+    setPhotos(p => [...p, entry].slice(0, 3));
     setPhotoSource('camera');
     if (isFirst) {
       fetchGps();          // re-acquire current device GPS
@@ -2381,13 +2397,15 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     // Was the catch empty before this batch? If so, the first file in
     // the batch becomes Photo 1 and drives the location + time.
     const wasEmpty = photos.length === 0;
-    // Downscale each before storing — full-res iPhone photos as
-    // data URLs blow Safari's localStorage cap after one catch.
-    Promise.all(batch.map(f => downscaleImageDataUrl(f)))
-      .then((dataUrls) => {
-        setPhotos(p => [...p, ...dataUrls].slice(0, 3));
-        setPhotoSource('upload');
-      });
+    // Downscale → savePhoto: full-res JPEG lands on filesystem (iOS)
+    // or stays inline (web). State only carries thumb + display URL.
+    Promise.all(batch.map(async (f) => {
+      const dataUrl = await downscaleImageDataUrl(f);
+      return savePhoto(dataUrl);
+    })).then((entries) => {
+      setPhotos(p => [...p, ...entries].slice(0, 3));
+      setPhotoSource('upload');
+    });
     if (!wasEmpty) return; // additional shots — don't touch location/time
     const f = batch[0];
     // Force the parser to include GPS + the main EXIF date tags and to
@@ -2418,7 +2436,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   };
 
   const removePhotoAt = (i) => {
-    setPhotos(p => p.filter((_, idx) => idx !== i));
+    setPhotos(p => {
+      // Fire-and-forget the disk delete so we don't leave orphan files.
+      // Best-effort: failures are silent (already deleted, missing file).
+      deletePhoto(p[i]);
+      return p.filter((_, idx) => idx !== i);
+    });
     // If we removed the first photo, the source tag no longer reflects
     // what's on screen — clear it so the angler isn't misled.
     if (i === 0) {
@@ -2556,7 +2579,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             if (p) {
               return (
                 <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: i === 0 ? `1.5px solid ${T.brass}` : `1px solid ${T.cardEdge}` }}>
-                  <img src={p} alt={`Catch photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <img src={photoThumbUrl(p)} alt={`Catch photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   {i === 0 && (
                     <div style={{
                       position: 'absolute', bottom: 0, left: 0, right: 0,

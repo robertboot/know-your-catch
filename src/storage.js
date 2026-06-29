@@ -93,7 +93,13 @@ export function clearState() {
    to recover state that was saved before downscaling shipped, so
    future writes don't bump the localStorage cap. */
 export async function compactStatePhotos(state, maxDim = 1600, quality = 0.82) {
-  const compact = (url) => downscaleImageDataUrl(url, maxDim, quality);
+  const compact = async (entry) => {
+    // photos-store entries (objects) are skipped — they live on the
+    // filesystem (native) or are already thumb+src (web); re-shrinking
+    // them in-place would lose the structured shape.
+    if (typeof entry !== 'string' || !entry.startsWith('data:')) return entry;
+    return downscaleImageDataUrl(entry, maxDim, quality);
+  };
   const next = { ...state };
   if (Array.isArray(state.catchLog)) {
     next.catchLog = await Promise.all(state.catchLog.map(async (c) => {
@@ -162,15 +168,25 @@ export async function downscaleImageDataUrl(input, maxDim = 1600, quality = 0.82
   });
 }
 
-/* Per-bucket photo stats for the Settings diagnostic. */
+/* Per-bucket photo stats for the Settings diagnostic. Counts a photo
+   regardless of shape; bytes are what's actually in localStorage —
+   the full data URL for legacy entries, or just the inline thumbnail
+   for photos-store entries (full-res lives on the filesystem and
+   doesn't bill against localStorage). */
 export function photoStats(state) {
   let count = 0;
   let bytes = 0;
-  const tally = (urls) => {
-    for (const u of urls) {
-      if (typeof u !== 'string' || !u.startsWith('data:')) continue;
-      count++;
-      bytes += u.length;
+  const tally = (entries) => {
+    for (const e of entries) {
+      if (!e) continue;
+      if (typeof e === 'string') {
+        if (!e.startsWith('data:')) continue;
+        count++; bytes += e.length;
+      } else if (typeof e === 'object') {
+        count++;
+        if (typeof e.thumb === 'string') bytes += e.thumb.length;
+        if (typeof e.src === 'string' && e.src.startsWith('data:')) bytes += e.src.length;
+      }
     }
   };
   for (const c of (state.catchLog || [])) {

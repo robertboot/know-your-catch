@@ -3,6 +3,7 @@ import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, I
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport } from './helpers.js';
+import { photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
 
 /* ============================================================
    STATUS PILL — colorblind-safe via shape + color
@@ -269,13 +270,16 @@ export function ShareReportModal({
   notes,
   reportText,
   reportTitle,
-  photoDataUrl,       // for sharing
+  photoEntry,         // photo entry { thumb, src, path? } or legacy string; null if no photo
 }) {
   const [status, setStatus] = useState(null);
   if (!open) return null;
   const displayName = (anglerName || '').trim() || 'Angler';
   const handleShare = async () => {
     setStatus('working');
+    // Resolve the photo's bytes lazily — on native this reads the JPEG
+    // off disk; on web it's a no-op (already a data URL).
+    const photoDataUrl = photoEntry ? await photoAsDataUrl(photoEntry) : null;
     const r = await shareReport({ title: reportTitle || title, text: reportText, photoDataUrl });
     setStatus(r);
   };
@@ -368,7 +372,7 @@ export function ShareReportModal({
           </div>
 
           <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.5, textAlign: 'center' }}>
-            Tip: long-press the card to screenshot, or tap Share to send the summary{photoDataUrl ? ' with the photo' : ''}.
+            Tip: long-press the card to screenshot, or tap Share to send the summary{photoEntry ? ' with the photo' : ''}.
           </div>
         </div>
 
@@ -453,7 +457,7 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, kil
       }}
     >
       <img
-        src={list[idx]}
+        src={photoDisplayUrl(list[idx]) || list[idx]}
         alt={alt || ''}
         className={killWhite ? 'kyc-kill-white' : undefined}
         onClick={(e) => e.stopPropagation()}
