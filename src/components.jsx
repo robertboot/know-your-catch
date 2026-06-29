@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
@@ -397,7 +397,7 @@ export function ShareReportModal({
    LIGHTBOX — tap a species photo to enlarge full-screen
    ============================================================ */
 export function LightboxModal({ src, alt, caption, killWhite = false, onClose }) {
-  React.useEffect(() => {
+  useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
