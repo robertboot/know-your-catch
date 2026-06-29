@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff } from 'lucide-react';
+import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport } from './helpers.js';
@@ -394,15 +394,49 @@ export function ShareReportModal({
 }
 
 /* ============================================================
-   LIGHTBOX — tap a species photo to enlarge full-screen
+   LIGHTBOX — tap a species photo to enlarge full-screen, with
+   prev/next navigation when multiple photos are passed in.
+   Backward-compat: accepts `src` (single) or `photos` (array).
    ============================================================ */
-export function LightboxModal({ src, alt, caption, killWhite = false, onClose }) {
+export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, killWhite = false, onClose }) {
+  const list = Array.isArray(photos) && photos.length > 0 ? photos : (src ? [src] : []);
+  const [idx, setIdx] = useState(Math.max(0, Math.min(initialIndex, list.length - 1)));
+  const total = list.length;
+  const hasMany = total > 1;
+  const prev = () => setIdx(i => (i - 1 + total) % total);
+  const next = () => setIdx(i => (i + 1) % total);
+
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose && onClose();
+      else if (hasMany && e.key === 'ArrowLeft') prev();
+      else if (hasMany && e.key === 'ArrowRight') next();
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  if (!src) return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, hasMany, total]);
+
+  // Swipe gesture for touch devices.
+  const touch = useState({ x: 0, y: 0, t: 0 });
+  const onTouchStart = (e) => {
+    const t = e.changedTouches[0];
+    touch[0].x = t.clientX; touch[0].y = t.clientY; touch[0].t = Date.now();
+  };
+  const onTouchEnd = (e) => {
+    if (!hasMany) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touch[0].x;
+    const dy = t.clientY - touch[0].y;
+    const dt = Date.now() - touch[0].t;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && dt < 600) {
+      e.stopPropagation();
+      if (dx > 0) prev(); else next();
+    }
+  };
+
+  if (list.length === 0) return null;
+
   return (
     <div
       onClick={onClose}
@@ -419,24 +453,59 @@ export function LightboxModal({ src, alt, caption, killWhite = false, onClose })
       }}
     >
       <img
-        src={src}
+        src={list[idx]}
         alt={alt || ''}
         className={killWhite ? 'kyc-kill-white' : undefined}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         style={{
-          maxWidth: '100%', maxHeight: caption ? '82vh' : '90vh',
+          maxWidth: '100%',
+          maxHeight: (caption || hasMany) ? '78vh' : '90vh',
           objectFit: 'contain', display: 'block',
           borderRadius: 8,
         }}
       />
-      {caption && (
+
+      {hasMany && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); prev(); }}
+            aria-label="Previous photo"
+            style={{
+              position: 'absolute', top: '50%', left: 12, transform: 'translateY(-50%)',
+              width: 44, height: 44, borderRadius: '50%',
+              background: 'rgba(3, 27, 51, 0.75)', border: `1px solid ${T.cardEdge}`,
+              color: T.parchment, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            }}
+          ><ChevronLeft size={26} /></button>
+          <button
+            onClick={(e) => { e.stopPropagation(); next(); }}
+            aria-label="Next photo"
+            style={{
+              position: 'absolute', top: '50%', right: 12, transform: 'translateY(-50%)',
+              width: 44, height: 44, borderRadius: '50%',
+              background: 'rgba(3, 27, 51, 0.75)', border: `1px solid ${T.cardEdge}`,
+              color: T.parchment, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            }}
+          ><ChevronRight size={26} /></button>
+        </>
+      )}
+
+      {(caption || hasMany) && (
         <div style={{
           position: 'absolute', bottom: 20, left: 20, right: 20,
           textAlign: 'center', color: T.parchment,
-          fontSize: 12, lineHeight: 1.4, fontStyle: 'italic',
+          fontSize: 12, lineHeight: 1.4,
           textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-        }}>{caption}</div>
+        }}>
+          {hasMany && <span style={{ color: T.brass, fontWeight: 800, marginRight: 8 }}>{idx + 1} of {total}</span>}
+          {caption && <span style={{ fontStyle: 'italic' }}>{caption}</span>}
+        </div>
       )}
+
       <button
         onClick={onClose}
         aria-label="Close"

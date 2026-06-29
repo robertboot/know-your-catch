@@ -246,7 +246,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       </Card>
       {lightboxOpen && photo && (
         <LightboxModal
-          src={photo.url}
+          photos={[photo.url]}
           alt={s.commonName}
           caption={photo.credit ? `${s.commonName} · ${photo.credit} · ${photo.license}` : s.commonName}
           killWhite
@@ -892,6 +892,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
 export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
   const recorded = Object.keys(state.pbs || {});
   const hasCatches = (state.catchLog || []).length > 0;
+  const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
 
   // Persistent action buttons. Always available so an angler can jump
   // straight to the Logbook to promote an already-logged catch, or
@@ -935,27 +936,57 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
               const s = speciesById(id); const pb = state.pbs[id];
               if (!s) return null;
               const photos = pbPhotos(pb);
-              const thumb = photos[0];
               return (
-                <Card key={id} onClick={() => onView(id)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: T.parchmentDeep, borderColor: T.brass }}>
-                  <Trophy size={20} color={T.brass} />
-                  {thumb
-                    ? <div style={{ width: 56, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
-                        <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                        {photos.length > 1 && (
-                          <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(3, 27, 51, 0.85)', color: T.parchment, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>
-                            +{photos.length - 1}
-                          </span>
-                        )}
-                      </div>
-                    : <SpeciesImage species={s} size={44} />}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                    <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
-                      {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date}
+                <Card key={id} onClick={() => onView(id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, background: T.parchmentDeep, borderColor: T.brass }}>
+                  {/* Photo strip — all PB photos in a horizontal scroll;
+                      each tappable to enlarge with the full set. */}
+                  {photos.length === 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Trophy size={20} color={T.brass} />
+                      <SpeciesImage species={s} size={56} />
                     </div>
+                  ) : (
+                    <div
+                      className="kyc-hscroll"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        display: 'flex', gap: 6,
+                        overflowX: 'auto', overflowY: 'hidden',
+                        margin: '0 -10px', padding: '0 10px 4px',
+                        scrollSnapType: 'x proximity',
+                      }}
+                    >
+                      {photos.map((p, i) => (
+                        <button
+                          key={i}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightbox({ photos, index: i, caption: s.commonName });
+                          }}
+                          aria-label={`Enlarge ${s.commonName} photo ${i + 1}`}
+                          className="kyc-tappable"
+                          style={{
+                            flex: '0 0 96px', width: 96, height: 96,
+                            padding: 0, border: `1px solid ${T.brass}`, borderRadius: 6,
+                            background: T.parchmentDeep, overflow: 'hidden', cursor: 'zoom-in',
+                            scrollSnapAlign: 'start',
+                          }}
+                        >
+                          <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <Trophy size={18} color={T.brass} style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                      <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+                        {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date}
+                      </div>
+                    </div>
+                    <ChevronRight size={16} color={T.brass} />
                   </div>
-                  <ChevronRight size={16} color={T.brass} />
                 </Card>
               );
             })}
@@ -964,6 +995,15 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
           {actions}
         </>
       )}
+
+      {lightbox && (
+        <LightboxModal
+          photos={lightbox.photos}
+          initialIndex={lightbox.index}
+          caption={lightbox.caption}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
@@ -971,7 +1011,7 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
 export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const s = speciesById(speciesId); const pb = state.pbs[speciesId];
   const [shareOpen, setShareOpen] = useState(false);
-  const [lightbox, setLightbox] = useState(null); // photo URL or null
+  const [lightboxIdx, setLightboxIdx] = useState(null); // tapped index or null
   if (!s || !pb) return <div style={{ padding: 20 }}>No PB.</div>;
   const remove = () => {
     if (!window.confirm('Delete this personal best and all its history?')) return;
@@ -1009,7 +1049,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
       </Card>
       {photos.length > 0 && (
         photos.length === 1 ? (
-          <Card onClick={() => setLightbox(photos[0])} className="kyc-tappable" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+          <Card onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
             <img src={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
           </Card>
         ) : (
@@ -1019,7 +1059,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
             scrollSnapType: 'x proximity',
           }}>
             {photos.map((p, i) => (
-              <div key={i} onClick={() => setLightbox(p)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
+              <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
                 <img src={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
               </div>
             ))}
@@ -1073,8 +1113,13 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         reportText={reportText}
         reportTitle={`${(state.anglerName || 'My').trim() || 'My'} ${s.commonName} PB`}
       />
-      {lightbox && (
-        <LightboxModal src={lightbox} alt={s.commonName} caption={s.commonName} onClose={() => setLightbox(null)} />
+      {lightboxIdx != null && photos.length > 0 && (
+        <LightboxModal
+          photos={photos}
+          initialIndex={lightboxIdx}
+          caption={s.commonName}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </div>
   );
@@ -1689,7 +1734,7 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
 }
 
 function CatchListView({ items, onView }) {
-  const [lightbox, setLightbox] = useState(null); // { src, caption } or null
+  const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
   if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
   // Stop the row-level onClick (which navigates to the catch detail)
   // when the angler taps an individual photo thumbnail to enlarge it.
@@ -1723,7 +1768,7 @@ function CatchListView({ items, onView }) {
                 {cPhotos.map((p, i) => (
                   <button
                     key={i}
-                    onClick={(e) => { e.stopPropagation(); setLightbox({ src: p, caption: `${speciesName} · photo ${i + 1} of ${cPhotos.length}` }); }}
+                    onClick={(e) => { e.stopPropagation(); setLightbox({ photos: cPhotos, index: i, caption: speciesName }); }}
                     aria-label={`Enlarge ${speciesName} photo ${i + 1}`}
                     className="kyc-tappable"
                     style={{
@@ -1762,7 +1807,8 @@ function CatchListView({ items, onView }) {
       })}
       {lightbox && (
         <LightboxModal
-          src={lightbox.src}
+          photos={lightbox.photos}
+          initialIndex={lightbox.index}
           alt={lightbox.caption}
           caption={lightbox.caption}
           onClose={() => setLightbox(null)}
@@ -1830,7 +1876,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [lightbox, setLightbox] = useState(null);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
   useEffect(() => {
     if (!confirming) return;
     const t = setTimeout(() => setConfirming(false), 4000);
@@ -1893,14 +1939,14 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
       {cPhotos.length === 0
         ? <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>
         : cPhotos.length === 1
-          ? <img src={cPhotos[0]} alt="" onClick={() => setLightbox(cPhotos[0])} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
+          ? <img src={cPhotos[0]} alt="" onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
           : <div className="kyc-hscroll" style={{
               display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
               margin: '0 -16px 14px', padding: '0 16px 4px',
               scrollSnapType: 'x proximity',
             }}>
               {cPhotos.map((p, i) => (
-                <div key={i} onClick={() => setLightbox(p)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
+                <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
                   <img src={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
                 </div>
               ))}
@@ -2022,8 +2068,14 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
           />
         );
       })()}
-      {lightbox && (
-        <LightboxModal src={lightbox} alt={s ? s.commonName : 'Catch'} caption={s ? s.commonName : 'Catch'} onClose={() => setLightbox(null)} />
+      {lightboxIdx != null && cPhotos.length > 0 && (
+        <LightboxModal
+          photos={cPhotos}
+          initialIndex={lightboxIdx}
+          alt={s ? s.commonName : 'Catch'}
+          caption={s ? s.commonName : 'Catch'}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </div>
   );
