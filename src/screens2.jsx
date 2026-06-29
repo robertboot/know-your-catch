@@ -9,7 +9,7 @@ import {
   JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
-import { defaultState, saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes } from './storage.js';
+import { defaultState, saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes, photoStats } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
@@ -1488,6 +1488,9 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
           const cap = 5 * 1024; // Safari iOS localStorage cap ≈ 5MB
           const pct = Math.min(100, (kb / cap) * 100);
           const barColor = pct > 90 ? T.closed : pct > 70 ? T.warn : T.open;
+          const stats = photoStats(state);
+          const photoKb = stats.bytes / 1024;
+          const avgKb = stats.count > 0 ? photoKb / stats.count : 0;
           return (
             <>
               <div style={{ fontSize: 13, color: T.ink, fontWeight: 700 }}>
@@ -1498,6 +1501,10 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
               </div>
               <div style={{ height: 6, background: T.parchmentDeep, borderRadius: 4, marginTop: 6, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: barColor }} />
+              </div>
+              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>
+                <span>{stats.count} photo{stats.count === 1 ? '' : 's'}</span>
+                <span>{photoKb < 1024 ? `${photoKb.toFixed(0)} KB` : `${(photoKb / 1024).toFixed(2)} MB`}{stats.count > 0 ? ` · avg ${avgKb.toFixed(0)} KB` : ''}</span>
               </div>
               {storage.wrote && (
                 <div style={{ fontSize: 11, color: T.open, marginTop: 6 }}>

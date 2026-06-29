@@ -122,7 +122,9 @@ export async function compactStatePhotos(state, maxDim = 1600, quality = 0.82) {
    and re-encode as JPEG. Returns a data URL ready to persist.
    Default 1600px / 0.82 quality lands an iPhone photo at ~200-400KB
    instead of 5-7MB, keeping a few catches inside Safari's 5MB cap.
-   Skips work if the image is already smaller than the target. */
+   ALWAYS re-encodes so a previously-saved high-quality JPEG at
+   already-modest dimensions still gets compressed. Only keeps the
+   re-encoded output if it's smaller than the original. */
 export async function downscaleImageDataUrl(input, maxDim = 1600, quality = 0.82) {
   const dataUrl = await (typeof input === 'string'
     ? Promise.resolve(input)
@@ -135,23 +137,49 @@ export async function downscaleImageDataUrl(input, maxDim = 1600, quality = 0.82
   return await new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      const longest = Math.max(img.width, img.height);
-      if (longest <= maxDim) { resolve(dataUrl); return; }
-      const ratio = maxDim / longest;
-      const w = Math.round(img.width * ratio);
-      const h = Math.round(img.height * ratio);
+      const srcW = img.naturalWidth || img.width;
+      const srcH = img.naturalHeight || img.height;
+      if (!srcW || !srcH) { resolve(dataUrl); return; }
+      const longest = Math.max(srcW, srcH);
+      const ratio = Math.min(1, maxDim / longest); // scale down only
+      const w = Math.max(1, Math.round(srcW * ratio));
+      const h = Math.max(1, Math.round(srcH * ratio));
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
       try {
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        const out = canvas.toDataURL('image/jpeg', quality);
+        // Keep the re-encode only if it actually saved bytes — re-
+        // encoding a tiny PNG to JPEG could otherwise inflate it.
+        resolve(out.length < dataUrl.length ? out : dataUrl);
       } catch (e) {
-        // Cross-origin or canvas-tainted; fall back to the original.
         resolve(dataUrl);
       }
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
+}
+
+/* Per-bucket photo stats for the Settings diagnostic. */
+export function photoStats(state) {
+  let count = 0;
+  let bytes = 0;
+  const tally = (urls) => {
+    for (const u of urls) {
+      if (typeof u !== 'string' || !u.startsWith('data:')) continue;
+      count++;
+      bytes += u.length;
+    }
+  };
+  for (const c of (state.catchLog || [])) {
+    if (Array.isArray(c.photos)) tally(c.photos);
+    else if (c.photo) tally([c.photo]);
+  }
+  for (const pb of Object.values(state.pbs || {})) {
+    if (Array.isArray(pb.photos)) tally(pb.photos);
+    else if (pb.photo) tally([pb.photo]);
+  }
+  return { count, bytes };
 }
