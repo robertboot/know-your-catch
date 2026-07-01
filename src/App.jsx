@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
   Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera, MoreHorizontal,
   Home as HomeIcon, Settings as SettingsIcon,
@@ -8,6 +8,7 @@ import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState } from './storage.js';
 import { migratePhotosToStore } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
+import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
@@ -24,7 +25,19 @@ import {
   CatchLogScreen, CatchEntryScreen, CatchDetailScreen, QuizScreen,
 } from './screens2.jsx';
 
+// Web-only admin console. When __KYC_ADMIN__ is false (ios:build) the
+// ternary constant-folds to null and Rollup drops both the dynamic
+// import and the admin/ subtree from the bundle.
+const AdminApp = __KYC_ADMIN__
+  ? lazy(() => import('./admin/AdminApp.jsx'))
+  : null;
+
+const ADMIN_EMAIL = 'robertb1023@me.com';
+
 const ALERT_COUNT = 2;
+
+const currentHashRoute = () =>
+  (typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '')) || '';
 
 export default function App() {
   const [state, setState] = useState(defaultState);
@@ -37,6 +50,10 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [keepFor, setKeepFor] = useState(null);
+  const [hashRoute, setHashRoute] = useState(currentHashRoute);
+  // Bump on every species-store notify so components that read SPECIES
+  // re-render when the overlay refreshes from Supabase.
+  const [, setSpeciesVersion] = useState(0);
 
   // Load persisted state on mount.
   useEffect(() => {
@@ -68,6 +85,22 @@ export default function App() {
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
     refreshFeeds().catch(() => {});
+    // Refresh species overlay from Supabase (no-op until env vars are
+    // set). Subscribers re-render when overrides land.
+    refreshSpecies().catch(() => {});
+  }, []);
+
+  // Species overlay subscription: bump a version counter on every
+  // notify so screens re-read the (mutated in place) SPECIES const.
+  useEffect(() => subscribeSpecies(() => setSpeciesVersion(v => v + 1)), []);
+
+  // Hash routing — only used for /#/admin today. Any change to the
+  // hash re-syncs the local route state so the admin console mounts
+  // or unmounts accordingly.
+  useEffect(() => {
+    const onHash = () => setHashRoute(currentHashRoute());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
   // Auto-dismiss the splash after a short hold.
@@ -100,6 +133,20 @@ export default function App() {
 
   if (showSplash || !loaded) {
     return <SplashScreen onContinue={() => loaded && setShowSplash(false)} />;
+  }
+
+  // /#/admin — web build only. Rendered above the tab-bar chrome
+  // because the admin console owns its own layout.
+  if (__KYC_ADMIN__ && AdminApp && hashRoute === 'admin'
+      && (state.anglerEmail || '').trim().toLowerCase() === ADMIN_EMAIL) {
+    return (
+      <Suspense fallback={<SplashScreen />}>
+        <AdminApp
+          localAnglerEmail={state.anglerEmail}
+          onExit={() => { window.location.hash = ''; }}
+        />
+      </Suspense>
+    );
   }
 
   const jurisdiction = jurisdictionById(state.jurisdiction);

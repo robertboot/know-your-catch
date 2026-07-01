@@ -1464,6 +1464,20 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
           <GhostButton onClick={onChangeJurisdiction} style={{ padding: '6px 12px', fontSize: 12 }}>Change</GhostButton>
         </div>
       </Card>
+      {/* Admin console entry — web-only, admin allowlist only. When
+          __KYC_ADMIN__ is false (ios:build) the whole Card constant-
+          folds out and never reaches the iOS bundle. */}
+      {__KYC_ADMIN__ && (state.anglerEmail || '').trim().toLowerCase() === 'robertb1023@me.com' && (
+        <Card style={{ marginBottom: 10 }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Admin</SectionLabel>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
+              Species editor. Web-only; not shipped in the iOS bundle.
+            </div>
+            <GhostButton onClick={() => { window.location.hash = '#/admin'; }} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Open</GhostButton>
+          </div>
+        </Card>
+      )}
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Your fish</SectionLabel>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
