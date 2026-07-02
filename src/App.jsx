@@ -9,6 +9,7 @@ import { loadState, saveState, defaultState } from './storage.js';
 import { migratePhotosToStore } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
+import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
@@ -85,14 +86,17 @@ export default function App() {
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
     refreshFeeds().catch(() => {});
-    // Refresh species overlay from Supabase (no-op until env vars are
-    // set). Subscribers re-render when overrides land.
+    // Refresh species + brand overlays from Supabase (no-ops until env
+    // vars are set). Subscribers re-render when overrides land.
     refreshSpecies().catch(() => {});
+    refreshBrandAssets().catch(() => {});
   }, []);
 
-  // Species overlay subscription: bump a version counter on every
-  // notify so screens re-read the (mutated in place) SPECIES const.
+  // Overlay subscriptions: bump a version counter on every notify so
+  // screens re-read the (mutated in place) SPECIES const + brandAsset()
+  // lookups reflect the latest cache.
   useEffect(() => subscribeSpecies(() => setSpeciesVersion(v => v + 1)), []);
+  useEffect(() => subscribeBrand(() => setSpeciesVersion(v => v + 1)), []);
 
   // Hash routing — only used for /#/admin today. Any change to the
   // hash re-syncs the local route state so the admin console mounts
@@ -326,16 +330,16 @@ export default function App() {
             style={{
               background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
               display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
-              height: 72, overflow: 'hidden',
+              height: 72,
             }}
           >
             <img
-              src={`${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`}
+              src={brandAsset('logo_horizontal', `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`)}
               alt="ReelIntel — identify, check rules, log catch, find better spots"
               style={{
-                height: 140, width: 'auto', maxWidth: '100%',
+                height: 56, width: 'auto', maxWidth: '100%',
                 display: 'block', objectFit: 'contain',
-                marginLeft: -10,
+                marginLeft: 12,
               }}
             />
           </button>

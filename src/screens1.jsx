@@ -16,6 +16,7 @@ import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
 } from './helpers.js';
+import { brandAsset } from './brand-store.js';
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
@@ -37,7 +38,7 @@ export function SplashScreen({ onContinue }) {
       }}
     >
       <img
-        src={`${import.meta.env.BASE_URL}brand/reelintel-brand.png`}
+        src={brandAsset('logo_brand', `${import.meta.env.BASE_URL}brand/reelintel-brand.png`)}
         alt="ReelIntel — identify, check rules, log catch, find better spots. Built for the Gulf of America."
         style={{ maxWidth: 'min(92vw, 460px)', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
       />
@@ -219,7 +220,7 @@ export function HomeScreen({
         background: '#031B33',
       }}>
         <img
-          src={`${import.meta.env.BASE_URL}brand/hero-tuna.png`}
+          src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
           alt=""
           aria-hidden
           style={{

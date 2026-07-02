@@ -21,6 +21,10 @@ import { SPECIES } from './data.js';
 import { client } from './supabase-client.js';
 
 const CACHE_KEY = 'kyc_species_overrides_v1';
+const PHOTOS_CACHE_KEY = 'kyc_species_photos_v1';
+
+// speciesId -> [{ url, credit, license, source, is_primary, sort_order, path }]
+const photoOverrides = new Map();
 
 /* Map a Supabase row (snake_case + arrays) to the JS SPECIES shape
    (camelCase). Nullish column values fall back to what the bundled
@@ -111,9 +115,46 @@ function notify() {
   for (const fn of listeners) { try { fn(); } catch {} }
 }
 
+function loadCachedPhotos() {
+  try {
+    const raw = localStorage.getItem(PHOTOS_CACHE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed?.bySpecies && typeof parsed.bySpecies === 'object') {
+      for (const [id, arr] of Object.entries(parsed.bySpecies)) {
+        if (Array.isArray(arr)) photoOverrides.set(id, arr);
+      }
+    }
+  } catch {}
+}
+function saveCachedPhotos(bySpecies) {
+  try {
+    localStorage.setItem(PHOTOS_CACHE_KEY, JSON.stringify({
+      bySpecies, cachedAt: new Date().toISOString(),
+    }));
+  } catch {}
+}
+
 // === Module-init: seed SPECIES from cache before the app renders ==
 const cached = loadCachedOverrides();
 if (cached) applyOverrides(cached);
+loadCachedPhotos();
+
+/** Return the primary override photo for a species, or null. Preferred
+    over the bundled photos/manifest.json entry — see speciesPhoto() in
+    helpers.js. */
+export function speciesPhotoOverride(id) {
+  const rows = photoOverrides.get(id);
+  if (!rows || rows.length === 0) return null;
+  const primary = rows.find(r => r.is_primary) || rows[0];
+  if (!primary?.url) return null;
+  return { url: primary.url, credit: primary.credit, license: primary.license, source: primary.source };
+}
+
+/** All override photos for a species (admin editor uses this). */
+export function speciesPhotoOverrideAll(id) {
+  return (photoOverrides.get(id) || []).slice();
+}
 
 // === Public API ===================================================
 
@@ -125,18 +166,94 @@ export async function refreshSpecies() {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
   try {
-    const { data, error } = await c
-      .from('species')
-      .select('id, common_name, alt_names, scientific, category, key_ids, lookalikes, habitat, typical_size, reef_fish, hms');
-    if (error) return { ok: false, error: error.message };
-    const overrides = (data || []).map(rowToSpecies);
+    const [speciesRes, photosRes] = await Promise.all([
+      c.from('species').select('id, common_name, alt_names, scientific, category, key_ids, lookalikes, habitat, typical_size, reef_fish, hms'),
+      c.from('species_photos').select('id, species_id, url, credit, license, source, is_primary, sort_order').order('sort_order', { ascending: true }),
+    ]);
+    if (speciesRes.error) return { ok: false, error: speciesRes.error.message };
+    const overrides = (speciesRes.data || []).map(rowToSpecies);
     applyOverrides(overrides);
     saveCachedOverrides(overrides);
+
+    // Photos are a nice-to-have — a fetch failure here shouldn't
+    // block the species refresh from committing.
+    if (!photosRes.error && Array.isArray(photosRes.data)) {
+      photoOverrides.clear();
+      const bySpecies = {};
+      for (const row of photosRes.data) {
+        const sid = row.species_id;
+        if (!sid) continue;
+        (bySpecies[sid] ||= []).push(row);
+      }
+      for (const [sid, rows] of Object.entries(bySpecies)) photoOverrides.set(sid, rows);
+      saveCachedPhotos(bySpecies);
+    }
+
     notify();
     return { ok: true, count: overrides.length };
   } catch (e) {
     return { ok: false, error: e?.message || 'refresh failed' };
   }
+}
+
+/** Ensure a species row exists in Supabase so FK inserts succeed.
+    Only most species live in the bundled SPECIES const, not in the DB
+    (the DB holds edits/overlays). Adding a photo needs the FK target,
+    so we lazily seed the row from the bundled record when missing.
+    Safe to call redundantly — upsert on id primary key. */
+async function ensureSpeciesRow(speciesId) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const sp = SPECIES.find(s => s.id === speciesId);
+  if (!sp) return { ok: false, error: `species ${speciesId} not found in bundled seed` };
+  const row = speciesToRow(sp);
+  const { error } = await c.from('species').upsert(row, { onConflict: 'id', ignoreDuplicates: true });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Insert a species_photos row and refresh cache. */
+export async function addSpeciesPhoto({ speciesId, url, credit, license, source, isPrimary }) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  // FK target must exist. Seed from bundled if the species row is only
+  // in the JS seed and hasn't been touched by the admin yet.
+  const seed = await ensureSpeciesRow(speciesId);
+  if (!seed.ok) return { ok: false, error: seed.error };
+  const row = {
+    species_id: speciesId, url,
+    credit: credit || null, license: license || null, source: source || null,
+    is_primary: !!isPrimary, sort_order: 0,
+  };
+  if (isPrimary) {
+    // Unmark any existing primary for this species so at most one wins.
+    await c.from('species_photos').update({ is_primary: false }).eq('species_id', speciesId);
+  }
+  const { error } = await c.from('species_photos').insert(row);
+  if (error) return { ok: false, error: error.message };
+  await refreshSpecies();
+  return { ok: true };
+}
+
+/** Delete a species_photos row by id and refresh cache. */
+export async function deleteSpeciesPhoto(photoId) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const { error } = await c.from('species_photos').delete().eq('id', photoId);
+  if (error) return { ok: false, error: error.message };
+  await refreshSpecies();
+  return { ok: true };
+}
+
+/** Set a specific photo as primary; unset all others for that species. */
+export async function setPrimarySpeciesPhoto(photoId, speciesId) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  await c.from('species_photos').update({ is_primary: false }).eq('species_id', speciesId);
+  const { error } = await c.from('species_photos').update({ is_primary: true }).eq('id', photoId);
+  if (error) return { ok: false, error: error.message };
+  await refreshSpecies();
+  return { ok: true };
 }
 
 /** Upsert a single species (JS shape) to Supabase. Only the admin

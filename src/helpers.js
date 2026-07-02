@@ -1,13 +1,20 @@
 import { SPECIES, JURISDICTIONS, COMPARISONS, DATA_BUILD_DATE } from './data.js';
 import photoManifest from '../photos/manifest.json';
+import { speciesPhotoOverride } from './species-store.js';
 
 // Proprietary images are served from the repo via GitHub raw (same
 // public source the feeds use); licensed fallbacks come from their URL.
 const PHOTO_RAW = 'https://raw.githubusercontent.com/robertboot/know-your-catch/claude/upload-app-assets-NUxRr/';
 
 // Best available photo for a species, or null (caller draws the
-// FishMark illustration). Honours the manifest's chosen photo.
+// FishMark illustration). Preference order:
+//   1. Admin-uploaded Supabase override (species_photos primary row)
+//   2. Bundled manifest — proprietary file in the repo
+//   3. Bundled manifest — external fallback URL
+//   4. null → FishMark placeholder illustration
 export function speciesPhoto(id) {
+  const override = speciesPhotoOverride(id);
+  if (override) return override;
   const e = photoManifest.species && photoManifest.species[id];
   if (!e) return null;
   if (e.primary === 'proprietary' && e.proprietary) {

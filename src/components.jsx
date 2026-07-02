@@ -402,7 +402,7 @@ export function ShareReportModal({
    prev/next navigation when multiple photos are passed in.
    Backward-compat: accepts `src` (single) or `photos` (array).
    ============================================================ */
-export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, killWhite = false, onClose }) {
+export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onClose }) {
   const list = Array.isArray(photos) && photos.length > 0 ? photos : (src ? [src] : []);
   const [idx, setIdx] = useState(Math.max(0, Math.min(initialIndex, list.length - 1)));
   const total = list.length;
@@ -459,7 +459,6 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, kil
       <img
         src={photoDisplayUrl(list[idx]) || list[idx]}
         alt={alt || ''}
-        className={killWhite ? 'kyc-kill-white' : undefined}
         onClick={(e) => e.stopPropagation()}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}

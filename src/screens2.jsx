@@ -95,7 +95,6 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
               }}
             >
               <img src={photo.url} alt={s.commonName} loading="lazy"
-                className="kyc-kill-white"
                 style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
               <div aria-hidden style={{
                 position: 'absolute', bottom: 6, right: 8,
@@ -253,7 +252,6 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           photos={[photo.url]}
           alt={s.commonName}
           caption={photo.credit ? `${s.commonName} · ${photo.credit} · ${photo.license}` : s.commonName}
-          killWhite
           onClose={() => setLightboxOpen(false)}
         />
       )}
