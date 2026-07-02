@@ -2907,53 +2907,86 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   };
 }
 
-/* Lookalikes question — replaces the retired standalone CompareScreen.
-   Given a species with a non-empty s.lookalikes array, ask which one
-   is often confused with it. Correct = a real lookalike; distractors
-   = same-category species that are NOT actual lookalikes (so the
-   answer isn't ambiguous). Feedback surfaces one key discriminator
-   from the correct answer's keyIds so it teaches, not just quizzes. */
-function pickLookalikesQuestion(prevSpeciesId = null) {
+/* Lookalikes question — three-tier graded scoring.
+
+   Given an anchor species with a non-empty s.lookalikes[] array, ask
+   which species is commonly confused with it. Answers are graded, not
+   binary:
+     - Any species in anchor.lookalikes → full credit (1.0, green)
+     - Same category as anchor but NOT in lookalikes → partial (0.5, amber)
+     - Different category → wrong (0.0, red)
+
+   Options are constructed to make the tier distribution deterministic:
+     1× primary lookalike (canonical correct, first in anchor.lookalikes)
+     1× same-category non-lookalike (partial-credit trap)
+     2× different-category distractors (obvious wrongs)
+   Then shuffled so tier order isn't predictable to the angler. */
+function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   const candidates = SPECIES.filter(s =>
-    s.id !== prevSpeciesId
+    !seenAnchorIds.has(s.id)
     && Array.isArray(s.lookalikes)
     && s.lookalikes.some(id => speciesById(id))
   );
   if (candidates.length === 0) return null;
   const anchor = candidates[Math.floor(Math.random() * candidates.length)];
-  const lookalikeIds = anchor.lookalikes.filter(id => speciesById(id));
-  const correctId = lookalikeIds[Math.floor(Math.random() * lookalikeIds.length)];
-  const correct = speciesById(correctId);
-  const distractorPool = SPECIES.filter(s =>
+
+  // Primary lookalike = first resolvable entry in anchor.lookalikes.
+  // That's the "canonical" pairing the seed data authors prioritized.
+  const primary = anchor.lookalikes.map(id => speciesById(id)).find(Boolean);
+  if (!primary) return null;
+
+  const sameCatPool = SPECIES.filter(s =>
     s.id !== anchor.id
-    && s.id !== correct.id
+    && s.id !== primary.id
     && s.category === anchor.category
     && !anchor.lookalikes.includes(s.id)
   );
-  let distractors = _shuffle(distractorPool).slice(0, 3);
-  // If same-category pool is too small, top up with any-category rows.
-  if (distractors.length < 3) {
-    const rest = _shuffle(SPECIES.filter(s =>
-      s.id !== anchor.id && s.id !== correct.id && !distractors.some(d => d.id === s.id) && !anchor.lookalikes.includes(s.id)
+  const sameCatDistractor = _shuffle(sameCatPool)[0];
+
+  const otherCatPool = SPECIES.filter(s =>
+    s.id !== anchor.id
+    && s.id !== primary.id
+    && s.category !== anchor.category
+    && !anchor.lookalikes.includes(s.id)
+    && (!sameCatDistractor || s.id !== sameCatDistractor.id)
+  );
+  const otherCatDistractors = _shuffle(otherCatPool).slice(0, 2);
+
+  // Compose the option list. If same-category distractor pool was
+  // empty (rare — very short-category anchor), backfill with another
+  // different-category option so we still get 4 answers.
+  const seed = [primary];
+  if (sameCatDistractor) seed.push(sameCatDistractor);
+  seed.push(...otherCatDistractors);
+  if (seed.length < 4) {
+    const backup = _shuffle(SPECIES.filter(s =>
+      s.id !== anchor.id && !seed.some(x => x.id === s.id) && !anchor.lookalikes.includes(s.id)
     ));
-    for (const s of rest) {
-      if (distractors.length >= 3) break;
-      distractors.push(s);
+    for (const s of backup) {
+      if (seed.length >= 4) break;
+      seed.push(s);
     }
   }
-  if (distractors.length < 3) return null;
+  if (seed.length < 4) return null;
+
   return {
     type: 'lookalikes',
     species: anchor,
-    correctSpecies: correct,
+    correctSpecies: primary,           // used by feedback UI
+    primaryLookalike: primary,         // explicit alias per spec
+    anchorLookalikes: anchor.lookalikes,
     prompt: <>Which of these is often confused with a <strong>{anchor.commonName}</strong>?</>,
-    options: _shuffle([correct, ...distractors]).map(s => ({
-      key: s.id, label: s.commonName, isCorrect: s.id === correct.id, species: s,
+    options: _shuffle(seed).map(s => ({
+      key: s.id, label: s.commonName, species: s,
+      // isCorrect kept for backwards-compat with the shared render
+      // path — true only for full-credit picks. Tier is computed at
+      // scoring time from the picked species vs the anchor.
+      isCorrect: anchor.lookalikes.includes(s.id),
     })),
   };
 }
 
-function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null) {
+function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null, seenAnchorIds = new Set()) {
   // Without a jurisdiction set we can't ask reg questions — fall back
   // to species-ID or lookalikes only.
   const types = jurisdiction
@@ -2962,29 +2995,71 @@ function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null) {
   const pick = types[Math.floor(Math.random() * types.length)];
   const q = pick === 'bag'        ? pickBagLimitQuestion(jurisdiction, prevSpeciesId)
           : pick === 'size'       ? pickSizeLimitQuestion(jurisdiction, state.units, prevSpeciesId)
-          : pick === 'lookalikes' ? pickLookalikesQuestion(prevSpeciesId)
+          : pick === 'lookalikes' ? pickLookalikesQuestion(seenAnchorIds)
           : pickSpeciesQuestion(prevSpeciesId);
   // If a reg-question pool is empty for the chosen jurisdiction,
   // fall back to species so the angler always gets something.
   return q || pickSpeciesQuestion(prevSpeciesId);
 }
 
+/* Classify a picked option into one of three grading tiers. For all
+   non-lookalikes question types the picked option is either correct
+   or wrong (no partial). Returns { tier, score } where tier is
+   'full' | 'partial' | 'wrong' and score is 1 | 0.5 | 0.
+
+   Tier is derived server-side (from the question + picked species)
+   rather than from an option flag so the option data is free of any
+   scoring hints an inspector could exploit. */
+function classifyAnswer(question, picked) {
+  if (!question || !picked) return { tier: 'wrong', score: 0 };
+  if (question.type === 'lookalikes') {
+    const anchor = question.species;
+    if (anchor?.lookalikes?.includes(picked.id)) return { tier: 'full',    score: 1   };
+    if (picked.category && anchor?.category === picked.category)
+                                             return { tier: 'partial', score: 0.5 };
+    return                                          { tier: 'wrong',   score: 0   };
+  }
+  // Non-lookalikes: full or nothing.
+  return picked.__isCorrect ? { tier: 'full', score: 1 } : { tier: 'wrong', score: 0 };
+}
+
 export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
+  const [seenAnchorIds] = useState(() => new Set());
   const [question, setQuestion] = useState(() => pickQuizQuestion(state, jurisdiction));
   const [selectedKey, setSelectedKey] = useState(null);
-  const [score, setScore] = useState({ right: 0, total: 0 });
+  // Decimal score to accommodate 0.5 partial credit. Split tracks how
+  // many were full / partial / wrong for the end-of-session summary.
+  const [score, setScore] = useState({ points: 0, total: 0, full: 0, partial: 0, wrong: 0 });
   const [streak, setStreak] = useState(0);
+
+  // Register the anchor so the next question doesn't repeat it.
+  useEffect(() => {
+    if (question?.type === 'lookalikes' && question.species?.id) {
+      seenAnchorIds.add(question.species.id);
+    }
+  }, [question, seenAnchorIds]);
 
   const next = () => {
     setSelectedKey(null);
-    setQuestion(pickQuizQuestion(state, jurisdiction, question?.species?.id));
+    setQuestion(pickQuizQuestion(state, jurisdiction, question?.species?.id, seenAnchorIds));
   };
 
   const pick = (opt) => {
     if (selectedKey) return;
     setSelectedKey(opt.key);
-    setScore(({ right, total }) => ({ right: right + (opt.isCorrect ? 1 : 0), total: total + 1 }));
-    setStreak(prev => opt.isCorrect ? prev + 1 : 0);
+    // Pass through the option's own isCorrect via a non-persistent
+    // temporary — the classifier reads either the lookalikes match
+    // or (for other types) the option's __isCorrect flag.
+    const picked = opt.species ? { ...opt.species, __isCorrect: opt.isCorrect } : { id: opt.key, __isCorrect: opt.isCorrect };
+    const { tier, score: pts } = classifyAnswer(question, picked);
+    setScore(s => ({
+      points: s.points + pts,
+      total: s.total + 1,
+      full: s.full + (tier === 'full' ? 1 : 0),
+      partial: s.partial + (tier === 'partial' ? 1 : 0),
+      wrong: s.wrong + (tier === 'wrong' ? 1 : 0),
+    }));
+    setStreak(prev => tier === 'full' ? prev + 1 : 0);
   };
 
   if (!question) {
@@ -2999,9 +3074,28 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
   const photo = speciesPhoto(sp.id);
   const selectedOpt = question.options.find(o => o.key === selectedKey);
   const correctOpt = question.options.find(o => o.isCorrect);
-  const isCorrect = !!selectedOpt?.isCorrect;
+  const pickedSpecies = selectedOpt?.species || (selectedOpt && speciesById(selectedOpt.key));
+  // Grade the picked answer. For lookalikes this yields full / partial /
+  // wrong; for other question types partial never triggers.
+  const grade = selectedOpt
+    ? classifyAnswer(question, pickedSpecies ? { ...pickedSpecies, __isCorrect: selectedOpt.isCorrect } : { id: selectedOpt.key, __isCorrect: selectedOpt.isCorrect })
+    : null;
+  const tier = grade?.tier; // 'full' | 'partial' | 'wrong' | null
+  const isCorrect = tier === 'full';
+  const tierColor = tier === 'full' ? T.open : tier === 'partial' ? T.warn : T.closed;
+  const tierBg    = tier === 'full' ? T.openBg : tier === 'partial' ? T.warnBg : T.closedBg;
+  // For wrong-category picks in a lookalikes question, teach by
+  // showing the anchor next to the PRIMARY lookalike (what they
+  // should've picked). For full/partial, show anchor next to what
+  // they actually picked so the comparison reinforces the choice.
+  const compareRight = question.type === 'lookalikes'
+    ? (tier === 'wrong' ? question.primaryLookalike : pickedSpecies)
+    : null;
   const reg = jurisdiction ? REGULATIONS[sp.id]?.[jurisdiction.id] : null;
   const status = reg ? seasonState(reg.open).status : 'unknown';
+
+  const catName = (id) => (CATEGORIES.find(c => c.id === id)?.name) || id;
+  const fmtScore = (n) => (n % 1 === 0 ? String(n) : n.toFixed(1));
 
   const typeLabel = {
     species: 'Spot the species from the photo.',
@@ -3020,10 +3114,17 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
         <H1 size={22}>Fish ID Quiz</H1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.inkSoft }}>
-          <span>{score.right} / {score.total}</span>
+          <span title={`${score.full} correct · ${score.partial} partial · ${score.wrong} wrong`}>
+            {fmtScore(score.points)} / {score.total}
+          </span>
           {streak >= 2 && <span style={{ color: T.brass, fontWeight: 800 }}>{streak} streak</span>}
         </div>
       </div>
+      {score.total > 0 && score.partial > 0 && (
+        <div style={{ fontSize: 10, color: T.inkMute, marginBottom: 6, letterSpacing: 0.4 }}>
+          {score.full} full · {score.partial} partial · {score.wrong} wrong
+        </div>
+      )}
       <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 14 }}>
         {typeLabel}
       </div>
@@ -3051,15 +3152,36 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
         {question.prompt}
       </div>
 
-      {/* Options */}
+      {/* Options — after an answer, lookalikes options use tier tinting:
+          full-credit lookalike → green, same-category (partial) → amber,
+          different-category → dim. The picked option gets its own tier
+          color even if not full-credit. Other question types stay
+          full-or-nothing green/red. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {question.options.map(opt => {
           const isPicked = selectedKey === opt.key;
           let bg = T.card, border = T.cardEdge, color = T.ink, iconNode = null;
           if (selectedKey) {
-            if (opt.isCorrect) { bg = T.openBg; border = T.open; color = T.open; iconNode = <CheckCircle2 size={18} color={T.open} />; }
-            else if (isPicked) { bg = T.closedBg; border = T.closed; color = T.closed; iconNode = <X size={18} color={T.closed} />; }
-            else { color = T.inkMute; }
+            if (question.type === 'lookalikes') {
+              const optSpecies = opt.species || speciesById(opt.key);
+              const optGrade = classifyAnswer(question, optSpecies ? { ...optSpecies, __isCorrect: opt.isCorrect } : { id: opt.key });
+              if (optGrade.tier === 'full') {
+                bg = T.openBg; border = T.open; color = T.open;
+                if (isPicked) iconNode = <CheckCircle2 size={18} color={T.open} />;
+              } else if (isPicked && optGrade.tier === 'partial') {
+                bg = T.warnBg; border = T.warn; color = T.warn;
+                iconNode = <AlertTriangle size={18} color={T.warn} />;
+              } else if (isPicked) {
+                bg = T.closedBg; border = T.closed; color = T.closed;
+                iconNode = <X size={18} color={T.closed} />;
+              } else {
+                color = T.inkMute;
+              }
+            } else {
+              if (opt.isCorrect) { bg = T.openBg; border = T.open; color = T.open; iconNode = <CheckCircle2 size={18} color={T.open} />; }
+              else if (isPicked) { bg = T.closedBg; border = T.closed; color = T.closed; iconNode = <X size={18} color={T.closed} />; }
+              else { color = T.inkMute; }
+            }
           }
           return (
             <button key={opt.key} onClick={() => pick(opt)} disabled={!!selectedKey} style={{
@@ -3077,19 +3199,34 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
 
       {/* Result + species review */}
       {selectedKey && (
-        <Card style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: isCorrect ? T.open : T.closed, marginBottom: 10 }}>
-            {isCorrect
-              ? '✓ Correct!'
-              : question.type === 'species'
-                ? `✗ It's a ${sp.commonName}`
-                : `✗ The answer is ${correctOpt?.label}`}
+        <Card style={{ marginTop: 14, background: question.type === 'lookalikes' ? tierBg : undefined, borderColor: question.type === 'lookalikes' ? tierColor : undefined }}>
+          {/* Tier-aware verdict line — lookalikes get three-tier phrasing
+              (full / partial / wrong); other types keep the classic
+              green-check or red-X messaging. */}
+          <div style={{ fontSize: 15, fontWeight: 800, color: question.type === 'lookalikes' ? tierColor : (isCorrect ? T.open : T.closed), marginBottom: 10, lineHeight: 1.4 }}>
+            {question.type === 'lookalikes' ? (
+              tier === 'full' ? (
+                <>✓ Correct — {sp.commonName} is often confused with {pickedSpecies?.commonName}.</>
+              ) : tier === 'partial' ? (
+                <>◐ Good eye — both are {catName(sp.category)}. But {sp.commonName} is most commonly confused with {question.primaryLookalike?.commonName}. Tell them apart by: {sp.keyIds?.[0] || '—'}.</>
+              ) : (
+                <>✗ Not quite — {pickedSpecies?.commonName} is a {catName(pickedSpecies?.category)}, different family. {sp.commonName} is most commonly confused with {question.primaryLookalike?.commonName}.</>
+              )
+            ) : (
+              isCorrect
+                ? '✓ Correct!'
+                : question.type === 'species'
+                  ? `✗ It's a ${sp.commonName}`
+                  : `✗ The answer is ${correctOpt?.label}`
+            )}
           </div>
 
-          {/* Lookalikes side-by-side panel — anchor vs the correct lookalike
-              with one key discriminator pulled from keyIds. Richer feature
-              comparison can come later. */}
-          {question.type === 'lookalikes' && question.correctSpecies && (
+          {/* Side-by-side panel for lookalikes: anchor + either the
+              picked species (full/partial credit) or the primary
+              lookalike (wrong — teach what they should have picked).
+              Wrong-category picks explicitly aren't shown side-by-side
+              with the wrong species, only with the correct target. */}
+          {question.type === 'lookalikes' && compareRight && (
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                 <div style={{ textAlign: 'center' }}>
@@ -3097,13 +3234,13 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
                   <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{sp.commonName}</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <SpeciesImage species={question.correctSpecies} size={80} />
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{question.correctSpecies.commonName}</div>
+                  <SpeciesImage species={compareRight} size={80} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{compareRight.commonName}</div>
                 </div>
               </div>
-              {question.correctSpecies.keyIds?.[0] && (
+              {sp.keyIds?.[0] && (
                 <div style={{ background: T.parchmentDeep, borderRadius: 6, padding: '8px 10px', fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
-                  <span style={{ color: T.brass, fontWeight: 700 }}>Key tell for {question.correctSpecies.commonName}:</span> {question.correctSpecies.keyIds[0]}
+                  <span style={{ color: T.brass, fontWeight: 700 }}>Key tell for {sp.commonName}:</span> {sp.keyIds[0]}
                 </div>
               )}
             </div>
