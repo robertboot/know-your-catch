@@ -4,7 +4,7 @@ import {
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
-  CheckCircle2, ShieldCheck, MoreHorizontal,
+  CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -15,7 +15,7 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
-  sunPosition, moonPhase,
+  sunPosition, moonPhase, fetchWeatherForTime,
 } from './helpers.js';
 import { brandAsset } from './brand-store.js';
 import { getLocation, getPhoto } from './native.js';
@@ -160,7 +160,7 @@ function ScrollDots({ count, active }) {
 export function HomeScreen({
   state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
-  onCompare, onRegulationAlerts, onQuiz, onLogMenu,
+  onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   const jurId = jurisdiction?.id || 'fed_gulf';
@@ -270,6 +270,12 @@ export function HomeScreen({
           scrollSnapType: 'x proximity',
         }}
       >
+        <QuickTile
+          icon={<BarChart2 size={28} strokeWidth={1.8} />}
+          titleA="PATTERNS"
+          subtitle="What's working in your log"
+          onClick={onPatterns}
+        />
         <QuickTile
           icon={<Camera size={28} strokeWidth={1.8} />}
           titleA="FISH" titleB="ID"
@@ -530,28 +536,12 @@ export function QuickLogScreen({ state, jurisdiction, update, onDone, onCancel }
         const photoEntry = await savePhoto(downscaled);
 
         const { lat, lon } = await gpsPromise;
-
-        // Weather only when we have coords and the network cooperates.
-        let weather = null;
-        if (lat != null && lon != null) {
-          const ac = new AbortController();
-          const wxTimer = setTimeout(() => ac.abort(), 5000);
-          try {
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl&temperature_unit=fahrenheit&wind_speed_unit=mph`;
-            const j = await fetch(url, { signal: ac.signal }).then(r => r.ok ? r.json() : Promise.reject());
-            const c = j.current || {};
-            weather = {
-              tempF: c.temperature_2m, windMph: c.wind_speed_10m, windDir: c.wind_direction_10m,
-              cloudPct: c.cloud_cover, precipMm: c.precipitation, pressureMb: c.pressure_msl,
-            };
-          } catch {
-            weather = null;
-          } finally {
-            clearTimeout(wxTimer);
-          }
-        }
-
         const when = new Date();
+
+        // Weather via the shared helper — Quick Log is always "now"
+        // so it'll hit the live branch, but keeping the same call
+        // site as backdated uploads means one path to test + fix.
+        const weather = await fetchWeatherForTime({ lat, lon, when });
         const sun = lat != null && lon != null ? sunPosition(when, lat, lon) : null;
         const moon = moonPhase(when);
 

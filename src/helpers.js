@@ -270,6 +270,116 @@ export function appleMapsLink(lat, lon) {
    Share / quick report
    ------------------------------------------------------------------ */
 
+/* Fetch weather for a specific moment in time and location. Branches
+   by age so backdated uploads (photo taken last week) get correct
+   historical weather instead of today's:
+
+     age < 2h  → open-meteo /v1/forecast?current=…  (weather.source: 'live')
+     age >= 2h → open-meteo /v1/archive with start_date=end_date=YYYY-MM-DD,
+                 pick hourly index closest to the target time
+                 (weather.source: 'archive')
+     archive returns empty hourly array (recent-lag 2h–5d gap) →
+                 /v1/forecast?past_days=7 + hourly + start/end_date filter
+                 (weather.source: 'forecast_past_days')
+
+   AbortController budget: 5s. On failure returns null; catch still
+   saves. Future timestamps (broken camera clocks) clamp to now.
+
+   Weather shape: { tempF, windMph, windDir, cloudPct, precipMm,
+                    pressureMb, source }. Consumers key on source to
+   badge archived rows in the UI. */
+export async function fetchWeatherForTime({ lat, lon, when }) {
+  if (lat == null || lon == null) return null;
+  const now = Date.now();
+  let ts = when instanceof Date ? when.getTime() : new Date(when).getTime();
+  if (!Number.isFinite(ts)) return null;
+  if (ts > now) {
+    console.warn('fetchWeatherForTime: future timestamp clamped to now', new Date(ts).toISOString());
+    ts = now;
+  }
+  const ageMs = now - ts;
+
+  const wxUnits = 'temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto';
+  const hourly  = 'hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl';
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 5000);
+
+  const runFetch = async (url) => {
+    const r = await fetch(url, { signal: ac.signal });
+    if (!r.ok) throw new Error(`open-meteo ${r.status}`);
+    return await r.json();
+  };
+  const closestHourlyIdx = (times, target) => {
+    let best = -1, bestDiff = Infinity;
+    for (let i = 0; i < times.length; i++) {
+      const t = new Date(times[i]).getTime();
+      if (!Number.isFinite(t)) continue;
+      const diff = Math.abs(t - target);
+      if (diff < bestDiff) { bestDiff = diff; best = i; }
+    }
+    return best;
+  };
+
+  try {
+    // Live branch: <2h old.
+    if (ageMs < 2 * 60 * 60 * 1000) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl&${wxUnits}`;
+      const j = await runFetch(url);
+      const c = j.current || {};
+      clearTimeout(timer);
+      return {
+        tempF: c.temperature_2m, windMph: c.wind_speed_10m, windDir: c.wind_direction_10m,
+        cloudPct: c.cloud_cover, precipMm: c.precipitation, pressureMb: c.pressure_msl,
+        source: 'live',
+      };
+    }
+
+    // Archive branch: >=2h old.
+    const day = new Date(ts).toISOString().slice(0, 10);
+    const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${day}&end_date=${day}&${hourly}&${wxUnits}`;
+    let j = await runFetch(archiveUrl);
+    const hoursA = j.hourly?.time || [];
+    if (hoursA.length > 0) {
+      const idx = closestHourlyIdx(hoursA, ts);
+      clearTimeout(timer);
+      if (idx < 0) return null;
+      const h = j.hourly;
+      return {
+        tempF:     h.temperature_2m?.[idx] ?? null,
+        windMph:   h.wind_speed_10m?.[idx] ?? null,
+        windDir:   h.wind_direction_10m?.[idx] ?? null,
+        cloudPct:  h.cloud_cover?.[idx] ?? null,
+        precipMm:  h.precipitation?.[idx] ?? null,
+        pressureMb: h.pressure_msl?.[idx] ?? null,
+        source: 'archive',
+      };
+    }
+
+    // Recent-lag fallback: archive doesn't cover the past ~5 days yet.
+    // The forecast endpoint's past_days window fills that gap.
+    const fallbackUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&start_date=${day}&end_date=${day}&${hourly}&${wxUnits}`;
+    j = await runFetch(fallbackUrl);
+    const hoursB = j.hourly?.time || [];
+    clearTimeout(timer);
+    if (hoursB.length === 0) return null;
+    const idx = closestHourlyIdx(hoursB, ts);
+    if (idx < 0) return null;
+    const h = j.hourly;
+    return {
+      tempF:     h.temperature_2m?.[idx] ?? null,
+      windMph:   h.wind_speed_10m?.[idx] ?? null,
+      windDir:   h.wind_direction_10m?.[idx] ?? null,
+      cloudPct:  h.cloud_cover?.[idx] ?? null,
+      precipMm:  h.precipitation?.[idx] ?? null,
+      pressureMb: h.pressure_msl?.[idx] ?? null,
+      source: 'forecast_past_days',
+    };
+  } catch (e) {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
 /* Guard: catch strings if a conditions/coordinate line accidentally
    slips into a share payload. This is user privacy — we never share
    catch location, weather, or celestial data. Warns loudly in dev so

@@ -25,6 +25,7 @@ import {
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
   CatchLogScreen, CatchEntryScreen, CatchDetailScreen, QuizScreen,
 } from './screens2.jsx';
+import { PatternsScreen } from './screens_patterns.jsx';
 
 // Web-only admin console. When __KYC_ADMIN__ is false (ios:build) the
 // ternary constant-folds to null and Rollup drops both the dynamic
@@ -217,6 +218,7 @@ export default function App() {
     onQuiz:        () => push({ name: 'quiz' }),
     onReport:     () => push({ name: 'catch_entry' }),
     onLogMenu:    () => push({ name: 'log_menu' }),
+    onPatterns:   () => push({ name: 'patterns' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
@@ -240,6 +242,12 @@ export default function App() {
         onQuickLog={() => push({ name: 'quick_log' })}
         onIdentify={() => push({ name: 'identify' })}
         onUploadPhoto={() => push({ name: 'catch_entry', openUploadOnMount: true })}
+      />;
+      break;
+    case 'patterns':
+      body = <PatternsScreen
+        state={state}
+        onPickSpecies={(id) => push({ name: 'species', id })}
       />;
       break;
     case 'quick_log':

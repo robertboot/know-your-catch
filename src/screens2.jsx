@@ -17,7 +17,7 @@ import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
-  shareReport,
+  shareReport, fetchWeatherForTime,
 } from './helpers.js';
 
 /* Render a coordinate value as a tappable Apple Maps link. */
@@ -2215,7 +2215,21 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
-        <SectionLabel style={{ marginBottom: 8 }}>Conditions when caught</SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <SectionLabel>Conditions when caught</SectionLabel>
+          {/* Archived-weather pill — surfaces when the weather block was
+              pulled from the historical archive (backdated upload) rather
+              than live-fetched at save time. Old catches without a source
+              field predate the branch and show no pill. */}
+          {c.weather && (c.weather.source === 'archive' || c.weather.source === 'forecast_past_days') && (
+            <span style={{
+              fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase',
+              background: T.warnBg, color: T.warn,
+              border: `1px solid ${T.warn}`,
+              padding: '2px 6px', borderRadius: 4, fontWeight: 800,
+            }}>🕰 archived</span>
+          )}
+        </div>
         {c.sunAlt != null && <DetailRow label="Sun" value={`${c.sunAlt.toFixed(1)}° altitude · ${compassDir(c.sunAz || 0)} (${(c.sunAz||0).toFixed(0)}°)`} />}
         {c.moonName && <DetailRow label="Moon" value={`${c.moonName} · ${Math.round((c.moonIllum||0)*100)}% illum`} />}
         {c.weather ? (
@@ -2340,22 +2354,24 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     return () => { cancelled = true; };
   }, [prefilledPhoto]);
 
-  // Weather fetch once we have coords (best effort; offline = skipped).
-  // In edit mode we keep the original weather unless the user re-fetches GPS.
+  // Weather fetch once we have coords + a timestamp. Age-branched so
+  // an upload of a backdated photo gets the historical weather at
+  // that moment, not today's — see fetchWeatherForTime in helpers.js.
+  // In edit mode we keep the original weather unless the user re-
+  // fetches (e.g. changes GPS or when).
   useEffect(() => {
     if (loc.lat == null || loc.lon == null) return;
     if (isEdit && weather) return;
     setWxStatus('loading');
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl&temperature_unit=fahrenheit&wind_speed_unit=mph`;
-    fetch(url).then(r => r.ok ? r.json() : Promise.reject()).then(j => {
-      const c = j.current || {};
-      setWeather({
-        tempF: c.temperature_2m, windMph: c.wind_speed_10m, windDir: c.wind_direction_10m,
-        cloudPct: c.cloud_cover, precipMm: c.precipitation, pressureMb: c.pressure_msl,
+    let cancelled = false;
+    fetchWeatherForTime({ lat: loc.lat, lon: loc.lon, when })
+      .then((w) => {
+        if (cancelled) return;
+        if (w) { setWeather(w); setWxStatus('ok'); }
+        else   { setWxStatus('offline'); }
       });
-      setWxStatus('ok');
-    }).catch(() => setWxStatus('offline'));
-  }, [loc.lat, loc.lon]);
+    return () => { cancelled = true; };
+  }, [loc.lat, loc.lon, when]);
 
   const sun = loc.lat != null && loc.lon != null ? sunPosition(when, loc.lat, loc.lon) : null;
   const moon = moonPhase(when);
