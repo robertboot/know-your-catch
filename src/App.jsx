@@ -3,7 +3,7 @@ import {
   Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera, MoreHorizontal,
   Home as HomeIcon, Settings as SettingsIcon,
 } from 'lucide-react';
-import { T } from './theme.js';
+import { T, screenSize, containerMaxWidth } from './theme.js';
 import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState } from './storage.js';
 import { migratePhotosToStore } from './photos-store.js';
@@ -17,10 +17,10 @@ import {
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
-  PhotoAnalyzingScreen, PhotoResultScreen,
+  PhotoAnalyzingScreen, PhotoResultScreen, LogMenuScreen, QuickLogScreen,
 } from './screens1.jsx';
 import {
-  SpeciesDetailScreen, CompareScreen, RegulationsListScreen, RegulationDetailScreen,
+  SpeciesDetailScreen, RegulationsListScreen, RegulationDetailScreen,
   RegulationAlertsScreen,
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
   CatchLogScreen, CatchEntryScreen, CatchDetailScreen, QuizScreen,
@@ -55,6 +55,13 @@ export default function App() {
   // Bump on every species-store notify so components that read SPECIES
   // re-render when the overlay refreshes from Supabase.
   const [, setSpeciesVersion] = useState(0);
+  // Responsive: 'phone' | 'tablet' | 'tablet-landscape'. Reflows the
+  // outer container so iPad users don't get a 440px column marooned
+  // in the middle of the screen. See theme.js for the breakpoints.
+  const [size, setSize] = useState(screenSize);
+  // Transient banner for the Quick Log flow's post-save confirmation
+  // and for stale-quick-log reminders. Auto-clears after 2.4s.
+  const [toast, setToast] = useState(null); // { text, kind: 'success' | 'nag' } | null
 
   // Load persisted state on mount.
   useEffect(() => {
@@ -107,6 +114,48 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // Auto-clear the transient toast after ~2.4s so the confirmation
+  // banner from Quick Log doesn't linger.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // On resume (tab / app visible again after being hidden), if the
+  // logbook has any quick-log catches older than 24h, surface a soft
+  // reminder so those don't drift indefinitely with no species set.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const pending = (state.catchLog || []).filter(c =>
+        c.status === 'quick'
+        && c.dateIso && new Date(c.dateIso).getTime() < cutoff
+      );
+      if (pending.length > 0) {
+        setToast({
+          text: `${pending.length} ${pending.length === 1 ? 'catch needs' : 'catches need'} details`,
+          kind: 'nag',
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [state.catchLog]);
+
+  // Watch window resize so iPad rotation between portrait / landscape
+  // moves the container between the 720 / 900 width tiers live.
+  useEffect(() => {
+    const onResize = () => setSize(screenSize());
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
+
   // Auto-dismiss the splash after a short hold.
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 2200);
@@ -157,7 +206,7 @@ export default function App() {
   const stale = isStale(state.syncMeta);
 
   const homeProps = {
-    state, jurisdiction, stale,
+    state, jurisdiction, stale, screenSize: size,
     onChangeJurisdiction: () => setShowJur(true),
     onIdentify:   () => push({ name: 'identify' }),
     onUploadPhoto:(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl }),
@@ -167,6 +216,7 @@ export default function App() {
     onRegulationAlerts: () => push({ name: 'regulation_alerts' }),
     onQuiz:        () => push({ name: 'quiz' }),
     onReport:     () => push({ name: 'catch_entry' }),
+    onLogMenu:    () => push({ name: 'log_menu' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
@@ -183,6 +233,23 @@ export default function App() {
         onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
         onSearch={() => push({ name: 'search' })}
+      />;
+      break;
+    case 'log_menu':
+      body = <LogMenuScreen
+        onQuickLog={() => push({ name: 'quick_log' })}
+        onIdentify={() => push({ name: 'identify' })}
+        onUploadPhoto={() => push({ name: 'catch_entry', openUploadOnMount: true })}
+      />;
+      break;
+    case 'quick_log':
+      body = <QuickLogScreen
+        state={state} jurisdiction={jurisdiction} update={update}
+        onDone={() => {
+          setToast({ text: 'Logged — back to fishing', kind: 'success' });
+          reset([{ name: 'home' }]);
+        }}
+        onCancel={() => reset([{ name: 'home' }])}
       />;
       break;
     case 'photo_analyzing':
@@ -213,17 +280,11 @@ export default function App() {
     case 'species':
       body = <SpeciesDetailScreen
         id={screen.id} state={state} jurisdiction={jurisdiction} stale={stale}
-        onLookalike={(otherId) => push({ name: 'compare', aId: screen.id, bId: otherId })}
+        onLookalike={(otherId) => push({ name: 'species', id: otherId })}
         onAddPB={() => push({ name: 'catch_entry', preselectSpeciesId: screen.id })}
         onFullRegs={() => push({ name: 'regulation', id: screen.id })}
         onKeep={setKeepFor}
         update={update}
-      />;
-      break;
-    case 'compare':
-      body = <CompareScreen
-        aId={screen.aId} bId={screen.bId}
-        onPick={(id) => reset([{ name: 'home' }, { name: 'species', id }])}
       />;
       break;
     case 'regulations':
@@ -251,6 +312,7 @@ export default function App() {
         editingId={screen.editingId}
         preselectSpeciesId={screen.preselectSpeciesId}
         prefilledPhoto={screen.prefilledPhoto}
+        openUploadOnMount={screen.openUploadOnMount}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}
       />;
@@ -308,14 +370,15 @@ export default function App() {
     'species';
 
   const moreActive = screen.name === 'settings';
-  const speciesActive = ['species_list', 'species', 'categories', 'category', 'compare', 'search'].includes(screen.name);
+  const speciesActive = ['species_list', 'species', 'categories', 'category', 'search'].includes(screen.name);
   const identifyActive = ['identify', 'photo_analyzing', 'photo_result'].includes(screen.name);
 
   return (
-    <div style={{
+    <div data-screen-size={size} style={{
       background: T.bgGradient, minHeight: '100vh', color: T.ink,
-      maxWidth: 440, margin: '0 auto', position: 'relative',
+      maxWidth: containerMaxWidth(size), margin: '0 auto', position: 'relative',
       boxShadow: '0 0 60px rgba(0,0,0,0.5)',
+      fontSize: size === 'phone' ? undefined : 15,
     }}>
       {/* Top app bar */}
       <div style={{
@@ -394,13 +457,31 @@ export default function App() {
         {body}
       </div>
 
-      {/* Floating action button — quick fish scan, home only */}
+      {/* Toast — quick-log confirmation + stale-quick nag. Fixed at the
+          top center over the current viewport, auto-dismisses. */}
+      {toast && (
+        <div role="status" style={{
+          position: 'fixed', top: 90, left: '50%', transform: 'translateX(-50%)',
+          background: toast.kind === 'nag' ? T.warnBg : T.openBg,
+          border: `1px solid ${toast.kind === 'nag' ? T.warn : T.open}`,
+          color: toast.kind === 'nag' ? T.warn : T.open,
+          padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+          zIndex: 200, maxWidth: 'calc(100% - 32px)',
+        }}>
+          {toast.text}
+        </div>
+      )}
+
+      {/* Floating action button — Quick Log, home only. Opens camera
+          immediately; on capture we save with GPS+sun+moon+weather in
+          the background and drop a "Logged" toast on the home screen. */}
       {isHome && (
         <button
-          onClick={() => push({ name: 'identify' })}
-          aria-label="Quick scan"
+          onClick={() => push({ name: 'quick_log' })}
+          aria-label="Quick log"
           style={{
-            position: 'fixed', bottom: 92, right: 'max(16px, calc(50vw - 220px + 16px))',
+            position: 'fixed', bottom: 92, right: `max(16px, calc(50vw - ${containerMaxWidth(size) / 2}px + 16px))`,
             width: 64, height: 64, borderRadius: '50%',
             background: 'radial-gradient(circle at 30% 30%, #2EE4FF 0%, #19D4F2 60%, #0F8FAA 100%)',
             border: '3px solid rgba(25, 212, 242, 0.45)',

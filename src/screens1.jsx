@@ -15,8 +15,12 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
+  sunPosition, moonPhase,
 } from './helpers.js';
 import { brandAsset } from './brand-store.js';
+import { getLocation, getPhoto } from './native.js';
+import { savePhoto } from './photos-store.js';
+import { downscaleImageDataUrl } from './storage.js';
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
@@ -154,19 +158,11 @@ function ScrollDots({ count, active }) {
 }
 
 export function HomeScreen({
-  state, jurisdiction, stale, onChangeJurisdiction,
+  state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
-  onCompare, onBrowse, onUploadPhoto, onRegulationAlerts, onQuiz,
+  onCompare, onRegulationAlerts, onQuiz, onLogMenu,
 }) {
-  const uploadRef = useRef(null);
-  const handleUploadPick = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-selecting the same file
-    if (!file || !onUploadPhoto) return;
-    const reader = new FileReader();
-    reader.onload = () => onUploadPhoto(reader.result);
-    reader.readAsDataURL(file);
-  };
+  const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   const jurId = jurisdiction?.id || 'fed_gulf';
   const featured = FEATURED_IDS
     .map(id => {
@@ -237,17 +233,17 @@ export function HomeScreen({
         }} />
 
         <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 270 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>LOG YOUR</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>BUILD YOUR</div>
           <div style={{
-            fontSize: 44, fontWeight: 900, color: T.brass, letterSpacing: 2.5,
+            fontSize: 40, fontWeight: 900, color: T.brass, letterSpacing: 2,
             lineHeight: 1, marginTop: 2,
             textShadow: '0 0 22px rgba(25, 212, 242, 0.45)',
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
-          }}>CATCH</div>
+          }}>FISHING MAP</div>
           <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4, marginTop: 12, maxWidth: 220 }}>
-            Capture, log, identify your catch in seconds.
+            Save photos, species, GPS, and conditions—then use your log to find better spots.
           </div>
-          <button onClick={onReport} style={{
+          <button onClick={onLogMenu || onReport} style={{
             marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
             padding: '11px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800,
             letterSpacing: 1.6, cursor: 'pointer',
@@ -256,40 +252,18 @@ export function HomeScreen({
           }}>
             <Camera size={16} strokeWidth={2.4} /> LOG YOUR CATCH
           </button>
-
-          <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-            <button onClick={() => uploadRef.current?.click()} style={{
-              background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
-              fontSize: 11, fontWeight: 700, letterSpacing: 0.8, whiteSpace: 'nowrap',
-            }}>
-              <ImageIcon size={14} color={T.ink} /> UPLOAD PHOTO
-            </button>
-            <button onClick={onBrowse || onSpeciesList} style={{
-              background: 'transparent', border: 'none', color: T.ink, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0,
-              fontSize: 11, fontWeight: 700, letterSpacing: 0.8, whiteSpace: 'nowrap',
-            }}>
-              <Search size={14} color={T.ink} /> BROWSE SPECIES
-            </button>
-          </div>
         </div>
-        {/* Hidden file input for the UPLOAD PHOTO action — no capture
-            attribute, so iOS opens the photo library instead of camera. */}
-        <input
-          ref={uploadRef}
-          type="file"
-          accept="image/*"
-          onChange={handleUploadPick}
-          style={{ display: 'none' }}
-        />
       </div>
 
-      {/* Quick Actions — each tile sized for its content; whole row
-          scrolls horizontally so titles and subtitles aren't squeezed. */}
+      {/* Quick Actions — phone: horizontally scrolling row so tiles
+          keep a comfortable width; tablet: 2x2 grid using the extra
+          screen real estate so all tiles are visible at once. */}
       <div
-        className="kyc-hscroll"
-        style={{
+        className={isTablet ? undefined : 'kyc-hscroll'}
+        style={isTablet ? {
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
+          margin: '14px 0 0',
+        } : {
           display: 'flex', gap: 10,
           overflowX: 'auto', overflowY: 'hidden',
           margin: '14px -16px 0', padding: '0 16px 6px',
@@ -297,28 +271,22 @@ export function HomeScreen({
         }}
       >
         <QuickTile
-          icon={<ClipboardList size={28} strokeWidth={1.8} />}
-          titleA="CHECK" titleB="REGULATIONS"
-          subtitle="View rules, limits and seasons"
-          onClick={onRegulations}
-        />
-        <QuickTile
-          icon={<Layers size={28} strokeWidth={1.8} />}
-          titleA="COMPARE" titleB="LOOKALIKES"
-          subtitle="Compare similar species"
-          onClick={onCompare || onSpeciesList}
+          icon={<BookOpen size={28} strokeWidth={1.8} />}
+          titleA="LOG YOUR" titleB="CATCH"
+          subtitle="Photo, species, GPS, conditions"
+          onClick={onLogMenu || onReport}
         />
         <QuickTile
           icon={<Camera size={28} strokeWidth={1.8} />}
           titleA="IDENTIFY YOUR" titleB="CATCH"
-          subtitle="Photo, GPS and conditions"
-          onClick={onReport}
+          subtitle="Point, shoot, get the species"
+          onClick={onIdentify}
         />
         <QuickTile
-          icon={<BookOpen size={28} strokeWidth={1.8} />}
-          titleA="SPECIES" titleB="LIBRARY"
-          subtitle="Explore species and ID guide"
-          onClick={onSpeciesList}
+          icon={<ClipboardList size={28} strokeWidth={1.8} />}
+          titleA="CHECK" titleB="REGULATIONS"
+          subtitle="Rules, limits, and seasons"
+          onClick={onRegulations}
         />
         <QuickTile
           icon={<Sparkles size={28} strokeWidth={1.8} />}
@@ -489,6 +457,160 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <BigButton onClick={onBrowse} icon={<Layers size={24} />} title="Browse by category" subtitle="Snapper, grouper, mackerel, jacks…" />
         <BigButton onClick={onSearch} icon={<Search size={24} />} title="Search by name" subtitle="Common names, scientific, regional" />
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   LOG MENU — three ways to log a catch
+   ============================================================ */
+export function LogMenuScreen({ onQuickLog, onIdentify, onUploadPhoto }) {
+  return (
+    <div style={{ padding: '18px 16px' }}>
+      <H1 size={24} style={{ marginBottom: 6 }}>Log your catch</H1>
+      <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: 18 }}>
+        Three ways to add a catch to your logbook.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <BigButton
+          onClick={onQuickLog}
+          icon={<Camera size={24} />}
+          title="Quick log"
+          subtitle="Take photo, get back to fishing — we'll fill in the rest"
+        />
+        <BigButton
+          onClick={onIdentify}
+          icon={<Sparkles size={24} />}
+          title="Identify fish"
+          subtitle="Identify and log your catch"
+        />
+        <BigButton
+          onClick={onUploadPhoto}
+          icon={<ImageIcon size={24} />}
+          title="Upload photo"
+          subtitle="Log a fish you already caught from a saved photo"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   QUICK LOG — camera-first, everything else in the background
+   ============================================================
+   Opens native camera immediately. On capture we save the catch with
+   whatever environmental data we can gather in a bounded time:
+     - GPS is satellite-based → works offline. 10s timeout / skip on
+       permission denial. If nothing comes back, lat/lon stay null.
+     - Sun + moon are pure math from the timestamp + lat/lon; always
+       computed when GPS returned coords.
+     - Weather (open-meteo) is the only step that needs internet. 5s
+       AbortController budget; anything longer commits weather=null.
+   The catch persists with status:'quick' so the Logbook can flag it
+   and prompt the angler to fill in species / measurements later. */
+export function QuickLogScreen({ state, jurisdiction, update, onDone, onCancel }) {
+  const [phase, setPhase] = React.useState('opening'); // opening | saving | done | cancelled
+  const [err, setErr] = React.useState(null);
+  const ranRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+    let alive = true;
+    (async () => {
+      try {
+        const dataUrl = await getPhoto({ cameraOnly: true });
+        if (!alive) return;
+        if (!dataUrl) { setPhase('cancelled'); onCancel && onCancel(); return; }
+        setPhase('saving');
+
+        // Kick off GPS + weather in parallel with the photo downscale
+        // so nothing sits idle. Each has its own timeout so a slow one
+        // doesn't stall the save.
+        const gpsPromise = getLocation({ enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 })
+          .then(pos => ({ lat: pos.lat, lon: pos.lon }))
+          .catch(() => ({ lat: null, lon: null }));
+
+        const downscaled = await downscaleImageDataUrl(dataUrl);
+        const photoEntry = await savePhoto(downscaled);
+
+        const { lat, lon } = await gpsPromise;
+
+        // Weather only when we have coords and the network cooperates.
+        let weather = null;
+        if (lat != null && lon != null) {
+          const ac = new AbortController();
+          const wxTimer = setTimeout(() => ac.abort(), 5000);
+          try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+            const j = await fetch(url, { signal: ac.signal }).then(r => r.ok ? r.json() : Promise.reject());
+            const c = j.current || {};
+            weather = {
+              tempF: c.temperature_2m, windMph: c.wind_speed_10m, windDir: c.wind_direction_10m,
+              cloudPct: c.cloud_cover, precipMm: c.precipitation, pressureMb: c.pressure_msl,
+            };
+          } catch {
+            weather = null;
+          } finally {
+            clearTimeout(wxTimer);
+          }
+        }
+
+        const when = new Date();
+        const sun = lat != null && lon != null ? sunPosition(when, lat, lon) : null;
+        const moon = moonPhase(when);
+
+        const entry = {
+          id: `catch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          status: 'quick',
+          speciesId: null,
+          dateIso: when.toISOString(),
+          lat, lon,
+          length: null,
+          weight: null,
+          notes: null,
+          photos: [photoEntry],
+          photo: photoEntry,
+          jurisdiction: jurisdiction?.id || null,
+          sunAlt: sun ? sun.altitudeDeg : null,
+          sunAz:  sun ? sun.azimuthDeg  : null,
+          moonPhase: moon.phase,
+          moonIllum: moon.illumination,
+          moonName: moon.name,
+          weather,
+        };
+        update({ catchLog: [entry, ...(state.catchLog || [])] });
+        if (!alive) return;
+        setPhase('done');
+        onDone && onDone(entry);
+      } catch (e) {
+        setErr(e?.message || 'Quick log failed');
+        setPhase('cancelled');
+        onCancel && onCancel();
+      }
+    })();
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div style={{
+      minHeight: 'calc(100vh - 168px)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center',
+    }}>
+      <div>
+        <div style={{ fontSize: 13, letterSpacing: 2, color: T.brass, fontWeight: 800, marginBottom: 12 }}>
+          {phase === 'opening' ? 'OPENING CAMERA…'
+            : phase === 'saving' ? 'SAVING CATCH…'
+            : phase === 'done' ? 'LOGGED' : 'CANCELLED'}
+        </div>
+        <div style={{ fontSize: 13, color: T.inkSoft, maxWidth: 320, margin: '0 auto', lineHeight: 1.5 }}>
+          {phase === 'saving' ? 'Fetching GPS, sun, and weather in the background — this only takes a moment.'
+            : phase === 'done' ? 'Back to fishing.'
+            : phase === 'cancelled' ? 'No photo taken.'
+            : 'Point the camera at your fish and shoot.'}
+        </div>
+        {err && <div role="alert" style={{ marginTop: 12, fontSize: 12, color: T.closed }}>{err}</div>}
       </div>
     </div>
   );

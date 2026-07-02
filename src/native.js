@@ -24,14 +24,18 @@ export async function getLocation(opts = {}) {
   });
 }
 
-/** Resolve to a data URL of the chosen photo, or null if the user cancelled. */
-export async function getPhoto() {
+/** Resolve to a data URL of the chosen photo, or null if the user cancelled.
+    Options:
+      cameraOnly = true → skip the "Choose from Library" prompt and go
+        straight to the camera. Used for the Quick Log flow so the user
+        gets one tap → shutter, not a source picker. */
+export async function getPhoto({ cameraOnly = false } = {}) {
   if (isNative()) {
     try {
       const photo = await Camera.getPhoto({
         quality: 85,
         allowEditing: false,
-        source: CameraSource.Prompt,   // "Take Photo" / "Choose from Library"
+        source: cameraOnly ? CameraSource.Camera : CameraSource.Prompt,
         resultType: CameraResultType.DataUrl,
       });
       return photo.dataUrl || null;

@@ -1,5 +1,34 @@
 /* Theme — premium offshore marine, dark navy + cyan accent.
    Tuned to the ReelIntel home-screen mockup. */
+
+/* Layout breakpoints. Phone-first: the outer container is 440px wide
+   by default (fits the iPhone Pro-Max width). On iPad we widen to
+   720px portrait / 900px landscape so the app doesn't render as a
+   thin column marooned in the middle of the screen. */
+export const BREAKPOINT = {
+  tablet: 768,          // iPad portrait floor
+  tabletLandscape: 1024,
+};
+export const WIDTH = {
+  phone: 440,
+  tabletPortrait: 720,
+  tabletLandscape: 900,
+};
+
+/* Read the current window width once at first call; the App.jsx hook
+   wraps this in a resize listener so the UI reflows on rotation. */
+export function screenSize(width = typeof window !== 'undefined' ? window.innerWidth : 0) {
+  if (width >= BREAKPOINT.tabletLandscape) return 'tablet-landscape';
+  if (width >= BREAKPOINT.tablet)          return 'tablet';
+  return 'phone';
+}
+export function containerMaxWidth(size = screenSize()) {
+  if (size === 'tablet-landscape') return WIDTH.tabletLandscape;
+  if (size === 'tablet')           return WIDTH.tabletPortrait;
+  return WIDTH.phone;
+}
+export const isTabletSize = (size = screenSize()) => size !== 'phone';
+
 export const T = {
   /* page + surfaces — deep navy gradient floor */
   bg: '#031B33',

@@ -138,7 +138,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       {s.lookalikes.length > 0 && (
         <Card style={{ marginBottom: 12 }}>
           <SectionLabel style={{ marginBottom: 4 }}>Often confused with</SectionLabel>
-          <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10 }}>Tap to compare side-by-side.</div>
+          <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10 }}>Tap to view species details.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {s.lookalikes.map(otherId => {
               const o = speciesById(otherId);
@@ -151,7 +151,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
                   <SpeciesImage species={o} size={36} />
                   <div style={{ flex: 1, textAlign: 'left' }}>
                     <div style={{ fontWeight: 600, fontSize: 14, color: T.ink }}>{o.commonName}</div>
-                    <div style={{ fontSize: 11, color: T.inkMute }}>Compare features →</div>
+                    <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{o.scientific}</div>
                   </div>
                   <ChevronRight size={18} color={T.brass} />
                 </button>
@@ -352,51 +352,10 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
   );
 }
 
-/* ============================================================
-   COMPARE
-   ============================================================ */
-export function CompareScreen({ aId, bId, onPick }) {
-  const a = speciesById(aId), b = speciesById(bId);
-  const cmp = getComparison(aId, bId);
-  if (!a || !b) return <div style={{ padding: 20 }}>Not found.</div>;
-  const features = cmp ? (cmp.reversed ? cmp.features.map(f => ({ feature: f.feature, a: f.b, b: f.a })) : cmp.features) : [];
-  return (
-    <div style={{ padding: '16px 12px' }}>
-      <SectionLabel style={{ marginBottom: 6 }}>Side-by-side</SectionLabel>
-      <H1 size={20} style={{ marginBottom: 12 }}>Compare</H1>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-        <Card style={{ textAlign: 'center', padding: 10 }}>
-          <SpeciesImage species={a} size={64} />
-          <div style={{ marginTop: 6, fontFamily: 'Georgia, serif', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{a.commonName}</div>
-        </Card>
-        <Card style={{ textAlign: 'center', padding: 10 }}>
-          <SpeciesImage species={b} size={64} />
-          <div style={{ marginTop: 6, fontFamily: 'Georgia, serif', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{b.commonName}</div>
-        </Card>
-      </div>
-      {features.length > 0 ? (
-        <Card style={{ padding: 0, overflow: 'hidden' }}>
-          {features.map((f, i) => (
-            <div key={i} style={{ borderTop: i > 0 ? `1px solid ${T.cardEdge}` : 'none', padding: '10px 12px' }}>
-              <div style={{ fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: T.brassDeep, fontWeight: 700, marginBottom: 6 }}>{f.feature}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4 }}>{f.a}</div>
-                <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4 }}>{f.b}</div>
-              </div>
-            </div>
-          ))}
-        </Card>
-      ) : (
-        <Card><div style={{ fontSize: 13, color: T.inkMute, textAlign: 'center' }}>No structured comparison yet. Use Key identifiers on each species page.</div></Card>
-      )}
-      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 12, color: T.brassDeep, textAlign: 'center', fontWeight: 600 }}>WHICH ONE IS YOUR FISH?</div>
-        <PrimaryButton onClick={() => onPick(aId)}>It's a {a.commonName}</PrimaryButton>
-        <PrimaryButton onClick={() => onPick(bId)} style={{ background: T.brassDeep }}>It's a {b.commonName}</PrimaryButton>
-      </div>
-    </div>
-  );
-}
+/* CompareScreen was removed in build 9. Lookalikes fold into the
+   quiz as a dedicated question type; the standalone side-by-side
+   comparison flow was low-signal for anglers. Lookalikes list on the
+   species detail page now links straight to the other species. */
 
 /* ============================================================
    REGULATIONS LIST + DETAIL
@@ -1798,6 +1757,11 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
     }}>{label}</button>
   );
 
+  // Quick logs are catches saved with only a photo + environmentals
+  // and no species. The Logbook nag banner surfaces the count so the
+  // angler doesn't lose track — filter chip below jumps to just those.
+  const quickPending = items.filter(c => c.status === 'quick');
+
   return (
     <div style={{ padding: '16px 16px 8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
@@ -1806,6 +1770,15 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
           <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
       </div>
+
+      {quickPending.length > 0 && (
+        <Card style={{ background: T.warnBg, borderColor: T.warn, marginBottom: 12, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <AlertTriangle size={18} color={T.warn} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: 13, color: T.ink, lineHeight: 1.4 }}>
+            <strong>{quickPending.length}</strong> {quickPending.length === 1 ? 'catch needs' : 'catches need'} details — tap a row to add species & measurements.
+          </div>
+        </Card>
+      )}
 
       {items.length === 0 ? (
         <Card>
@@ -1915,9 +1888,10 @@ function CatchListView({ items, onView, pbCatchIds }) {
         const s = speciesById(c.speciesId);
         const when = new Date(c.dateIso);
         const cPhotos = catchPhotos(c);
-        const speciesName = s ? s.commonName : (c.speciesId || 'Unknown');
+        const isQuick = c.status === 'quick';
+        const speciesName = s ? s.commonName : (isQuick ? 'Unidentified catch' : (c.speciesId || 'Unknown'));
         return (
-          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, borderLeft: isQuick ? `3px solid ${T.warn}` : undefined }}>
             {/* Photo strip — full width, horizontal scroll for multi-photo
                 catches, single thumb for one, camera placeholder for zero. */}
             {cPhotos.length === 0 ? (
@@ -1958,6 +1932,17 @@ function CatchListView({ items, onView, pbCatchIds }) {
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{speciesName}</span>
+                {isQuick && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    background: T.warnBg, color: T.warn,
+                    border: `1px solid ${T.warn}`,
+                    fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+                    padding: '2px 6px', borderRadius: 4,
+                  }}>
+                    ! Details pending
+                  </span>
+                )}
                 {isPB(c.id) && (
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -2283,7 +2268,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, openUploadOnMount }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
@@ -2378,6 +2363,18 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const cameraRef = React.useRef(null);
   const uploadRef = React.useRef(null);
   const [photoSource, setPhotoSource] = useState(null); // 'camera' | 'upload' | null
+
+  // Auto-open the file picker on mount when routed here from the
+  // Log-menu "Upload photo" tile. One-shot: guard with a ref so
+  // subsequent renders don't re-trigger.
+  const uploadKickedRef = React.useRef(false);
+  useEffect(() => {
+    if (openUploadOnMount && !uploadKickedRef.current) {
+      uploadKickedRef.current = true;
+      // Defer to next tick so the ref is attached to the DOM node.
+      setTimeout(() => uploadRef.current?.click(), 0);
+    }
+  }, [openUploadOnMount]);
 
   // Only Photo #1 drives the catch's location & time. Photos #2 and
   // #3 are just additional shots — they don't change anything.
@@ -2502,6 +2499,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const save = () => {
     const entry = {
       id: existing ? existing.id : 'c_' + Date.now(),
+      // Editing a Quick Log: speciesId is required to save (canSave
+      // above enforces), and saving flips the status back to 'complete'
+      // so the Logbook badge + nag banner clear for this row.
+      status: existing?.status === 'quick' ? 'complete' : (existing?.status || 'complete'),
       speciesId,
       dateIso: when.toISOString(),
       lat: loc.lat, lon: loc.lon,
@@ -2906,14 +2907,62 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   };
 }
 
+/* Lookalikes question — replaces the retired standalone CompareScreen.
+   Given a species with a non-empty s.lookalikes array, ask which one
+   is often confused with it. Correct = a real lookalike; distractors
+   = same-category species that are NOT actual lookalikes (so the
+   answer isn't ambiguous). Feedback surfaces one key discriminator
+   from the correct answer's keyIds so it teaches, not just quizzes. */
+function pickLookalikesQuestion(prevSpeciesId = null) {
+  const candidates = SPECIES.filter(s =>
+    s.id !== prevSpeciesId
+    && Array.isArray(s.lookalikes)
+    && s.lookalikes.some(id => speciesById(id))
+  );
+  if (candidates.length === 0) return null;
+  const anchor = candidates[Math.floor(Math.random() * candidates.length)];
+  const lookalikeIds = anchor.lookalikes.filter(id => speciesById(id));
+  const correctId = lookalikeIds[Math.floor(Math.random() * lookalikeIds.length)];
+  const correct = speciesById(correctId);
+  const distractorPool = SPECIES.filter(s =>
+    s.id !== anchor.id
+    && s.id !== correct.id
+    && s.category === anchor.category
+    && !anchor.lookalikes.includes(s.id)
+  );
+  let distractors = _shuffle(distractorPool).slice(0, 3);
+  // If same-category pool is too small, top up with any-category rows.
+  if (distractors.length < 3) {
+    const rest = _shuffle(SPECIES.filter(s =>
+      s.id !== anchor.id && s.id !== correct.id && !distractors.some(d => d.id === s.id) && !anchor.lookalikes.includes(s.id)
+    ));
+    for (const s of rest) {
+      if (distractors.length >= 3) break;
+      distractors.push(s);
+    }
+  }
+  if (distractors.length < 3) return null;
+  return {
+    type: 'lookalikes',
+    species: anchor,
+    correctSpecies: correct,
+    prompt: <>Which of these is often confused with a <strong>{anchor.commonName}</strong>?</>,
+    options: _shuffle([correct, ...distractors]).map(s => ({
+      key: s.id, label: s.commonName, isCorrect: s.id === correct.id, species: s,
+    })),
+  };
+}
+
 function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null) {
   // Without a jurisdiction set we can't ask reg questions — fall back
-  // to species ID only.
-  if (!jurisdiction) return pickSpeciesQuestion(prevSpeciesId);
-  const types = ['species', 'bag', 'size'];
+  // to species-ID or lookalikes only.
+  const types = jurisdiction
+    ? ['species', 'bag', 'size', 'lookalikes']
+    : ['species', 'lookalikes'];
   const pick = types[Math.floor(Math.random() * types.length)];
-  const q = pick === 'bag' ? pickBagLimitQuestion(jurisdiction, prevSpeciesId)
-          : pick === 'size' ? pickSizeLimitQuestion(jurisdiction, state.units, prevSpeciesId)
+  const q = pick === 'bag'        ? pickBagLimitQuestion(jurisdiction, prevSpeciesId)
+          : pick === 'size'       ? pickSizeLimitQuestion(jurisdiction, state.units, prevSpeciesId)
+          : pick === 'lookalikes' ? pickLookalikesQuestion(prevSpeciesId)
           : pickSpeciesQuestion(prevSpeciesId);
   // If a reg-question pool is empty for the chosen jurisdiction,
   // fall back to species so the angler always gets something.
@@ -2958,9 +3007,10 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
     species: 'Spot the species from the photo.',
     bag: 'Recall the daily bag limit for this species in your waters.',
     size: 'Recall the minimum legal size for this species in your waters.',
+    lookalikes: 'Which species is commonly confused with the one shown?',
   }[question.type];
 
-  // For bag / size questions we show the species photo + name in the
+  // For bag / size / lookalikes we show the species photo + name in the
   // prompt (so the angler knows what fish they're answering about).
   // For the species-ID question we hide the name until they answer.
   const revealSpeciesName = question.type !== 'species';
@@ -3035,6 +3085,30 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
                 ? `✗ It's a ${sp.commonName}`
                 : `✗ The answer is ${correctOpt?.label}`}
           </div>
+
+          {/* Lookalikes side-by-side panel — anchor vs the correct lookalike
+              with one key discriminator pulled from keyIds. Richer feature
+              comparison can come later. */}
+          {question.type === 'lookalikes' && question.correctSpecies && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <SpeciesImage species={sp} size={80} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{sp.commonName}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <SpeciesImage species={question.correctSpecies} size={80} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{question.correctSpecies.commonName}</div>
+                </div>
+              </div>
+              {question.correctSpecies.keyIds?.[0] && (
+                <div style={{ background: T.parchmentDeep, borderRadius: 6, padding: '8px 10px', fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+                  <span style={{ color: T.brass, fontWeight: 700 }}>Key tell for {question.correctSpecies.commonName}:</span> {question.correctSpecies.keyIds[0]}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
             <SpeciesImage species={sp} size={64} />
             <div style={{ flex: 1, minWidth: 0 }}>
