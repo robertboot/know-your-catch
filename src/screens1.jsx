@@ -271,12 +271,6 @@ export function HomeScreen({
         }}
       >
         <QuickTile
-          icon={<BookOpen size={28} strokeWidth={1.8} />}
-          titleA="LOG YOUR" titleB="CATCH"
-          subtitle="Photo, species, GPS, conditions"
-          onClick={onLogMenu || onReport}
-        />
-        <QuickTile
           icon={<Camera size={28} strokeWidth={1.8} />}
           titleA="IDENTIFY YOUR" titleB="CATCH"
           subtitle="Point, shoot, get the species"

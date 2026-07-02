@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
-  Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera, MoreHorizontal,
+  Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera,
   Home as HomeIcon, Settings as SettingsIcon,
 } from 'lucide-react';
 import { T, screenSize, containerMaxWidth } from './theme.js';
@@ -369,7 +369,6 @@ export default function App() {
     screen.name === 'settings' ? '' :
     'species';
 
-  const moreActive = screen.name === 'settings';
   const speciesActive = ['species_list', 'species', 'categories', 'category', 'search'].includes(screen.name);
   const identifyActive = ['identify', 'photo_analyzing', 'photo_result'].includes(screen.name);
 
@@ -497,14 +496,13 @@ export default function App() {
       {/* Bottom tab bar */}
       <div style={{
         position: 'sticky', bottom: 0, background: T.oceanDeep,
-        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
         padding: '10px 4px 14px', zIndex: 50,
       }}>
         <TabBtn label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon size={22} strokeWidth={2} />} />
         <TabBtn label="Identify"    active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish size={22} strokeWidth={2} />} />
         <TabBtn label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList size={22} strokeWidth={2} />} />
         <TabBtn label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen size={22} strokeWidth={2} />} />
-        <TabBtn label="More"        active={moreActive}                                    onClick={() => push({ name: 'settings' })}        icon={<MoreHorizontal size={22} strokeWidth={2} />} />
       </div>
 
       {showDisclaimer && (
