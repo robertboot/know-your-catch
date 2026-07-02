@@ -272,7 +272,7 @@ export function HomeScreen({
       >
         <QuickTile
           icon={<Camera size={28} strokeWidth={1.8} />}
-          titleA="IDENTIFY YOUR" titleB="CATCH"
+          titleA="FISH" titleB="ID"
           subtitle="Point, shoot, get the species"
           onClick={onIdentify}
         />
@@ -414,7 +414,7 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
 
   return (
     <div style={{ padding: '18px 16px' }}>
-      <H1 size={24} style={{ marginBottom: 6 }}>Identify</H1>
+      <H1 size={24} style={{ marginBottom: 6 }}>Fish ID</H1>
       <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: 16 }}>
         Take or upload a photo to identify your catch.
       </p>
@@ -476,7 +476,7 @@ export function LogMenuScreen({ onQuickLog, onIdentify, onUploadPhoto }) {
         <BigButton
           onClick={onIdentify}
           icon={<Sparkles size={24} />}
-          title="Identify fish"
+          title="Fish ID"
           subtitle="Identify and log your catch"
         />
         <BigButton

@@ -9,14 +9,14 @@ Paste these strings into **App Store Connect → ReelIntel → TestFlight**.
 > ReelIntel helps Gulf-of-America anglers identify their catch, check
 > current regulations, log catches with photo/GPS/conditions, and
 > track their personal bests. This beta is gathering feedback on the
-> identification flow, regulation alerts, and catch logging UX.
+> Fish ID flow, regulation alerts, and Logbook UX.
 
 ## What to Test (1.0.0 build 1)
 
 > Try logging a catch from both camera and photo library — confirm
 > location and time pull from the uploaded photo's EXIF where
 > available, and that you can drop a pin on the map when EXIF is
-> missing. Try the Identify flow with a clear in-hand photo; tap "Log
+> missing. Try the Fish ID flow with a clear in-hand photo; tap "Log
 > this catch" on the result screen and confirm the identification
 > photo lands as Photo 1 in the catch entry. Browse Regulation Alerts
 > and confirm starred species surface at the top. From Settings →

@@ -17,6 +17,7 @@ import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
+  shareReport,
 } from './helpers.js';
 
 /* Render a coordinate value as a tappable Apple Maps link. */
@@ -33,7 +34,7 @@ function CoordsLink({ lat, lon }) {
 }
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
-  DetailRow, Field, PickButton, SpeciesRow, StarButton, ShareReportModal, LightboxModal,
+  DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
   inputStyle,
 } from './components.jsx';
 import { getLocation, getPhoto } from './native.js';
@@ -971,7 +972,6 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
 
 export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
   const s = speciesById(speciesId); const pb = state.pbs[speciesId];
-  const [shareOpen, setShareOpen] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(null); // tapped index or null
   if (!s || !pb) return <div style={{ padding: 20 }}>No PB.</div>;
   const remove = () => {
@@ -987,16 +987,19 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
     ? { val: formatSize(pb.length, state.units), label: 'Length' }
     : { val: formatWeight(pb.weight, state.units), label: 'Weight' };
   const photos = pbPhotos(pb);
-  const reportText = buildPBReport({ anglerName: state.anglerName, species: s, pb, units: state.units });
-  const speciesFallbackPhoto = speciesPhoto(s.id);
-  const reportPhotoUrl = photoDisplayUrl(photos[0]) || (speciesFallbackPhoto ? speciesFallbackPhoto.url : null);
-  const meta = [
-    { label: 'Date', value: pb.date },
-    pb.jurisdiction && { label: 'Waters', value: jurisdictionById(pb.jurisdiction)?.name || pb.jurisdiction },
-    pb.location && { label: 'Location', value: pb.location },
-    (pb.lat != null && pb.lon != null) && { label: 'Coords', value: `${pb.lat.toFixed(5)}°, ${pb.lon.toFixed(5)}°` },
-    pb.gearBait && { label: 'Gear / bait', value: pb.gearBait },
-  ].filter(Boolean);
+  // Direct share (no modal preview): build text + resolve up to 3
+  // photos to data URLs → shareReport hands off to Web Share API or
+  // clipboard fallback. Photos in order from pb.photos.
+  const doShare = async () => {
+    const text = buildPBReport({ anglerName: state.anglerName, species: s, pb, units: state.units });
+    const photoDataUrls = (await Promise.all(photos.slice(0, 3).map(photoAsDataUrl))).filter(Boolean);
+    await shareReport({
+      title: `${(state.anglerName || 'My').trim() || 'My'} ${s.commonName} PB`,
+      text,
+      photoDataUrls,
+      fileName: `pb-${speciesId}`,
+    });
+  };
   return (
     <div style={{ padding: '16px 16px' }}>
       <Card style={{ background: T.oceanDeep, color: T.parchment, border: `1.5px solid ${T.brass}`, textAlign: 'center', padding: 18, marginBottom: 12 }}>
@@ -1053,27 +1056,11 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
       )}
       <div style={{ display: 'flex', gap: 8 }}>
         <PrimaryButton onClick={onEdit} style={{ flex: 1 }}><Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Edit</PrimaryButton>
-        <GhostButton onClick={() => setShareOpen(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <GhostButton onClick={doShare} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Share2 size={14} /> Share
         </GhostButton>
         <GhostButton onClick={remove} style={{ color: T.closed, borderColor: T.closed, padding: '14px 14px' }}><Trash2 size={16} /></GhostButton>
       </div>
-
-      <ShareReportModal
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        title="Personal Best"
-        anglerName={state.anglerName}
-        species={s}
-        photoUrl={reportPhotoUrl}
-        photoEntry={photos[0]}
-        primary={{ label: primary.label, value: primary.val }}
-        secondary={{ label: secondary.label, value: secondary.val }}
-        meta={meta}
-        notes={pb.notes}
-        reportText={reportText}
-        reportTitle={`${(state.anglerName || 'My').trim() || 'My'} ${s.commonName} PB`}
-      />
       {lightboxIdx != null && photos.length > 0 && (
         <LightboxModal
           photos={photos}
@@ -1765,7 +1752,7 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   return (
     <div style={{ padding: '16px 16px 8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-        <H1 size={22}>Catch Log</H1>
+        <H1 size={22}>Logbook</H1>
         <button onClick={onNew} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer' }}>
           <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
@@ -1867,7 +1854,7 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
           )}
 
           {view === 'list'
-            ? <CatchListView items={filtered} onView={onView} pbCatchIds={pbCatchIds} />
+            ? <CatchListView items={filtered} onView={onView} pbCatchIds={pbCatchIds} state={state} />
             : <CatchMapView items={filtered} onView={onView} />}
         </>
       )}
@@ -1875,13 +1862,33 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
   );
 }
 
-function CatchListView({ items, onView, pbCatchIds }) {
+function CatchListView({ items, onView, pbCatchIds, state }) {
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
   const isPB = (id) => pbCatchIds && pbCatchIds.has(id);
   if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
   // Stop the row-level onClick (which navigates to the catch detail)
   // when the angler taps an individual photo thumbnail to enlarge it.
   const stop = (e) => { e.stopPropagation(); };
+
+  // Row-level direct share. Same behavior as the detail-page share
+  // button — resolves up to 3 photos, picks PB or regular template.
+  const shareRow = async (c, e) => {
+    e.stopPropagation();
+    const s = speciesById(c.speciesId);
+    const pb = c.speciesId ? state?.pbs?.[c.speciesId] : null;
+    const isRowPB = !!pb && pb.catchId === c.id;
+    const text = isRowPB
+      ? buildPBReport({ anglerName: state?.anglerName, species: s, pb, units: state?.units })
+      : buildCatchReport({ anglerName: state?.anglerName, species: s, c, units: state?.units });
+    const photos = catchPhotos(c).slice(0, 3);
+    const photoDataUrls = (await Promise.all(photos.map(photoAsDataUrl))).filter(Boolean);
+    await shareReport({
+      title: `${(state?.anglerName || 'My').trim() || 'My'} ${s ? s.commonName : 'catch'}`,
+      text,
+      photoDataUrls,
+      fileName: `catch-${c.id}`,
+    });
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.map(c => {
@@ -1891,7 +1898,7 @@ function CatchListView({ items, onView, pbCatchIds }) {
         const isQuick = c.status === 'quick';
         const speciesName = s ? s.commonName : (isQuick ? 'Unidentified catch' : (c.speciesId || 'Unknown'));
         return (
-          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, borderLeft: isQuick ? `3px solid ${T.warn}` : undefined }}>
+          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, borderLeft: isQuick ? `3px solid ${T.warn}` : undefined, position: 'relative' }}>
             {/* Photo strip — full width, horizontal scroll for multi-photo
                 catches, single thumb for one, camera placeholder for zero. */}
             {cPhotos.length === 0 ? (
@@ -1970,6 +1977,23 @@ function CatchListView({ items, onView, pbCatchIds }) {
                 </div>
               )}
             </div>
+            {/* Row-level share — direct, no modal. stopPropagation
+                so tapping share doesn't also open the detail. */}
+            <button
+              onClick={(e) => shareRow(c, e)}
+              aria-label={`Share ${speciesName} catch`}
+              style={{
+                position: 'absolute', top: 8, right: 8,
+                width: 32, height: 32, background: 'transparent', border: 'none',
+                color: T.inkMute, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 6,
+              }}
+              onMouseDown={(e) => e.currentTarget.style.color = T.brass}
+              onMouseUp={(e) => e.currentTarget.style.color = T.inkMute}
+            >
+              <Share2 size={16} />
+            </button>
           </Card>
         );
       })}
@@ -2046,8 +2070,27 @@ function CatchMapView({ items, onView }) {
 export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(null);
+  // Direct share (no modal preview): build text (PB template if this
+  // catch is the species' current PB, else the regular catch report),
+  // resolve up to 3 photos to data URLs, hand off to shareReport.
+  const doShare = async () => {
+    if (!c) return;
+    const s = speciesById(c.speciesId);
+    const pb = c.speciesId ? state.pbs?.[c.speciesId] : null;
+    const isPB = !!pb && pb.catchId === c.id;
+    const text = isPB
+      ? buildPBReport({ anglerName: state.anglerName, species: s, pb, units: state.units })
+      : buildCatchReport({ anglerName: state.anglerName, species: s, c, units: state.units });
+    const photos = catchPhotos(c).slice(0, 3);
+    const photoDataUrls = (await Promise.all(photos.map(photoAsDataUrl))).filter(Boolean);
+    await shareReport({
+      title: `${(state.anglerName || 'My').trim() || 'My'} ${s ? s.commonName : 'catch'}`,
+      text,
+      photoDataUrls,
+      fileName: `catch-${c.id}`,
+    });
+  };
   useEffect(() => {
     if (!confirming) return;
     const t = setTimeout(() => setConfirming(false), 4000);
@@ -2195,7 +2238,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-        <GhostButton onClick={() => setShareOpen(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <GhostButton onClick={doShare} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Share2 size={14} /> Share
         </GhostButton>
         <GhostButton onClick={onEdit} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -2212,49 +2255,6 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
         </button>
       </div>
 
-      {(() => {
-        const speciesFallback = s ? speciesPhoto(s.id) : null;
-        const reportPhotoUrl = photoDisplayUrl(cPhotos[0]) || (speciesFallback ? speciesFallback.url : null);
-        const measurements = [];
-        if (c.weight != null) measurements.push(`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`);
-        if (c.length != null) measurements.push(`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`);
-        const primary = measurements[0]
-          ? { label: c.weight != null ? 'Weight' : 'Length', value: measurements[0] }
-          : { label: 'Logged', value: '—' };
-        const secondary = measurements[1]
-          ? { label: c.weight != null && c.length != null ? 'Length' : '—', value: measurements[1] }
-          : null;
-        const meta = [
-          { label: 'Date', value: when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) },
-          c.jurisdiction && { label: 'Waters', value: (jurisdictionById(c.jurisdiction) || { name: c.jurisdiction }).name },
-          (c.lat != null && c.lon != null) && { label: 'Location', value: `${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°` },
-        ].filter(Boolean);
-        const conditions = [];
-        if (c.sunAlt != null) conditions.push({ label: 'Sun', value: `${c.sunAlt.toFixed(0)}° ${compassDir(c.sunAz || 0)}` });
-        if (c.moonName) conditions.push({ label: 'Moon', value: `${c.moonName} · ${Math.round((c.moonIllum || 0) * 100)}%` });
-        if (c.weather?.tempF != null) conditions.push({ label: 'Temp', value: `${Math.round(c.weather.tempF)}°F` });
-        if (c.weather?.windMph != null) conditions.push({ label: 'Wind', value: `${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph` });
-        if (c.weather?.cloudPct != null) conditions.push({ label: 'Clouds', value: `${Math.round(c.weather.cloudPct)}%` });
-        if (c.weather?.pressureMb != null) conditions.push({ label: 'Pressure', value: `${Math.round(c.weather.pressureMb)} mb` });
-        return (
-          <ShareReportModal
-            open={shareOpen}
-            onClose={() => setShareOpen(false)}
-            title="Catch Report"
-            anglerName={state.anglerName}
-            species={s}
-            photoUrl={reportPhotoUrl}
-            photoEntry={cPhotos[0]}
-            primary={primary}
-            secondary={secondary}
-            meta={meta}
-            conditions={conditions}
-            notes={c.notes}
-            reportText={buildCatchReport({ anglerName: state.anglerName, species: s, c, units: state.units })}
-            reportTitle={`${(state.anglerName || 'My').trim() || 'My'} ${s ? s.commonName : 'catch'}`}
-          />
-        );
-      })()}
       {lightboxIdx != null && cPhotos.length > 0 && (
         <LightboxModal
           photos={cPhotos}

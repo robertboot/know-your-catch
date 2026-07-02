@@ -379,32 +379,45 @@ export default function App() {
       boxShadow: '0 0 60px rgba(0,0,0,0.5)',
       fontSize: size === 'phone' ? undefined : 15,
     }}>
-      {/* Top app bar */}
+      {/* Top app bar — fixed to the viewport with safe-area padding so
+          the header can't scroll into the iOS status bar area. Centered
+          via the same maxWidth as the outer container. */}
       <div style={{
-        background: T.oceanDeep, color: T.parchment, padding: 0,
+        background: T.oceanDeep, color: T.parchment,
+        padding: 0, paddingTop: 'env(safe-area-inset-top)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        borderBottom: `1px solid ${T.cardEdge}`, position: 'sticky', top: 0, zIndex: 50,
+        borderBottom: `1px solid ${T.cardEdge}`,
+        position: 'fixed', top: 0, left: 0, right: 0,
+        maxWidth: containerMaxWidth(size), margin: '0 auto',
+        zIndex: 50,
       }}>
-        {isHome ? (
-          <button
-            onClick={() => reset([{ name: 'home' }])}
-            aria-label="ReelIntel — home"
-            style={{
-              background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
-              height: 72,
-            }}
-          >
-            <img
-              src={brandAsset('logo_horizontal', `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`)}
-              alt="ReelIntel — identify, check rules, log catch, find better spots"
+        {stack.length === 1 ? (
+          isHome ? (
+            <button
+              onClick={() => reset([{ name: 'home' }])}
+              aria-label="ReelIntel — home"
               style={{
-                height: 56, width: 'auto', maxWidth: '100%',
-                display: 'block', objectFit: 'contain',
-                marginLeft: 12,
+                background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
+                height: 72,
               }}
-            />
-          </button>
+            >
+              <img
+                src={brandAsset('logo_horizontal', `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`)}
+                alt="ReelIntel — identify, check rules, log catch, find better spots"
+                style={{
+                  height: 56, width: 'auto', maxWidth: '100%',
+                  display: 'block', objectFit: 'contain',
+                  marginLeft: 12,
+                }}
+              />
+            </button>
+          ) : (
+            // Root of a non-Home tab (Fish ID / Regulations / Logbook) —
+            // no top-bar Back, no logo; the tab bar owns navigation.
+            // Empty flex-1 spacer keeps the header actions right-aligned.
+            <div style={{ flex: 1, height: 72 }} />
+          )
         ) : (
           <button onClick={pop} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
             <ChevronLeft size={20} /> Back
@@ -432,7 +445,9 @@ export default function App() {
 
       {saveError && (
         <div role="alert" style={{
-          position: 'sticky', top: 0, zIndex: 60,
+          position: 'fixed', top: 'env(safe-area-inset-top)', left: 0, right: 0,
+          maxWidth: containerMaxWidth(size), margin: '0 auto',
+          zIndex: 60,
           background: '#3A0F12', borderBottom: `1px solid ${T.closed}`,
           color: T.parchment, padding: '10px 14px',
           fontSize: 12, lineHeight: 1.45,
@@ -452,7 +467,14 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ paddingBottom: 96, minHeight: 'calc(100vh - 132px)' }}>
+      {/* Scrolling content region — leaves room for the fixed header
+          + footer + their respective safe-area insets so nothing sits
+          under the tab bar or in the notch. */}
+      <div style={{
+        paddingTop: 'calc(var(--kyc-header-height) + env(safe-area-inset-top))',
+        paddingBottom: 'calc(var(--kyc-footer-height) + env(safe-area-inset-bottom))',
+        minHeight: '100vh',
+      }}>
         {body}
       </div>
 
@@ -460,7 +482,9 @@ export default function App() {
           top center over the current viewport, auto-dismisses. */}
       {toast && (
         <div role="status" style={{
-          position: 'fixed', top: 90, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed',
+          top: `calc(env(safe-area-inset-top) + var(--kyc-header-height) + 12px)`,
+          left: '50%', transform: 'translateX(-50%)',
           background: toast.kind === 'nag' ? T.warnBg : T.openBg,
           border: `1px solid ${toast.kind === 'nag' ? T.warn : T.open}`,
           color: toast.kind === 'nag' ? T.warn : T.open,
@@ -480,7 +504,9 @@ export default function App() {
           onClick={() => push({ name: 'quick_log' })}
           aria-label="Quick log"
           style={{
-            position: 'fixed', bottom: 92, right: `max(16px, calc(50vw - ${containerMaxWidth(size) / 2}px + 16px))`,
+            position: 'fixed',
+            bottom: `calc(92px + env(safe-area-inset-bottom))`,
+            right: `max(16px, calc(50vw - ${containerMaxWidth(size) / 2}px + 16px))`,
             width: 64, height: 64, borderRadius: '50%',
             background: 'radial-gradient(circle at 30% 30%, #2EE4FF 0%, #19D4F2 60%, #0F8FAA 100%)',
             border: '3px solid rgba(25, 212, 242, 0.45)',
@@ -493,14 +519,22 @@ export default function App() {
         </button>
       )}
 
-      {/* Bottom tab bar */}
+      {/* Bottom tab bar — fixed to the viewport so it stays put during
+          scroll and doesn't leave a white gap under a bounced list
+          when iOS overscrolls. Safe-area padding leaves room for the
+          home indicator. */}
       <div style={{
-        position: 'sticky', bottom: 0, background: T.oceanDeep,
-        borderTop: `1px solid ${T.cardEdge}`, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-        padding: '10px 4px 14px', zIndex: 50,
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        maxWidth: containerMaxWidth(size), margin: '0 auto',
+        background: T.oceanDeep,
+        borderTop: `1px solid ${T.cardEdge}`,
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+        padding: '10px 4px 0',
+        paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
+        zIndex: 50,
       }}>
         <TabBtn label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon size={22} strokeWidth={2} />} />
-        <TabBtn label="Identify"    active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish size={22} strokeWidth={2} />} />
+        <TabBtn label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish size={22} strokeWidth={2} />} />
         <TabBtn label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList size={22} strokeWidth={2} />} />
         <TabBtn label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen size={22} strokeWidth={2} />} />
       </div>

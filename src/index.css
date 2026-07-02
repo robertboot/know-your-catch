@@ -1,5 +1,9 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+:root {
+  --kyc-header-height: 72px;
+  --kyc-footer-height: 64px;
+}
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

@@ -270,74 +270,94 @@ export function appleMapsLink(lat, lon) {
    Share / quick report
    ------------------------------------------------------------------ */
 
-const _compass = (deg) => {
-  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+/* Guard: catch strings if a conditions/coordinate line accidentally
+   slips into a share payload. This is user privacy — we never share
+   catch location, weather, or celestial data. Warns loudly in dev so
+   a regression shows up during smoke testing. */
+function _assertNoLeak(lines) {
+  const bad = lines.find(l => typeof l === 'string' && /\b(lat|lon|°|coord|wind|cloud|pressure|moon|sun)\b/i.test(l));
+  if (bad) console.warn('Share leaked conditions — bug:', bad);
+}
+
+const _fmtDate = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { dateStyle: 'medium' });
 };
 
-function _both(pb, units) {
-  const out = [];
-  if (pb.weight != null) out.push(formatWeight(pb.weight, units));
-  if (pb.length != null) out.push(formatSize(pb.length, units));
-  return out;
-}
+/* PB report. Format is fixed per Section 6 spec:
 
+     🏆 Personal Best Catch
+
+     {name} landed a {size} {species}
+
+     📍 Waters: {jur.name}
+     📅 Date: {formatted}
+
+     Shared with ReelIntel
+     Fish smarter. Catch more.
+
+   Size line prefers weight, falls back to length; if neither, the
+   size descriptor drops and it reads "landed a {species}". */
 export function buildPBReport({ anglerName, species, pb, units }) {
   const name = (anglerName || '').trim() || 'Angler';
-  const primary = pb.primaryMetric === 'weight'
-    ? formatWeight(pb.weight, units)
-    : formatSize(pb.length, units);
-  const secondary = pb.primaryMetric === 'weight'
-    ? (pb.length != null ? formatSize(pb.length, units) : null)
-    : (pb.weight != null ? formatWeight(pb.weight, units) : null);
-  const jur = jurisdictionById(pb.jurisdiction);
+  const speciesName = species ? species.commonName : 'a fish';
+  const sizeStr = pb?.weight != null ? formatWeight(pb.weight, units)
+                : pb?.length != null ? formatSize(pb.length, units)
+                : null;
+  const jur = jurisdictionById(pb?.jurisdiction);
+  const dateStr = _fmtDate(pb?.date || pb?.dateIso);
+
   const lines = [
-    `${name}'s ${species.commonName} — Personal Best`,
+    '🏆 Personal Best Catch',
     '',
-    `🏆 ${primary}${secondary ? ` · ${secondary}` : ''}`,
-    `📅 ${pb.date || ''}`.trim(),
+    sizeStr
+      ? `${name} landed a ${sizeStr} ${speciesName}`
+      : `${name} landed a ${speciesName}`,
+    '',
   ];
-  if (jur) lines.push(`📍 ${jur.name}`);
-  if (pb.location) lines.push(`   ${pb.location}`);
-  if (pb.gearBait) lines.push(`🎣 ${pb.gearBait}`);
-  if (pb.notes) { lines.push(''); lines.push(pb.notes); }
+  if (jur)      lines.push(`📍 Waters: ${jur.name}`);
+  if (dateStr)  lines.push(`📅 Date: ${dateStr}`);
   lines.push('');
-  lines.push('Logged with ReelIntel · reelintel.app');
-  return lines.filter(l => l != null).join('\n');
+  lines.push('Shared with ReelIntel');
+  lines.push('Fish smarter. Catch more.');
+  _assertNoLeak(lines);
+  return lines.join('\n');
 }
 
+/* Regular catch report. Format:
+
+     {name} landed a {species}
+
+     🐟 Size: {size} {unit}
+     📍 Waters: {jur.name}
+     📅 Date: {formatted}
+
+     Shared with ReelIntel
+     Fish smarter. Catch more.
+
+   Size line drops entirely if neither weight nor length is set. */
 export function buildCatchReport({ anglerName, species, c, units }) {
   const name = (anglerName || '').trim() || 'Angler';
-  const speciesName = species ? species.commonName : (c.speciesId || 'Unknown species');
+  const speciesName = species ? species.commonName : 'a fish';
+  const sizeStr = c?.weight != null ? formatWeight(c.weight, units)
+                : c?.length != null ? formatSize(c.length, units)
+                : null;
+  const jur = jurisdictionById(c?.jurisdiction);
+  const dateStr = _fmtDate(c?.dateIso);
+
   const lines = [
-    `${name}'s ${speciesName}`,
+    `${name} landed a ${speciesName}`,
     '',
   ];
-  const measured = [];
-  if (c.weight != null) measured.push(`${c.weight} ${units === 'metric' ? 'kg' : 'lb'}`);
-  if (c.length != null) measured.push(`${c.length} ${units === 'metric' ? 'cm' : 'in'}`);
-  if (measured.length) lines.push(`🐟 ${measured.join(' · ')}`);
-  if (c.dateIso) {
-    const d = new Date(c.dateIso);
-    lines.push(`📅 ${d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
-  }
-  const jur = jurisdictionById(c.jurisdiction);
-  if (jur) lines.push(`📍 ${jur.name}`);
-  if (c.lat != null && c.lon != null) lines.push(`   ${c.lat.toFixed(5)}°, ${c.lon.toFixed(5)}°`);
-  if (c.sunAlt != null) lines.push(`🌅 Sun ${c.sunAlt.toFixed(0)}° ${_compass(c.sunAz || 0)}`);
-  if (c.moonName) lines.push(`🌙 ${c.moonName} · ${Math.round((c.moonIllum || 0) * 100)}%`);
-  if (c.weather) {
-    const w = c.weather;
-    const wbits = [];
-    if (w.tempF != null) wbits.push(`${Math.round(w.tempF)}°F`);
-    if (w.windMph != null) wbits.push(`${_compass(w.windDir || 0)} ${Math.round(w.windMph)} mph`);
-    if (w.cloudPct != null) wbits.push(`${Math.round(w.cloudPct)}% clouds`);
-    if (w.pressureMb != null) wbits.push(`${Math.round(w.pressureMb)} mb`);
-    if (wbits.length) lines.push(`🌤  ${wbits.join(' · ')}`);
-  }
-  if (c.notes) { lines.push(''); lines.push(c.notes); }
+  if (sizeStr) lines.push(`🐟 Size: ${sizeStr}`);
+  if (jur)     lines.push(`📍 Waters: ${jur.name}`);
+  if (dateStr) lines.push(`📅 Date: ${dateStr}`);
   lines.push('');
-  lines.push('Logged with ReelIntel · reelintel.app');
+  lines.push('Shared with ReelIntel');
+  lines.push('Fish smarter. Catch more.');
+  _assertNoLeak(lines);
   return lines.join('\n');
 }
 
@@ -351,15 +371,22 @@ async function _dataUrlToFile(dataUrl, name) {
   }
 }
 
-/* Share via Web Share API; falls back to clipboard.
-   Returns: 'shared' | 'copied' | 'cancelled' | 'failed' */
-export async function shareReport({ title, text, photoDataUrl, fileName = 'catch.jpg' }) {
+/* Share via Web Share API with up to 3 photos attached. Preference
+   order: files+text via navigator.share → text-only navigator.share
+   → clipboard fallback. Returns 'shared' | 'copied' | 'cancelled' |
+   'failed'.
+
+   photoDataUrls: array of resolved data URLs (nulls filtered out
+   by the caller). fileName is the stem — index appended per photo. */
+export async function shareReport({ title, text, photoDataUrls = [], fileName = 'catch' }) {
+  const urls = (Array.isArray(photoDataUrls) ? photoDataUrls : []).filter(Boolean).slice(0, 3);
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
-      if (photoDataUrl && navigator.canShare) {
-        const file = await _dataUrlToFile(photoDataUrl, fileName);
-        if (file && navigator.canShare({ files: [file], text, title })) {
-          await navigator.share({ files: [file], text, title });
+      if (urls.length && navigator.canShare) {
+        const files = (await Promise.all(urls.map((u, i) => _dataUrlToFile(u, `${fileName}-${i + 1}.jpg`))))
+          .filter(Boolean);
+        if (files.length && navigator.canShare({ files, text, title })) {
+          await navigator.share({ files, text, title });
           return 'shared';
         }
       }
