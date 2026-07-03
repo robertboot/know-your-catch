@@ -9,7 +9,7 @@ import {
   JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
-import { defaultState, saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes, photoStats } from './storage.js';
+import { saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes, photoStats } from './storage.js';
 import {
   savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl,
 } from './photos-store.js';
@@ -37,8 +37,8 @@ import {
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
   inputStyle,
 } from './components.jsx';
+import { SignInPrompt, AccountCloudCard } from './auth-ui.jsx';
 import { getLocation, getPhoto } from './native.js';
-import { publishCatch } from './cloudsync.js';
 import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -851,7 +851,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
 /* ============================================================
    PBs
    ============================================================ */
-export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
+export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }) {
   const recorded = Object.keys(state.pbs || {});
   const hasCatches = (state.catchLog || []).length > 0;
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
@@ -878,6 +878,8 @@ export function PBsScreen({ state, onView, onLogCatch, onViewCatches }) {
         <H1 size={22}>Personal Bests</H1>
         <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>Your records, by species.</div>
       </div>
+
+      {!signedIn && <SignInPrompt context="pbs" />}
 
       {recorded.length === 0 ? (
         <Card style={{ padding: 18, textAlign: 'center' }}>
@@ -1278,7 +1280,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
 /* ============================================================
    SETTINGS
    ============================================================ */
-export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
+export function SettingsScreen({ state, jurisdiction, update, session, syncStatus, lastSyncedAt, onForceSync, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
   const setUnits = (u) => update({ units: u });
   // Storage diagnostic — useful when the angler reports "edits aren't
   // saving". Re-reads on every interaction so the meter stays current.
@@ -1321,12 +1323,6 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
       }
     } finally {
       setCompacting(false);
-    }
-  };
-  const clearAll = () => {
-    if (window.confirm('Clear all PBs, notes, and settings? This cannot be undone.')) {
-      saveState(defaultState);
-      window.location.reload();
     }
   };
 
@@ -1386,6 +1382,12 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
+      <AccountCloudCard
+        session={session}
+        syncStatus={syncStatus}
+        lastSyncedAt={lastSyncedAt}
+        onForceSync={onForceSync}
+      />
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Angler profile</SectionLabel>
         <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>
@@ -1526,12 +1528,6 @@ export function SettingsScreen({ state, jurisdiction, update, onChangeJurisdicti
           Re-read disclaimer
         </button>
       </Card>
-      <Card>
-        <SectionLabel style={{ marginBottom: 8 }}>Reset</SectionLabel>
-        <button onClick={clearAll} style={{ background: 'transparent', border: `1.5px solid ${T.closed}`, color: T.closed, fontSize: 13, fontWeight: 600, padding: '8px 12px', borderRadius: 4, cursor: 'pointer' }}>
-          Clear all local data
-        </button>
-      </Card>
     </div>
   );
 }
@@ -1669,7 +1665,7 @@ function timeOfDay(sunAlt, dateIso) {
   return h < 12 ? 'dawn' : 'dusk';
 }
 
-export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
+export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
   // Each list-style filter holds an array of selected values — empty
   // means "no filter on this dimension". pbOnly is a boolean toggle.
@@ -1757,6 +1753,8 @@ export function CatchLogScreen({ state, onNew, onView, onViewPB }) {
           <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
       </div>
+
+      {!signedIn && <SignInPrompt context="catches" />}
 
       {quickPending.length > 0 && (
         <Card style={{ background: T.warnBg, borderColor: T.warn, marginBottom: 12, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -2585,9 +2583,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     }
 
     update(patch);
-    // Best-effort research publish — no-op if cloud not configured or
-    // the angler hasn't opted in. Local log is canonical regardless.
-    publishCatch(entry, state.research).catch(() => {});
+    // Cross-device sync is wired into update() itself now (see App.jsx
+    // syncChanges hook). The old research publish flow was retired
+    // when the sync layer landed in build 14.
     onDone();
   };
 

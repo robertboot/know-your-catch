@@ -1,6 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { downscaleImageDataUrl } from './storage.js';
+import { client } from './supabase-client.js';
+import { getLastSession } from './auth.js';
 
 /* Photo persistence with a split-storage model:
    - Full-res JPEG (1600px / 0.82q, ~200-400KB) lives on the iOS app's
@@ -39,23 +41,61 @@ async function makeThumb(dataUrl) {
 
 /* Save a downscaled full-res photo. fullDataUrl should already be at
    target dims (callers run it through downscaleImageDataUrl first).
-   Returns a PhotoEntry: { thumb, src, path? }. */
+   Returns a PhotoEntry: { thumb, src, path?, cloudUrl? }.
+
+   Background: when a Supabase session is active we also upload the
+   full-res bytes to the catch-photos bucket under the user's folder.
+   The returned entry gets `cloudUrl` attached so cross-device sync
+   can render the photo on the other device without re-downloading
+   the raw bytes. The upload is fire-and-forget after the local write
+   so a slow network never blocks the save. */
 export async function savePhoto(fullDataUrl) {
   const thumb = await makeThumb(fullDataUrl);
 
+  let entry;
   if (!NATIVE) {
-    return { thumb, src: fullDataUrl };
+    entry = { thumb, src: fullDataUrl };
+  } else {
+    const id = newPhotoId();
+    const path = `${PHOTO_DIR}/${id}.jpg`;
+    const base64 = fullDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
+    await Filesystem.writeFile({
+      path, data: base64, directory: Directory.Data, recursive: true,
+    });
+    const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
+    entry = { thumb, src: Capacitor.convertFileSrc(uri), path };
   }
 
-  const id = newPhotoId();
-  const path = `${PHOTO_DIR}/${id}.jpg`;
-  const base64 = fullDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
+  // Best-effort cloud upload. Silent if no session or Supabase config.
+  await uploadToCloud(entry, fullDataUrl);
+  return entry;
+}
 
-  await Filesystem.writeFile({
-    path, data: base64, directory: Directory.Data, recursive: true,
-  });
-  const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-  return { thumb, src: Capacitor.convertFileSrc(uri), path };
+/* Upload full-res bytes to the catch-photos bucket. Path is prefixed
+   with the user's uid so the storage RLS policy resolves. On success
+   the entry gets cloudUrl attached so downstream cross-device sync
+   can render the photo. Any failure is swallowed — the local copy
+   is authoritative. */
+async function uploadToCloud(entry, fullDataUrl) {
+  try {
+    const sess = getLastSession();
+    const uid = sess?.user?.id;
+    const c = client();
+    if (!uid || !c) return;
+    const id = entry.path ? entry.path.split('/').pop().replace(/\.jpg$/, '') : newPhotoId();
+    const key = `${uid}/${id}.jpg`;
+    const blob = await (await fetch(fullDataUrl)).blob();
+    const { error } = await c.storage.from('catch-photos').upload(key, blob, {
+      contentType: 'image/jpeg',
+      cacheControl: '31536000, immutable',
+      upsert: false,
+    });
+    if (error && !/already exists|Duplicate/i.test(error.message || '')) return;
+    const { data } = c.storage.from('catch-photos').getPublicUrl(key);
+    entry.cloudUrl = data?.publicUrl || null;
+  } catch {
+    // silent — local save still counts as success
+  }
 }
 
 /* Remove a photo's underlying file if it lives on disk. Safe to call
@@ -79,11 +119,14 @@ export function photoThumbUrl(p) {
 
 /* Synchronous full-size URL for <img src=...> / lightbox / share.
    On native this is already a capacitor:// URL the WebView can load
-   directly — no async disk read needed. */
+   directly — no async disk read needed. Cross-device sync case:
+   entries pulled from another device only have cloudUrl (no local
+   file yet); fall back to that so the photo renders while the
+   background lazy-download populates the on-disk copy. */
 export function photoDisplayUrl(p) {
   if (!p) return null;
   if (typeof p === 'string') return p;
-  return p.src || p.thumb || null;
+  return p.src || p.cloudUrl || p.thumb || null;
 }
 
 /* Read a photo's bytes back as a data URL — only needed when handing

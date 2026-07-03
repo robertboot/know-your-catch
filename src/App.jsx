@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import {
   Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera,
   Home as HomeIcon, Settings as SettingsIcon,
@@ -10,6 +10,16 @@ import { migratePhotosToStore } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
+import { subscribe as subscribeAuth } from './auth.js';
+import {
+  pullAll as cloudPullAll,
+  syncChanges as cloudSyncChanges,
+  subscribe as subscribeSyncStatus,
+  getStatus as getSyncStatus,
+  getLastSyncedAt as getCloudLastSynced,
+  forceSync as cloudForceSync,
+} from './cloudsync.js';
+import { SyncPill } from './auth-ui.jsx';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
@@ -63,6 +73,10 @@ export default function App() {
   // Transient banner for the Quick Log flow's post-save confirmation
   // and for stale-quick-log reminders. Auto-clears after 2.4s.
   const [toast, setToast] = useState(null); // { text, kind: 'success' | 'nag' } | null
+  // Cloud auth session + sync status. Session drives the sign-in
+  // prompt on Logbook / PBs; syncStatus feeds the header pill.
+  const [session, setSession] = useState(null);
+  const [syncStatus, setSyncStatus] = useState(getSyncStatus());
 
   // Load persisted state on mount.
   useEffect(() => {
@@ -105,6 +119,41 @@ export default function App() {
   // lookups reflect the latest cache.
   useEffect(() => subscribeSpecies(() => setSpeciesVersion(v => v + 1)), []);
   useEffect(() => subscribeBrand(() => setSpeciesVersion(v => v + 1)), []);
+  // Auth + sync subscriptions.
+  useEffect(() => subscribeAuth(setSession), []);
+  useEffect(() => subscribeSyncStatus(setSyncStatus), []);
+
+  // On sign-in: pull the server snapshot and merge with local. Server
+  // wins on conflict — the state was already committed on this device
+  // via update(), so anything server-only is a delta from another
+  // device that we want. Local-only rows will get pushed by the
+  // syncChanges hook on the next state write.
+  const pullSessionRef = useRef(null);
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid || pullSessionRef.current === uid) return;
+    pullSessionRef.current = uid;
+    let alive = true;
+    (async () => {
+      const snap = await cloudPullAll(uid);
+      if (!alive || !snap) return;
+      setState(prev => {
+        const localById = new Map((prev.catchLog || []).map(c => [c.id, c]));
+        for (const c of snap.catches) localById.set(c.id, c);
+        const catchLog = Array.from(localById.values())
+          .sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
+        const pbs = { ...(prev.pbs || {}), ...snap.pbs };
+        // If the server has this user's email + we don't have anglerEmail
+        // set locally, adopt it so downstream views (share reports,
+        // profile card) render nicely.
+        const anglerEmail = (prev.anglerEmail || '').trim() || session.user?.email || '';
+        const next = { ...prev, catchLog, pbs, anglerEmail };
+        saveState(next);
+        return next;
+      });
+    })();
+    return () => { alive = false; };
+  }, [session]);
 
   // Hash routing — only used for /#/admin today. Any change to the
   // hash re-syncs the local route state so the admin console mounts
@@ -175,10 +224,15 @@ export default function App() {
       const res = saveState(next);
       if (!res.ok) setSaveError(res.code);
       else if (saveError) setSaveError(null);
+      // Fire-and-forget cross-device sync. syncChanges is debounced
+      // per-record so a run of rapid edits collapses to one write.
+      // Signed-out or no-Supabase = silent no-op.
+      const uid = session?.user?.id;
+      if (uid) { try { cloudSyncChanges(prev, next, uid); } catch {} }
       return next;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveError]);
+  }, [saveError, session]);
 
   const screen = stack[stack.length - 1];
   const push  = (s)    => setStack(st => [...st, s]);
@@ -309,6 +363,7 @@ export default function App() {
     case 'catch_log':
       body = <CatchLogScreen
         state={state}
+        signedIn={!!session}
         onNew={() => push({ name: 'catch_entry' })}
         onView={(id) => push({ name: 'catch_detail', id })}
         onViewPB={(speciesId) => push({ name: 'pb_detail', speciesId })}
@@ -336,6 +391,7 @@ export default function App() {
       break;
     case 'pbs':
       body = <PBsScreen state={state}
+        signedIn={!!session}
         onView={(id) => push({ name: 'pb_detail', speciesId: id })}
         onLogCatch={() => push({ name: 'catch_entry' })}
         onViewCatches={() => push({ name: 'catch_log' })} />;
@@ -360,6 +416,10 @@ export default function App() {
       break;
     case 'settings':
       body = <SettingsScreen state={state} jurisdiction={jurisdiction} update={update}
+                session={session}
+                syncStatus={syncStatus}
+                lastSyncedAt={getCloudLastSynced()}
+                onForceSync={() => { const uid = session?.user?.id; if (uid) cloudForceSync(state, uid); }}
                 onChangeJurisdiction={() => setShowJur(true)}
                 onShowDisclaimer={() => setShowDisclaimer(true)}
                 onEditFavorites={() => setShowFavorites(true)}
@@ -431,7 +491,10 @@ export default function App() {
             <ChevronLeft size={20} /> Back
           </button>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingRight: 12, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 12, flexShrink: 0 }}>
+          {session && !isHome && (
+            <SyncPill status={syncStatus} onClick={() => push({ name: 'settings' })} />
+          )}
           {isHome && (
             <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
               <Bell size={24} strokeWidth={1.8} />
