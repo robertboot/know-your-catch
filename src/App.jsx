@@ -29,8 +29,9 @@ import {
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
-  PhotoAnalyzingScreen, PhotoResultScreen, LogMenuScreen, QuickLogScreen,
+  PhotoAnalyzingScreen, PhotoResultScreen,
 } from './screens1.jsx';
+import { getPhoto } from './native.js';
 import {
   SpeciesDetailScreen, RegulationsListScreen, RegulationDetailScreen,
   RegulationAlertsScreen,
@@ -301,6 +302,18 @@ export default function App() {
   const jurisdiction = jurisdictionById(state.jurisdiction);
   const stale = isStale(state.syncMeta);
 
+  /* Single camera-first capture entry. Called from the home hero
+     button AND the raised center tab-bar action so the two entry
+     points can never drift. Offers Take Photo / Choose from Library
+     via the iOS system picker (Capacitor Camera source=Prompt), then
+     analyzes on-device via identifyPhoto and lands on catch_entry
+     with the photo + top species prefilled. Fully offline. */
+  const startCaptureFlow = async () => {
+    const dataUrl = await getPhoto({ source: 'prompt' });
+    if (!dataUrl) return; // cancelled
+    push({ name: 'photo_analyzing', imageDataUrl: dataUrl, fromCapture: true });
+  };
+
   const homeProps = {
     state, jurisdiction, stale, screenSize: size,
     onChangeJurisdiction: () => setShowJur(true),
@@ -312,7 +325,8 @@ export default function App() {
     onRegulationAlerts: () => push({ name: 'regulation_alerts' }),
     onQuiz:        () => push({ name: 'quiz' }),
     onReport:     () => push({ name: 'catch_entry' }),
-    onLogMenu:    () => push({ name: 'log_menu' }),
+    onLogMenu:    startCaptureFlow, // legacy prop name; now runs the single-shot capture
+    onCapture:    startCaptureFlow,
     onPatterns:   () => push({ name: 'patterns' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
@@ -332,33 +346,34 @@ export default function App() {
         onSearch={() => push({ name: 'search' })}
       />;
       break;
-    case 'log_menu':
-      body = <LogMenuScreen
-        onQuickLog={() => push({ name: 'quick_log' })}
-        onIdentify={() => push({ name: 'identify' })}
-        onUploadPhoto={() => push({ name: 'catch_entry', openUploadOnMount: true })}
-      />;
-      break;
     case 'patterns':
       body = <PatternsScreen
         state={state}
         onPickSpecies={(id) => push({ name: 'species', id })}
       />;
       break;
-    case 'quick_log':
-      body = <QuickLogScreen
-        state={state} jurisdiction={jurisdiction} update={update}
-        onDone={() => {
-          setToast({ text: 'Logged — back to fishing', kind: 'success' });
-          reset([{ name: 'home' }]);
-        }}
-        onCancel={() => reset([{ name: 'home' }])}
-      />;
-      break;
     case 'photo_analyzing':
       body = <PhotoAnalyzingScreen
         imageDataUrl={screen.imageDataUrl}
-        onResult={(result) => setStack(st => [...st.slice(0, -1), { name: 'photo_result', imageDataUrl: screen.imageDataUrl, result }])}
+        onResult={(result) => {
+          // Capture-flow origin: skip the results screen and drop
+          // the angler directly on catch_entry with the photo +
+          // top-candidate species prefilled. On low-confidence /
+          // no-candidate results we still land on catch_entry — the
+          // species picker inside catch_entry lets them pick manually.
+          if (screen.fromCapture) {
+            const top = (result && result.candidates && result.candidates[0]) || null;
+            const preselectSpeciesId = top ? top.speciesId : undefined;
+            setStack(st => [...st.slice(0, -1), {
+              name: 'catch_entry',
+              preselectSpeciesId,
+              prefilledPhoto: screen.imageDataUrl,
+            }]);
+            return;
+          }
+          // Legacy Fish-ID-tab flow: results screen with candidates.
+          setStack(st => [...st.slice(0, -1), { name: 'photo_result', imageDataUrl: screen.imageDataUrl, result }]);
+        }}
       />;
       break;
     case 'photo_result':
@@ -621,53 +636,28 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating action button — Quick Log, home only. Opens camera
-          immediately; on capture we save with GPS+sun+moon+weather in
-          the background and drop a "Logged" toast on the home screen. */}
-      {isHome && (
-        <button
-          onClick={() => push({ name: 'quick_log' })}
-          aria-label="Quick log"
-          style={{
-            position: 'fixed',
-            bottom: `calc(${size === 'phone' ? 92 : 108}px + env(safe-area-inset-bottom))`,
-            // On phone the shell is clamped to 440px centered; offset
-            // the FAB so it sits at the right edge of that column.
-            // On tablet the shell fills the viewport, so a plain edge
-            // offset is enough.
-            right: size === 'phone'
-              ? `max(16px, calc(50vw - 220px + 16px))`
-              : 24,
-            width: size === 'phone' ? 64 : 76,
-            height: size === 'phone' ? 64 : 76,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle at 30% 30%, #2EE4FF 0%, #19D4F2 60%, #0F8FAA 100%)',
-            border: '3px solid rgba(25, 212, 242, 0.45)',
-            color: T.oceanDeep, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 0 6px rgba(25, 212, 242, 0.15), 0 8px 28px rgba(25, 212, 242, 0.55)',
-            zIndex: 49,
-          }}>
-          <Camera size={28} strokeWidth={2.2} />
-        </button>
-      )}
 
       {/* Bottom tab bar — fixed to the viewport so it stays put during
           scroll and doesn't leave a white gap under a bounced list
           when iOS overscrolls. Safe-area padding leaves room for the
           home indicator. */}
+      {/* Bottom tab bar — 5 slots with a raised center capture action.
+          Home | Fish ID | [camera] | Regulations | Logbook. The center
+          slot is an unlabeled action (not a tab): it never highlights,
+          it always triggers the shared capture flow. */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         maxWidth: containerMaxWidth(size), margin: '0 auto',
         background: T.oceanDeep,
         borderTop: `1px solid ${T.cardEdge}`,
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
         padding: `${size === 'phone' ? 10 : 14}px 4px 0`,
         paddingBottom: `calc(${size === 'phone' ? 14 : 18}px + env(safe-area-inset-bottom))`,
         zIndex: 50,
       }}>
         <TabBtn size={size} label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon />} />
         <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
+        <CenterCaptureBtn size={size} onClick={startCaptureFlow} />
         <TabBtn size={size} label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList />} />
         <TabBtn size={size} label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen />} />
       </div>
@@ -746,25 +736,63 @@ export default function App() {
   );
 }
 
+const TAB_ACTIVE   = '#5ecdf2';
+const TAB_INACTIVE = '#8494a8';
+
 function TabBtn({ label, active, onClick, icon, size = 'phone' }) {
-  const iconSize = size === 'phone' ? 22 : size === 'tablet' ? 26 : 28;
+  const iconSize  = size === 'phone' ? 23 : size === 'tablet' ? 26 : 28;
   const labelSize = size === 'phone' ? 11 : size === 'tablet' ? 13 : 14;
-  const gap = size === 'phone' ? 5 : 7;
+  const gap       = size === 'phone' ? 5 : 7;
+  const color = active ? TAB_ACTIVE : TAB_INACTIVE;
   const scaledIcon = React.isValidElement(icon)
     ? React.cloneElement(icon, { size: iconSize, strokeWidth: 2 })
     : icon;
   return (
     <button onClick={onClick} style={{
-      background: 'transparent', border: 'none', color: active ? T.brass : T.inkMute,
+      background: 'transparent', border: 'none', color,
       padding: '4px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column',
       alignItems: 'center', gap, fontSize: labelSize, fontWeight: active ? 700 : 600,
       letterSpacing: 0.2,
     }}>
-      <span style={{
-        color: active ? T.brass : T.inkMute,
-        filter: active ? 'drop-shadow(0 0 6px rgba(25, 212, 242, 0.55))' : 'none',
-      }}>{scaledIcon}</span>
+      <span style={{ color }}>{scaledIcon}</span>
       {label}
     </button>
+  );
+}
+
+/* Center capture action — an action slot in the tab bar, not a tab.
+   56px filled circle in the brand light-blue, seated in a 64px socket
+   colored like the tab-bar itself so it reads as raised through the
+   top edge. No labels, no active state; always triggers the shared
+   capture flow. */
+function CenterCaptureBtn({ onClick, size = 'phone' }) {
+  const socket = size === 'phone' ? 64 : 72;
+  const btn    = size === 'phone' ? 56 : 64;
+  const icon   = size === 'phone' ? 28 : 32;
+  return (
+    <div style={{
+      position: 'relative', display: 'flex', justifyContent: 'center',
+      alignItems: 'flex-start',
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: -(socket / 2 + 4),
+        left: '50%', transform: 'translateX(-50%)',
+        width: socket, height: socket, borderRadius: '50%',
+        background: T.oceanDeep,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        pointerEvents: 'none',
+      }}>
+        <button onClick={onClick} aria-label="Log a catch" style={{
+          width: btn, height: btn, borderRadius: '50%',
+          background: '#5ecdf2', border: 'none',
+          color: '#062330', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'auto',
+        }}>
+          <Camera size={icon} strokeWidth={2.2} />
+        </button>
+      </div>
+    </div>
   );
 }

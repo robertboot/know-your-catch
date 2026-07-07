@@ -26,26 +26,34 @@ export async function getLocation(opts = {}) {
 
 /** Resolve to a data URL of the chosen photo, or null if the user cancelled.
     Options:
-      cameraOnly = true → skip the "Choose from Library" prompt and go
-        straight to the camera. Used for the Quick Log flow so the user
-        gets one tap → shutter, not a source picker. */
-export async function getPhoto({ cameraOnly = false } = {}) {
+      source =
+        'prompt' → iOS system picker offering Take Photo / Choose from
+                   Library. Default and preferred entry — the user
+                   should always be able to pick a library photo
+                   without a separate app-level menu.
+        'camera' → camera only, no library option
+        'library' → library only, no camera
+    Legacy: cameraOnly=true is aliased to source='camera' for older
+    call sites. */
+export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
+  const effective = cameraOnly ? 'camera' : source;
   if (isNative()) {
     try {
+      const capacitorSource =
+        effective === 'camera'  ? CameraSource.Camera :
+        effective === 'library' ? CameraSource.Photos :
+                                  CameraSource.Prompt;
       const photo = await Camera.getPhoto({
         quality: 85,
         allowEditing: false,
-        source: cameraOnly ? CameraSource.Camera : CameraSource.Prompt,
+        source: capacitorSource,
         resultType: CameraResultType.DataUrl,
         // Dual-write: when the source is the camera the full-res
         // capture also lands in the iOS Photos library. Anglers
         // expect their fish photos in Recents. The app keeps its own
         // downscaled copy in Filesystem for fast render / share
-        // regardless. Requires NSPhotoLibraryAddUsageDescription in
-        // Info.plist (pre-staged from ios-templates). If the user
-        // denies the "add to Photos" prompt the capture still
-        // succeeds — we get the bytes for our downscaled copy and
-        // just skip the Photos-write silently.
+        // regardless. Silent skip if the user denies the "add to
+        // Photos" permission.
         saveToGallery: true,
       });
       return photo.dataUrl || null;
@@ -53,12 +61,15 @@ export async function getPhoto({ cameraOnly = false } = {}) {
       return null; // user cancelled
     }
   }
-  // Web fallback: programmatically open a file picker that prefers the camera.
+  // Web fallback: programmatically open a file picker. Prefer camera
+  // when source='camera', otherwise let the user pick either camera
+  // or an existing library photo. Cancellation doesn't fire reliably
+  // on file inputs; just resolve null on no-pick.
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.capture = 'environment';
+    if (effective === 'camera') input.capture = 'environment';
     input.onchange = () => {
       const f = input.files && input.files[0];
       if (!f) return resolve(null);
@@ -67,7 +78,6 @@ export async function getPhoto({ cameraOnly = false } = {}) {
       r.onerror = () => resolve(null);
       r.readAsDataURL(f);
     };
-    // Cancellation in file input doesn't fire reliably; just resolve null on no-pick.
     input.click();
   });
 }

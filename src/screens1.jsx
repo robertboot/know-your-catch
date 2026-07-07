@@ -467,39 +467,8 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
   );
 }
 
-/* ============================================================
-   LOG MENU — three ways to log a catch
-   ============================================================ */
-export function LogMenuScreen({ onQuickLog, onIdentify, onUploadPhoto }) {
-  return (
-    <div style={{ padding: '18px 16px' }}>
-      <H1 size={24} style={{ marginBottom: 6 }}>Log your catch</H1>
-      <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: 18 }}>
-        Three ways to add a catch to your logbook.
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <BigButton
-          onClick={onQuickLog}
-          icon={<Camera size={24} />}
-          title="Quick log"
-          subtitle="Take photo, get back to fishing — we'll fill in the rest"
-        />
-        <BigButton
-          onClick={onIdentify}
-          icon={<Sparkles size={24} />}
-          title="Fish ID"
-          subtitle="Identify and log your catch"
-        />
-        <BigButton
-          onClick={onUploadPhoto}
-          icon={<ImageIcon size={24} />}
-          title="Upload photo"
-          subtitle="Log a fish you already caught from a saved photo"
-        />
-      </div>
-    </div>
-  );
-}
+/* LogMenuScreen removed in build 16 — the app now goes camera-first
+   from a single entry point (Home hero + tab bar center action). */
 
 /* ============================================================
    QUICK LOG — camera-first, everything else in the background
