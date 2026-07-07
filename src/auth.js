@@ -1,31 +1,25 @@
-/* Auth — Sign in with Apple → Supabase session.
+/* Auth — Supabase magic-link email flow.
 
-   Native iOS flow (via @capacitor-community/apple-sign-in):
-     1. SignInWithApple.authorize() invokes Apple's native prompt.
-        The user confirms with Face/Touch ID or their Apple ID.
-     2. Apple returns an identity token (JWT) signed by Apple.
-     3. Hand that token to supabase.auth.signInWithIdToken({ provider:
-        'apple', token }). Supabase verifies with Apple's public key
-        and issues a session that RLS keys on via auth.uid().
+   Flow:
+     1. User enters email → sendMagicLink({ email }) → supabase sends an
+        OTP email whose link is `reelintel://auth?code=...` (the
+        emailRedirectTo we hand supabase-js).
+     2. User taps the link in Mail on the same device. iOS resolves the
+        reelintel:// scheme and hands the URL to our app.
+     3. Capacitor App plugin's appUrlOpen listener fires. handleDeepLink
+        parses the URL and calls supabase.auth.exchangeCodeForSession
+        which lands a session server-side and locally.
+     4. Any subscriber (SettingsScreen, sync layer) sees the session flip.
 
-   Web fallback (dev + Safari testing on the desktop): use supabase's
-   built-in OAuth redirect flow via signInWithOAuth({ provider:
-   'apple' }). Requires the Services ID + return URL to be configured
-   in Apple + Supabase.
-
-   Session state:
-     - subscribe(fn) — fires with the current { session, user } on
-       every auth state change (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED).
-     - getSession() — snapshot lookup.
-
-   Config prerequisites — see BUILD14_SETUP.md at the repo root. */
+   Sign in with Apple was tried in an earlier build and produced
+   AuthenticationServices error 1000 on-device (likely OAuth allow-list
+   drift + presentation-context nuance). Magic link is simpler because
+   it uses the system Mail app + a plain deep-link — no
+   ASWebAuthenticationSession, no OAuth handshake surface. */
 import { Capacitor } from '@capacitor/core';
 import { client } from './supabase-client.js';
 
-// The Sign-in-with-Apple plugin's Services ID (web) / bundle ID
-// (native). Set to match Apple Developer console entries.
-const APPLE_BUNDLE_ID   = 'com.reelintel.app';
-const APPLE_SERVICES_ID = 'com.reelintel.services';
+const REDIRECT_URL = 'reelintel://auth';
 
 let _lastSession = null;
 const listeners = new Set();
@@ -35,7 +29,8 @@ function notify(session) {
   for (const fn of listeners) { try { fn(session); } catch {} }
 }
 
-/** Subscribe to auth state. Returns an unsubscribe fn. */
+/** Subscribe to auth state. Fires immediately with the current session
+    (or null) so callers don't have to poll. Returns an unsubscribe fn. */
 export function subscribe(fn) {
   listeners.add(fn);
   const c = client();
@@ -45,61 +40,74 @@ export function subscribe(fn) {
 
 export function getLastSession() { return _lastSession; }
 
-/** Native Sign in with Apple. On iOS Capacitor. */
-async function signInWithAppleNative() {
-  const { SignInWithApple } = await import('@capacitor-community/apple-sign-in');
-  const options = {
-    clientId: APPLE_BUNDLE_ID,   // native uses the app bundle id
-    redirectURI: `https://${new URL(import.meta.env.VITE_SUPABASE_URL).host}/auth/v1/callback`,
-    scopes: 'email name',
-    state: Math.random().toString(36).slice(2),
-    // On iOS the "nonce" is optional but recommended. Skipped here
-    // because Supabase's signInWithIdToken accepts unnonced tokens.
-  };
-  const res = await SignInWithApple.authorize(options);
-  const idToken = res?.response?.identityToken;
-  if (!idToken) throw new Error('Apple did not return an identity token');
+/** Kick off the magic-link email flow. Returns { ok, error } — the
+    caller shows a "check your email" state on ok. */
+export async function sendMagicLink({ email }) {
   const c = client();
-  if (!c) throw new Error('Supabase not configured');
-  const { data, error } = await c.auth.signInWithIdToken({
-    provider: 'apple',
-    token: idToken,
+  if (!c) return { ok: false, error: 'Supabase is not configured.' };
+  const trimmed = (email || '').trim();
+  if (!trimmed) return { ok: false, error: 'Enter an email address.' };
+  const { error } = await c.auth.signInWithOtp({
+    email: trimmed,
+    options: { emailRedirectTo: REDIRECT_URL },
   });
-  if (error) throw error;
-  return data;
+  if (error) {
+    console.error('[auth] signInWithOtp failed', error);
+    return { ok: false, error: error.message || String(error) };
+  }
+  return { ok: true };
 }
 
-/** Web fallback: Supabase OAuth redirect. */
-async function signInWithAppleWeb() {
+/** Called from the appUrlOpen listener with the full deep-link URL.
+    Extracts the code and completes the session exchange. */
+export async function handleDeepLink(url) {
+  if (!url || !url.startsWith(REDIRECT_URL)) return { ok: false, error: 'not a reelintel:// link' };
   const c = client();
-  if (!c) throw new Error('Supabase not configured');
-  const { error } = await c.auth.signInWithOAuth({
-    provider: 'apple',
-    options: {
-      redirectTo: window.location.origin,
-    },
-  });
-  if (error) throw error;
+  if (!c) return { ok: false, error: 'Supabase is not configured.' };
+  try {
+    const { data, error } = await c.auth.exchangeCodeForSession(url);
+    if (error) {
+      console.error('[auth] exchangeCodeForSession failed', error);
+      return { ok: false, error: error.message || String(error) };
+    }
+    return { ok: true, session: data?.session || null };
+  } catch (e) {
+    console.error('[auth] exchange threw', e);
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
-/** Preferred entry. Picks the right flow for the runtime. */
-export async function signInWithApple() {
-  return Capacitor.isNativePlatform() ? signInWithAppleNative() : signInWithAppleWeb();
-}
-
-/** Sign out — clears session + storage. Local catch data stays put. */
+/** Sign out — clears Supabase session. Local catch data is untouched. */
 export async function signOut() {
   const c = client();
   if (!c) return;
   await c.auth.signOut();
 }
 
-// Boot-time: wire the Supabase listener once. Any consumer that
-// subscribes later gets replayed the most recent session immediately
-// via the subscribe() helper above.
+// Boot-time: seed the current session + wire Supabase's own auth
+// state change listener. Any consumer subscribing later gets replayed
+// via subscribe()'s immediate getSession call above.
 (function initAuthListener() {
   const c = client();
   if (!c) return;
   c.auth.getSession().then(({ data }) => notify(data.session || null));
   c.auth.onAuthStateChange((_evt, sess) => notify(sess || null));
+})();
+
+// Register the Capacitor App URL-open handler once at module load so
+// the app can receive the magic-link tap immediately after iOS
+// deep-links back into the app. Silent no-op on web.
+(async function initDeepLinkHandler() {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { App } = await import('@capacitor/app');
+    App.addListener('appUrlOpen', async (event) => {
+      const url = event?.url || '';
+      if (url.startsWith(REDIRECT_URL)) {
+        await handleDeepLink(url);
+      }
+    });
+  } catch (e) {
+    console.warn('[auth] failed to register appUrlOpen listener', e);
+  }
 })();

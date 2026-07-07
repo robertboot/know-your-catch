@@ -397,6 +397,106 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
   );
 }
 
+/* ============================================================
+   SIGN IN MODAL — magic-link email flow.
+   Two states: enter-email, then check-your-email with a resend
+   button that runs a 60s cooldown so we can't spam Supabase's OTP
+   endpoint.
+   ============================================================ */
+export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
+  const [email, setEmail] = useState(initialEmail || '');
+  const [phase, setPhase] = useState('input'); // 'input' | 'sent'
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [cooldown, setCooldown] = useState(0); // seconds remaining
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    timerRef.current = setTimeout(() => setCooldown(c => c - 1), 1000);
+    return () => clearTimeout(timerRef.current);
+  }, [cooldown]);
+
+  const send = async () => {
+    setBusy(true); setError('');
+    const res = await onSendLink({ email });
+    setBusy(false);
+    if (!res?.ok) {
+      setError(res?.error || 'Send failed');
+      return;
+    }
+    setPhase('sent');
+    setCooldown(60);
+  };
+
+  const resend = async () => {
+    if (cooldown > 0 || busy) return;
+    setBusy(true); setError('');
+    const res = await onSendLink({ email });
+    setBusy(false);
+    if (!res?.ok) { setError(res?.error || 'Send failed'); return; }
+    setCooldown(60);
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <H1 size={20}>{phase === 'input' ? 'Sign in' : 'Check your email'}</H1>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkMute, padding: 4 }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {phase === 'input' ? (
+          <>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 12px' }}>
+              We'll email a link. Tap it on this device to sign in — no password required.
+            </p>
+            <SectionLabel style={{ marginBottom: 6 }}>Email</SectionLabel>
+            <input
+              type="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && email) send(); }}
+              placeholder="you@example.com"
+              autoComplete="email"
+              style={inputStyle}
+            />
+            <div style={{ marginTop: 14 }}>
+              <PrimaryButton onClick={send} disabled={busy || !email}>
+                {busy ? 'Sending…' : 'Send magic link'}
+              </PrimaryButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
+              We sent a link to <strong style={{ color: T.ink }}>{email}</strong>.
+            </p>
+            <p style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
+              Tap the link in Mail on this device. Delivery usually takes a few seconds; check spam if it doesn't arrive within a minute.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <GhostButton onClick={onClose} style={{ flex: 1 }}>Close</GhostButton>
+              <GhostButton onClick={resend} disabled={cooldown > 0 || busy} style={{ flex: 1 }}>
+                {cooldown > 0 ? `Resend in ${cooldown}s` : (busy ? 'Sending…' : 'Resend link')}
+              </GhostButton>
+            </div>
+          </>
+        )}
+
+        {error && (
+          <div role="alert" style={{ marginTop: 10, fontSize: 12, color: T.closed, lineHeight: 1.45 }}>
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function KeepConfirmModal({ species, onClose }) {
   return (
     <div style={overlayStyle}>

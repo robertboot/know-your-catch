@@ -37,7 +37,7 @@ import {
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
   inputStyle,
 } from './components.jsx';
-import { SignInPrompt, AccountCloudCard } from './auth-ui.jsx';
+import { SignInPrompt, AccountSection } from './auth-ui.jsx';
 import { useScreenSize } from './screen-size.js';
 import { getLocation, getPhoto, isNative } from './native.js';
 import exifr from 'exifr';
@@ -1393,11 +1393,12 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
   return (
     <div style={{ padding: '16px 16px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
-      <AccountCloudCard
+      <AccountSection
         session={session}
         syncStatus={syncStatus}
         lastSyncedAt={lastSyncedAt}
         onForceSync={onForceSync}
+        initialEmail={state.anglerEmail}
       />
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Angler profile</SectionLabel>

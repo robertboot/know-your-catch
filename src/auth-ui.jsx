@@ -1,15 +1,22 @@
-/* Sign-in UI — an inline prompt shown at the top of Logbook / PBs
-   when the user is signed out, plus a dedicated Sign-In button used
-   from Settings.
+/* Auth UI — magic-link email flow surfaces.
 
-   Signed-out state keeps local-only functionality intact so existing
-   testers with catches in localStorage don't lose access. Sync is
-   strictly opt-in via signing in. */
+   Two pieces:
+    - useSession()      — hook for any component that needs the current
+                          Supabase session (or null)
+    - AccountSection    — the Settings top card. Signed-out shows a
+                          "Sign in with email" primary button; signed-in
+                          shows email, sync status, Sync now, Sign out.
+    - SyncPill          — small ☁/↻/⚠ header pill on non-home routes
+
+   Sign in with Apple was removed in build 19 — it produced
+   AuthenticationServices error 1000 on device and the config surface
+   was heavier than a magic link. See docs/DEFERRED.md for the future
+   swap. */
 import React, { useEffect, useState } from 'react';
-import { Cloud, ChevronRight, LogIn } from 'lucide-react';
+import { LogIn, Cloud, LogOut, RefreshCcw } from 'lucide-react';
 import { T } from './theme.js';
-import { Card, PrimaryButton, GhostButton, SectionLabel } from './components.jsx';
-import { signInWithApple, signOut, subscribe, getLastSession } from './auth.js';
+import { Card, PrimaryButton, GhostButton, SectionLabel, SignInModal } from './components.jsx';
+import { subscribe, getLastSession, sendMagicLink, signOut } from './auth.js';
 
 /** Small hook: returns the current Supabase session (or null). */
 export function useSession() {
@@ -18,112 +25,77 @@ export function useSession() {
   return session;
 }
 
-/** Renders a "Sign in with Apple" button. Uses the Apple system font
-    for the wordmark to match Apple's HIG. */
-export function AppleSignInButton({ onDone, style }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr]   = useState('');
-  const click = async () => {
-    setBusy(true); setErr('');
-    try {
-      await signInWithApple();
-      onDone && onDone();
-    } catch (e) {
-      setErr(e?.message || String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div style={style}>
-      <button onClick={click} disabled={busy} style={{
-        width: '100%', background: '#000', color: '#fff', border: 'none',
-        padding: '12px 16px', borderRadius: 8, fontSize: 15, fontWeight: 600,
-        cursor: busy ? 'default' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        fontFamily: '-apple-system, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", sans-serif',
-      }}>
-        <span style={{ fontSize: 18, lineHeight: 1, marginTop: -2 }}></span>
-        {busy ? 'Signing in…' : 'Sign in with Apple'}
-      </button>
-      {err && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: T.closed, lineHeight: 1.4 }}>{err}</div>}
-    </div>
-  );
-}
-
-/** Banner shown at the top of Logbook / PBs when the user is signed
-    out. Encourages sign-in to unlock sync without blocking the local
-    experience. */
-export function SignInPrompt({ context = 'catches' }) {
-  const copy = context === 'pbs'
-    ? 'Sign in to sync your personal bests across devices.'
-    : 'Sign in to sync your catches across devices.';
-  return (
-    <Card style={{ marginBottom: 12, background: 'linear-gradient(135deg, rgba(25,212,242,0.08), transparent)', borderColor: T.brass }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-        <Cloud size={22} color={T.brass} style={{ flexShrink: 0, marginTop: 2 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{copy}</div>
-          <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
-            Log on your iPhone. Open the app on iPad. Same catches, same PBs. Your data stays yours — we just make it portable.
-          </div>
-        </div>
-      </div>
-      <AppleSignInButton />
-    </Card>
-  );
-}
-
-/** Settings card: current session + Sign In / Sign Out. */
-export function AccountCloudCard({ session, syncStatus, lastSyncedAt, onForceSync }) {
-  const [busy, setBusy] = useState(false);
+/** Account card at the top of Settings. Owns the SignInModal open/close.
+    Signed-out and signed-in states share the surface — no separate
+    "Cloud Sync" card. Auth IS the sync switch. */
+export function AccountSection({ session, syncStatus, lastSyncedAt, onForceSync, initialEmail }) {
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const doSignOut = async () => {
-    if (!window.confirm('Sign out? Your catches stay on this device but stop syncing until you sign back in.')) return;
-    setBusy(true);
-    try { await signOut(); } finally { setBusy(false); }
+    if (!window.confirm('Sign out? Your local catches stay on this device; sync stops until you sign back in.')) return;
+    setSigningOut(true);
+    try { await signOut(); } finally { setSigningOut(false); }
   };
   const lastSyncStr = lastSyncedAt
     ? `${Math.max(1, Math.round((Date.now() - lastSyncedAt) / 60000))} min ago`
     : 'not yet';
+  const statusLabel = syncStatus === 'syncing' ? '↻ Syncing' : syncStatus === 'offline' ? '⚠ Offline' : '☁ Synced';
+  const statusColor = syncStatus === 'offline' ? T.warn : syncStatus === 'syncing' ? T.brass : T.open;
+
   return (
-    <Card style={{ marginBottom: 10 }}>
-      <SectionLabel style={{ marginBottom: 6 }}>Cloud sync</SectionLabel>
-      {session ? (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, color: T.ink, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {session.user?.email || 'Signed in'}
-              </div>
-              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
-                Status: {syncStatus} · Last sync: {lastSyncStr}
-              </div>
+    <>
+      <Card style={{ marginBottom: 10 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Account</SectionLabel>
+        {session ? (
+          <>
+            <div style={{ fontSize: 15, color: T.ink, fontWeight: 700, wordBreak: 'break-all' }}>
+              {session.user?.email || 'Signed in'}
             </div>
-            <GhostButton onClick={doSignOut} disabled={busy} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>
-              Sign out
-            </GhostButton>
-          </div>
-          {onForceSync && (
-            <GhostButton onClick={onForceSync} style={{ width: '100%', padding: '8px 12px', fontSize: 12 }}>
-              Sync now
-            </GhostButton>
-          )}
-        </>
-      ) : (
-        <>
-          <p style={{ margin: '0 0 10px', fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
-            Sign in to sync your catches, personal bests, and photos across devices.
-          </p>
-          <AppleSignInButton />
-        </>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: statusColor, marginTop: 4 }}>
+              <span>{statusLabel}</span>
+              <span style={{ color: T.inkMute }}>· Last sync: {lastSyncStr}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              {onForceSync && (
+                <GhostButton onClick={onForceSync} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 12 }}>
+                  <RefreshCcw size={14} /> Sync now
+                </GhostButton>
+              )}
+              <GhostButton onClick={doSignOut} disabled={signingOut}
+                style={{ flex: 1, color: T.closed, borderColor: T.closed, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 12 }}>
+                <LogOut size={14} /> Sign out
+              </GhostButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 15, color: T.ink, fontWeight: 700, marginBottom: 4 }}>
+              Sign in to sync across devices
+            </div>
+            <p style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 12px' }}>
+              Your log, backed up automatically, on iPhone and iPad.
+            </p>
+            <PrimaryButton onClick={() => setShowSignIn(true)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <LogIn size={16} /> Sign in with email
+            </PrimaryButton>
+          </>
+        )}
+      </Card>
+
+      {showSignIn && (
+        <SignInModal
+          initialEmail={initialEmail || ''}
+          onClose={() => setShowSignIn(false)}
+          onSendLink={sendMagicLink}
+        />
       )}
-    </Card>
+    </>
   );
 }
 
 /** Small pill indicating sync status. Shown in the header on non-
-    home routes when signed in. Muted when idle/synced, brass while
-    syncing, amber when queued/offline. */
+    home routes when signed in. */
 export function SyncPill({ status, onClick }) {
   const isSyncing = status === 'syncing';
   const isOffline = status === 'offline';
@@ -137,5 +109,42 @@ export function SyncPill({ status, onClick }) {
       padding: '3px 8px', borderRadius: 999, cursor: onClick ? 'pointer' : 'default',
       display: 'inline-flex', alignItems: 'center', gap: 4,
     }}>{label}</button>
+  );
+}
+
+/** Signed-out promo shown at the top of Logbook / PBs, unchanged
+    from prior builds — signals cross-device sync without blocking
+    the local experience. Kept as a small inline component so screens
+    don't need to import SignInModal separately. */
+export function SignInPrompt({ context = 'catches', initialEmail }) {
+  const [open, setOpen] = useState(false);
+  const copy = context === 'pbs'
+    ? 'Sign in to sync your personal bests across devices.'
+    : 'Sign in to sync your catches across devices.';
+  return (
+    <>
+      <Card style={{ marginBottom: 12, background: 'linear-gradient(135deg, rgba(25,212,242,0.08), transparent)', borderColor: T.brass }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+          <Cloud size={22} color={T.brass} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{copy}</div>
+            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+              Log on your iPhone. Open the app on iPad. Same catches, same PBs.
+            </div>
+          </div>
+        </div>
+        <PrimaryButton onClick={() => setOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <LogIn size={16} /> Sign in with email
+        </PrimaryButton>
+      </Card>
+      {open && (
+        <SignInModal
+          initialEmail={initialEmail || ''}
+          onClose={() => setOpen(false)}
+          onSendLink={sendMagicLink}
+        />
+      )}
+    </>
   );
 }

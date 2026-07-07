@@ -63,6 +63,14 @@ upsert_json "UISupportedInterfaceOrientations" \
 upsert_json "UISupportedInterfaceOrientations~ipad" \
   '["UIInterfaceOrientationPortrait","UIInterfaceOrientationPortraitUpsideDown","UIInterfaceOrientationLandscapeLeft","UIInterfaceOrientationLandscapeRight"]'
 
+# reelintel:// deep-link scheme — required for the magic-link auth
+# roundtrip. Supabase sends the OTP email with reelintel://auth?code=…;
+# iOS opens the scheme; the app's URL-open listener exchanges the
+# code for a session. Without this key the tap in Mail opens Safari
+# instead of the app.
+upsert_json "CFBundleURLTypes" \
+  '[{"CFBundleURLSchemes":["reelintel"]}]'
+
 echo "→ Copying PrivacyInfo.xcprivacy"
 cp "$PRIVACY_SRC" "$PRIVACY_DEST"
 echo "  $PRIVACY_DEST"
