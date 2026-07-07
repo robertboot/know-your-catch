@@ -19,6 +19,7 @@ import {
   upsertSpecies, refreshSpecies,
   speciesPhotoOverrideAll,
   addSpeciesPhoto, deleteSpeciesPhoto, setPrimarySpeciesPhoto,
+  subscribe as subscribeSpeciesStore,
 } from '../species-store.js';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
@@ -373,10 +374,16 @@ function SpeciesTab({ detailView, setDetailView }) {
 }
 
 function SpeciesForm({ initial, onDone, onCancel }) {
+  // Reads the runtime merged categories list (bundled + Supabase
+  // overlay) and subscribes so a new category added on the
+  // Categories tab appears in this dropdown live.
+  const [liveCategories, setLiveCategories] = useState(() => getCategories());
+  useEffect(() => subscribeCategoriesStore(() => setLiveCategories(getCategories())), []);
+
   const [id, setId]                   = useState(initial?.id || '');
   const [commonName, setCommonName]   = useState(initial?.commonName || '');
   const [scientific, setScientific]   = useState(initial?.scientific || '');
-  const [category, setCategory]       = useState(initial?.category || CATEGORIES[0]?.id || '');
+  const [category, setCategory]       = useState(initial?.category || liveCategories[0]?.id || '');
   const [altNames, setAltNames]       = useState((initial?.altNames || []).join(', '));
   const [keyIds, setKeyIds]           = useState((initial?.keyIds || []).join('\n'));
   const [lookalikes, setLookalikes]   = useState((initial?.lookalikes || []).join(', '));
@@ -429,7 +436,7 @@ function SpeciesForm({ initial, onDone, onCancel }) {
         <div style={{ marginTop: 10 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Category</SectionLabel>
           <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
-            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {liveCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <Field label="Alt names (comma-separated)" value={altNames} onChange={setAltNames} placeholder="Sow Snapper, Genuine Red" />
@@ -612,15 +619,22 @@ function CategoriesTab() {
     })();
   }, []);
 
-  // Re-render when the overlay refreshes (e.g. after an upsert
-  // ripple).
+  // Re-render when either overlay refreshes. Categories = when a new
+  // category is added or an existing one is renamed/reordered.
+  // Species = when a species's category assignment is reassigned in
+  // place (SPECIES const gets mutated but its length stays constant,
+  // so we need an explicit notify to recompute counts + refresh the
+  // dropdown before delete).
+  const [speciesVersion, setSpeciesVersion] = useState(0);
   useEffect(() => subscribeCategoriesStore(() => setRows(getCategories())), []);
+  useEffect(() => subscribeSpeciesStore(() => setSpeciesVersion(v => v + 1)), []);
 
   const speciesCounts = useMemo(() => {
     const map = {};
     for (const s of SPECIES) map[s.category] = (map[s.category] || 0) + 1;
     return map;
-  }, [SPECIES.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speciesVersion, rows.length]);
 
   const moveRow = async (idx, dir) => {
     const nextIdx = idx + dir;
@@ -660,6 +674,27 @@ function CategoriesTab() {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <PrimaryButton onClick={() => setEditing('new')} style={{ flex: 1 }}>+ Add category</PrimaryButton>
+        <GhostButton
+          onClick={async () => {
+            // Clears the localStorage overlay + re-pulls both stores
+            // so any drift between the admin UI and Supabase reality
+            // resolves without a DevTools operation.
+            try {
+              localStorage.removeItem('kyc_categories_overrides_v1');
+              localStorage.removeItem('kyc_species_overrides_v1');
+              localStorage.removeItem('kyc_species_photos_v1');
+            } catch {}
+            setBusy(true);
+            await refreshCategories();
+            await refreshSpecies();
+            setBusy(false);
+            setRows(getCategories());
+          }}
+          disabled={busy}
+          style={{ padding: '10px 14px', fontSize: 12 }}
+        >
+          {busy ? 'Refreshing…' : 'Refresh from Supabase'}
+        </GhostButton>
       </div>
       {err && <div role="alert" style={{ fontSize: 12, color: T.closed }}>{err}</div>}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -704,9 +739,15 @@ function CategoryForm({ initial, onDone, onCancel }) {
   const [error, setError]          = useState('');
   const [showDelete, setShowDelete] = useState(false);
 
+  // Also subscribes to species-store so this recomputes when a
+  // species is reassigned to a different category before the delete
+  // flow opens. Otherwise the "N species assigned" message can lag.
+  const [speciesVersion, setSpeciesVersion] = useState(0);
+  useEffect(() => subscribeSpeciesStore(() => setSpeciesVersion(v => v + 1)), []);
   const speciesInCat = useMemo(
     () => SPECIES.filter(s => s.category === initial?.id),
-    [initial?.id]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initial?.id, speciesVersion]
   );
 
   const save = async () => {
