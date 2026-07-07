@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
-import { speciesPhoto, shareReport } from './helpers.js';
+import { speciesPhoto, shareReport, speciesById } from './helpers.js';
 import { photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
 
 /* ============================================================
@@ -227,6 +227,171 @@ export function InfoModal({ title, children, onClose }) {
         </div>
         <div style={{ fontSize: 14, color: T.inkSoft }}>{children}</div>
         <PrimaryButton onClick={onClose} style={{ marginTop: 16 }}>Got it</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   IDENTIFICATION CONFIRM CARD
+
+   Sits between the analyzing screen and catch_entry so the angler
+   can accept or correct the AI's pick before it becomes a catch.
+   Full-screen dark overlay — the card is the whole surface. Auto-
+   advances after 3s at confidence >= 60% (6s tier removed —
+   user preference for < 60% is explicit-only). Any interaction
+   (touch, focus, hover) pauses the timer permanently.
+   ============================================================ */
+export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId, aiConfidence, onConfirm, onCorrect }) {
+  const species = aiIdentifiedSpeciesId ? speciesById(aiIdentifiedSpeciesId) : null;
+  const pct = aiConfidence != null ? Math.round(aiConfidence * 100) : null;
+
+  // Tier: green >= 80, amber 60–79, red < 60. Colors from theme.
+  const tier = pct == null ? 'unknown' : pct >= 80 ? 'high' : pct >= 60 ? 'mid' : 'low';
+  const tierColor = tier === 'high' ? T.open : tier === 'mid' ? T.warn : T.closed;
+  const tierBg    = tier === 'high' ? T.openBg : tier === 'mid' ? T.warnBg : T.closedBg;
+  const tierLabel = tier === 'high' ? 'High confidence' : tier === 'mid' ? 'Likely' : 'Uncertain';
+
+  // Auto-advance only when confidence is high enough — a bad ID
+  // silently becoming a wrong catch is worse than one extra tap.
+  const AUTO_MS = 3000;
+  const autoAdvance = tier === 'high' || tier === 'mid';
+
+  const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const doneRef = useRef(false);
+  const startRef = useRef(null);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    if (!autoAdvance) return;
+    startRef.current = performance.now();
+    const tick = (now) => {
+      if (doneRef.current || paused) return;
+      const elapsed = now - startRef.current;
+      const p = Math.min(1, elapsed / AUTO_MS);
+      setProgress(p);
+      if (p >= 1) {
+        doneRef.current = true;
+        onConfirm && onConfirm();
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [autoAdvance, paused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pauseTimer = () => setPaused(true);
+
+  const confirm = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onConfirm && onConfirm();
+  };
+  const correct = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCorrect && onCorrect();
+  };
+
+  return (
+    <div
+      onTouchStart={pauseTimer} onMouseDown={pauseTimer} onScroll={pauseTimer}
+      style={{
+        position: 'fixed', inset: 0, background: T.bgDeep, color: T.ink,
+        display: 'flex', flexDirection: 'column',
+        zIndex: 100, padding: '16px 16px 24px',
+        overflowY: 'auto',
+        paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)',
+      }}
+    >
+      {/* Auto-advance progress bar. Only rendered when the timer is
+          actually running so no-auto-advance tiers don't imply one. */}
+      {autoAdvance && (
+        <div style={{
+          height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 999,
+          overflow: 'hidden', marginBottom: 14,
+        }}>
+          <div style={{
+            width: `${Math.round(progress * 100)}%`, height: '100%',
+            background: tierColor, transition: paused ? 'none' : 'width 60ms linear',
+          }} />
+        </div>
+      )}
+
+      {/* Photo the angler just captured */}
+      {imageDataUrl && (
+        <div style={{
+          width: '100%', maxHeight: 220, marginBottom: 14,
+          borderRadius: 12, overflow: 'hidden',
+          background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+          border: `1px solid ${T.cardEdge}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <img src={imageDataUrl} alt="Your catch"
+            style={{ width: '100%', maxHeight: 220, objectFit: 'contain', display: 'block' }} />
+        </div>
+      )}
+
+      {/* AI-identified chip */}
+      <div style={{
+        alignSelf: 'flex-start',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: T.parchmentDeep, border: `1px solid ${T.brass}`,
+        color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+        padding: '4px 10px', borderRadius: 999, marginBottom: 10,
+      }}>
+        <Sparkles size={12} strokeWidth={2.4} /> AI IDENTIFIED
+      </div>
+
+      {/* Species — the identification target */}
+      {species ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          <SpeciesImage species={species} size={80} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 700, color: T.ink, lineHeight: 1.15 }}>
+              {species.commonName}
+            </div>
+            <div style={{ fontSize: 14, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
+              {species.scientific}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 14, color: T.inkSoft, marginBottom: 14 }}>
+          No confident match — pick a species manually.
+        </div>
+      )}
+
+      {/* Confidence pill */}
+      {pct != null && (
+        <div style={{
+          alignSelf: 'flex-start',
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: tierBg, border: `1px solid ${tierColor}`, color: tierColor,
+          fontSize: 12, fontWeight: 700, letterSpacing: 0.4,
+          padding: '5px 12px', borderRadius: 999, marginBottom: 18,
+        }}>
+          {tierLabel} · {pct}%
+        </div>
+      )}
+
+      {tier === 'low' && (
+        <div style={{ fontSize: 12, color: T.warn, marginBottom: 14, lineHeight: 1.5 }}>
+          Low confidence — please verify.
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
+        <PrimaryButton onClick={confirm}>
+          Confirm & log this catch
+        </PrimaryButton>
+        <GhostButton onClick={correct} style={{ width: '100%' }}>
+          Not this fish → pick species
+        </GhostButton>
       </div>
     </div>
   );

@@ -25,7 +25,7 @@ import { SyncPill } from './auth-ui.jsx';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
-  FavoritePickerModal, AccountSetupModal,
+  FavoritePickerModal, AccountSetupModal, IdentificationConfirmCard,
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
@@ -367,31 +367,72 @@ export default function App() {
       body = <PhotoAnalyzingScreen
         imageDataUrl={screen.imageDataUrl}
         onResult={(result) => {
-          // Capture-flow origin: skip the results screen and drop
-          // the angler directly on catch_entry with the photo +
-          // top-candidate species + confidence prefilled. On low-
-          // confidence / no-candidate results we still land on
-          // catch_entry — the species picker inside catch_entry lets
-          // them pick manually.
+          // Capture-flow origin: interpose the identification
+          // confirmation card between the analyzing animation and
+          // catch_entry. The card gives the angler 3s to accept or
+          // correct the model's pick. If identifyPhoto returns no
+          // resolvable species (or confidence is really low with no
+          // top candidate) we skip the card and land straight on
+          // catch_entry so they can pick manually — no wasted step.
           if (screen.fromCapture) {
             const top = (result && result.candidates && result.candidates[0]) || null;
-            const preselectSpeciesId = top ? top.speciesId : undefined;
+            const aiIdentifiedSpeciesId = top ? top.speciesId : null;
             const aiConfidence =
               result && typeof result.confidenceScore === 'number' ? result.confidenceScore
               : result?.confidence === 'high'   ? 0.85
               : result?.confidence === 'medium' ? 0.55
               : result?.confidence === 'low'    ? 0.30
               : null;
+            if (!aiIdentifiedSpeciesId) {
+              setStack(st => [...st.slice(0, -1), {
+                name: 'catch_entry',
+                prefilledPhoto: screen.imageDataUrl,
+                aiConfidence,
+                aiIdentifiedSpeciesId: null,
+                aiWasConfirmed: false,
+              }]);
+              return;
+            }
             setStack(st => [...st.slice(0, -1), {
-              name: 'catch_entry',
-              preselectSpeciesId,
-              prefilledPhoto: screen.imageDataUrl,
+              name: 'identify_confirm',
+              imageDataUrl: screen.imageDataUrl,
+              aiIdentifiedSpeciesId,
               aiConfidence,
             }]);
             return;
           }
           // Legacy Fish-ID-tab flow: results screen with candidates.
           setStack(st => [...st.slice(0, -1), { name: 'photo_result', imageDataUrl: screen.imageDataUrl, result }]);
+        }}
+      />;
+      break;
+    case 'identify_confirm':
+      body = <IdentificationConfirmCard
+        imageDataUrl={screen.imageDataUrl}
+        aiIdentifiedSpeciesId={screen.aiIdentifiedSpeciesId}
+        aiConfidence={screen.aiConfidence}
+        onConfirm={() => {
+          setStack(st => [...st.slice(0, -1), {
+            name: 'catch_entry',
+            preselectSpeciesId: screen.aiIdentifiedSpeciesId,
+            prefilledPhoto: screen.imageDataUrl,
+            aiIdentifiedSpeciesId: screen.aiIdentifiedSpeciesId,
+            aiConfidence: screen.aiConfidence,
+            aiWasConfirmed: true,
+          }]);
+        }}
+        onCorrect={() => {
+          // Skip to catch_entry with no species preselection so the
+          // angler picks from the dropdown. The AI's original pick
+          // + confidence + aiWasConfirmed:false ride along so we can
+          // measure the model's real-world accuracy later.
+          setStack(st => [...st.slice(0, -1), {
+            name: 'catch_entry',
+            prefilledPhoto: screen.imageDataUrl,
+            aiIdentifiedSpeciesId: screen.aiIdentifiedSpeciesId,
+            aiConfidence: screen.aiConfidence,
+            aiWasConfirmed: false,
+          }]);
         }}
       />;
       break;
@@ -451,6 +492,8 @@ export default function App() {
         preselectSpeciesId={screen.preselectSpeciesId}
         prefilledPhoto={screen.prefilledPhoto}
         aiConfidence={screen.aiConfidence}
+        aiIdentifiedSpeciesId={screen.aiIdentifiedSpeciesId}
+        aiWasConfirmed={screen.aiWasConfirmed}
         openUploadOnMount={screen.openUploadOnMount}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}

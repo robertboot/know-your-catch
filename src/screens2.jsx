@@ -2297,7 +2297,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, openUploadOnMount }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
@@ -2582,6 +2582,11 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       weather: weather || null,
       jurisdiction: jurisdiction ? jurisdiction.id : (existing?.jurisdiction || null),
       outcome, // 'kept' | 'released' | null
+      // AI identification metadata rides along on every capture-flow
+      // catch. Existing/edit rows preserve whatever was already there.
+      aiIdentifiedSpeciesId: aiIdentifiedSpeciesId ?? existing?.aiIdentifiedSpeciesId ?? null,
+      aiConfidence:          aiConfidence          ?? existing?.aiConfidence          ?? null,
+      aiWasConfirmed:        aiWasConfirmed        ?? existing?.aiWasConfirmed        ?? false,
     };
 
     const nextCatchLog = existing
