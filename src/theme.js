@@ -22,12 +22,69 @@ export function screenSize(width = typeof window !== 'undefined' ? window.innerW
   if (width >= BREAKPOINT.tablet)          return 'tablet';
   return 'phone';
 }
+/* Container max-width policy: on phone we clamp to 440 so the shell
+   never gets stretched by a landscape rotation; on tablet we let the
+   viewport drive width (no cap) so the app fills the iPad. Prose
+   blocks inside cards apply their own reading-max-width so long
+   paragraphs don't lose scannability at wide widths. */
 export function containerMaxWidth(size = screenSize()) {
-  if (size === 'tablet-landscape') return WIDTH.tabletLandscape;
-  if (size === 'tablet')           return WIDTH.tabletPortrait;
+  if (size === 'tablet-landscape') return 'none';
+  if (size === 'tablet')           return 'none';
   return WIDTH.phone;
 }
 export const isTabletSize = (size = screenSize()) => size !== 'phone';
+export const isPhoneSize  = (size = screenSize()) => size === 'phone';
+
+/* Type scale — bumps on tablet so the app feels iPad-native, not a
+   scaled-up phone screen. Grouped by size tier so screens can either
+   read the whole object or a single key. Sizes are in px. */
+export const TYPE = {
+  phone: {
+    h1: 24, h2: 20, h3: 17,
+    body: 14, bodyStrong: 15,
+    small: 12, tiny: 11,
+    sectionLabel: 11,
+  },
+  tablet: {
+    h1: 32, h2: 26, h3: 20,
+    body: 17, bodyStrong: 18,
+    small: 14, tiny: 12,
+    sectionLabel: 12,
+  },
+  'tablet-landscape': {
+    h1: 36, h2: 28, h3: 22,
+    body: 18, bodyStrong: 19,
+    small: 15, tiny: 13,
+    sectionLabel: 13,
+  },
+};
+export function typeScale(size = screenSize()) {
+  return TYPE[size] || TYPE.phone;
+}
+
+/* Column counts per section per size. Screens read these instead of
+   hand-rolling media queries so column policy stays consistent. */
+export const COLS = {
+  phone:              { home: 1, categories: 3, browse: 3, regsList: 1, logList: 1, pbsList: 1 },
+  tablet:             { home: 3, categories: 4, browse: 4, regsList: 1, logList: 1, pbsList: 2 },
+  'tablet-landscape': { home: 4, categories: 5, browse: 5, regsList: 2, logList: 2, pbsList: 2 },
+};
+export function cols(size = screenSize()) {
+  return COLS[size] || COLS.phone;
+}
+
+/* Header + footer heights — larger on tablet so tap targets scale
+   with the device. Wired via CSS custom properties from App.jsx. */
+export function chromeHeights(size = screenSize()) {
+  if (size === 'tablet-landscape') return { header: 84, footer: 88 };
+  if (size === 'tablet')           return { header: 76, footer: 80 };
+  return                                  { header: 72, footer: 64 };
+}
+
+/* Reading-max-width for prose text. Applied inline on species detail
+   paragraphs, notes bodies, regulation notes — long text lines stop
+   at ~72ch so they stay comfortable to scan. */
+export const READING_MAX = '72ch';
 
 export const T = {
   /* page + surfaces — deep navy gradient floor */

@@ -18,6 +18,8 @@ import {
   sunPosition, moonPhase, fetchWeatherForTime,
 } from './helpers.js';
 import { brandAsset } from './brand-store.js';
+import { useScreenSize } from './screen-size.js';
+import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
 import { savePhoto } from './photos-store.js';
 import { downscaleImageDataUrl } from './storage.js';
@@ -256,13 +258,16 @@ export function HomeScreen({
       </div>
 
       {/* Quick Actions — phone: horizontally scrolling row so tiles
-          keep a comfortable width; tablet: 2x2 grid using the extra
-          screen real estate so all tiles are visible at once. */}
+          keep a comfortable width; tablet: multi-column grid using
+          the wider viewport (3-col portrait, 4-col landscape) so all
+          tiles are visible at once. */}
       <div
         className={isTablet ? undefined : 'kyc-hscroll'}
         style={isTablet ? {
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
-          margin: '14px 0 0',
+          display: 'grid',
+          gridTemplateColumns: screenSize === 'tablet-landscape' ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)',
+          gap: 14,
+          margin: '18px 0 0',
         } : {
           display: 'flex', gap: 10,
           overflowX: 'auto', overflowY: 'hidden',
@@ -804,6 +809,12 @@ const CATEGORY_REP_SPECIES = {
 };
 
 export function CategoriesScreen({ onPick }) {
+  const { size, cols: gridCols, type } = useScreenSize();
+  // Re-render when the categories overlay refreshes so admin edits
+  // reflect immediately on the mobile app after the next boot pull.
+  const [, bump] = useState(0);
+  useEffect(() => subscribeCategories(() => bump(v => v + 1)), []);
+  const activeCategories = getCategories();
   const counts = useMemo(() => {
     const map = {};
     SPECIES.forEach(s => { map[s.category] = (map[s.category] || 0) + 1; });
@@ -811,10 +822,13 @@ export function CategoriesScreen({ onPick }) {
   }, []);
   return (
     <div style={{ padding: '18px 16px' }}>
-      <H1 size={22} style={{ marginBottom: 14 }}>Browse by category</H1>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {CATEGORIES.map(c => {
-          const repId = CATEGORY_REP_SPECIES[c.id];
+      <H1 size={type.h1} style={{ marginBottom: 14 }}>Browse by category</H1>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridCols.categories}, 1fr)`, gap: size === 'phone' ? 12 : 16 }}>
+        {activeCategories.map(c => {
+          // Admin-set rep_species_id from the overlay wins; otherwise
+          // fall back to the bundled CATEGORY_REP_SPECIES map, then
+          // to the first species in the category.
+          const repId = c.rep_species_id || CATEGORY_REP_SPECIES[c.id];
           const rep = (repId && speciesById(repId))
             || SPECIES.find(s => s.category === c.id) // fallback: first in category
             || null;
@@ -842,7 +856,7 @@ export function CategoriesScreen({ onPick }) {
 }
 
 export function CategoryScreen({ catId, state, update, onPick }) {
-  const cat = CATEGORIES.find(c => c.id === catId);
+  const cat = getCategories().find(c => c.id === catId) || CATEGORIES.find(c => c.id === catId);
   const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
   const toggleFav = (id) => {
     if (!update) return;

@@ -38,7 +38,8 @@ import {
   inputStyle,
 } from './components.jsx';
 import { SignInPrompt, AccountCloudCard } from './auth-ui.jsx';
-import { getLocation, getPhoto } from './native.js';
+import { useScreenSize } from './screen-size.js';
+import { getLocation, getPhoto, isNative } from './native.js';
 import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -47,12 +48,16 @@ import 'leaflet/dist/leaflet.css';
    SPECIES DETAIL
    ============================================================ */
 export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalike, onAddPB, onFullRegs, onKeep, update }) {
+  const { size, type } = useScreenSize();
   const s = speciesById(id);
   const [showNoteEdit, setShowNoteEdit] = useState(false);
   const [noteDraft, setNoteDraft] = useState(state.notes[id] || '');
   const [lightboxOpen, setLightboxOpen] = useState(false);
   if (!s) return <div style={{ padding: 20 }}>Species not found.</div>;
   const photo = speciesPhoto(s.id);
+  const heroMaxWidth = size === 'phone' ? 360 : size === 'tablet' ? 480 : 560;
+  const heroHeight   = size === 'phone' ? 220 : size === 'tablet' ? 300 : 340;
+  const fallbackSize = size === 'phone' ? 100 : 200;
   const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
   const fedReg = REGULATIONS[id]?.fed_gulf;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
@@ -89,7 +94,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
               aria-label={`Enlarge ${s.commonName} photo`}
               className="kyc-tappable"
               style={{
-                width: '100%', maxWidth: 360, height: 220, margin: '0 auto',
+                width: '100%', maxWidth: heroMaxWidth, height: heroHeight, margin: '0 auto',
                 background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
                 borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 overflow: 'hidden', position: 'relative',
@@ -107,9 +112,9 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
             {photo.credit && <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
           </>
         ) : (
-          <SpeciesImage species={s} size={100} />
+          <SpeciesImage species={s} size={fallbackSize} />
         )}
-        <H1 size={24} style={{ color: T.parchment, marginTop: 8 }}>{s.commonName}</H1>
+        <H1 size={type.h1} style={{ color: T.parchment, marginTop: 8 }}>{s.commonName}</H1>
         <div style={{ fontStyle: 'italic', fontSize: 13, color: '#B8C5CD', marginTop: 4 }}>{s.scientific}</div>
         {s.altNames.length > 0 && (
           <div style={{ fontSize: 11, color: T.brass, marginTop: 8, letterSpacing: 0.5 }}>
@@ -852,6 +857,8 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
    PBs
    ============================================================ */
 export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }) {
+  const { cols: gridCols } = useScreenSize();
+  const pbsCols = gridCols.pbsList;
   const recorded = Object.keys(state.pbs || {});
   const hasCatches = (state.catchLog || []).length > 0;
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
@@ -895,7 +902,11 @@ export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }
         </Card>
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${pbsCols}, minmax(0, 1fr))`,
+            gap: 8, marginBottom: 18,
+          }}>
             {recorded.map(id => {
               const s = speciesById(id); const pb = state.pbs[id];
               if (!s) return null;
@@ -1861,6 +1872,8 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
 }
 
 function CatchListView({ items, onView, pbCatchIds, state }) {
+  const { cols: gridCols } = useScreenSize();
+  const listCols = gridCols.logList;
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
   const isPB = (id) => pbCatchIds && pbCatchIds.has(id);
   if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
@@ -1888,7 +1901,11 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
     });
   };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${listCols}, minmax(0, 1fr))`,
+      gap: 8,
+    }}>
       {items.map(c => {
         const s = speciesById(c.speciesId);
         const when = new Date(c.dateIso);
@@ -2392,15 +2409,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   // Only Photo #1 drives the catch's location & time. Photos #2 and
   // #3 are just additional shots — they don't change anything.
-  const handleCameraPick = async (e) => {
-    const f = e.target.files?.[0];
-    e.target.value = '';
-    if (!f || photos.length >= 3) return;
+  // Common post-capture flow — accepts a data URL from either the
+  // Capacitor Camera path (native) or the hidden file input (web).
+  const acceptCameraPhoto = async (rawDataUrl) => {
+    if (!rawDataUrl || photos.length >= 3) return;
     const isFirst = photos.length === 0;
-    // Downscale, then hand to photos-store: native writes the JPEG to
-    // the app's Documents directory and we only keep a small thumb +
-    // capacitor:// URL inline. Web stays as before.
-    const dataUrl = await downscaleImageDataUrl(f);
+    const dataUrl = await downscaleImageDataUrl(rawDataUrl);
     const entry = await savePhoto(dataUrl);
     setPhotos(p => [...p, entry].slice(0, 3));
     setPhotoSource('camera');
@@ -2409,6 +2423,31 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       setWhen(new Date()); // catch time = the moment we took the photo
       setMetaSource('device');
     }
+  };
+
+  const handleCameraPick = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    // File input path (web + fallback). Read to data URL, then hand
+    // to the common accept flow.
+    const r = new FileReader();
+    r.onload = () => acceptCameraPhoto(String(r.result));
+    r.readAsDataURL(f);
+  };
+
+  // Native path: invoke Capacitor Camera directly so saveToGallery
+  // fires and the full-res capture also lands in the iOS Photos
+  // library, matching the angler's expectation that camera photos go
+  // into Recents. Web falls through to the hidden file input.
+  const takePhotoNow = async () => {
+    if (photos.length >= 3) return;
+    if (!isNative()) {
+      cameraRef.current?.click();
+      return;
+    }
+    const dataUrl = await getPhoto({ cameraOnly: true });
+    if (dataUrl) acceptCameraPhoto(dataUrl);
   };
 
   const handleUploadPick = (e) => {
@@ -2658,7 +2697,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           <strong style={{ color: T.brass }}>Photo 1</strong> sets the catch's location &amp; time. If Photo 1 was taken away from the catch spot (e.g. at the dock), edit the location and time below.
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => cameraRef.current?.click()} disabled={photos.length >= 3} style={{
+          <button onClick={takePhotoNow} disabled={photos.length >= 3} style={{
             flex: 1, background: photos.length >= 3 ? '#2A3E4D' : T.brass,
             color: photos.length >= 3 ? T.inkMute : T.oceanDeep, border: 'none',
             padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,

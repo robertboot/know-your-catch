@@ -23,6 +23,11 @@ import {
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
 } from '../brand-store.js';
+import {
+  getCategories, refreshCategories,
+  upsertCategory, deactivateCategory, reassignSpecies, seedFromBundled,
+  subscribe as subscribeCategoriesStore,
+} from '../categories-store.js';
 import { speciesPhoto } from '../helpers.js';
 import { uploadImage } from './upload.js';
 import {
@@ -232,7 +237,7 @@ function Loading() {
    Signed-in shell — tabs + active tab content
    ============================================================ */
 function SignedInShell({ email, onExit }) {
-  const [tab, setTab] = useState('species'); // 'species' | 'branding'
+  const [tab, setTab] = useState('species'); // 'species' | 'branding' | 'categories'
   const [detailView, setDetailView] = useState(null); // e.g. { kind:'species-edit', id }
 
   const signOut = async () => { await client()?.auth?.signOut(); };
@@ -255,16 +260,18 @@ function SignedInShell({ email, onExit }) {
           </div>
         </>
       )}
-      {tab === 'species'  && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
-      {tab === 'branding' && !detailView && <BrandingTab />}
+      {tab === 'species'    && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
+      {tab === 'branding'   && !detailView && <BrandingTab />}
+      {tab === 'categories' && !detailView && <CategoriesTab />}
     </Chrome>
   );
 }
 
 function TabBar({ tab, onTab }) {
   const tabs = [
-    { id: 'species',  label: 'Species' },
-    { id: 'branding', label: 'Branding' },
+    { id: 'species',    label: 'Species' },
+    { id: 'categories', label: 'Categories' },
+    { id: 'branding',   label: 'Branding' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
@@ -580,6 +587,250 @@ function SpeciesPhotoManager({ speciesId, speciesName }) {
 /* ============================================================
    Branding tab
    ============================================================ */
+/* ============================================================
+   Categories tab — cloud-first overlay editor.
+   Seed from bundled on first visit, then admin can add / rename /
+   reorder / toggle active / hard-delete with bulk reassign.
+   ============================================================ */
+function CategoriesTab() {
+  const [rows, setRows] = useState(() => getCategories());
+  const [editing, setEditing] = useState(null); // category being edited (or 'new')
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  // Seed from bundled if the table is empty on first visit. Cheap +
+  // idempotent — seedFromBundled short-circuits when count > 0.
+  useEffect(() => {
+    (async () => {
+      setBusy(true);
+      const seeded = await seedFromBundled();
+      const refr = await refreshCategories();
+      setBusy(false);
+      if (!seeded.ok) setErr(seeded.error);
+      if (!refr.ok && refr.error !== 'not-configured') setErr(refr.error);
+      setRows(getCategories());
+    })();
+  }, []);
+
+  // Re-render when the overlay refreshes (e.g. after an upsert
+  // ripple).
+  useEffect(() => subscribeCategoriesStore(() => setRows(getCategories())), []);
+
+  const speciesCounts = useMemo(() => {
+    const map = {};
+    for (const s of SPECIES) map[s.category] = (map[s.category] || 0) + 1;
+    return map;
+  }, [SPECIES.length]);
+
+  const moveRow = async (idx, dir) => {
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= rows.length) return;
+    const a = rows[idx];
+    const b = rows[nextIdx];
+    setBusy(true);
+    // Swap sort_orders — both upserts fire; local re-sort happens on
+    // the next refresh.
+    await upsertCategory({
+      id: a.id, label: a.name, sort_order: nextIdx, icon_key: a.icon_key || null,
+      rep_species_id: a.rep_species_id || null, is_active: true,
+    });
+    await upsertCategory({
+      id: b.id, label: b.name, sort_order: idx, icon_key: b.icon_key || null,
+      rep_species_id: b.rep_species_id || null, is_active: true,
+    });
+    setBusy(false);
+  };
+
+  if (editing) {
+    return (
+      <CategoryForm
+        initial={editing === 'new' ? null : editing}
+        onDone={() => setEditing(null)}
+        onCancel={() => setEditing(null)}
+      />
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ fontSize: 12, color: T.inkSoft, padding: '4px 4px 8px', lineHeight: 1.5 }}>
+        Admin renames, adds, reorders, hides — mobile installs pull the merged list
+        on next boot. Bundled seed remains the offline-first floor if the cloud
+        table is ever wiped.
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <PrimaryButton onClick={() => setEditing('new')} style={{ flex: 1 }}>+ Add category</PrimaryButton>
+      </div>
+      {err && <div role="alert" style={{ fontSize: 12, color: T.closed }}>{err}</div>}
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        {rows.map((r, i) => (
+          <div key={r.id} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px',
+            borderTop: i > 0 ? `1px solid ${T.cardEdge}` : 'none',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <button onClick={() => moveRow(i, -1)} disabled={busy || i === 0} style={miniBtn(i === 0)}>▲</button>
+              <button onClick={() => moveRow(i, +1)} disabled={busy || i === rows.length - 1} style={miniBtn(i === rows.length - 1)}>▼</button>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{r.name}</div>
+              <div style={{ fontSize: 11, color: T.inkMute, fontFamily: 'monospace' }}>{r.id} · {speciesCounts[r.id] || 0} species</div>
+            </div>
+            <GhostButton onClick={() => setEditing(r)} style={{ padding: '4px 10px', fontSize: 11 }}>Edit</GhostButton>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+const miniBtn = (disabled) => ({
+  background: 'transparent',
+  border: `1px solid ${disabled ? 'transparent' : T.cardEdge}`,
+  color: disabled ? T.inkMute : T.brass,
+  padding: '2px 6px', borderRadius: 4, cursor: disabled ? 'default' : 'pointer',
+  fontSize: 10, lineHeight: 1,
+});
+
+function CategoryForm({ initial, onDone, onCancel }) {
+  const isNew = !initial;
+  const [id, setId]                = useState(initial?.id || '');
+  const [label, setLabel]          = useState(initial?.name || '');
+  const [sortOrder, setSortOrder]  = useState(initial?.sort_order ?? 0);
+  const [iconKey, setIconKey]      = useState(initial?.icon_key || '');
+  const [repSpeciesId, setRepSpId] = useState(initial?.rep_species_id || '');
+  const [saving, setSaving]        = useState(false);
+  const [error, setError]          = useState('');
+  const [showDelete, setShowDelete] = useState(false);
+
+  const speciesInCat = useMemo(
+    () => SPECIES.filter(s => s.category === initial?.id),
+    [initial?.id]
+  );
+
+  const save = async () => {
+    setError('');
+    if (!id.trim() || !label.trim()) { setError('id and label required'); return; }
+    setSaving(true);
+    const { ok, error } = await upsertCategory({
+      id: id.trim(), label: label.trim(), sort_order: +sortOrder || 0,
+      icon_key: iconKey.trim() || null,
+      rep_species_id: repSpeciesId.trim() || null,
+      is_active: true,
+    });
+    setSaving(false);
+    if (!ok) { setError(error || 'save failed'); return; }
+    onDone();
+  };
+
+  if (showDelete) {
+    return (
+      <CategoryDeleteFlow
+        category={initial}
+        speciesInCat={speciesInCat}
+        onCancel={() => setShowDelete(false)}
+        onDone={onDone}
+      />
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Card>
+        <SectionLabel style={{ marginBottom: 6 }}>id (kebab-case slug)</SectionLabel>
+        <input type="text" value={id} onChange={e => setId(e.target.value)}
+          disabled={!isNew} placeholder="e.g. pelagic"
+          style={{ ...inputStyle, opacity: isNew ? 1 : 0.55 }} />
+        <Field label="Label"       value={label}     onChange={setLabel}    placeholder="Pelagic" />
+        <Field label="Sort order"  value={String(sortOrder)} onChange={(v) => setSortOrder(v.replace(/[^0-9]/g, ''))} placeholder="0" />
+        <Field label="Icon key (lucide-react name; blank = default)" value={iconKey} onChange={setIconKey} placeholder="Fish" />
+        <div style={{ marginTop: 10 }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Representative species (drives the browse tile photo)</SectionLabel>
+          <select value={repSpeciesId} onChange={e => setRepSpId(e.target.value)} style={inputStyle}>
+            <option value="">— none —</option>
+            {SPECIES.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
+          </select>
+        </div>
+      </Card>
+
+      {error && <div role="alert" style={{ fontSize: 12, color: T.closed }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
+        <PrimaryButton onClick={save} disabled={saving} style={{ flex: 1 }}>
+          {saving ? 'Saving…' : (isNew ? 'Create category' : 'Save changes')}
+        </PrimaryButton>
+      </div>
+
+      {!isNew && (
+        <GhostButton onClick={() => setShowDelete(true)}
+          style={{ width: '100%', color: T.closed, borderColor: T.closed, marginTop: 6 }}>
+          Delete this category
+        </GhostButton>
+      )}
+    </div>
+  );
+}
+
+function CategoryDeleteFlow({ category, speciesInCat, onCancel, onDone }) {
+  const [target, setTarget] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const options = getCategories().filter(c => c.id !== category.id);
+  const needsReassign = speciesInCat.length > 0;
+
+  const doDelete = async () => {
+    setBusy(true); setError('');
+    if (needsReassign) {
+      if (!target) { setBusy(false); setError('Pick a target category first.'); return; }
+      const re = await reassignSpecies(speciesInCat.map(s => s.id), target);
+      if (!re.ok) { setBusy(false); setError(re.error || 'reassign failed'); return; }
+    }
+    const de = await deactivateCategory(category.id);
+    setBusy(false);
+    if (!de.ok) { setError(de.error || 'delete failed'); return; }
+    onDone();
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Card>
+        <SectionLabel style={{ marginBottom: 8 }}>Delete "{category.name}"?</SectionLabel>
+        {needsReassign ? (
+          <>
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 10 }}>
+              <strong>{speciesInCat.length}</strong> {speciesInCat.length === 1 ? 'species is' : 'species are'} assigned to this category and must be moved to a different one before it can be deleted.
+            </div>
+            <SectionLabel style={{ marginBottom: 6 }}>Move to</SectionLabel>
+            <select value={target} onChange={e => setTarget(e.target.value)} style={inputStyle}>
+              <option value="">— pick a category —</option>
+              {options.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
+              Species that will be moved: {speciesInCat.map(s => s.commonName).join(', ')}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5 }}>
+            No species are currently assigned to this category. Safe to remove.
+          </div>
+        )}
+      </Card>
+
+      {error && <div role="alert" style={{ fontSize: 12, color: T.closed }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
+        <PrimaryButton onClick={doDelete} disabled={busy || (needsReassign && !target)}
+          style={{ flex: 1, background: T.closed, color: '#fff' }}>
+          {busy ? 'Working…' : (needsReassign ? `Move ${speciesInCat.length} + delete` : 'Delete')}
+        </PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
 function BrandingTab() {
   return (
     <div style={{ display: 'grid', gap: 10 }}>

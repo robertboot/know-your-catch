@@ -3,13 +3,15 @@ import {
   Fish, ChevronLeft, BookOpen, Bell, ClipboardList, Camera,
   Home as HomeIcon, Settings as SettingsIcon,
 } from 'lucide-react';
-import { T, screenSize, containerMaxWidth } from './theme.js';
+import { T, screenSize, containerMaxWidth, chromeHeights, typeScale, cols } from './theme.js';
+import { ScreenSizeContext } from './screen-size.js';
 import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState } from './storage.js';
 import { migratePhotosToStore } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
+import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { subscribe as subscribeAuth } from './auth.js';
 import {
   pullAll as cloudPullAll,
@@ -108,10 +110,12 @@ export default function App() {
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
     refreshFeeds().catch(() => {});
-    // Refresh species + brand overlays from Supabase (no-ops until env
-    // vars are set). Subscribers re-render when overrides land.
+    // Refresh species + brand + categories overlays from Supabase
+    // (no-ops until env vars are set). Subscribers re-render when
+    // overrides land.
     refreshSpecies().catch(() => {});
     refreshBrandAssets().catch(() => {});
+    refreshCategories().catch(() => {});
   }, []);
 
   // Overlay subscriptions: bump a version counter on every notify so
@@ -119,6 +123,7 @@ export default function App() {
   // lookups reflect the latest cache.
   useEffect(() => subscribeSpecies(() => setSpeciesVersion(v => v + 1)), []);
   useEffect(() => subscribeBrand(() => setSpeciesVersion(v => v + 1)), []);
+  useEffect(() => subscribeCategories(() => setSpeciesVersion(v => v + 1)), []);
   // Auth + sync subscriptions.
   useEffect(() => subscribeAuth(setSession), []);
   useEffect(() => subscribeSyncStatus(setSyncStatus), []);
@@ -235,9 +240,45 @@ export default function App() {
   }, [saveError, session]);
 
   const screen = stack[stack.length - 1];
-  const push  = (s)    => setStack(st => [...st, s]);
-  const pop   = ()     => setStack(st => st.length > 1 ? st.slice(0, -1) : st);
-  const reset = (s)    => setStack(Array.isArray(s) ? s : [s]);
+
+  // Scroll persistence across the stack. push()/reset() save the
+  // current top's scroll position; a route-change effect resets to 0
+  // for the new screen; pop() restores the saved position after the
+  // next paint so back-navigation feels stable. Key by stack-index so
+  // repeated visits to the same route don't stomp each other.
+  const scrollByRouteRef = useRef({});
+  const scrollRootRef = useRef(null);
+  const currentScrollY = () => (scrollRootRef.current?.scrollTop ?? 0) || window.scrollY || 0;
+  const setScrollY = (y) => {
+    if (scrollRootRef.current) scrollRootRef.current.scrollTop = y;
+    else window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+  };
+  const push  = (s) => {
+    scrollByRouteRef.current[stack.length - 1] = currentScrollY();
+    setStack(st => [...st, s]);
+  };
+  const pop   = () => setStack(st => {
+    if (st.length <= 1) return st;
+    const nextLen = st.length - 1;
+    const saved = scrollByRouteRef.current[nextLen - 1] || 0;
+    // Restore after paint so the new screen's content is measurable.
+    requestAnimationFrame(() => setScrollY(saved));
+    return st.slice(0, -1);
+  });
+  const reset = (s) => {
+    scrollByRouteRef.current = {};
+    setStack(Array.isArray(s) ? s : [s]);
+  };
+
+  // On any forward route change, scroll the content region to top.
+  // Depends on the full stack length + the top screen's identity so
+  // pushing a new species detail or swapping the top screen mid-stack
+  // both trigger the reset. Restored-scroll on pop() runs after this
+  // effect and overrides the top-scroll (later effect wins).
+  useEffect(() => {
+    if (scrollRootRef.current) scrollRootRef.current.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [stack.length, screen.name, screen.id, screen.speciesId, screen.editingId, screen.catId]);
 
   if (showSplash || !loaded) {
     return <SplashScreen onContinue={() => loaded && setShowSplash(false)} />;
@@ -440,12 +481,21 @@ export default function App() {
   const speciesActive = ['species_list', 'species', 'categories', 'category', 'search'].includes(screen.name);
   const identifyActive = ['identify', 'photo_analyzing', 'photo_result'].includes(screen.name);
 
+  const chrome = chromeHeights(size);
+  const type = typeScale(size);
+  const gridCols = cols(size);
+  const screenCtx = { size, type, cols: gridCols, chrome };
   return (
+    <ScreenSizeContext.Provider value={screenCtx}>
     <div data-screen-size={size} style={{
       background: T.bgGradient, minHeight: '100vh', color: T.ink,
       maxWidth: containerMaxWidth(size), margin: '0 auto', position: 'relative',
       boxShadow: '0 0 60px rgba(0,0,0,0.5)',
-      fontSize: size === 'phone' ? undefined : 15,
+      fontSize: type.body,
+      // Push the chrome-height CSS vars into the tree so the safe-area
+      // content-region padding scales with tablet.
+      '--kyc-header-height': `${chrome.header}px`,
+      '--kyc-footer-height': `${chrome.footer}px`,
     }}>
       {/* Top app bar — fixed to the viewport with safe-area padding so
           the header can't scroll into the iOS status bar area. Centered
@@ -467,16 +517,16 @@ export default function App() {
               style={{
                 background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
-                height: 72,
+                height: chrome.header,
               }}
             >
               <img
                 src={brandAsset('logo_horizontal', `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`)}
                 alt="ReelIntel — identify, check rules, log catch, find better spots"
                 style={{
-                  height: 56, width: 'auto', maxWidth: '100%',
+                  height: Math.round(chrome.header * 0.78), width: 'auto', maxWidth: '100%',
                   display: 'block', objectFit: 'contain',
-                  marginLeft: 12,
+                  marginLeft: size === 'phone' ? 12 : 20,
                 }}
               />
             </button>
@@ -484,7 +534,7 @@ export default function App() {
             // Root of a non-Home tab (Fish ID / Regulations / Logbook) —
             // no top-bar Back, no logo; the tab bar owns navigation.
             // Empty flex-1 spacer keeps the header actions right-aligned.
-            <div style={{ flex: 1, height: 72 }} />
+            <div style={{ flex: 1, height: chrome.header }} />
           )
         ) : (
           <button onClick={pop} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
@@ -540,12 +590,16 @@ export default function App() {
 
       {/* Scrolling content region — leaves room for the fixed header
           + footer + their respective safe-area insets so nothing sits
-          under the tab bar or in the notch. */}
-      <div style={{
-        paddingTop: 'calc(var(--kyc-header-height) + env(safe-area-inset-top))',
-        paddingBottom: 'calc(var(--kyc-footer-height) + env(safe-area-inset-bottom))',
-        minHeight: '100vh',
-      }}>
+          under the tab bar or in the notch. data-scroll-root marks
+          it for the route-change scroll-to-top effect. */}
+      <div
+        ref={scrollRootRef}
+        data-scroll-root
+        style={{
+          paddingTop: 'calc(var(--kyc-header-height) + env(safe-area-inset-top))',
+          paddingBottom: 'calc(var(--kyc-footer-height) + env(safe-area-inset-bottom))',
+          minHeight: '100vh',
+        }}>
         {body}
       </div>
 
@@ -576,9 +630,17 @@ export default function App() {
           aria-label="Quick log"
           style={{
             position: 'fixed',
-            bottom: `calc(92px + env(safe-area-inset-bottom))`,
-            right: `max(16px, calc(50vw - ${containerMaxWidth(size) / 2}px + 16px))`,
-            width: 64, height: 64, borderRadius: '50%',
+            bottom: `calc(${size === 'phone' ? 92 : 108}px + env(safe-area-inset-bottom))`,
+            // On phone the shell is clamped to 440px centered; offset
+            // the FAB so it sits at the right edge of that column.
+            // On tablet the shell fills the viewport, so a plain edge
+            // offset is enough.
+            right: size === 'phone'
+              ? `max(16px, calc(50vw - 220px + 16px))`
+              : 24,
+            width: size === 'phone' ? 64 : 76,
+            height: size === 'phone' ? 64 : 76,
+            borderRadius: '50%',
             background: 'radial-gradient(circle at 30% 30%, #2EE4FF 0%, #19D4F2 60%, #0F8FAA 100%)',
             border: '3px solid rgba(25, 212, 242, 0.45)',
             color: T.oceanDeep, cursor: 'pointer',
@@ -600,14 +662,14 @@ export default function App() {
         background: T.oceanDeep,
         borderTop: `1px solid ${T.cardEdge}`,
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-        padding: '10px 4px 0',
-        paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
+        padding: `${size === 'phone' ? 10 : 14}px 4px 0`,
+        paddingBottom: `calc(${size === 'phone' ? 14 : 18}px + env(safe-area-inset-bottom))`,
         zIndex: 50,
       }}>
-        <TabBtn label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon size={22} strokeWidth={2} />} />
-        <TabBtn label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish size={22} strokeWidth={2} />} />
-        <TabBtn label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList size={22} strokeWidth={2} />} />
-        <TabBtn label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen size={22} strokeWidth={2} />} />
+        <TabBtn size={size} label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon />} />
+        <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
+        <TabBtn size={size} label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList />} />
+        <TabBtn size={size} label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen />} />
       </div>
 
       {showDisclaimer && (
@@ -680,21 +742,28 @@ export default function App() {
 
       {keepFor && <KeepConfirmModal species={keepFor} onClose={() => setKeepFor(null)} />}
     </div>
+    </ScreenSizeContext.Provider>
   );
 }
 
-function TabBtn({ label, active, onClick, icon }) {
+function TabBtn({ label, active, onClick, icon, size = 'phone' }) {
+  const iconSize = size === 'phone' ? 22 : size === 'tablet' ? 26 : 28;
+  const labelSize = size === 'phone' ? 11 : size === 'tablet' ? 13 : 14;
+  const gap = size === 'phone' ? 5 : 7;
+  const scaledIcon = React.isValidElement(icon)
+    ? React.cloneElement(icon, { size: iconSize, strokeWidth: 2 })
+    : icon;
   return (
     <button onClick={onClick} style={{
       background: 'transparent', border: 'none', color: active ? T.brass : T.inkMute,
       padding: '4px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', gap: 5, fontSize: 11, fontWeight: active ? 700 : 600,
+      alignItems: 'center', gap, fontSize: labelSize, fontWeight: active ? 700 : 600,
       letterSpacing: 0.2,
     }}>
       <span style={{
         color: active ? T.brass : T.inkMute,
         filter: active ? 'drop-shadow(0 0 6px rgba(25, 212, 242, 0.55))' : 'none',
-      }}>{icon}</span>
+      }}>{scaledIcon}</span>
       {label}
     </button>
   );

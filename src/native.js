@@ -37,6 +37,16 @@ export async function getPhoto({ cameraOnly = false } = {}) {
         allowEditing: false,
         source: cameraOnly ? CameraSource.Camera : CameraSource.Prompt,
         resultType: CameraResultType.DataUrl,
+        // Dual-write: when the source is the camera the full-res
+        // capture also lands in the iOS Photos library. Anglers
+        // expect their fish photos in Recents. The app keeps its own
+        // downscaled copy in Filesystem for fast render / share
+        // regardless. Requires NSPhotoLibraryAddUsageDescription in
+        // Info.plist (pre-staged from ios-templates). If the user
+        // denies the "add to Photos" prompt the capture still
+        // succeeds — we get the bytes for our downscaled copy and
+        // just skip the Photos-write silently.
+        saveToGallery: true,
       });
       return photo.dataUrl || null;
     } catch (e) {
