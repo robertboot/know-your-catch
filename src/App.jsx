@@ -302,15 +302,24 @@ export default function App() {
   const jurisdiction = jurisdictionById(state.jurisdiction);
   const stale = isStale(state.syncMeta);
 
-  /* Single camera-first capture entry. Called from the home hero
-     button AND the raised center tab-bar action so the two entry
-     points can never drift. Offers Take Photo / Choose from Library
-     via the iOS system picker (Capacitor Camera source=Prompt), then
-     analyzes on-device via identifyPhoto and lands on catch_entry
-     with the photo + top species prefilled. Fully offline. */
-  const startCaptureFlow = async () => {
-    const dataUrl = await getPhoto({ source: 'prompt' });
-    if (!dataUrl) return; // cancelled
+  /* Shared post-capture pipeline for both camera entry points.
+     Only the capture invocation differs:
+       - Home hero "Log Your Catch" button → source: 'prompt' (system
+         picker offering Take Photo or Choose from Library)
+       - Footer center tab action → source: 'camera' (camera-direct,
+         no chooser, straight to the live viewfinder)
+     After capture: photo_analyzing runs identifyPhoto on-device and
+     lands on catch_entry with photo + top species + confidence pre-
+     filled. Fully offline. */
+  const startCaptureFlow = async (source = 'prompt') => {
+    const dataUrl = await getPhoto({ source });
+    if (!dataUrl) {
+      // Native camera denial: drop the angler on catch_entry with no
+      // photo so they can still log manually. Chooser cancels stay
+      // on the current screen (empty-handed but intentional).
+      if (source === 'camera') push({ name: 'catch_entry' });
+      return;
+    }
     push({ name: 'photo_analyzing', imageDataUrl: dataUrl, fromCapture: true });
   };
 
@@ -325,8 +334,10 @@ export default function App() {
     onRegulationAlerts: () => push({ name: 'regulation_alerts' }),
     onQuiz:        () => push({ name: 'quiz' }),
     onReport:     () => push({ name: 'catch_entry' }),
-    onLogMenu:    startCaptureFlow, // legacy prop name; now runs the single-shot capture
-    onCapture:    startCaptureFlow,
+    // Home hero button — presents the source picker (Take Photo /
+    // Choose from Library) so anglers can pick either.
+    onLogMenu:    () => startCaptureFlow('prompt'),
+    onCapture:    () => startCaptureFlow('prompt'),
     onPatterns:   () => push({ name: 'patterns' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
@@ -358,16 +369,24 @@ export default function App() {
         onResult={(result) => {
           // Capture-flow origin: skip the results screen and drop
           // the angler directly on catch_entry with the photo +
-          // top-candidate species prefilled. On low-confidence /
-          // no-candidate results we still land on catch_entry — the
-          // species picker inside catch_entry lets them pick manually.
+          // top-candidate species + confidence prefilled. On low-
+          // confidence / no-candidate results we still land on
+          // catch_entry — the species picker inside catch_entry lets
+          // them pick manually.
           if (screen.fromCapture) {
             const top = (result && result.candidates && result.candidates[0]) || null;
             const preselectSpeciesId = top ? top.speciesId : undefined;
+            const aiConfidence =
+              result && typeof result.confidenceScore === 'number' ? result.confidenceScore
+              : result?.confidence === 'high'   ? 0.85
+              : result?.confidence === 'medium' ? 0.55
+              : result?.confidence === 'low'    ? 0.30
+              : null;
             setStack(st => [...st.slice(0, -1), {
               name: 'catch_entry',
               preselectSpeciesId,
               prefilledPhoto: screen.imageDataUrl,
+              aiConfidence,
             }]);
             return;
           }
@@ -431,6 +450,7 @@ export default function App() {
         editingId={screen.editingId}
         preselectSpeciesId={screen.preselectSpeciesId}
         prefilledPhoto={screen.prefilledPhoto}
+        aiConfidence={screen.aiConfidence}
         openUploadOnMount={screen.openUploadOnMount}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}
@@ -657,7 +677,7 @@ export default function App() {
       }}>
         <TabBtn size={size} label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon />} />
         <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
-        <CenterCaptureBtn size={size} onClick={startCaptureFlow} />
+        <CenterCaptureBtn size={size} onClick={() => startCaptureFlow('camera')} />
         <TabBtn size={size} label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList />} />
         <TabBtn size={size} label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen />} />
       </div>

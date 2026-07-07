@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
-  SlidersHorizontal,
+  SlidersHorizontal, Sparkles, ShieldCheck, ShieldAlert, ShieldQuestion,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -2297,13 +2297,24 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, openUploadOnMount }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, openUploadOnMount }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
   const [length, setLength] = useState(existing?.length != null ? String(existing.length) : '');
   const [weight, setWeight] = useState(existing?.weight != null ? String(existing.weight) : '');
   const [notes, setNotes] = useState(existing?.notes || '');
+  // Kept vs Released — persisted as entry.outcome. null = unset (angler
+  // hasn't decided yet). Editable pre-save so the "did you keep this?"
+  // question stays optional.
+  const [outcome, setOutcome] = useState(existing?.outcome || null); // 'kept' | 'released' | null
+  // AI-identified confidence from the capture flow. Only rendered on
+  // the initial capture-flow arrival — clears once the angler changes
+  // the species manually, since the AI's confidence no longer applies
+  // to their overriding pick.
+  const [aiBadgeConfidence, setAiBadgeConfidence] = useState(
+    aiConfidence != null && preselectSpeciesId ? aiConfidence : null
+  );
   // Seed photos from the catch we're editing, or from an identification
   // photo handed in via prefilledPhoto (Identify → Log this catch flow).
   const [photos, setPhotos] = useState(() => {
@@ -2570,6 +2581,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       moonPhase: moon.phase, moonIllum: moon.illumination, moonName: moon.name,
       weather: weather || null,
       jurisdiction: jurisdiction ? jurisdiction.id : (existing?.jurisdiction || null),
+      outcome, // 'kept' | 'released' | null
     };
 
     const nextCatchLog = existing
@@ -2630,9 +2642,41 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   const speciesSorted = useMemo(() => SPECIES.slice().sort((a, b) => a.commonName.localeCompare(b.commonName)), []);
 
+  // Legality banner — derived from the current REGULATIONS entry for
+  // this species + jurisdiction. Runs entirely off the bundled dataset
+  // so it works airplane-mode. Absent regs default to a neutral
+  // "check with the agency" state — never say "legal" when we don't
+  // know.
+  const legalityReg = jurisdiction && speciesId ? REGULATIONS[speciesId]?.[jurisdiction.id] : null;
+  const legalitySeason = legalityReg ? seasonState(legalityReg.open) : null;
+  const legalityChips = [];
+  if (legalityReg) {
+    if (legalitySeason?.reason) legalityChips.push(legalitySeason.reason);
+    if (legalityReg.minSize != null) legalityChips.push(`Min size ${formatSize(legalityReg.minSize, state.units)}`);
+    if (legalityReg.bagLimit != null) legalityChips.push(`Bag limit ${legalityReg.bagLimit}`);
+  }
+  const legalityStatus =
+    !speciesId ? null
+    : !legalityReg ? 'unknown'
+    : legalitySeason?.status === 'closed' ? 'closed'
+    : legalitySeason?.status === 'open'   ? 'open'
+    : 'unknown';
+
   return (
     <div style={{ padding: '16px 16px 24px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>{isEdit ? 'Edit catch' : 'Log a catch'}</H1>
+
+      {aiBadgeConfidence != null && (
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: T.parchmentDeep, border: `1px solid ${T.brass}`,
+          color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+          padding: '4px 10px', borderRadius: 999, marginBottom: 12,
+        }}>
+          <Sparkles size={12} strokeWidth={2.4} />
+          AI IDENTIFIED · {Math.round(aiBadgeConfidence * 100)}%
+        </div>
+      )}
 
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -2732,14 +2776,89 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Species</SectionLabel>
-        <select value={speciesId} onChange={e => setSpeciesId(e.target.value)} style={{ ...inputStyle, padding: '10px 12px' }}>
+        {speciesId && (() => {
+          const s = speciesById(speciesId);
+          if (!s) return null;
+          return (
+            <div style={{ marginBottom: 10, fontFamily: 'Georgia, serif' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
+                {s.commonName}
+              </div>
+              <div style={{ fontSize: 13, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
+                {s.scientific}
+              </div>
+            </div>
+          );
+        })()}
+        <select value={speciesId} onChange={e => { setSpeciesId(e.target.value); setAiBadgeConfidence(null); }} style={{ ...inputStyle, padding: '10px 12px' }}>
           <option value="">— pick a species —</option>
           {speciesSorted.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
         </select>
+
+        {/* Legality banner — reads the bundled REGULATIONS table for
+            this species + jurisdiction. Airplane-mode safe. Green
+            "Legal to keep" when open + no size violation, red when
+            closed, neutral when we don't have data. Chips list the
+            deciding factors so the angler can see the numbers, not
+            just the verdict. */}
+        {speciesId && jurisdiction && legalityStatus && (
+          <div style={{
+            marginTop: 12, padding: '10px 12px', borderRadius: 8,
+            background: legalityStatus === 'open'   ? T.openBg
+                       : legalityStatus === 'closed' ? T.closedBg
+                       : T.warnBg,
+            border: `1px solid ${
+              legalityStatus === 'open'   ? T.open
+              : legalityStatus === 'closed' ? T.closed
+              : T.warn
+            }`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: legalityChips.length ? 8 : 0 }}>
+              {legalityStatus === 'open'
+                ? <ShieldCheck    size={18} color={T.open} />
+                : legalityStatus === 'closed'
+                ? <ShieldAlert    size={18} color={T.closed} />
+                : <ShieldQuestion size={18} color={T.warn} />}
+              <div style={{
+                fontSize: 13, fontWeight: 800, letterSpacing: 0.4,
+                color: legalityStatus === 'open' ? T.open
+                     : legalityStatus === 'closed' ? T.closed
+                     : T.warn,
+              }}>
+                {legalityStatus === 'open'   ? 'Legal to keep'
+                 : legalityStatus === 'closed' ? 'Not legal to keep'
+                 : 'Check with the agency'}
+              </div>
+            </div>
+            {legalityChips.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {legalityChips.map((chip, i) => (
+                  <span key={i} style={{
+                    fontSize: 11, color: T.inkSoft, background: T.parchmentDeep,
+                    border: `1px solid ${T.cardEdge}`, padding: '3px 8px', borderRadius: 999,
+                  }}>{chip}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <Field label={`Length (${state.units === 'metric' ? 'cm' : 'in'})`} value={length} onChange={setLength} type="number" placeholder="—" />
           <Field label={`Weight (${state.units === 'metric' ? 'kg' : 'lb'})`} value={weight} onChange={setWeight} type="number" placeholder="—" />
         </div>
+
+        {/* Kept / Released toggle — the angler's outcome, separate
+            from the legality banner. Tracking this over time drives
+            the "release rate" analytic in Patterns. */}
+        <div style={{ marginTop: 12 }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Outcome</SectionLabel>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <PickButton active={outcome === 'kept'}     onClick={() => setOutcome(outcome === 'kept' ? null : 'kept')}>Kept</PickButton>
+            <PickButton active={outcome === 'released'} onClick={() => setOutcome(outcome === 'released' ? null : 'released')}>Released</PickButton>
+          </div>
+        </div>
+
         <div style={{ marginTop: 10 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Notes</SectionLabel>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Lure, depth, bite, anything memorable…" style={{ ...inputStyle, resize: 'vertical' }} />
