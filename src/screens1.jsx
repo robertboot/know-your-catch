@@ -29,6 +29,7 @@ import {
   inputStyle,
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
+import { dlog } from './debug-log.js';
 
 /* ============================================================
    SPLASH
@@ -75,10 +76,21 @@ export function SplashScreen({
           marginTop: 28, width: '100%', maxWidth: 340,
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <PrimaryButton onClick={onSignIn}>
+          <PrimaryButton onClick={(e) => {
+            dlog('[splash] Sign in tapped');
+            if (typeof onSignIn === 'function') onSignIn(e);
+            else dlog('[splash] onSignIn prop is NOT a function — button unwired');
+          }}>
             Sign in
           </PrimaryButton>
-          <GhostButton onClick={onCreateAccount} style={{ borderColor: T.brass, color: T.brass }}>
+          <GhostButton
+            onClick={(e) => {
+              dlog('[splash] Create account tapped');
+              if (typeof onCreateAccount === 'function') onCreateAccount(e);
+              else dlog('[splash] onCreateAccount prop is NOT a function — button unwired');
+            }}
+            style={{ borderColor: T.brass, color: T.brass }}
+          >
             Create an account
           </GhostButton>
           <div style={{

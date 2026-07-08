@@ -4,6 +4,7 @@ import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
 import { photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
+import { dlog } from './debug-log.js';
 
 /* ============================================================
    STATUS PILL — colorblind-safe via shape + color
@@ -411,6 +412,12 @@ export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
   const [cooldown, setCooldown] = useState(0); // seconds remaining
   const timerRef = useRef(null);
 
+  // Mount log so we can see the modal actually enter the tree on
+  // Sign in tap. Also log every phase transition so the debug
+  // overlay shows the state machine advancing.
+  useEffect(() => { dlog('[SignInModal] mounted'); return () => dlog('[SignInModal] unmounted'); }, []);
+  useEffect(() => { dlog(`[SignInModal] phase=${phase}`); }, [phase]);
+
   useEffect(() => {
     if (cooldown <= 0) return;
     timerRef.current = setTimeout(() => setCooldown(c => c - 1), 1000);
@@ -418,10 +425,26 @@ export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
   }, [cooldown]);
 
   const send = async () => {
+    dlog(`[SignInModal] send tapped email=${email}`);
     setBusy(true); setError('');
-    const res = await onSendLink({ email });
+    let res;
+    try {
+      res = await onSendLink({ email });
+    } catch (e) {
+      dlog(`[SignInModal] onSendLink THREW: ${e?.message || String(e)}`);
+      // Bulletproof error surface: even if the modal state is broken,
+      // alert() cannot fail to show. Diagnostic-only until auth ships.
+      // eslint-disable-next-line no-alert
+      alert('Sign-in threw: ' + (e?.message || String(e)));
+      setBusy(false);
+      setError(e?.message || String(e));
+      return;
+    }
     setBusy(false);
+    dlog(`[SignInModal] onSendLink returned ok=${!!res?.ok} error=${res?.error || ''}`);
     if (!res?.ok) {
+      // eslint-disable-next-line no-alert
+      alert('Sign-in error: ' + (res?.error || 'unknown'));
       setError(res?.error || 'Send failed');
       return;
     }
@@ -431,8 +454,16 @@ export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
 
   const resend = async () => {
     if (cooldown > 0 || busy) return;
+    dlog(`[SignInModal] resend tapped email=${email}`);
     setBusy(true); setError('');
-    const res = await onSendLink({ email });
+    let res;
+    try {
+      res = await onSendLink({ email });
+    } catch (e) {
+      dlog(`[SignInModal] resend THREW: ${e?.message || String(e)}`);
+      setBusy(false); setError(e?.message || String(e));
+      return;
+    }
     setBusy(false);
     if (!res?.ok) { setError(res?.error || 'Send failed'); return; }
     setCooldown(60);

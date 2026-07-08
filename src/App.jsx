@@ -22,6 +22,8 @@ import {
   forceSync as cloudForceSync,
 } from './cloudsync.js';
 import { SyncPill } from './auth-ui.jsx';
+import { dlog } from './debug-log.js';
+import { DebugOverlay } from './debug-overlay.jsx';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
@@ -227,9 +229,9 @@ export default function App() {
 
   // Debug: log every auth state transition + first-boot session read
   // so we can trace magic-link deep-link completion on device via
-  // console. Cheap; safe to leave on in production.
+  // the debug overlay. Cheap; safe to leave on in production for now.
   useEffect(() => {
-    console.log('[auth] session state:', session ? `signed in as ${session.user?.email}` : 'signed out');
+    dlog(`[App] session state: ${session ? 'signed in as ' + session.user?.email : 'signed out'}`);
   }, [session]);
 
   // Splash login modal state — the same SignInModal we use from
@@ -310,17 +312,25 @@ export default function App() {
     const showLogin = loaded && !session;
     return (
       <>
+        <DebugOverlay />
         <SplashScreen
           showLogin={showLogin}
           onContinue={() => loaded && session && setShowSplash(false)}
-          onSignIn={() => setSplashSignInOpen(true)}
-          onCreateAccount={() => setSplashSignInOpen(true)}
+          onSignIn={() => {
+            dlog('[App] splash Sign in handler ran → opening SignInModal');
+            setSplashSignInOpen(true);
+          }}
+          onCreateAccount={() => {
+            dlog('[App] splash Create account handler ran → opening SignInModal');
+            setSplashSignInOpen(true);
+          }}
         />
         {splashSignInOpen && (
           <SignInModal
             initialEmail={state.anglerEmail || ''}
             onClose={() => setSplashSignInOpen(false)}
             onSendLink={async ({ email }) => {
+              dlog(`[App] splash onSendLink wrapper email=${email}`);
               const res = await sendMagicLink({ email });
               if (res?.ok) update({ anglerEmail: email });
               return res;
@@ -695,6 +705,7 @@ export default function App() {
   const screenCtx = { size, type, cols: gridCols, chrome };
   return (
     <ScreenSizeContext.Provider value={screenCtx}>
+    <DebugOverlay />
     <div data-screen-size={size} style={{
       background: T.bgGradient, minHeight: '100vh', color: T.ink,
       maxWidth: containerMaxWidth(size), margin: '0 auto', position: 'relative',

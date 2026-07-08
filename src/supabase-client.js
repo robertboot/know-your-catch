@@ -9,9 +9,15 @@
    caller no-ops. That matches the pattern in cloudsync.js so the app
    still ships fine on an offline-first fallback. */
 import { createClient } from '@supabase/supabase-js';
+import { dlog } from './debug-log.js';
 
 export const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL || '';
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+// Log at module load so the debug overlay picks up whether the env
+// vars actually reached the bundle. Show only the URL suffix — enough
+// to distinguish projects, safe to show. Anon key is yes/no.
+dlog(`[supabase] url=${SUPABASE_URL ? '…' + SUPABASE_URL.slice(-16) : 'MISSING'} anonKey=${SUPABASE_ANON_KEY ? 'yes' : 'MISSING'}`);
 
 let _client = null;
 export function client() {
@@ -26,6 +32,7 @@ export function client() {
         detectSessionInUrl: true,
       },
     });
+    dlog('[supabase] client created');
   }
   return _client;
 }
