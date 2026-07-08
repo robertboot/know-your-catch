@@ -741,9 +741,9 @@ body { margin: 0; }
 
 /* Hero visual — raster phone mockup + floating card images */
 .rl-visual { position: relative; min-height: 640px; display: flex; align-items: center; justify-content: center; }
-.rl-phone-slot { position: relative; width: 380px; max-width: 100%; display: flex; justify-content: center; }
+.rl-phone-slot { position: relative; width: 440px; max-width: 100%; display: flex; justify-content: center; }
 .rl-phone-img {
-  width: 340px; max-width: 100%; height: auto; display: block;
+  width: 400px; max-width: 100%; height: auto; display: block;
   filter: drop-shadow(0 30px 60px rgba(0,0,0,0.55));
 }
 .rl-floaters { position: absolute; inset: 0; pointer-events: none; }
@@ -753,8 +753,8 @@ body { margin: 0; }
   filter: drop-shadow(0 22px 36px rgba(0,0,0,0.45));
 }
 .rl-float-recent  { top: 20px;   left: -70px; width: 260px; }
-.rl-float-pattern { top: 240px;  right: -90px; width: 280px; }
-.rl-float-bite    { bottom: 30px; left: 10px;  width: 300px; }
+.rl-float-pattern { top: 260px;  right: -90px; width: 280px; }
+.rl-float-bite    { bottom: 20px; left: 20px;  width: 240px; }
 
 @media (max-width: 1024px) {
   .rl-visual { min-height: unset; padding: 20px 0 60px; }
@@ -776,10 +776,17 @@ body { margin: 0; }
   box-shadow: 0 24px 60px rgba(0,0,0,0.45);
 }
 
-/* Share graphic — center column, keep proportional */
+/* Share graphic — center column. Larger than the natural column
+   fit: let it span up to ~140% of its column so it visually dominates
+   the section. Above 1024px the three columns are 1fr each; a 1.4×
+   share graphic reads as the section's hero. */
 .rl-share-img {
-  max-width: 100%; height: auto; display: block;
+  width: 100%;
+  max-width: 520px; height: auto; display: block; margin: 0 auto;
   filter: drop-shadow(0 22px 40px rgba(0,0,0,0.5));
+}
+@media (min-width: 1025px) {
+  .rl-share-img { max-width: 620px; transform: scale(1.05); }
 }
 
 /* Section */
