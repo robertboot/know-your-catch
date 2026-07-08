@@ -470,7 +470,10 @@ export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
   };
 
   return (
-    <div style={overlayStyle}>
+    // z-index 300 — must render above the splash screen (zIndex 200).
+    // The default overlayStyle has zIndex 100 which puts the modal
+    // BEHIND the splash, so the user sees nothing when Sign in fires.
+    <div style={{ ...overlayStyle, zIndex: 300 }}>
       <div style={modalStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <H1 size={20}>{phase === 'input' ? 'Sign in' : 'Check your email'}</H1>
