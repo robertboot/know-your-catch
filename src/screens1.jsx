@@ -288,31 +288,41 @@ export function HomeScreen({
 
         <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 320 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.brass, letterSpacing: 1.4 }}>BUILD YOUR</div>
+          {/* H1 forced onto two lines ("Log your" / "catch") so the
+              headline never overflows the tuna image at narrow widths.
+              Line-height ~0.95 keeps the two lines feeling like a
+              single thought. */}
           <div style={{
             fontSize: 34, fontWeight: 900, color: T.ink, letterSpacing: 0.5,
-            lineHeight: 1.05, marginTop: 4,
+            lineHeight: 0.95, marginTop: 4,
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
-          }}>Log your catch</div>
+          }}>
+            <span style={{ display: 'block' }}>Log your</span>
+            <span style={{ display: 'block' }}>catch</span>
+          </div>
           <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.45, marginTop: 10, maxWidth: 260 }}>
             Snap your catch. We'll log the species, location, and conditions — and build your fishing map.
           </div>
           {/* Two-button row: primary Take Photo (camera-direct) + secondary
               Select Photo (library only). Both feed the same shared post-
               capture pipeline (identify → confirmation card → catch entry).
-              The distinction is only which native picker fires. */}
+              The distinction is only which native picker fires. Icon size
+              scales with viewport (phone 22 / tablet 28); padding kept
+              compact but stays inside a comfortable 44pt hit target. */}
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <button
               onClick={onCapture || onLogMenu || onReport}
               aria-label="Take a photo"
               style={{
                 flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
-                padding: '13px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800,
+                padding: '10px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800,
                 letterSpacing: 1.2, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 boxShadow: '0 8px 24px rgba(25, 212, 242, 0.30)',
+                minHeight: 44,
               }}
             >
-              <Camera size={16} strokeWidth={2.4} /> TAKE PHOTO
+              <Camera size={isTablet ? 28 : 22} strokeWidth={2} /> TAKE PHOTO
             </button>
             <button
               onClick={onSelectFromLibrary || onLogMenu || onReport}
@@ -320,12 +330,13 @@ export function HomeScreen({
               style={{
                 flex: 1, background: 'transparent', color: T.brass,
                 border: `1.5px solid ${T.brass}`,
-                padding: '13px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800,
+                padding: '10px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800,
                 letterSpacing: 1.2, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                minHeight: 44,
               }}
             >
-              <ImageIcon size={16} strokeWidth={2.4} /> SELECT PHOTO
+              <ImageIcon size={isTablet ? 28 : 22} strokeWidth={2} /> SELECT PHOTO
             </button>
           </div>
         </div>
