@@ -19,7 +19,17 @@ const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
 
 const A = {
-  heroBg:     `${M}hero-bg.svg`,
+  // Big raster assets — real launch creative.
+  heroBg:       `${M}hero-underwater-bg.png`,
+  phoneMockup:  `${M}phone-mockup.png`,
+  cardRecent:   `${M}card-recent-catch.png`,
+  cardPattern:  `${M}card-top-pattern.png`,
+  cardBite:     `${M}card-hot-bite-window.png`,
+  insightsDash: `${M}insights-dashboard.png`,
+  shareGraphic: `${M}share-relive-graphic.png`,
+  // Store badges + QR — still SVG placeholders. Swap for official
+  // Apple / Google badges + a real QR pointing at the App Store URL
+  // once the listing is live. See file comments in each SVG.
   appStore:   `${M}app-store-badge.svg`,
   googlePlay: `${M}google-play-badge.svg`,
   qrCode:     `${M}qr-code-placeholder.svg`,
@@ -729,23 +739,47 @@ body { margin: 0; }
 .rl-trust strong { color: ${P.ink}; font-size: 13px; font-weight: 700; display: block; }
 .rl-trust span   { color: ${P.inkMute}; font-size: 12px; }
 
-/* Hero visual + floating cards positions */
+/* Hero visual — raster phone mockup + floating card images */
 .rl-visual { position: relative; min-height: 640px; display: flex; align-items: center; justify-content: center; }
-.rl-phone-slot { position: relative; }
+.rl-phone-slot { position: relative; width: 380px; max-width: 100%; display: flex; justify-content: center; }
+.rl-phone-img {
+  width: 340px; max-width: 100%; height: auto; display: block;
+  filter: drop-shadow(0 30px 60px rgba(0,0,0,0.55));
+}
 .rl-floaters { position: absolute; inset: 0; pointer-events: none; }
-.rl-floaters > * { position: absolute; pointer-events: auto; }
-.rl-float-recent  { top: 20px;   left: -50px; }
-.rl-float-pattern { top: 240px;  right: -70px; }
-.rl-float-bite    { bottom: 30px; left: 20px;  }
+.rl-floaters > img {
+  position: absolute; pointer-events: auto; display: block;
+  height: auto; max-width: none;
+  filter: drop-shadow(0 22px 36px rgba(0,0,0,0.45));
+}
+.rl-float-recent  { top: 20px;   left: -70px; width: 260px; }
+.rl-float-pattern { top: 240px;  right: -90px; width: 280px; }
+.rl-float-bite    { bottom: 30px; left: 10px;  width: 300px; }
 
 @media (max-width: 1024px) {
   .rl-visual { min-height: unset; padding: 20px 0 60px; }
-  .rl-floaters { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; padding: 0 4px; }
-  .rl-floaters > * { position: static !important; width: auto !important; }
-  .rl-float-recent, .rl-float-pattern, .rl-float-bite { top: auto; left: auto; right: auto; bottom: auto; }
+  .rl-phone-slot { width: 100%; }
+  .rl-floaters {
+    position: static; display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin-top: 24px; padding: 0 4px;
+  }
+  .rl-floaters > img {
+    position: static !important; width: 100% !important;
+    top: auto; left: auto; right: auto; bottom: auto;
+  }
 }
-@media (max-width: 720px) {
-  .rl-floaters { grid-template-columns: 1fr; }
+@media (max-width: 720px) { .rl-floaters { grid-template-columns: 1fr; } }
+
+/* Insights dashboard image — replaces the 5-tile grid */
+.rl-insight-dash img {
+  width: 100%; height: auto; display: block; border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+}
+
+/* Share graphic — center column, keep proportional */
+.rl-share-img {
+  max-width: 100%; height: auto; display: block;
+  filter: drop-shadow(0 22px 40px rgba(0,0,0,0.5));
 }
 
 /* Section */
@@ -886,11 +920,18 @@ function Hero() {
 
         <div className="rl-visual">
           <div className="rl-phone-slot">
-            <PhoneFrame width={340}><PhoneApp /></PhoneFrame>
+            <img
+              src={A.phoneMockup}
+              alt=""
+              aria-hidden="true"
+              className="rl-phone-img"
+              loading="eager"
+              decoding="async"
+            />
             <div className="rl-floaters">
-              <div className="rl-float-recent"><RecentCatchCard /></div>
-              <div className="rl-float-pattern"><TopPatternCard /></div>
-              <div className="rl-float-bite"><HotBiteWindowCard /></div>
+              <img className="rl-float-recent"  src={A.cardRecent}  alt="" aria-hidden="true" loading="lazy" />
+              <img className="rl-float-pattern" src={A.cardPattern} alt="" aria-hidden="true" loading="lazy" />
+              <img className="rl-float-bite"    src={A.cardBite}    alt="" aria-hidden="true" loading="lazy" />
             </div>
           </div>
         </div>
@@ -940,12 +981,13 @@ function Insights() {
             <a className="rl-btn rl-btn-ghost" href="#how">Learn more</a>
           </div>
         </div>
-        <div className="rl-insight-grid">
-          <InsightTile title="SPECIES BREAKDOWN"><DonutChart /></InsightTile>
-          <InsightTile title="BEST TIMES"><BestTimesList /></InsightTile>
-          <InsightTile title="YOUR CATCH MAP"><CatchHeatmap /></InsightTile>
-          <InsightTile title="SEASONAL SUCCESS"><SeasonalBars /></InsightTile>
-          <InsightTile title="PERSONAL BESTS" wide><PersonalBestMini /></InsightTile>
+        <div className="rl-insight-dash">
+          <img
+            src={A.insightsDash}
+            alt="Species breakdown, best times, catch map, seasonal success, and personal bests dashboard."
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       </div>
     </section>
@@ -990,7 +1032,16 @@ function ShareRelive() {
             </ul>
           </div>
 
-          <div><SharedCatchPhone /></div>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <img
+              src={A.shareGraphic}
+              alt=""
+              aria-hidden="true"
+              className="rl-share-img"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
 
           <div>
             <div style={{ color: P.inkMute, fontSize: 12, letterSpacing: 1.4, fontWeight: 700, marginBottom: 12 }}>
