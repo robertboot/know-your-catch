@@ -875,7 +875,7 @@ function Nav() {
   return (
     <nav className="rl-nav" aria-label="Primary">
       <a href="#top" style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 128, width: 'auto', display: 'block' }} />
+        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 192, width: 'auto', display: 'block' }} />
       </a>
       <div className="rl-nav-links">
         {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
