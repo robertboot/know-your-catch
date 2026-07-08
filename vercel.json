@@ -3,14 +3,12 @@
   "buildCommand": "npm run web:build",
   "outputDirectory": "dist-web",
   "framework": null,
-  "cleanUrls": true,
   "rewrites": [
-    { "source": "/admin", "destination": "/index.html" },
-    { "source": "/admin/(.*)", "destination": "/index.html" }
+    { "source": "/((?!.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "/admin(/.*)?",
+      "source": "/admin(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
