@@ -1,0 +1,14 @@
+<!--
+  Placeholder App Store badge. Replace with Apple's official
+  "Download on the App Store" SVG once available. See:
+    https://developer.apple.com/app-store/marketing/guidelines/
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <rect x="1" y="1" width="198" height="58" rx="12" fill="#000" stroke="#ffffff" stroke-opacity="0.35"/>
+  <g fill="#ffffff">
+    <path d="M32 18 c 2 -2 4 -3 6 -3 c 0 3 -1 5 -3 7 c -2 2 -4 3 -5 3 c 0 -3 1 -5 2 -7 z
+             M42 42 c -2 3 -4 5 -6 5 c -2 0 -3 -1 -5 -1 c -2 0 -3 1 -5 1 c -3 0 -6 -3 -8 -7 c -4 -8 -1 -18 4 -18 c 2 0 4 1 5 1 c 2 0 3 -1 6 -1 c 4 0 7 3 8 6 c -5 3 -5 10 1 14 z"/>
+  </g>
+  <text x="60" y="24" font-family="-apple-system, system-ui, sans-serif" font-size="9" fill="#ffffff" opacity="0.75">Download on the</text>
+  <text x="60" y="46" font-family="-apple-system, system-ui, sans-serif" font-size="20" font-weight="700" fill="#ffffff">App Store</text>
+</svg>

@@ -1,0 +1,15 @@
+<!--
+  Placeholder Google Play badge. Replace with Google's official
+  "GET IT ON Google Play" SVG once available. See:
+    https://play.google.com/intl/en_us/badges/
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none">
+  <rect x="1" y="1" width="218" height="58" rx="12" fill="#000" stroke="#ffffff" stroke-opacity="0.35"/>
+  <g transform="translate(20,15)">
+    <polygon points="0,0 20,15 0,30" fill="#19d4f2"/>
+    <polygon points="0,0 20,15 5,17" fill="#0f9fbf"/>
+    <polygon points="0,0 5,13 0,30" fill="#ffffff" opacity="0"/>
+  </g>
+  <text x="60" y="24" font-family="-apple-system, system-ui, sans-serif" font-size="9" fill="#ffffff" opacity="0.75">GET IT ON</text>
+  <text x="60" y="46" font-family="-apple-system, system-ui, sans-serif" font-size="20" font-weight="700" fill="#ffffff">Google Play</text>
+</svg>
