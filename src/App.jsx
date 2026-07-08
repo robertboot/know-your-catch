@@ -213,20 +213,24 @@ export default function App() {
     };
   }, []);
 
-  // Splash-dismiss logic — depends on whether the login block will
-  // render on the splash. Returning users (session already exists,
-  // OR they've previously chosen Continue-without on this device)
-  // get the 2.2s hold-splash. First-timers hold on the splash until
-  // they pick Sign in / Create account / Continue-without themselves;
-  // no auto-dismiss. Effect re-runs once state/session load so a
-  // returning user isn't held indefinitely while auth resolves.
+  // Splash-dismiss timer. Only auto-dismisses when a session exists
+  // (returning signed-in angler gets a 2.2s hold before home). If no
+  // session, the splash stays up with sign-in CTAs — there is no
+  // "continue without signing in" path; session presence IS the app
+  // gate.
   useEffect(() => {
     if (!loaded) return;
-    const willShowLogin = !session && !state.splashLoginDismissed;
-    if (willShowLogin) return; // user must pick
+    if (!session) return;
     const t = setTimeout(() => setShowSplash(false), 2200);
     return () => clearTimeout(t);
-  }, [loaded, session, state.splashLoginDismissed]);
+  }, [loaded, session]);
+
+  // Debug: log every auth state transition + first-boot session read
+  // so we can trace magic-link deep-link completion on device via
+  // console. Cheap; safe to leave on in production.
+  useEffect(() => {
+    console.log('[auth] session state:', session ? `signed in as ${session.user?.email}` : 'signed out');
+  }, [session]);
 
   // Splash login modal state — the same SignInModal we use from
   // Settings. Both Sign in and Create account funnel here; the
@@ -296,19 +300,21 @@ export default function App() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [stack.length, screen.name, screen.id, screen.speciesId, screen.editingId, screen.catId]);
 
-  if (showSplash || !loaded) {
-    const showLogin = loaded && !session && !state.splashLoginDismissed;
+  // App-wide session gate: the splash renders whenever we're loading
+  // OR the angler is signed out. There is no signed-out branch inside
+  // the app itself — Settings, Home, Logbook etc. all render only
+  // when session is truthy. This makes it structurally impossible for
+  // any screen to show a stale "Sign in" affordance to a signed-in
+  // user, or to show real data to a signed-out one.
+  if (showSplash || !loaded || !session) {
+    const showLogin = loaded && !session;
     return (
       <>
         <SplashScreen
           showLogin={showLogin}
-          onContinue={() => loaded && setShowSplash(false)}
+          onContinue={() => loaded && session && setShowSplash(false)}
           onSignIn={() => setSplashSignInOpen(true)}
           onCreateAccount={() => setSplashSignInOpen(true)}
-          onContinueOffline={() => {
-            update({ splashLoginDismissed: true });
-            setShowSplash(false);
-          }}
         />
         {splashSignInOpen && (
           <SignInModal
@@ -316,7 +322,7 @@ export default function App() {
             onClose={() => setSplashSignInOpen(false)}
             onSendLink={async ({ email }) => {
               const res = await sendMagicLink({ email });
-              if (res?.ok) update({ anglerEmail: email, splashLoginDismissed: true });
+              if (res?.ok) update({ anglerEmail: email });
               return res;
             }}
           />

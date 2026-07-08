@@ -37,7 +37,7 @@ import {
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
   inputStyle,
 } from './components.jsx';
-import { SignInPrompt, AccountSection } from './auth-ui.jsx';
+import { AccountSection } from './auth-ui.jsx';
 import { useScreenSize } from './screen-size.js';
 import { getLocation, getPhoto, isNative } from './native.js';
 import exifr from 'exifr';
@@ -885,8 +885,6 @@ export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }
         <H1 size={22}>Personal Bests</H1>
         <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>Your records, by species.</div>
       </div>
-
-      {!signedIn && <SignInPrompt context="pbs" />}
 
       {recorded.length === 0 ? (
         <Card style={{ padding: 18, textAlign: 'center' }}>
@@ -1773,8 +1771,6 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
           <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
       </div>
-
-      {!signedIn && <SignInPrompt context="catches" />}
 
       {quickPending.length > 0 && (
         <Card style={{ background: T.warnBg, borderColor: T.warn, marginBottom: 12, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>

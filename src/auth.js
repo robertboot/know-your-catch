@@ -61,15 +61,20 @@ export async function sendMagicLink({ email }) {
 /** Called from the appUrlOpen listener with the full deep-link URL.
     Extracts the code and completes the session exchange. */
 export async function handleDeepLink(url) {
+  console.log('[auth] deep-link received:', url);
   if (!url || !url.startsWith(REDIRECT_URL)) return { ok: false, error: 'not a reelintel:// link' };
   const c = client();
-  if (!c) return { ok: false, error: 'Supabase is not configured.' };
+  if (!c) {
+    console.error('[auth] deep-link received but Supabase client is null');
+    return { ok: false, error: 'Supabase is not configured.' };
+  }
   try {
     const { data, error } = await c.auth.exchangeCodeForSession(url);
     if (error) {
       console.error('[auth] exchangeCodeForSession failed', error);
       return { ok: false, error: error.message || String(error) };
     }
+    console.log('[auth] session exchange succeeded:', data?.session?.user?.email || '(no email)');
     return { ok: true, session: data?.session || null };
   } catch (e) {
     console.error('[auth] exchange threw', e);

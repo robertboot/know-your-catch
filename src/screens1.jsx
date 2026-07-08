@@ -34,19 +34,17 @@ import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
    SPLASH
    ============================================================
    Two modes:
-    - showLogin=false: plain hold-splash. Tap or 2.2s timer dismisses.
-      Used for returning users (session exists OR they've previously
-      picked Continue-without on this device).
-    - showLogin=true:  splash + a bottom login block (Sign in /
-      Create account / Continue without signing in). No auto-dismiss —
-      user must pick. This is the first moment first-time anglers see
-      the app, per the build-21 spec. */
+    - showLogin=false: plain hold-splash (session exists, warming
+      the UI for 2.2s). Tap or timer dismisses.
+    - showLogin=true:  splash + login CTAs (Sign in / Create account).
+      No auto-dismiss, no "continue without signing in" — session
+      presence IS the gate to the app. The angler must complete the
+      magic-link roundtrip to progress. */
 export function SplashScreen({
   onContinue,
   showLogin = false,
   onSignIn,
   onCreateAccount,
-  onContinueOffline,
 }) {
   const showCTAs = !!showLogin;
   return (
@@ -83,27 +81,16 @@ export function SplashScreen({
           <GhostButton onClick={onCreateAccount} style={{ borderColor: T.brass, color: T.brass }}>
             Create an account
           </GhostButton>
-          <button
-            onClick={onContinueOffline}
-            style={{
-              background: 'transparent', border: 'none', color: T.inkMute,
-              fontSize: 13, letterSpacing: 0.4, padding: '10px 4px', marginTop: 4,
-              cursor: 'pointer', textDecoration: 'underline',
-            }}
-          >
-            Continue without signing in
-          </button>
           <div style={{
             fontSize: 11, color: T.inkMute, textAlign: 'center', lineHeight: 1.5,
-            marginTop: 6, padding: '0 12px',
+            marginTop: 10, padding: '0 12px',
           }}>
             Sign in syncs your catches, PBs, and photos across your iPhone and iPad.
-            You can always sign in later from Settings.
           </div>
         </div>
       ) : (
         <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>
-          Tap to continue
+          Loading…
         </div>
       )}
     </div>
