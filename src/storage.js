@@ -20,6 +20,12 @@ export const defaultState = {
                  // Pinned to the top of every species/regulation list and seeded
                  // during onboarding right after the jurisdiction picker.
   onboardingFavoritesComplete: false,
+  // Set to true once the angler either signs in from the splash or
+  // taps "Continue without signing in". Suppresses the splash login
+  // block on subsequent launches so a returning offline user isn't
+  // nagged every cold-boot. Sign-in from Settings later is still
+  // available; this is only a "seen" flag for the splash CTA block.
+  splashLoginDismissed: false,
   research: {
     // Consent is set by the (forthcoming) account-creation flow, not in
     // the app settings. Until set, cloud sync stays dormant.

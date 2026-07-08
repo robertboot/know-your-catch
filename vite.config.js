@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => ({
   base: process.env.KYC_BASE || (mode === 'production' ? '/know-your-catch/' : '/'),
   define: {
     __KYC_ADMIN__: JSON.stringify(process.env.KYC_ADMIN !== 'false'),
+    // KYC_WEB=true is set by npm run web:build (the reelintel.ai deploy).
+    // Flips the router into path-based mode so `/` renders the marketing
+    // landing page and `/admin` renders the admin console.
+    __KYC_WEB__: JSON.stringify(process.env.KYC_WEB === 'true'),
   },
   plugins: [react()],
   server: { port: 5173, open: true },

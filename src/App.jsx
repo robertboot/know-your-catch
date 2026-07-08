@@ -12,7 +12,7 @@ import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
-import { subscribe as subscribeAuth } from './auth.js';
+import { subscribe as subscribeAuth, sendMagicLink } from './auth.js';
 import {
   pullAll as cloudPullAll,
   syncChanges as cloudSyncChanges,
@@ -26,6 +26,7 @@ import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
   FavoritePickerModal, AccountSetupModal, IdentificationConfirmCard,
+  SignInModal,
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
@@ -212,11 +213,25 @@ export default function App() {
     };
   }, []);
 
-  // Auto-dismiss the splash after a short hold.
+  // Splash-dismiss logic — depends on whether the login block will
+  // render on the splash. Returning users (session already exists,
+  // OR they've previously chosen Continue-without on this device)
+  // get the 2.2s hold-splash. First-timers hold on the splash until
+  // they pick Sign in / Create account / Continue-without themselves;
+  // no auto-dismiss. Effect re-runs once state/session load so a
+  // returning user isn't held indefinitely while auth resolves.
   useEffect(() => {
+    if (!loaded) return;
+    const willShowLogin = !session && !state.splashLoginDismissed;
+    if (willShowLogin) return; // user must pick
     const t = setTimeout(() => setShowSplash(false), 2200);
     return () => clearTimeout(t);
-  }, []);
+  }, [loaded, session, state.splashLoginDismissed]);
+
+  // Splash login modal state — the same SignInModal we use from
+  // Settings. Both Sign in and Create account funnel here; the
+  // distinction is copy only.
+  const [splashSignInOpen, setSplashSignInOpen] = useState(false);
 
   const [saveError, setSaveError] = useState(null); // 'quota' | 'other' | null
 
@@ -282,21 +297,126 @@ export default function App() {
   }, [stack.length, screen.name, screen.id, screen.speciesId, screen.editingId, screen.catId]);
 
   if (showSplash || !loaded) {
-    return <SplashScreen onContinue={() => loaded && setShowSplash(false)} />;
+    const showLogin = loaded && !session && !state.splashLoginDismissed;
+    return (
+      <>
+        <SplashScreen
+          showLogin={showLogin}
+          onContinue={() => loaded && setShowSplash(false)}
+          onSignIn={() => setSplashSignInOpen(true)}
+          onCreateAccount={() => setSplashSignInOpen(true)}
+          onContinueOffline={() => {
+            update({ splashLoginDismissed: true });
+            setShowSplash(false);
+          }}
+        />
+        {splashSignInOpen && (
+          <SignInModal
+            initialEmail={state.anglerEmail || ''}
+            onClose={() => setSplashSignInOpen(false)}
+            onSendLink={async ({ email }) => {
+              const res = await sendMagicLink({ email });
+              if (res?.ok) update({ anglerEmail: email, splashLoginDismissed: true });
+              return res;
+            }}
+          />
+        )}
+      </>
+    );
   }
 
-  // /#/admin — web build only. Rendered above the tab-bar chrome
-  // because the admin console owns its own layout.
-  if (__KYC_ADMIN__ && AdminApp && hashRoute === 'admin'
-      && (state.anglerEmail || '').trim().toLowerCase() === ADMIN_EMAIL) {
-    return (
-      <Suspense fallback={<SplashScreen />}>
-        <AdminApp
-          localAnglerEmail={state.anglerEmail}
-          onExit={() => { window.location.hash = ''; }}
-        />
-      </Suspense>
-    );
+  // /#/admin — web build only. On reelintel.ai this is reachable via
+  // /admin (main.jsx normalises the pathname into the hash before
+  // mount). Admin surfaces are gated by:
+  //   1. Signed-in Supabase session (real, verified email)
+  //   2. Email matches the admin allowlist (currently one address)
+  // Fallback to state.anglerEmail is kept for iOS dev / gh-pages
+  // preview where the session may not be present, but on the web
+  // build we require a real session to prevent anyone from unlocking
+  // admin by typing an email into onboarding.
+  if (__KYC_ADMIN__ && AdminApp && hashRoute === 'admin') {
+    const sessionEmail = (session?.user?.email || '').trim().toLowerCase();
+    const localEmail   = (state.anglerEmail   || '').trim().toLowerCase();
+    const authedEmail  = __KYC_WEB__ ? sessionEmail : (sessionEmail || localEmail);
+
+    // Signed out on the web deploy → show the sign-in modal only. No
+    // hint of what /admin is for. Search engines can't index this
+    // (public/robots.txt Disallow /admin).
+    if (__KYC_WEB__ && !session) {
+      return (
+        <div style={{
+          minHeight: '100vh', background: T.bgDeep, color: T.parchment,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{
+            maxWidth: 380, width: '100%',
+            background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
+            padding: '28px 24px',
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, marginBottom: 10 }}>Sign in</div>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 16px' }}>
+              Enter your email — we'll send a link.
+            </p>
+            <SignInModal
+              initialEmail={state.anglerEmail || ''}
+              onClose={() => {}}
+              onSendLink={async ({ email }) => {
+                const res = await sendMagicLink({ email });
+                if (res?.ok) update({ anglerEmail: email });
+                return res;
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (authedEmail && authedEmail === ADMIN_EMAIL) {
+      return (
+        <Suspense fallback={<SplashScreen />}>
+          <AdminApp
+            localAnglerEmail={state.anglerEmail}
+            onExit={() => { window.location.hash = ''; }}
+          />
+        </Suspense>
+      );
+    }
+
+    // Signed in but not on the allowlist — no info leak about what
+    // this URL does. Force sign-out button.
+    if (__KYC_WEB__ && session) {
+      return (
+        <div style={{
+          minHeight: '100vh', background: T.bgDeep, color: T.parchment,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{
+            maxWidth: 380, width: '100%', textAlign: 'center',
+            background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
+            padding: '28px 24px',
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.ink, marginBottom: 8 }}>Not authorized</div>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 20px' }}>
+              This account doesn't have access.
+            </p>
+            <button
+              onClick={async () => {
+                const { signOut } = await import('./auth.js');
+                await signOut();
+                window.location.href = '/';
+              }}
+              style={{
+                background: T.brass, color: T.oceanDeep, border: 'none',
+                padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      );
+    }
   }
 
   const jurisdiction = jurisdictionById(state.jurisdiction);
@@ -334,10 +454,14 @@ export default function App() {
     onRegulationAlerts: () => push({ name: 'regulation_alerts' }),
     onQuiz:        () => push({ name: 'quiz' }),
     onReport:     () => push({ name: 'catch_entry' }),
-    // Home hero button — presents the source picker (Take Photo /
-    // Choose from Library) so anglers can pick either.
-    onLogMenu:    () => startCaptureFlow('prompt'),
-    onCapture:    () => startCaptureFlow('prompt'),
+    // Home hero — two distinct entry points share the same post-
+    // capture pipeline, only the native picker differs:
+    //   onCapture             → camera-direct (source='camera')
+    //   onSelectFromLibrary   → library-only (source='library')
+    //   onLogMenu             → legacy prompt (kept as safety fallback)
+    onLogMenu:            () => startCaptureFlow('prompt'),
+    onCapture:            () => startCaptureFlow('camera'),
+    onSelectFromLibrary:  () => startCaptureFlow('library'),
     onPatterns:   () => push({ name: 'patterns' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
@@ -587,38 +711,53 @@ export default function App() {
         maxWidth: containerMaxWidth(size), margin: '0 auto',
         zIndex: 50,
       }}>
-        {stack.length === 1 ? (
-          isHome ? (
+        {/* Header left cluster. Layout, left-to-right:
+              1. Back chevron  — only when stack.length > 1
+              2. ReelIntel wordmark — ALWAYS renders (any screen, any depth).
+                 Tapping resets the stack to home.
+            The wordmark MUST be present on every screen — if this <img> is
+            ever conditionally skipped we regress the "logo missing on
+            non-home pages" bug. The render-time assertion below fires a
+            console.warn so any future regression surfaces during dev/QA. */}
+        <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, height: chrome.header }}>
+          {stack.length > 1 && (
             <button
-              onClick={() => reset([{ name: 'home' }])}
-              aria-label="ReelIntel — home"
+              onClick={pop}
+              aria-label="Back"
               style={{
-                background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
-                height: chrome.header,
+                background: 'transparent', border: 'none', color: T.parchment,
+                padding: '0 4px 0 10px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', flexShrink: 0,
               }}
             >
-              <img
-                src={brandAsset('logo_horizontal', `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`)}
-                alt="ReelIntel — identify, check rules, log catch, find better spots"
-                style={{
-                  height: Math.round(chrome.header * 0.78), width: 'auto', maxWidth: '100%',
-                  display: 'block', objectFit: 'contain',
-                  marginLeft: size === 'phone' ? 12 : 20,
-                }}
-              />
+              <ChevronLeft size={22} strokeWidth={2.2} />
             </button>
-          ) : (
-            // Root of a non-Home tab (Fish ID / Regulations / Logbook) —
-            // no top-bar Back, no logo; the tab bar owns navigation.
-            // Empty flex-1 spacer keeps the header actions right-aligned.
-            <div style={{ flex: 1, height: chrome.header }} />
-          )
-        ) : (
-          <button onClick={pop} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
-            <ChevronLeft size={20} /> Back
+          )}
+          <button
+            onClick={() => reset([{ name: 'home' }])}
+            aria-label="ReelIntel — home"
+            style={{
+              background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
+              height: chrome.header,
+            }}
+          >
+            <img
+              ref={(el) => {
+                if (!el && typeof console !== 'undefined') {
+                  console.warn('[header] wordmark img element failed to mount — logo will be missing');
+                }
+              }}
+              src={brandAsset('logo_horizontal', `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`)}
+              alt="ReelIntel"
+              style={{
+                height: Math.round(chrome.header * 0.78), width: 'auto', maxWidth: '100%',
+                display: 'block', objectFit: 'contain',
+                marginLeft: stack.length > 1 ? 4 : (size === 'phone' ? 12 : 20),
+              }}
+            />
           </button>
-        )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 12, flexShrink: 0 }}>
           {session && !isHome && (
             <SyncPill status={syncStatus} onClick={() => push({ name: 'settings' })} />

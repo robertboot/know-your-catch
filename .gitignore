@@ -2,6 +2,12 @@ node_modules
 # dist is intentionally tracked while we're in TestFlight prep so the
 # stable raw.githack branch URL always serves the latest build. Drop
 # this comment + re-add `dist` below before tagging a release.
+# dist-web/ is the KYC_WEB=true build for the reelintel.ai deploy —
+# regenerated on Vercel per push, never committed.
+dist-web/
+# build/ holds the transient Xcode archive + export outputs from
+# npm run ios:ship. Rebuilt every ship.
+build/
 .DS_Store
 *.log
 .env

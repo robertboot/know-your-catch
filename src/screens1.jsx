@@ -32,25 +32,80 @@ import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
 
 /* ============================================================
    SPLASH
-   ============================================================ */
-export function SplashScreen({ onContinue }) {
+   ============================================================
+   Two modes:
+    - showLogin=false: plain hold-splash. Tap or 2.2s timer dismisses.
+      Used for returning users (session exists OR they've previously
+      picked Continue-without on this device).
+    - showLogin=true:  splash + a bottom login block (Sign in /
+      Create account / Continue without signing in). No auto-dismiss —
+      user must pick. This is the first moment first-time anglers see
+      the app, per the build-21 spec. */
+export function SplashScreen({
+  onContinue,
+  showLogin = false,
+  onSignIn,
+  onCreateAccount,
+  onContinueOffline,
+}) {
+  const showCTAs = !!showLogin;
   return (
     <div
-      onClick={onContinue}
+      onClick={showCTAs ? undefined : onContinue}
       style={{
         position: 'fixed', inset: 0, background: T.bgDeep,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        zIndex: 200, cursor: 'pointer', padding: 24,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: showCTAs ? 'flex-start' : 'center',
+        zIndex: 200, cursor: showCTAs ? 'default' : 'pointer', padding: 24,
+        paddingTop: showCTAs ? 'max(env(safe-area-inset-top), 32px)' : 24,
+        paddingBottom: showCTAs ? 'max(env(safe-area-inset-bottom), 24px)' : 24,
+        overflowY: 'auto',
       }}
     >
       <img
         src={brandAsset('logo_brand', `${import.meta.env.BASE_URL}brand/reelintel-brand.png`)}
         alt="ReelIntel — identify, check rules, log catch, find better spots. Built for the Gulf of America."
-        style={{ maxWidth: 'min(92vw, 460px)', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
+        style={{
+          maxWidth: 'min(92vw, 460px)',
+          maxHeight: showCTAs ? '54vh' : '82vh',
+          objectFit: 'contain', display: 'block',
+          marginTop: showCTAs ? 12 : 0,
+        }}
       />
-      <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>
-        Tap to continue
-      </div>
+
+      {showCTAs ? (
+        <div style={{
+          marginTop: 28, width: '100%', maxWidth: 340,
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <PrimaryButton onClick={onSignIn}>
+            Sign in
+          </PrimaryButton>
+          <GhostButton onClick={onCreateAccount} style={{ borderColor: T.brass, color: T.brass }}>
+            Create an account
+          </GhostButton>
+          <button
+            onClick={onContinueOffline}
+            style={{
+              background: 'transparent', border: 'none', color: T.inkMute,
+              fontSize: 13, letterSpacing: 0.4, padding: '10px 4px', marginTop: 4,
+              cursor: 'pointer', textDecoration: 'underline',
+            }}
+          >
+            Continue without signing in
+          </button>
+          <div style={{
+            fontSize: 11, color: T.inkMute, textAlign: 'center', lineHeight: 1.5,
+            marginTop: 6, padding: '0 12px',
+          }}>
+            Sign in syncs your catches, PBs, and photos across your iPhone and iPad.
+            You can always sign in later from Settings.
+          </div>
+        </div>
+      ) : (
+        <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>
+          Tap to continue
+        </div>
+      )}
     </div>
   );
 }
@@ -163,6 +218,7 @@ export function HomeScreen({
   state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
   onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
+  onCapture, onSelectFromLibrary,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   const jurId = jurisdiction?.id || 'fed_gulf';
@@ -178,26 +234,22 @@ export function HomeScreen({
 
   return (
     <div style={{ padding: '14px 16px' }}>
-      {/* Current Location */}
-      <Card style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 14 }}>
-        <div style={{ color: T.brass, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32 }}>
-          <MapPin size={22} strokeWidth={2.2} />
+      {/* Current Regulations — read-only display line above the hero.
+          Jurisdiction switching moved to Settings → Waters. Anglers
+          asked repeatedly for this to stop being a tappable card on
+          home; keep it as a small header line. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '4px 2px', marginBottom: 4,
+      }}>
+        <MapPin size={isTablet ? 18 : 15} strokeWidth={2.2} color={T.brass} style={{ flexShrink: 0 }} />
+        <div style={{
+          fontSize: isTablet ? 17 : 14, color: T.parchment, fontWeight: 600,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
+        }}>
+          Current Regulations: <span style={{ color: T.ink, fontWeight: 800 }}>{jurisdiction?.name || '—'}</span>
         </div>
-        <div style={{ flex: 1, minWidth: 0, lineHeight: 1.15 }}>
-          <div style={{ fontSize: 9.5, letterSpacing: 1.6, color: T.brass, fontWeight: 800 }}>CURRENT LOCATION</div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {jurisdiction ? jurisdiction.name : 'Select fishing waters'}
-          </div>
-          <div style={{ fontSize: 10.5, color: T.inkMute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {jurisdiction ? jurisdiction.agency : 'Tap change to pick your waters'}
-          </div>
-        </div>
-        <button onClick={onChangeJurisdiction} style={{
-          background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
-          padding: '5px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 800,
-          letterSpacing: 1.3, cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0,
-        }}>Change</button>
-      </Card>
+      </div>
 
       {stale && (
         <Card style={{ background: T.warnBg, borderColor: T.warn, marginTop: 12, display: 'flex', gap: 10, alignItems: 'flex-start', borderRadius: 12 }}>
@@ -234,26 +286,48 @@ export function HomeScreen({
           pointerEvents: 'none',
         }} />
 
-        <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 270 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: 1.2 }}>BUILD YOUR</div>
+        <div style={{ position: 'relative', padding: '20px 18px 18px', maxWidth: 320 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.brass, letterSpacing: 1.4 }}>BUILD YOUR</div>
           <div style={{
-            fontSize: 40, fontWeight: 900, color: T.brass, letterSpacing: 2,
-            lineHeight: 1, marginTop: 2,
-            textShadow: '0 0 22px rgba(25, 212, 242, 0.45)',
+            fontSize: 34, fontWeight: 900, color: T.ink, letterSpacing: 0.5,
+            lineHeight: 1.05, marginTop: 4,
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
-          }}>FISHING MAP</div>
-          <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4, marginTop: 12, maxWidth: 220 }}>
-            Save photos, species, GPS, and conditions—then use your log to find better spots.
+          }}>Log your catch</div>
+          <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.45, marginTop: 10, maxWidth: 260 }}>
+            Snap your catch. We'll log the species, location, and conditions — and build your fishing map.
           </div>
-          <button onClick={onLogMenu || onReport} style={{
-            marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
-            padding: '11px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800,
-            letterSpacing: 1.6, cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', gap: 10,
-            boxShadow: '0 8px 24px rgba(25, 212, 242, 0.35)',
-          }}>
-            <Camera size={16} strokeWidth={2.4} /> LOG YOUR CATCH
-          </button>
+          {/* Two-button row: primary Take Photo (camera-direct) + secondary
+              Select Photo (library only). Both feed the same shared post-
+              capture pipeline (identify → confirmation card → catch entry).
+              The distinction is only which native picker fires. */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+            <button
+              onClick={onCapture || onLogMenu || onReport}
+              aria-label="Take a photo"
+              style={{
+                flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
+                padding: '13px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800,
+                letterSpacing: 1.2, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: '0 8px 24px rgba(25, 212, 242, 0.30)',
+              }}
+            >
+              <Camera size={16} strokeWidth={2.4} /> TAKE PHOTO
+            </button>
+            <button
+              onClick={onSelectFromLibrary || onLogMenu || onReport}
+              aria-label="Select photo from library"
+              style={{
+                flex: 1, background: 'transparent', color: T.brass,
+                border: `1.5px solid ${T.brass}`,
+                padding: '13px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800,
+                letterSpacing: 1.2, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <ImageIcon size={16} strokeWidth={2.4} /> SELECT PHOTO
+            </button>
+          </div>
         </div>
       </div>
 

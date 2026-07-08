@@ -1400,6 +1400,21 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         onForceSync={onForceSync}
         initialEmail={state.anglerEmail}
       />
+      {/* Waters row sits directly below Account — this is the only
+          place jurisdiction can be changed. Home shows a read-only
+          "Current Regulations: {name}" line above the hero. */}
+      <Card style={{ marginBottom: 10 }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Waters / Jurisdiction</SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>{jurisdiction?.name || 'Not set'}</div>
+          <GhostButton onClick={onChangeJurisdiction} style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+            Change <ChevronRight size={14} />
+          </GhostButton>
+        </div>
+        {jurisdiction?.agency && (
+          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4 }}>{jurisdiction.agency}</div>
+        )}
+      </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Angler profile</SectionLabel>
         <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>
@@ -1410,16 +1425,9 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
           <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
-            Name appears on your shared catch and Personal Best report cards. Email is the future magic-link login when cloud sync goes live.
+            Name appears on your shared catch and Personal Best report cards.
           </div>
           <GhostButton onClick={onEditAccount} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Edit</GhostButton>
-        </div>
-      </Card>
-      <Card style={{ marginBottom: 10 }}>
-        <SectionLabel style={{ marginBottom: 6 }}>Fishing waters</SectionLabel>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 14, color: T.ink, fontWeight: 600 }}>{jurisdiction?.name || 'Not set'}</div>
-          <GhostButton onClick={onChangeJurisdiction} style={{ padding: '6px 12px', fontSize: 12 }}>Change</GhostButton>
         </div>
       </Card>
       {/* Admin console entry — web-only, admin allowlist only. When

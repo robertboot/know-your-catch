@@ -43,6 +43,12 @@ fi
 echo "→ Re-syncing web bundle"
 npm run ios:sync >/dev/null
 
+# Re-generate the AppIcon + splash from resources/*.png so a stale
+# Assets.xcassets can't ship a wrong / default gray icon. The generator
+# is idempotent — safe to run every time.
+echo "→ Refreshing native assets from resources/"
+npm run ios:assets >/dev/null
+
 # Bump CFBundleVersion (build number) to one above whatever's in the
 # project. Marketing version stays at whatever package.json says.
 echo "→ Bumping build number"

@@ -7,13 +7,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "web:build": "KYC_BASE=/ KYC_ADMIN=true KYC_WEB=true vite build --outDir dist-web",
+    "web:preview": "vite preview --outDir dist-web",
     "preview": "vite preview",
     "validate-feeds": "node regulations/validate.mjs",
     "validate-photos": "node photos/validate.mjs",
     "ios:init": "cap add ios && npm run ios:sync",
     "ios:build": "KYC_BASE=./ KYC_ADMIN=false vite build",
     "ios:sync": "npm run ios:build && cap sync ios",
-    "ios:assets": "capacitor-assets generate --ios",
+    "ios:assets": "capacitor-assets generate --ios --assetPath resources",
     "ios:prepare": "bash scripts/ios-prepare.sh",
     "ios:ship": "bash scripts/ios-ship.sh",
     "ios:open": "cap open ios"
