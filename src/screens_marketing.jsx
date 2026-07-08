@@ -17,6 +17,7 @@ import { T } from './theme.js';
 
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
+const LOGO_HEADER     = `${import.meta.env.BASE_URL}brand/icon-horz.png`;
 
 const A = {
   // Big raster assets — real launch creative.
@@ -882,7 +883,7 @@ function Nav() {
   return (
     <nav className="rl-nav" aria-label="Primary">
       <a href="#top" style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 192, width: 'auto', display: 'block' }} />
+        <img src={LOGO_HEADER} alt="ReelIntel" style={{ height: 192, width: 'auto', display: 'block' }} />
       </a>
       <div className="rl-nav-links">
         {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
