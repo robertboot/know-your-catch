@@ -1,350 +1,427 @@
 /* reelintel.ai marketing landing page.
 
-   Rendered at / on the reelintel.ai web deploy (KYC_WEB=true,
-   see main.jsx). Public, no auth gate, no admin link. iOS bundle
-   is unaffected — this whole module is dead-code-eliminated when
-   KYC_WEB=false.
+   All UI cards, phone frames, dashboards, and chart widgets are
+   built as inline React + SVG components — nothing baked to raster.
+   Only real file assets:
+     public/marketing/hero-bg.svg          (dark ocean + rig)
+     public/marketing/app-store-badge.svg  (placeholder — swap for official)
+     public/marketing/google-play-badge.svg (placeholder — swap for official)
+     public/marketing/qr-code-placeholder.svg (placeholder — swap for real QR)
 
-   Layout mirrors the mockup provided in the build spec:
-     1. Nav header
-     2. Hero (headline + copy + CTAs + trust badges | phone mockup
-        + three floating cards)
-     3. Feature cards row (4 equal cards)
-     4. Insights section (copy | analytics visuals grid)
-     5. Share & Relive section
-     6. Download CTA block
-     7. Footer
-
-   Responsiveness lives in a single <style> block scoped to
-   .rl-* classes at the top of the component — that keeps CSS
-   next to the JSX without pulling in a framework. Media queries
-   collapse the two-column sections at 900px and stack finer
-   details at 640px. */
+   Rendered at / when KYC_WEB=true (see main.jsx). iOS bundle is
+   unaffected — this module is dead-code eliminated in the iOS build.
+   No TestFlight / beta copy anywhere — this is a real launch page. */
 
 import React, { useMemo } from 'react';
-import {
-  ArrowRight, Camera, ShieldCheck, BookOpen, TrendingUp, Share2, Trophy,
-  Users, Cloud, Fish, MapPin, Clock, BarChart2, Award,
-} from 'lucide-react';
 import { T } from './theme.js';
 
-const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
-const BRAND_LOGO      = `${import.meta.env.BASE_URL}brand/reelintel-brand.png`;
-
 const M = `${import.meta.env.BASE_URL}marketing/`;
+const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
+
 const A = {
-  heroBg:        `${M}underwater-hero-bg.svg`,
-  phoneMockup:   `${M}hero-phone-mockup.svg`,
-  recentCatch:   `${M}recent-catch-card.svg`,
-  topPattern:    `${M}top-pattern-card.svg`,
-  hotBiteWindow: `${M}hot-bite-window-card.svg`,
-  shareRelive:   `${M}share-relive-graphic.svg`,
-  appStore:      `${M}app-store-badge.svg`,
-  googlePlay:    `${M}google-play-badge.svg`,
-  qrCode:        `${M}qr-code-placeholder.svg`,
+  heroBg:     `${M}hero-bg.svg`,
+  appStore:   `${M}app-store-badge.svg`,
+  googlePlay: `${M}google-play-badge.svg`,
+  qrCode:     `${M}qr-code-placeholder.svg`,
 };
 
-/* Placeholder URLs — swap in real store URLs once live. Fine to
-   fall back to reelintel.ai when unset so the anchors always click. */
-const APP_STORE_URL   = 'https://apps.apple.com/app/reelintel/';   // TODO real ID once approved
-const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.reelintel.app'; // TODO real listing
+/* Placeholder URLs — swap once the store listings are live. */
+const APP_STORE_URL   = 'https://apps.apple.com/app/reelintel/';
+const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.reelintel.app';
 const SUPPORT_URL     = 'mailto:hello@reelintel.ai';
 
-// Style palette pulled from src/theme.js so brand color drift is
-// impossible; anything not in T is defined locally.
-const PALETTE = {
-  bg:         T.bgDeep,
-  bgAlt:      '#04182b',
-  card:       T.card,
-  cardAlt:    '#0f2f4e',
-  border:     T.cardEdge,
-  borderHi:   'rgba(25, 212, 242, 0.55)',
-  accent:     T.brass,          // cyan
-  accentDeep: T.brassDeep,
-  ink:        T.ink,
-  inkSoft:    T.inkSoft,
-  inkMute:    T.inkMute,
+const P = {
+  bg:        T.bgDeep,
+  bgAlt:     '#04182b',
+  card:      '#0B2740',
+  cardHi:    '#0e2f4e',
+  border:    'rgba(15, 94, 133, 0.35)',
+  borderHi:  'rgba(25, 212, 242, 0.55)',
+  accent:    T.brass,            // #19d4f2
+  accentDim: 'rgba(25,212,242,0.15)',
+  ink:       T.ink,
+  inkSoft:   T.inkSoft,
+  inkMute:   T.inkMute,
 };
 
 const NAV_ITEMS = [
-  { label: 'Features',     href: '#features'   },
-  { label: 'How It Works', href: '#how'        },
-  { label: 'Patterns',     href: '#insights'   },
-  { label: 'Download',     href: '#download'   },
-  { label: 'Blog',         href: '#blog'       },
-  { label: 'Support',      href: SUPPORT_URL   },
+  { label: 'Features',     href: '#features' },
+  { label: 'How It Works', href: '#how'      },
+  { label: 'Patterns',     href: '#insights' },
+  { label: 'Download',     href: '#download' },
+  { label: 'Blog',         href: '#blog'     },
+  { label: 'Support',      href: SUPPORT_URL },
 ];
 
-const FEATURES = [
-  { icon: BookOpen,   title: 'Log Every Catch',
-    body: 'Record species, size, depth, location, weather, gear, photos, and notes — all in seconds.' },
-  { icon: TrendingUp, title: 'Discover Patterns & Trends',
-    body: "See what's biting, where, and when — so you can fish with confidence, not guesswork." },
-  { icon: Trophy,     title: 'Personal Bests',
-    body: 'Save your PBs, see how you stack up, and celebrate every biggest-yet moment.' },
-  { icon: Share2,     title: 'Relive the Trip',
-    body: 'Share catches with friends and family, and relive your best days on the water together.' },
-];
+/* ============================================================
+   INLINE SVG ICONS
+   ============================================================ */
 
-const TRUST_BADGES = [
-  { icon: Cloud,       t1: 'Works Offline',   t2: 'Syncs Everywhere' },
-  { icon: ShieldCheck, t1: 'Private & Secure',t2: 'Your Data, Yours' },
-  { icon: Users,       t1: 'Built for Anglers',t2: 'By Anglers' },
-];
-
-/* --------- CSS block: media queries, hover, tokens ---------- */
-const CSS = `
-:root {
-  --rl-bg:        ${PALETTE.bg};
-  --rl-card:      ${PALETTE.card};
-  --rl-border:    ${PALETTE.border};
-  --rl-borderHi:  ${PALETTE.borderHi};
-  --rl-accent:    ${PALETTE.accent};
-  --rl-ink:       ${PALETTE.ink};
-  --rl-inkSoft:   ${PALETTE.inkSoft};
-  --rl-inkMute:   ${PALETTE.inkMute};
-}
-html, body, #root { background: var(--rl-bg); }
-body { margin: 0; }
-.rl-root {
-  background: var(--rl-bg); color: var(--rl-ink);
-  font-family: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-.rl-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
-
-/* Nav */
-.rl-nav {
-  display: flex; align-items: center; gap: 20px;
-  padding: 20px 24px; max-width: 1200px; margin: 0 auto;
-}
-.rl-nav-links { display: flex; gap: 22px; flex: 1; justify-content: center; }
-.rl-nav-links a {
-  color: var(--rl-inkSoft); text-decoration: none; font-size: 14px; font-weight: 500;
-  transition: color 160ms ease;
-}
-.rl-nav-links a:hover { color: var(--rl-accent); }
-@media (max-width: 900px) { .rl-nav-links { display: none; } }
-
-/* Buttons */
-.rl-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 14px 22px; border-radius: 12px; font-size: 14px; font-weight: 700;
-  letter-spacing: 0.6px; text-decoration: none; cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
-}
-.rl-btn-primary {
-  background: var(--rl-accent); color: #031B33; border: none;
-  box-shadow: 0 10px 30px rgba(25,212,242,0.28);
-}
-.rl-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 40px rgba(25,212,242,0.38); }
-.rl-btn-ghost {
-  background: transparent; color: var(--rl-accent);
-  border: 1.5px solid var(--rl-accent);
-}
-.rl-btn-ghost:hover { background: rgba(25,212,242,0.08); transform: translateY(-1px); }
-
-/* Hero */
-.rl-hero { position: relative; overflow: hidden; padding: 40px 0 90px; }
-.rl-hero-bg {
-  position: absolute; inset: 0; background: center/cover no-repeat;
-  background-image: url("${A.heroBg}"); z-index: 0;
-}
-.rl-hero-scrim {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(6,17,31,0.15) 0%, rgba(6,17,31,0.5) 40%, var(--rl-bg) 100%);
-  z-index: 1;
-}
-.rl-hero-inner {
-  position: relative; z-index: 2;
-  display: grid; grid-template-columns: 1.05fr 1fr; gap: 60px; align-items: center;
-  padding-top: 40px;
-}
-@media (max-width: 1024px) { .rl-hero-inner { grid-template-columns: 1fr; gap: 48px; } }
-
-.rl-eyebrow {
-  font-size: 12px; font-weight: 800; letter-spacing: 2.5px;
-  color: var(--rl-accent); text-transform: uppercase;
-}
-.rl-h1 {
-  font-size: 60px; font-weight: 900; line-height: 1.02; letter-spacing: -0.9px;
-  margin: 14px 0 22px; color: var(--rl-ink);
-}
-.rl-h1 span { color: var(--rl-accent); }
-@media (max-width: 900px) { .rl-h1 { font-size: 44px; } }
-@media (max-width: 500px) { .rl-h1 { font-size: 36px; } }
-
-.rl-lead {
-  font-size: 17px; line-height: 1.6; color: var(--rl-inkSoft);
-  max-width: 560px; margin: 0 0 30px;
-}
-.rl-cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 34px; }
-
-/* Trust badges */
-.rl-trust-row {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; max-width: 560px;
-}
-@media (max-width: 620px) { .rl-trust-row { grid-template-columns: 1fr; } }
-.rl-trust {
-  display: flex; align-items: flex-start; gap: 10px;
-}
-.rl-trust-lines strong { color: var(--rl-ink); font-size: 13px; font-weight: 700; display: block; }
-.rl-trust-lines span   { color: var(--rl-inkMute); font-size: 12px; }
-
-/* Hero visual */
-.rl-visual { position: relative; min-height: 620px; }
-@media (max-width: 1024px) { .rl-visual { min-height: 560px; } }
-@media (max-width: 500px)  { .rl-visual { min-height: 480px; } }
-.rl-phone {
-  position: absolute; left: 50%; top: 0; transform: translateX(-50%);
-  width: min(90%, 360px); filter: drop-shadow(0 40px 60px rgba(0,0,0,0.5));
-}
-.rl-float { position: absolute; }
-.rl-float-recent  { top: 60px;   left: -30px; width: 260px; }
-.rl-float-pattern { top: 300px;  right: -30px; width: 260px; }
-.rl-float-bite    { bottom: 30px; left: 40px;   width: 270px; }
-@media (max-width: 1024px) {
-  .rl-float-recent  { left: 0;   top: 40px; }
-  .rl-float-pattern { right: 0;  top: 260px; }
-  .rl-float-bite    { left: 0;   bottom: 0; }
-}
-@media (max-width: 640px) {
-  .rl-float-recent  { display: none; }
-  .rl-float-pattern { display: none; }
-  .rl-float-bite    { display: none; }
-}
-
-/* Section */
-.rl-section { padding: 90px 0; }
-.rl-section-alt { background: ${PALETTE.bgAlt}; }
-.rl-section-head {
-  text-align: center; max-width: 720px; margin: 0 auto 60px;
-}
-.rl-section-head .rl-eyebrow { display: block; margin-bottom: 12px; }
-.rl-h2 {
-  font-size: 42px; font-weight: 900; line-height: 1.08; letter-spacing: -0.5px;
-  color: var(--rl-ink); margin: 0 0 18px;
-}
-@media (max-width: 700px) { .rl-h2 { font-size: 32px; } }
-.rl-lead-2 { font-size: 16px; line-height: 1.65; color: var(--rl-inkSoft); }
-
-/* Feature cards row */
-.rl-features {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
-}
-@media (max-width: 1024px) { .rl-features { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px)  { .rl-features { grid-template-columns: 1fr; } }
-.rl-feature {
-  background: var(--rl-card); border: 1px solid var(--rl-border);
-  border-radius: 20px; padding: 26px 22px; transition: border-color 180ms ease, transform 180ms ease;
-}
-.rl-feature:hover { border-color: var(--rl-borderHi); transform: translateY(-3px); }
-.rl-feature-icon {
-  width: 46px; height: 46px; border-radius: 12px;
-  background: rgba(25,212,242,0.12); display: inline-flex; align-items: center; justify-content: center;
-  margin-bottom: 16px;
-}
-.rl-feature h3 { font-size: 18px; font-weight: 800; color: var(--rl-ink); margin: 0 0 8px; }
-.rl-feature p  { font-size: 14px; line-height: 1.6; color: var(--rl-inkSoft); margin: 0; }
-
-/* Insights split */
-.rl-split {
-  display: grid; grid-template-columns: 1fr 1.15fr; gap: 60px; align-items: center;
-}
-@media (max-width: 1024px) { .rl-split { grid-template-columns: 1fr; gap: 48px; } }
-.rl-insight-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
-}
-@media (max-width: 560px) { .rl-insight-grid { grid-template-columns: 1fr; } }
-.rl-insight {
-  background: var(--rl-card); border: 1px solid var(--rl-border);
-  border-radius: 18px; padding: 22px;
-}
-.rl-insight-title { font-size: 11px; font-weight: 800; letter-spacing: 1.6px; color: var(--rl-accent); }
-.rl-insight-main  { font-size: 22px; font-weight: 800; color: var(--rl-ink); margin: 6px 0 4px; }
-.rl-insight-sub   { font-size: 13px; color: var(--rl-inkMute); }
-
-/* Donut */
-.rl-donut { display: flex; align-items: center; gap: 14px; }
-.rl-donut svg { flex-shrink: 0; }
-.rl-donut ul { list-style: none; margin: 0; padding: 0; font-size: 12px; }
-.rl-donut li { color: var(--rl-inkSoft); display: flex; align-items: center; gap: 6px; padding: 2px 0; }
-.rl-donut li strong { color: var(--rl-ink); font-weight: 800; }
-.rl-donut li span { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-
-/* Bars */
-.rl-bars { display: flex; align-items: flex-end; gap: 6px; height: 90px; }
-.rl-bars div {
-  flex: 1; background: linear-gradient(180deg, var(--rl-accent), rgba(25,212,242,0.15));
-  border-radius: 4px 4px 0 0;
-}
-.rl-bar-labels { display: flex; gap: 6px; margin-top: 6px; font-size: 10px; color: var(--rl-inkMute); }
-.rl-bar-labels span { flex: 1; text-align: center; }
-
-/* Heat map */
-.rl-heat { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
-.rl-heat div { aspect-ratio: 1; border-radius: 3px; background: rgba(25,212,242,0.08); }
-
-/* Times list */
-.rl-times li {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 0; border-bottom: 1px solid var(--rl-border);
-  color: var(--rl-ink); font-size: 13px; font-weight: 600;
-}
-.rl-times li:last-child { border-bottom: none; }
-.rl-times li span { color: var(--rl-inkMute); font-weight: 400; margin-left: auto; font-size: 12px; }
-
-/* Share split */
-.rl-share { display: grid; grid-template-columns: 1.15fr 1fr; gap: 60px; align-items: center; }
-@media (max-width: 1024px) { .rl-share { grid-template-columns: 1fr; } }
-.rl-share-img { max-width: 100%; height: auto; display: block; }
-
-/* Download CTA block */
-.rl-cta-block {
-  text-align: center; padding: 70px 30px; border-radius: 30px;
-  background: radial-gradient(circle at 50% -20%, rgba(25,212,242,0.22), transparent 55%), var(--rl-card);
-  border: 1px solid var(--rl-borderHi);
-}
-.rl-store-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 26px; }
-.rl-store-row img { display: block; height: 56px; }
-.rl-qr {
-  width: 100px; height: 100px; border-radius: 12px; background: #fff; padding: 6px;
-  display: flex; align-items: center; justify-content: center;
-}
-.rl-qr img { height: 100%; width: 100%; }
-
-/* Footer */
-.rl-footer { padding: 40px 0 60px; border-top: 1px solid var(--rl-border); }
-.rl-footer-inner {
-  display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;
-}
-.rl-footer-links { display: flex; gap: 22px; flex-wrap: wrap; }
-.rl-footer-links a { color: var(--rl-inkMute); font-size: 13px; text-decoration: none; }
-.rl-footer-links a:hover { color: var(--rl-accent); }
-.rl-footer-legal { font-size: 12px; color: var(--rl-inkMute); }
-`;
-
-/* ---------- Sub-components ---------- */
-
-function TrustItem({ icon: Icon, t1, t2 }) {
+function FishIcon({ size = 22, color = P.accent }) {
   return (
-    <div className="rl-trust">
-      <div style={{ color: PALETTE.accent, marginTop: 2 }}>
-        <Icon size={22} strokeWidth={2} />
-      </div>
-      <div className="rl-trust-lines">
-        <strong>{t1}</strong>
-        <span>{t2}</span>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M2 12 c 3 -5 8 -6 12 -4 c 2 1 4 2 6 3 l 2 1 l -2 1 c -2 1 -4 2 -6 3 c -4 2 -9 1 -12 -4 z" fill={color} opacity="0.85"/>
+      <circle cx="18" cy="10" r="0.9" fill="#031B33"/>
+      <path d="M2 12 l -1 -3 l 2 0 z M 2 12 l -1 3 l 2 0 z" fill={color} opacity="0.65"/>
+      <path d="M14 9 c 1 1 1 5 0 6 z" fill="#031B33" opacity="0.35"/>
+    </svg>
+  );
+}
+
+function TrendIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 17 9 11 13 15 21 6"/>
+      <polyline points="15 6 21 6 21 12"/>
+    </svg>
+  );
+}
+
+function TrophyIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 4 h 10 v 5 a 5 5 0 0 1 -10 0 z"/>
+      <path d="M7 6 H 4 a 3 3 0 0 0 3 5"/>
+      <path d="M17 6 h 3 a 3 3 0 0 1 -3 5"/>
+      <path d="M10 14 h 4 v 3 h -4 z"/>
+      <path d="M8 20 h 8"/>
+      <path d="M12 17 v 3"/>
+    </svg>
+  );
+}
+
+function ShareIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="12" r="2.5"/>
+      <circle cx="18" cy="6" r="2.5"/>
+      <circle cx="18" cy="18" r="2.5"/>
+      <line x1="8.5" y1="10.5" x2="15.5" y2="7"/>
+      <line x1="8.5" y1="13.5" x2="15.5" y2="17"/>
+    </svg>
+  );
+}
+
+function ClockIcon({ size = 14, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9"/>
+      <polyline points="12 7 12 12 15.5 14"/>
+    </svg>
+  );
+}
+
+function ArrowRight({ size = 16, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <polyline points="14 6 20 12 14 18"/>
+    </svg>
+  );
+}
+
+function CloudIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 18 h 10 a 4 4 0 0 0 0 -8 a 5 5 0 0 0 -9 -1 a 4 4 0 0 0 -1 9 z"/>
+    </svg>
+  );
+}
+
+function ShieldIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 l 8 3 v 6 c 0 5 -3 8 -8 9 c -5 -1 -8 -4 -8 -9 v -6 z"/>
+      <polyline points="9 12 11.5 14.5 15.5 10"/>
+    </svg>
+  );
+}
+
+function UsersIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3"/>
+      <path d="M3 20 c 0 -3 3 -5 6 -5 s 6 2 6 5"/>
+      <circle cx="17" cy="9" r="2.5"/>
+      <path d="M15 15 c 3 0 6 2 6 5"/>
+    </svg>
+  );
+}
+
+function TextIcon({ size = 18, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6 a 3 3 0 0 1 3 -3 h 12 a 3 3 0 0 1 3 3 v 8 a 3 3 0 0 1 -3 3 h -8 l -5 4 v -4 h -1 a 2 2 0 0 1 -1 -2 z"/>
+    </svg>
+  );
+}
+
+function MailIcon({ size = 18, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <polyline points="3 7 12 13 21 7"/>
+    </svg>
+  );
+}
+
+function DotsIcon({ size = 18, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/>
+    </svg>
+  );
+}
+
+/* ============================================================
+   PHONE + IN-APP MAP (used in hero + share section)
+   ============================================================ */
+
+function PhoneFrame({ width = 340, children }) {
+  const height = Math.round(width * (740 / 340));
+  return (
+    <div style={{
+      position: 'relative', width, height,
+      borderRadius: 46, background: '#0a1a2c',
+      border: `1px solid ${P.borderHi}`,
+      boxShadow:
+        '0 30px 60px rgba(0,0,0,0.55), 0 0 0 2px rgba(0,0,0,0.6), inset 0 0 0 8px #0e1522, inset 0 0 40px rgba(25,212,242,0.05)',
+      overflow: 'hidden',
+    }}>
+      {/* screen */}
+      <div style={{
+        position: 'absolute', top: 12, left: 12, right: 12, bottom: 12,
+        borderRadius: 36, background: '#031b33', overflow: 'hidden',
+      }}>
+        {/* notch */}
+        <div style={{
+          position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+          width: 96, height: 26, background: '#000', borderRadius: 13, zIndex: 3,
+        }} />
+        {/* home indicator */}
+        <div style={{
+          position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+          width: 100, height: 4, background: '#fff', opacity: 0.4, borderRadius: 2, zIndex: 3,
+        }} />
+        {children}
       </div>
     </div>
   );
 }
 
+function AppMap() {
+  // Cyan glow location pins over a dark stylised map.
+  const pins = [
+    { x: 60,  y: 220, r: 22 },
+    { x: 130, y: 300, r: 26 },
+    { x: 200, y: 240, r: 18 },
+    { x: 240, y: 380, r: 22 },
+    { x: 90,  y: 430, r: 20 },
+  ];
+  return (
+    <svg viewBox="0 0 300 640" preserveAspectRatio="xMidYMid slice"
+         style={{ width: '100%', height: '100%', display: 'block' }}>
+      <defs>
+        <linearGradient id="m-sea" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#0e3a5a"/>
+          <stop offset="1" stopColor="#031b33"/>
+        </linearGradient>
+        <radialGradient id="m-pin" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0"  stopColor="#19d4f2" stopOpacity="0.85"/>
+          <stop offset="1"  stopColor="#19d4f2" stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="300" height="640" fill="url(#m-sea)"/>
+      {/* grid */}
+      <g stroke="#0f5e85" strokeOpacity="0.28">
+        {[80, 160, 240, 320, 400, 480, 560].map(y => (
+          <line key={y} x1="0" y1={y} x2="300" y2={y}/>
+        ))}
+        {[60, 120, 180, 240].map(x => (
+          <line key={x} x1={x} y1="0" x2={x} y2="640"/>
+        ))}
+      </g>
+      {/* coast */}
+      <path d="M0 460 Q 60 430 130 460 T 260 470 T 300 450 L 300 640 L 0 640 Z" fill="#082139" opacity="0.85"/>
+      <path d="M0 500 Q 60 480 130 500 T 260 510 T 300 495 L 300 640 L 0 640 Z" fill="#051a2d" opacity="0.9"/>
+      {/* pins */}
+      {pins.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r={p.r + 12} fill="url(#m-pin)"/>
+          <circle cx={p.x} cy={p.y} r="7" fill={P.accent}/>
+          <circle cx={p.x} cy={p.y} r="3" fill="#fff"/>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function PhoneApp() {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* map fills the frame */}
+      <AppMap />
+      {/* app header overlay */}
+      <div style={{
+        position: 'absolute', top: 44, left: 16, right: 16,
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <div style={{
+          background: 'rgba(3,27,51,0.55)', border: `1px solid ${P.borderHi}`,
+          padding: '4px 10px', borderRadius: 999, backdropFilter: 'blur(6px)',
+          fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: P.accent,
+        }}>YOUR MAP</div>
+        <div style={{
+          background: 'rgba(3,27,51,0.55)', border: `1px solid ${P.border}`,
+          padding: '4px 10px', borderRadius: 999, backdropFilter: 'blur(6px)',
+          fontSize: 11, color: P.inkSoft, fontWeight: 600,
+        }}>Last 30 days</div>
+      </div>
+
+      {/* bottom action card */}
+      <div style={{
+        position: 'absolute', left: 16, right: 16, bottom: 78,
+        background: 'rgba(11,39,64,0.85)', border: `1px solid ${P.borderHi}`,
+        borderRadius: 16, padding: '14px 14px',
+        backdropFilter: 'blur(10px)',
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: P.accent }}>NINE-MILE REEF</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: P.ink, marginTop: 3 }}>Red Snapper · 5 pins</div>
+        <div style={{ fontSize: 11, color: P.inkMute, marginTop: 2 }}>Peak bite window: 6:12 – 7:48 AM</div>
+      </div>
+
+      {/* bottom tab bar */}
+      <div style={{
+        position: 'absolute', left: 16, right: 16, bottom: 20,
+        background: 'rgba(11,39,64,0.9)', border: `1px solid ${P.border}`,
+        borderRadius: 20, padding: '10px 18px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        backdropFilter: 'blur(10px)',
+      }}>
+        {['Map', 'Log', 'Discover', 'Profile'].map((t, i) => (
+          <div key={t} style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+            color: i === 0 ? P.accent : P.inkMute,
+          }}>{t}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   FLOATING CARDS
+   ============================================================ */
+
+function FloatingCard({ children, style }) {
+  return (
+    <div style={{
+      background: 'rgba(11,39,64,0.82)', border: `1px solid ${P.borderHi}`,
+      borderRadius: 16, padding: '14px 16px',
+      backdropFilter: 'blur(14px)',
+      boxShadow: '0 24px 40px rgba(0,0,0,0.45)',
+      color: P.ink,
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function RecentCatchCard() {
+  return (
+    <FloatingCard style={{ width: 240 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10, background: P.accentDim,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <FishIcon size={22} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: P.accent }}>RECENT CATCH</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: P.ink }}>Gulf Snapper</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: P.inkSoft, lineHeight: 1.6 }}>
+        <div><strong style={{ color: P.ink }}>23 in · 6.2 lb</strong></div>
+        <div>Depth 82 ft · Water 78°F</div>
+        <div style={{ color: P.inkMute }}>Jun 24, 2026</div>
+      </div>
+    </FloatingCard>
+  );
+}
+
+function TopPatternCard() {
+  return (
+    <FloatingCard style={{ width: 260 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: P.accent }}>TOP PATTERN</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px' }}>
+        <FishIcon size={20} />
+        <div style={{ fontSize: 16, fontWeight: 800, color: P.ink }}>Red Snapper</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11 }}>
+        <div>
+          <div style={{ color: P.inkMute, letterSpacing: 0.8 }}>BEST MONTH</div>
+          <div style={{ color: P.ink, fontWeight: 700, fontSize: 13, marginTop: 1 }}>June</div>
+        </div>
+        <div>
+          <div style={{ color: P.inkMute, letterSpacing: 0.8 }}>BEST DEPTH</div>
+          <div style={{ color: P.ink, fontWeight: 700, fontSize: 13, marginTop: 1 }}>30 – 120 ft</div>
+        </div>
+        <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+          <div style={{ color: P.inkMute, letterSpacing: 0.8 }}>TOP LOCATION</div>
+          <div style={{ color: P.ink, fontWeight: 700, fontSize: 13, marginTop: 1 }}>Destin East · Nine-Mile Reef</div>
+        </div>
+      </div>
+    </FloatingCard>
+  );
+}
+
+function HotBiteWindowCard() {
+  const heights = [0.35, 0.55, 0.75, 1.0, 0.9, 0.65, 0.5, 0.4, 0.32, 0.42, 0.58, 0.72, 0.5];
+  return (
+    <FloatingCard style={{ width: 280 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: P.accent }}>HOT BITE WINDOW</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: P.ink, marginTop: 3 }}>6:00 – 9:00 AM</div>
+      <div style={{ fontSize: 11, color: P.inkMute, marginTop: 1 }}>Morning peak · last 42 catches</div>
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', gap: 4, height: 48, marginTop: 10,
+      }}>
+        {heights.map((h, i) => (
+          <div key={i} style={{
+            flex: 1,
+            height: `${Math.round(h * 100)}%`,
+            background: `linear-gradient(180deg, ${P.accent}, rgba(25,212,242,0.25))`,
+            borderRadius: 3,
+            opacity: 0.35 + h * 0.65,
+          }} />
+        ))}
+      </div>
+    </FloatingCard>
+  );
+}
+
+/* ============================================================
+   FEATURE CARDS
+   ============================================================ */
+
+const FEATURES = [
+  { icon: FishIcon,   title: 'Log Every Catch',
+    body: 'Record species, size, depth, location, weather, gear, photos, and notes in seconds.' },
+  { icon: TrendIcon,  title: 'Discover Patterns & Trends',
+    body: "See what's biting, where, and when — so you can fish with confidence, not guesswork." },
+  { icon: TrophyIcon, title: 'Personal Bests',
+    body: 'Save your PBs, see how you stack up, and celebrate every biggest-yet moment.' },
+  { icon: ShareIcon,  title: 'Relive the Trip',
+    body: 'Share catches with friends and family, and relive your best days on the water together.' },
+];
+
 function FeatureCard({ icon: Icon, title, body }) {
   return (
     <div className="rl-feature">
       <div className="rl-feature-icon">
-        <Icon size={22} color={PALETTE.accent} strokeWidth={2} />
+        <Icon size={22} />
       </div>
       <h3>{title}</h3>
       <p>{body}</p>
@@ -352,8 +429,11 @@ function FeatureCard({ icon: Icon, title, body }) {
   );
 }
 
-function DonutInsight() {
-  // Static donut — visual only. Segments matter proportionally.
+/* ============================================================
+   INSIGHTS WIDGETS
+   ============================================================ */
+
+function DonutChart() {
   const segments = [
     { color: '#19d4f2', pct: 34, label: 'Red Snapper' },
     { color: '#5ecdf2', pct: 22, label: 'King Mackerel' },
@@ -361,12 +441,12 @@ function DonutInsight() {
     { color: '#ffc857', pct: 12, label: 'Gag Grouper' },
     { color: '#8ca8c9', pct: 16, label: 'Other' },
   ];
-  const size = 96, r = 40, c = 2 * Math.PI * r;
+  const size = 100, r = 40, c = 2 * Math.PI * r;
   let acc = 0;
   return (
-    <div className="rl-donut">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#0f2f4e" strokeWidth="16"/>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#0e2f4e" strokeWidth="16"/>
         {segments.map((s, i) => {
           const off  = -c * (acc / 100);
           const dash = c * (s.pct / 100);
@@ -383,11 +463,12 @@ function DonutInsight() {
           return el;
         })}
       </svg>
-      <ul>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 12 }}>
         {segments.slice(0, 4).map((s, i) => (
-          <li key={i}>
-            <span style={{ background: s.color }} />
-            <strong>{s.label}</strong>
+          <li key={i} style={{ color: P.inkSoft, display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, display: 'inline-block' }} />
+            <span style={{ color: P.ink, fontWeight: 700 }}>{s.label}</span>
+            <span style={{ color: P.inkMute, marginLeft: 4 }}>{s.pct}%</span>
           </li>
         ))}
       </ul>
@@ -395,85 +476,375 @@ function DonutInsight() {
   );
 }
 
-function BarsInsight() {
-  // Monthly bars — 12 months.
-  const heights = [22, 30, 46, 62, 74, 90, 85, 78, 62, 44, 30, 24];
-  return (
-    <>
-      <div className="rl-bars">
-        {heights.map((h, i) => <div key={i} style={{ height: `${h}%` }} />)}
-      </div>
-      <div className="rl-bar-labels">
-        {['J','F','M','A','M','J','J','A','S','O','N','D'].map((m, i) => <span key={i}>{m}</span>)}
-      </div>
-    </>
-  );
-}
-
-function HeatInsight() {
-  // 8x5 = 40 cells. Simulated intensity clusters for a "hot spot" look.
-  const cells = useMemo(() => Array.from({ length: 40 }, (_, i) => {
-    const row = Math.floor(i / 8), col = i % 8;
-    // gaussian-ish blob around row 2, col 5
-    const d = Math.sqrt((row - 2) ** 2 + (col - 5) ** 2);
-    const v = Math.max(0, 0.9 - d * 0.22);
-    return v;
-  }), []);
-  return (
-    <div className="rl-heat">
-      {cells.map((v, i) => (
-        <div key={i} style={{ background: `rgba(25,212,242,${0.08 + v * 0.7})` }} />
-      ))}
-    </div>
-  );
-}
-
-function TimesInsight() {
+function BestTimesList() {
   const times = [
-    { window: '6:12 – 7:48 AM', tag: 'Peak'  },
-    { window: '11:04 AM – 12:20 PM', tag: 'Mid'   },
-    { window: '5:50 – 7:12 PM', tag: 'Evening' },
+    { window: '6:12 – 7:48 AM',      tag: 'Peak'    },
+    { window: '11:04 AM – 12:20 PM', tag: 'Mid'     },
+    { window: '5:50 – 7:12 PM',      tag: 'Evening' },
   ];
   return (
-    <ul className="rl-times" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
       {times.map((t, i) => (
-        <li key={i}>
-          <Clock size={14} color={PALETTE.accent} />
-          {t.window} <span>{t.tag}</span>
+        <li key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '9px 0', borderBottom: i < times.length - 1 ? `1px solid ${P.border}` : 'none',
+          color: P.ink, fontSize: 13, fontWeight: 600,
+        }}>
+          <ClockIcon size={14} />
+          <span>{t.window}</span>
+          <span style={{ color: P.inkMute, marginLeft: 'auto', fontSize: 11, fontWeight: 500 }}>{t.tag}</span>
         </li>
       ))}
     </ul>
   );
 }
 
-function PBInsight() {
+function CatchHeatmap() {
+  // Radial-gradient blobs over a dark rect — cyan hot, red hotter.
+  return (
+    <svg viewBox="0 0 200 120" style={{ width: '100%', height: 120, display: 'block', borderRadius: 10 }}>
+      <defs>
+        <radialGradient id="hot1" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ff6262" stopOpacity="0.75"/>
+          <stop offset="1" stopColor="#ff6262" stopOpacity="0"/>
+        </radialGradient>
+        <radialGradient id="hot2" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#19d4f2" stopOpacity="0.7"/>
+          <stop offset="1" stopColor="#19d4f2" stopOpacity="0"/>
+        </radialGradient>
+        <radialGradient id="hot3" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#5ecdf2" stopOpacity="0.55"/>
+          <stop offset="1" stopColor="#5ecdf2" stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="200" height="120" fill="#031b33"/>
+      {/* subtle coast */}
+      <path d="M0 90 Q 40 78 90 88 T 200 90 L 200 120 L 0 120 Z" fill="#08283f" opacity="0.9"/>
+      {/* grid */}
+      <g stroke="#0f5e85" strokeOpacity="0.15">
+        <line x1="0" y1="30" x2="200" y2="30"/>
+        <line x1="0" y1="60" x2="200" y2="60"/>
+        <line x1="50" y1="0" x2="50" y2="120"/>
+        <line x1="100" y1="0" x2="100" y2="120"/>
+        <line x1="150" y1="0" x2="150" y2="120"/>
+      </g>
+      {/* blobs */}
+      <ellipse cx="140" cy="45" rx="40" ry="30" fill="url(#hot1)"/>
+      <ellipse cx="60"  cy="60" rx="35" ry="26" fill="url(#hot2)"/>
+      <ellipse cx="105" cy="80" rx="30" ry="22" fill="url(#hot3)"/>
+      {/* pin markers */}
+      <circle cx="140" cy="45" r="3" fill={P.accent}/>
+      <circle cx="60"  cy="60" r="3" fill={P.accent}/>
+      <circle cx="105" cy="80" r="3" fill={P.accent}/>
+    </svg>
+  );
+}
+
+function SeasonalBars() {
+  const heights = [22, 30, 46, 62, 74, 90, 85, 78, 62, 44, 30, 24];
+  const months  = ['J','F','M','A','M','J','J','A','S','O','N','D'];
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-        <Award size={20} color={PALETTE.accent} />
-        <div style={{ fontSize: 12, letterSpacing: 1.4, color: PALETTE.inkMute, fontWeight: 700 }}>PERSONAL BEST</div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 90 }}>
+        {heights.map((h, i) => (
+          <div key={i} style={{
+            flex: 1, height: `${h}%`,
+            background: `linear-gradient(180deg, ${P.accent}, rgba(25,212,242,0.15))`,
+            borderRadius: '4px 4px 0 0',
+          }} />
+        ))}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: PALETTE.ink }}>Red Snapper</div>
-      <div style={{ fontSize: 15, color: PALETTE.inkSoft, marginTop: 2 }}>
-        29.5 in · <strong style={{ color: PALETTE.ink }}>11.4 lb</strong>
+      <div style={{ display: 'flex', gap: 5, marginTop: 6, fontSize: 10, color: P.inkMute }}>
+        {months.map((m, i) => <span key={i} style={{ flex: 1, textAlign: 'center' }}>{m}</span>)}
       </div>
-      <div style={{ fontSize: 12, color: PALETTE.inkMute, marginTop: 6 }}>Nine-Mile Reef · Jun 24, 2026</div>
     </>
   );
 }
 
-/* ---------- Sections ---------- */
+function PersonalBestMini() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 12, background: P.accentDim,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <TrophyIcon size={24} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, letterSpacing: 1.4, color: P.inkMute, fontWeight: 700 }}>PERSONAL BEST</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: P.ink }}>Red Snapper · 11.4 lb</div>
+        <div style={{ fontSize: 12, color: P.inkMute }}>29.5 in · Nine-Mile Reef · Jun 24</div>
+      </div>
+    </div>
+  );
+}
+
+function InsightTile({ title, children, wide }) {
+  return (
+    <div style={{
+      background: P.card, border: `1px solid ${P.border}`, borderRadius: 18,
+      padding: 20, gridColumn: wide ? '1 / -1' : 'auto',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: P.accent, marginBottom: 12 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+/* ============================================================
+   SHARE + RELIVE
+   ============================================================ */
+
+function SharedCatchPhone() {
+  // Compact phone frame showing a shared catch card (text-thread style).
+  return (
+    <PhoneFrame width={240}>
+      <div style={{ padding: '46px 14px 14px', height: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 11, color: P.inkMute, textAlign: 'center' }}>Dave · Family group</div>
+        {/* incoming bubble */}
+        <div style={{
+          alignSelf: 'flex-start', maxWidth: '80%',
+          background: '#0e2f4e', color: P.ink, padding: '8px 12px',
+          borderRadius: '14px 14px 14px 4px', fontSize: 12,
+        }}>Nice catch! What a day!</div>
+        {/* catch card bubble */}
+        <div style={{
+          alignSelf: 'flex-end', width: '92%',
+          background: '#0B2740', border: `1px solid ${P.borderHi}`,
+          borderRadius: '14px 14px 4px 14px', padding: 10, color: P.ink,
+        }}>
+          <div style={{
+            height: 76, borderRadius: 8,
+            background: 'linear-gradient(135deg, #0a2a44 0%, #08283f 60%, #06263f 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <FishIcon size={44} color={P.accent} />
+          </div>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: P.accent, marginTop: 8 }}>YOUR CATCH</div>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>Gulf Snapper</div>
+          <div style={{ fontSize: 11, color: P.inkSoft }}>24 in · 6.1 lb</div>
+          <div style={{ fontSize: 10, color: P.inkMute, marginTop: 2 }}>Nine-Mile Reef · today</div>
+        </div>
+        <div style={{
+          alignSelf: 'flex-start', maxWidth: '76%',
+          background: '#0e2f4e', color: P.ink, padding: '8px 12px',
+          borderRadius: '14px 14px 14px 4px', fontSize: 12,
+        }}>Send me the spot 👀</div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+/* ============================================================
+   RESPONSIVE CSS (media queries — inline styles can't do these)
+   ============================================================ */
+
+const CSS = `
+html, body, #root { background: ${P.bg}; }
+body { margin: 0; }
+.rl-root {
+  background: ${P.bg}; color: ${P.ink};
+  font-family: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.rl-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+/* Nav */
+.rl-nav {
+  display: flex; align-items: center; gap: 20px;
+  padding: 22px 24px; max-width: 1200px; margin: 0 auto;
+  position: relative; z-index: 5;
+}
+.rl-nav-links { display: flex; gap: 26px; flex: 1; justify-content: center; }
+.rl-nav-links a {
+  color: ${P.inkSoft}; text-decoration: none; font-size: 14px; font-weight: 500;
+  transition: color 160ms ease;
+}
+.rl-nav-links a:hover { color: ${P.accent}; }
+@media (max-width: 900px) { .rl-nav-links { display: none; } }
+
+/* Buttons */
+.rl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 22px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  letter-spacing: 0.5px; text-decoration: none; cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.rl-btn-primary {
+  background: ${P.accent}; color: #031B33; border: none;
+  box-shadow: 0 10px 30px rgba(25,212,242,0.30);
+}
+.rl-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 40px rgba(25,212,242,0.40); }
+.rl-btn-ghost {
+  background: transparent; color: ${P.accent};
+  border: 1.5px solid ${P.accent};
+}
+.rl-btn-ghost:hover { background: rgba(25,212,242,0.08); transform: translateY(-1px); }
+
+/* Hero */
+.rl-hero {
+  position: relative; overflow: hidden;
+  padding: 30px 0 100px;
+  min-height: 640px;
+}
+.rl-hero-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background: center/cover no-repeat url("${A.heroBg}");
+}
+.rl-hero-scrim {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(6,17,31,0.25) 0%, rgba(6,17,31,0.55) 40%, ${P.bg} 100%);
+}
+.rl-hero-inner {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: 1.05fr 1fr; gap: 60px; align-items: center;
+  padding-top: 40px;
+}
+@media (max-width: 1024px) { .rl-hero-inner { grid-template-columns: 1fr; gap: 40px; } }
+
+.rl-eyebrow {
+  font-size: 12px; font-weight: 800; letter-spacing: 2.5px;
+  color: ${P.accent}; text-transform: uppercase;
+}
+.rl-h1 {
+  font-size: 60px; font-weight: 900; line-height: 1.03; letter-spacing: -0.9px;
+  margin: 14px 0 22px; color: ${P.ink};
+}
+.rl-h1 span { color: ${P.accent}; }
+@media (max-width: 900px) { .rl-h1 { font-size: 44px; } }
+@media (max-width: 500px) { .rl-h1 { font-size: 36px; } }
+
+.rl-lead {
+  font-size: 17px; line-height: 1.6; color: ${P.inkSoft};
+  max-width: 560px; margin: 0 0 30px;
+}
+.rl-cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 34px; }
+
+/* Trust badges */
+.rl-trust-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; max-width: 560px;
+}
+@media (max-width: 620px) { .rl-trust-row { grid-template-columns: 1fr; } }
+.rl-trust { display: flex; align-items: flex-start; gap: 10px; }
+.rl-trust strong { color: ${P.ink}; font-size: 13px; font-weight: 700; display: block; }
+.rl-trust span   { color: ${P.inkMute}; font-size: 12px; }
+
+/* Hero visual + floating cards positions */
+.rl-visual { position: relative; min-height: 640px; display: flex; align-items: center; justify-content: center; }
+.rl-phone-slot { position: relative; }
+.rl-floaters { position: absolute; inset: 0; pointer-events: none; }
+.rl-floaters > * { position: absolute; pointer-events: auto; }
+.rl-float-recent  { top: 20px;   left: -50px; }
+.rl-float-pattern { top: 240px;  right: -70px; }
+.rl-float-bite    { bottom: 30px; left: 20px;  }
+
+@media (max-width: 1024px) {
+  .rl-visual { min-height: unset; padding: 20px 0 60px; }
+  .rl-floaters { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; padding: 0 4px; }
+  .rl-floaters > * { position: static !important; width: auto !important; }
+  .rl-float-recent, .rl-float-pattern, .rl-float-bite { top: auto; left: auto; right: auto; bottom: auto; }
+}
+@media (max-width: 720px) {
+  .rl-floaters { grid-template-columns: 1fr; }
+}
+
+/* Section */
+.rl-section { padding: 90px 0; }
+.rl-section-alt { background: ${P.bgAlt}; }
+.rl-section-head { max-width: 720px; margin: 0 auto 56px; text-align: center; }
+.rl-section-head .rl-eyebrow { display: block; margin-bottom: 12px; }
+.rl-h2 {
+  font-size: 42px; font-weight: 900; line-height: 1.08; letter-spacing: -0.5px;
+  color: ${P.ink}; margin: 0 0 18px;
+}
+@media (max-width: 700px) { .rl-h2 { font-size: 32px; } }
+.rl-lead-2 { font-size: 16px; line-height: 1.65; color: ${P.inkSoft}; }
+
+/* Feature cards row */
+.rl-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+@media (max-width: 1024px) { .rl-features { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .rl-features { grid-template-columns: 1fr; } }
+.rl-feature {
+  background: ${P.card}; border: 1px solid ${P.border};
+  border-radius: 20px; padding: 26px 22px; transition: border-color 180ms ease, transform 180ms ease;
+}
+.rl-feature:hover { border-color: ${P.borderHi}; transform: translateY(-3px); }
+.rl-feature-icon {
+  width: 46px; height: 46px; border-radius: 12px;
+  background: ${P.accentDim}; display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 16px;
+}
+.rl-feature h3 { font-size: 18px; font-weight: 800; color: ${P.ink}; margin: 0 0 8px; }
+.rl-feature p  { font-size: 14px; line-height: 1.6; color: ${P.inkSoft}; margin: 0; }
+
+/* Insights split */
+.rl-split { display: grid; grid-template-columns: 1fr 1.15fr; gap: 60px; align-items: center; }
+@media (max-width: 1024px) { .rl-split { grid-template-columns: 1fr; gap: 48px; } }
+.rl-insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (max-width: 560px) { .rl-insight-grid { grid-template-columns: 1fr; } }
+
+/* Share split */
+.rl-share { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; align-items: center; }
+@media (max-width: 1024px) { .rl-share { grid-template-columns: 1fr; text-align: center; } }
+@media (max-width: 1024px) { .rl-share > * { justify-self: center; } }
+
+/* Download CTA */
+.rl-cta-block {
+  text-align: center; padding: 70px 30px; border-radius: 30px;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(25,212,242,0.22), transparent 55%),
+    ${P.card};
+  border: 1px solid ${P.borderHi};
+}
+.rl-store-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 26px; }
+.rl-store-row img { display: block; height: 58px; }
+.rl-qr {
+  width: 92px; height: 92px; border-radius: 12px; background: #fff; padding: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+.rl-qr img { height: 100%; width: 100%; }
+
+/* Footer */
+.rl-footer { padding: 40px 0 60px; border-top: 1px solid ${P.border}; }
+.rl-footer-inner {
+  display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;
+}
+.rl-footer-links { display: flex; gap: 22px; flex-wrap: wrap; }
+.rl-footer-links a { color: ${P.inkMute}; font-size: 13px; text-decoration: none; }
+.rl-footer-links a:hover { color: ${P.accent}; }
+.rl-footer-legal { font-size: 12px; color: ${P.inkMute}; }
+`;
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+
+function TrustItem({ icon: Icon, t1, t2 }) {
+  return (
+    <div className="rl-trust">
+      <div style={{ color: P.accent, marginTop: 2 }}><Icon size={22} /></div>
+      <div>
+        <strong>{t1}</strong>
+        <span>{t2}</span>
+      </div>
+    </div>
+  );
+}
+
+const TRUST_BADGES = [
+  { icon: CloudIcon,  t1: 'Works Offline',    t2: 'Syncs Everywhere' },
+  { icon: ShieldIcon, t1: 'Private & Secure', t2: 'Your Data, Yours' },
+  { icon: UsersIcon,  t1: 'Built for Anglers',t2: 'By Anglers' },
+];
 
 function Nav() {
   return (
     <nav className="rl-nav" aria-label="Primary">
       <a href="#top" style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 32, width: 'auto', display: 'block' }} />
+        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 64, width: 'auto', display: 'block' }} />
       </a>
       <div className="rl-nav-links">
-        {NAV_ITEMS.map(n => (
-          <a key={n.label} href={n.href}>{n.label}</a>
-        ))}
+        {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
       </div>
       <a className="rl-btn rl-btn-primary" href="#download" style={{ padding: '10px 16px', fontSize: 13 }}>
         Download the App <ArrowRight size={14} />
@@ -512,11 +883,16 @@ function Hero() {
             {TRUST_BADGES.map((b, i) => <TrustItem key={i} {...b} />)}
           </div>
         </div>
-        <div className="rl-visual" aria-hidden="true">
-          <img className="rl-phone" src={A.phoneMockup} alt="" />
-          <img className="rl-float rl-float-recent"  src={A.recentCatch}   alt="" />
-          <img className="rl-float rl-float-pattern" src={A.topPattern}    alt="" />
-          <img className="rl-float rl-float-bite"    src={A.hotBiteWindow} alt="" />
+
+        <div className="rl-visual">
+          <div className="rl-phone-slot">
+            <PhoneFrame width={340}><PhoneApp /></PhoneFrame>
+            <div className="rl-floaters">
+              <div className="rl-float-recent"><RecentCatchCard /></div>
+              <div className="rl-float-pattern"><TopPatternCard /></div>
+              <div className="rl-float-bite"><HotBiteWindowCard /></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -565,25 +941,11 @@ function Insights() {
           </div>
         </div>
         <div className="rl-insight-grid">
-          <div className="rl-insight">
-            <div className="rl-insight-title">SPECIES BREAKDOWN</div>
-            <div style={{ marginTop: 12 }}><DonutInsight /></div>
-          </div>
-          <div className="rl-insight">
-            <div className="rl-insight-title">BEST TIMES</div>
-            <div style={{ marginTop: 8 }}><TimesInsight /></div>
-          </div>
-          <div className="rl-insight">
-            <div className="rl-insight-title">YOUR CATCH MAP</div>
-            <div style={{ marginTop: 12 }}><HeatInsight /></div>
-          </div>
-          <div className="rl-insight">
-            <div className="rl-insight-title">SEASONAL SUCCESS</div>
-            <div style={{ marginTop: 12 }}><BarsInsight /></div>
-          </div>
-          <div className="rl-insight" style={{ gridColumn: '1 / -1' }}>
-            <PBInsight />
-          </div>
+          <InsightTile title="SPECIES BREAKDOWN"><DonutChart /></InsightTile>
+          <InsightTile title="BEST TIMES"><BestTimesList /></InsightTile>
+          <InsightTile title="YOUR CATCH MAP"><CatchHeatmap /></InsightTile>
+          <InsightTile title="SEASONAL SUCCESS"><SeasonalBars /></InsightTile>
+          <InsightTile title="PERSONAL BESTS" wide><PersonalBestMini /></InsightTile>
         </div>
       </div>
     </section>
@@ -593,37 +955,76 @@ function Insights() {
 function ShareRelive() {
   return (
     <section className="rl-section" id="share">
-      <div className="rl-container rl-share">
-        <img className="rl-share-img" src={A.shareRelive} alt="" aria-hidden="true" />
-        <div>
-          <div className="rl-eyebrow">Share &amp; Relive</div>
-          <h2 className="rl-h2" style={{ marginTop: 12 }}>Share &amp; Relive with Friends.</h2>
+      <div className="rl-container">
+        <div className="rl-section-head">
+          <span className="rl-eyebrow">Share &amp; Relive</span>
+          <h2 className="rl-h2">Share &amp; Relive with Friends.</h2>
           <p className="rl-lead-2">
             Send catches by text or email. Relive the laughs, the big ones, and every
             unforgettable moment together — the whole day, in one tap.
           </p>
-          <ul style={{ listStyle: 'none', margin: '24px 0 0', padding: 0, display: 'grid', gap: 12 }}>
-            {[
-              ['Text a catch', 'Share the photo, species, size, and location — instantly.'],
-              ['Email a report',  'A polished catch card with weather, gear, and notes.'],
-              ['Family archive',  'Every kid, every buddy trip — all in one shared album.'],
-            ].map(([t, s], i) => (
-              <li key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                  background: 'rgba(25,212,242,0.14)',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  color: PALETTE.accent,
+        </div>
+
+        <div className="rl-share">
+          <div>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 14, textAlign: 'left' }}>
+              {[
+                ['Text a catch',    'Share the photo, species, size, and location — instantly.'],
+                ['Email a report',  'A polished catch card with weather, gear, and notes.'],
+                ['Family archive',  'Every kid, every buddy trip — all in one shared album.'],
+              ].map(([t, s], i) => (
+                <li key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                    background: P.accentDim,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <ShareIcon size={18} />
+                  </div>
+                  <div>
+                    <div style={{ color: P.ink, fontWeight: 700 }}>{t}</div>
+                    <div style={{ color: P.inkSoft, fontSize: 13.5, marginTop: 2 }}>{s}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div><SharedCatchPhone /></div>
+
+          <div>
+            <div style={{ color: P.inkMute, fontSize: 12, letterSpacing: 1.4, fontWeight: 700, marginBottom: 12 }}>
+              SHARE IN SECONDS VIA
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
+              {[
+                [TextIcon, 'Text'],
+                [MailIcon, 'Email'],
+                [DotsIcon, 'More'],
+              ].map(([Icon, label], i) => (
+                <div key={i} style={{
+                  background: P.card, border: `1px solid ${P.border}`,
+                  borderRadius: 12, padding: '12px 14px', flex: 1, minWidth: 0,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                 }}>
-                  <Share2 size={16} />
+                  <Icon size={18} />
+                  <div style={{ fontSize: 11, color: P.inkSoft, fontWeight: 700 }}>{label}</div>
                 </div>
-                <div>
-                  <div style={{ color: PALETTE.ink, fontWeight: 700 }}>{t}</div>
-                  <div style={{ color: PALETTE.inkSoft, fontSize: 13.5, marginTop: 2 }}>{s}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <a href={APP_STORE_URL} target="_blank" rel="noreferrer" aria-label="Download on the App Store">
+                <img src={A.appStore} alt="Download on the App Store" style={{ height: 50, display: 'block' }} />
+              </a>
+              <a href={GOOGLE_PLAY_URL} target="_blank" rel="noreferrer" aria-label="Get it on Google Play">
+                <img src={A.googlePlay} alt="Get it on Google Play" style={{ height: 50, display: 'block' }} />
+              </a>
+              <div className="rl-qr" style={{ width: 82, height: 82 }}>
+                <img src={A.qrCode} alt="" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -649,7 +1050,7 @@ function DownloadCTA() {
             <a href={GOOGLE_PLAY_URL} target="_blank" rel="noreferrer" aria-label="Get it on Google Play">
               <img src={A.googlePlay} alt="Get it on Google Play" />
             </a>
-            <div className="rl-qr" aria-label="Scan QR code to download">
+            <div className="rl-qr">
               <img src={A.qrCode} alt="" />
             </div>
           </div>
@@ -663,26 +1064,30 @@ function Footer() {
   return (
     <footer className="rl-footer">
       <div className="rl-container rl-footer-inner">
-        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 28, width: 'auto' }} />
+        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 40, width: 'auto' }} />
         <div className="rl-footer-links">
           {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
         </div>
         <div className="rl-footer-legal">
           © {new Date().getFullYear()} ReelIntel, LLC. All rights reserved.
-          {' · '}<a href="/privacy" style={{ color: PALETTE.inkMute }}>Privacy Policy</a>
-          {' · '}<a href="/terms"   style={{ color: PALETTE.inkMute }}>Terms of Use</a>
+          {' · '}<a href="/privacy" style={{ color: P.inkMute }}>Privacy Policy</a>
+          {' · '}<a href="/terms"   style={{ color: P.inkMute }}>Terms of Use</a>
         </div>
       </div>
     </footer>
   );
 }
 
-/* ---------- Root ---------- */
+/* ============================================================
+   ROOT
+   ============================================================ */
 
 export function MarketingLanding() {
+  // useMemo — small perf, but the CSS string never changes.
+  const cssRef = useMemo(() => CSS, []);
   return (
     <div className="rl-root">
-      <style>{CSS}</style>
+      <style>{cssRef}</style>
       <Nav />
       <Hero />
       <Features />
