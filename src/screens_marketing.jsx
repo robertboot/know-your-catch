@@ -842,11 +842,18 @@ body { margin: 0; }
    Backgrounds are <img>s absolutely positioned so loading="lazy"
    works (CSS background-image would eager-fetch on every visit). */
 .rl-story-section { padding: 30px 0 90px; background: ${P.bg}; }
-.rl-story-list { display: flex; flex-direction: column; gap: 16px; }
+/* 2×2 grid on desktop. Each block is narrower than the full-width
+   vertical stack was, so the alternating side-fade doesn't earn its
+   keep — one darker uniform scrim keeps every headline legible. */
+.rl-story-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
 .rl-story {
   position: relative; overflow: hidden;
   border-radius: 20px; border: 1px solid ${P.border};
-  height: 320px;
+  height: 280px;
 }
 .rl-story-img {
   position: absolute; inset: 0;
@@ -855,56 +862,39 @@ body { margin: 0; }
 }
 .rl-story-scrim {
   position: absolute; inset: 0; z-index: 1;
-  background: linear-gradient(90deg,
-    rgba(3,10,25,0.85) 0%,
-    rgba(3,10,25,0.55) 45%,
-    rgba(3,10,25,0.15) 75%,
-    rgba(3,10,25,0) 100%);
+  background: linear-gradient(180deg,
+    rgba(3,10,25,0.45) 0%,
+    rgba(3,10,25,0.72) 55%,
+    rgba(3,10,25,0.86) 100%);
 }
 .rl-story-inner {
   position: relative; z-index: 2;
-  height: 100%; display: flex; align-items: center;
-  padding: 28px clamp(24px, 5vw, 56px);
+  height: 100%; display: flex; align-items: flex-end;
+  padding: 24px 26px;
 }
-.rl-story-copy { max-width: 460px; }
+.rl-story-copy { max-width: 100%; }
 .rl-story-copy h2 {
-  font-size: 24px; font-weight: 900; line-height: 1.15; letter-spacing: -0.3px;
-  color: ${P.ink}; margin: 8px 0 10px;
+  font-size: 22px; font-weight: 900; line-height: 1.15; letter-spacing: -0.3px;
+  color: ${P.ink}; margin: 8px 0 8px;
 }
 .rl-story-copy p {
-  font-size: 14px; line-height: 1.6; color: ${P.inkSoft}; margin: 0;
+  font-size: 13.5px; line-height: 1.55; color: ${P.inkSoft}; margin: 0;
 }
-/* Alternate side per block on desktop. Odd = image right, copy left;
-   even = image left, copy right (scrim flipped so text stays lit). */
-.rl-story.side-right .rl-story-scrim {
-  background: linear-gradient(270deg,
-    rgba(3,10,25,0.85) 0%,
-    rgba(3,10,25,0.55) 45%,
-    rgba(3,10,25,0.15) 75%,
-    rgba(3,10,25,0) 100%);
-}
-.rl-story.side-right .rl-story-inner { justify-content: flex-end; }
-.rl-story.side-right .rl-story-copy { text-align: left; }
 
-@media (max-width: 1024px) {
-  .rl-story { height: 260px; border-radius: 18px; }
-  .rl-story-inner { padding: 22px clamp(22px, 4vw, 40px); }
-  .rl-story-copy h2 { font-size: 21px; }
+@media (max-width: 900px) {
+  /* Tablet portrait — keep 2 columns but shrink slightly. */
+  .rl-story { height: 240px; border-radius: 18px; }
+  .rl-story-inner { padding: 20px 22px; }
+  .rl-story-copy h2 { font-size: 19px; }
+  .rl-story-copy p { font-size: 13px; }
 }
 @media (max-width: 640px) {
-  .rl-story { height: 220px; border-radius: 16px; }
+  /* Phone — single column stack, tighter. */
+  .rl-story-list { grid-template-columns: 1fr; gap: 12px; }
+  .rl-story { height: 200px; border-radius: 16px; }
   .rl-story-inner { padding: 18px 20px; }
-  .rl-story-copy { max-width: none; }
   .rl-story-copy h2 { font-size: 18px; }
-  .rl-story-copy p { font-size: 13px; line-height: 1.55; }
-  /* Uniform dark scrim on mobile so text is legible over any part
-     of the underlying image — full-width layouts don't have room for
-     the desktop side-fade. */
-  .rl-story-scrim,
-  .rl-story.side-right .rl-story-scrim {
-    background: rgba(3,10,25,0.75);
-  }
-  .rl-story.side-right .rl-story-inner { justify-content: flex-start; }
+  .rl-story-copy p { font-size: 13px; line-height: 1.5; }
 }
 `;
 
@@ -1047,7 +1037,7 @@ function IntelligencePlatform() {
         </div>
         <div className="rl-story-list">
           {STORY_BLOCKS.map((b, i) => (
-            <article key={i} className={`rl-story${i % 2 === 1 ? ' side-right' : ''}`}>
+            <article key={i} className="rl-story">
               <img
                 className="rl-story-img"
                 src={A[b.img]}
