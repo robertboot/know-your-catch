@@ -13,17 +13,20 @@ export function DebugOverlay() {
   useEffect(() => subscribeDlog(() => setEntries(getDlog())), []);
 
   const latest = entries[entries.length - 1];
+  // Collapsed: sits above the notch. Total height = safe-area + ~44px
+  // of visible text region (two lines of 11px monospace at 1.4 line-
+  // height fit comfortably). Dropping the fixed maxHeight — previous
+  // build clipped the text under the notch on iPhones.
   const collapsedBar = {
     position: 'fixed', top: 0, left: 0, right: 0,
     zIndex: 9999,
     background: '#000',
     color: '#00ff88',
     fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-    fontSize: 10, lineHeight: 1.35,
-    padding: '4px 8px',
-    paddingTop: 'calc(env(safe-area-inset-top) + 4px)',
-    minHeight: 60, maxHeight: 60,
-    overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+    fontSize: 11, lineHeight: 1.4,
+    padding: '6px 10px 8px',
+    paddingTop: 'calc(env(safe-area-inset-top) + 6px)',
+    overflow: 'hidden',
     borderBottom: '1px solid #00ff88',
     cursor: 'pointer', touchAction: 'manipulation',
   };
@@ -52,8 +55,13 @@ export function DebugOverlay() {
   if (!expanded) {
     return (
       <div style={collapsedBar} onClick={() => setExpanded(true)}>
-        <div style={{ fontWeight: 800 }}>▸ DEBUG {entries.length ? `(${entries.length})` : ''}</div>
-        <div style={{ opacity: 0.85 }}>
+        <div style={{ fontWeight: 800, whiteSpace: 'nowrap' }}>
+          ▸ DEBUG {entries.length ? `(${entries.length})` : ''} — tap to expand
+        </div>
+        <div style={{
+          opacity: 0.9,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
           {latest ? `${latest.t}  ${latest.msg}` : 'waiting for events…'}
         </div>
       </div>
