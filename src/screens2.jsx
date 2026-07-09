@@ -3,6 +3,7 @@ import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
   SlidersHorizontal, Sparkles, ShieldCheck, ShieldAlert, ShieldQuestion,
+  MapPin as MapPinIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -1882,10 +1883,40 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
         </Card>
       ) : (
         <>
-          {/* List / Map toggle + Filter toggle */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <button onClick={() => setView('list')} style={{ flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'list' ? T.brass : T.parchmentDeep, color: view === 'list' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'list' ? T.brass : T.cardEdge}` }}>List</button>
-            <button onClick={() => setView('map')} style={{ flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: view === 'map' ? T.brass : T.parchmentDeep, color: view === 'map' ? T.oceanDeep : T.inkSoft, border: `1.5px solid ${view === 'map' ? T.brass : T.cardEdge}` }}>Map</button>
+          {/* List / Map toggle + Filter toggle. Toggle is a raised
+              segmented control so anglers can find Map at a glance —
+              previous 12px flat pills got lost against the surround. */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button
+              onClick={() => setView('list')}
+              aria-pressed={view === 'list'}
+              style={{
+                flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
+                fontSize: 14, fontWeight: 800, letterSpacing: 0.8,
+                background: view === 'list' ? T.brass : T.parchmentDeep,
+                color: view === 'list' ? T.oceanDeep : T.parchment,
+                border: `2px solid ${view === 'list' ? T.brass : T.cardEdge}`,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: view === 'list' ? '0 4px 14px rgba(25,212,242,0.25)' : 'none',
+              }}
+            >
+              <BookOpen size={16} /> LIST
+            </button>
+            <button
+              onClick={() => setView('map')}
+              aria-pressed={view === 'map'}
+              style={{
+                flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
+                fontSize: 14, fontWeight: 800, letterSpacing: 0.8,
+                background: view === 'map' ? T.brass : T.parchmentDeep,
+                color: view === 'map' ? T.oceanDeep : T.parchment,
+                border: `2px solid ${view === 'map' ? T.brass : T.cardEdge}`,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: view === 'map' ? '0 4px 14px rgba(25,212,242,0.25)' : 'none',
+              }}
+            >
+              <MapPinIcon size={16} /> MAP
+            </button>
             <button
               onClick={() => setFiltersOpen(o => !o)}
               aria-label={filtersOpen ? 'Hide filters' : 'Show filters'}
@@ -2144,11 +2175,13 @@ function CatchMapView({ items, onView }) {
     const located = items.filter(c => c.lat != null && c.lon != null);
     for (const c of located) {
       const s = speciesById(c.speciesId);
-      // Map pin uses the thumbnail (URL) — works for both legacy
-      // string photos and new {thumb, src} entries.
-      const pinUrl = photoThumbUrl(c.photo);
+      // Pin uses the SPECIES photo so anglers see what's caught where
+      // at a glance. Falls back to the catch's own thumbnail (legacy
+      // + user-photo case), then a plain dot if neither exists.
+      const spPhoto = s ? speciesPhoto(s.id) : null;
+      const pinUrl = spPhoto?.url || photoThumbUrl(c.photo);
       const icon = pinUrl
-        ? L.divIcon({ html: `<img class="kyc-pin-img" src="${pinUrl}">`, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
+        ? L.divIcon({ html: `<img class="kyc-pin-img" src="${pinUrl}">`, className: '', iconSize: [34, 34], iconAnchor: [17, 17] })
         : L.divIcon({ html: `<div class="kyc-pin"></div>`, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
       const when = new Date(c.dateIso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const m = L.marker([c.lat, c.lon], { icon }).addTo(markersRef.current);
