@@ -11,12 +11,45 @@
 import { createClient } from '@supabase/supabase-js';
 import { dlog } from './debug-log.js';
 
-export const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL || '';
+const RAW_SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL || '';
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+/* Sanitize the URL so a mistyped env var can't brick the whole flow.
+   The client library expects the bare project URL, e.g.
+     https://<ref>.supabase.co
+   Common mistakes we auto-fix:
+     - trailing slash: https://<ref>.supabase.co/
+     - full REST path appended: https://<ref>.supabase.co/rest/v1/
+     - any path at all: https://<ref>.supabase.co/anything
+   If nothing looks recognizable but we have an anon key, derive the
+   URL from the ref claim inside the anon key's JWT payload — that
+   claim is authoritative and can't drift. */
+function sanitizeSupabaseUrl(raw, anonKey) {
+  const m = /^https:\/\/[a-z0-9-]+\.supabase\.co/i.exec(raw || '');
+  if (m) return m[0];
+  // Fallback: try to derive from the anon key JWT (both legacy JWT
+  // format and modern sb_publishable_ format encode the project ref
+  // differently — only the legacy JWT has it in payload).
+  if (anonKey && anonKey.includes('.')) {
+    try {
+      const payload = anonKey.split('.')[1];
+      const padded = payload + '='.repeat((4 - (payload.length % 4)) % 4);
+      const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+      const claims = JSON.parse(atob(b64));
+      if (claims?.ref) return `https://${claims.ref}.supabase.co`;
+    } catch {}
+  }
+  return raw;
+}
+
+export const SUPABASE_URL = sanitizeSupabaseUrl(RAW_SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Log at module load so the debug overlay picks up whether the env
 // vars actually reached the bundle. Show only the URL suffix — enough
 // to distinguish projects, safe to show. Anon key is yes/no.
+if (RAW_SUPABASE_URL && RAW_SUPABASE_URL !== SUPABASE_URL) {
+  dlog(`[supabase] URL sanitized: raw=…${RAW_SUPABASE_URL.slice(-24)} clean=…${SUPABASE_URL.slice(-24)}`);
+}
 dlog(`[supabase] url=${SUPABASE_URL ? '…' + SUPABASE_URL.slice(-16) : 'MISSING'} anonKey=${SUPABASE_ANON_KEY ? 'yes' : 'MISSING'}`);
 
 let _client = null;
