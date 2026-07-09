@@ -3,7 +3,7 @@ import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, I
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
-import { photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
+import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl } from './photos-store.js';
 
 /* ============================================================
    STATUS PILL — colorblind-safe via shape + color
@@ -801,6 +801,24 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
   const prev = () => setIdx(i => (i - 1 + total) % total);
   const next = () => setIdx(i => (i + 1) % total);
 
+  // Primary + fallback URL for the current slide. Same pattern as
+  // PhotoImg in screens2.jsx: capacitor:// file URLs baked at save
+  // time can go stale between installs; the inline thumb never does.
+  const current = list[idx];
+  const primary = photoDisplayUrl(current) || current;
+  const [imgSrc, setImgSrc] = useState(primary);
+  const fellBackRef = useRef(false);
+  useEffect(() => {
+    setImgSrc(primary);
+    fellBackRef.current = false;
+  }, [primary]);
+  const onImgError = () => {
+    if (fellBackRef.current) return;
+    fellBackRef.current = true;
+    const thumb = photoThumbUrl(current);
+    if (thumb && thumb !== imgSrc) setImgSrc(thumb);
+  };
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose && onClose();
@@ -848,11 +866,12 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
       }}
     >
       <img
-        src={photoDisplayUrl(list[idx]) || list[idx]}
+        src={imgSrc}
         alt={alt || ''}
         onClick={(e) => e.stopPropagation()}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
+        onError={onImgError}
         style={{
           maxWidth: '100%',
           maxHeight: (caption || hasMany) ? '78vh' : '90vh',
