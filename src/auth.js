@@ -18,11 +18,20 @@
 import { client } from './supabase-client.js';
 import { dlog } from './debug-log.js';
 
-/* Where password-reset (and email-confirm) links land. Fixed to the
-   web deploy — no iOS deep-link involved. Even for anglers on iOS,
-   Safari opens reelintel.ai/reset-password, they set the new password,
-   and switch back to the app to sign in. */
-const RESET_REDIRECT = 'https://reelintel.ai/reset-password';
+/* Where password-reset (and email-confirm) links land. On web
+   (reelintel.ai OR www.reelintel.ai OR any Vercel preview) we
+   derive from the current origin so the redirect always matches
+   what Supabase expects. On iOS (Capacitor WebView, origin
+   capacitor://localhost) we fall back to the production apex —
+   Safari on the phone opens the link, so the origin the user
+   sees is reelintel.ai regardless. */
+const RESET_REDIRECT = (() => {
+  if (typeof window === 'undefined') return 'https://reelintel.ai/reset-password';
+  const o = window.location.origin;
+  // Capacitor / native — always go to the web deploy.
+  if (o.startsWith('capacitor://') || o.startsWith('file://')) return 'https://reelintel.ai/reset-password';
+  return `${o}/reset-password`;
+})();
 
 let _lastSession = null;
 const listeners = new Set();
