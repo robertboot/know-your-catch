@@ -423,33 +423,6 @@ function HotBiteWindowCard() {
 }
 
 /* ============================================================
-   FEATURE CARDS
-   ============================================================ */
-
-const FEATURES = [
-  { icon: FishIcon,   title: 'Log Every Catch',
-    body: 'Record species, size, depth, location, weather, gear, photos, and notes in seconds.' },
-  { icon: TrendIcon,  title: 'Discover Patterns & Trends',
-    body: "See what's biting, where, and when — so you can fish with confidence, not guesswork." },
-  { icon: TrophyIcon, title: 'Personal Bests',
-    body: 'Save your PBs, see how you stack up, and celebrate every biggest-yet moment.' },
-  { icon: ShareIcon,  title: 'Relive the Trip',
-    body: 'Share catches with friends and family, and relive your best days on the water together.' },
-];
-
-function FeatureCard({ icon: Icon, title, body }) {
-  return (
-    <div className="rl-feature">
-      <div className="rl-feature-icon">
-        <Icon size={22} />
-      </div>
-      <h3>{title}</h3>
-      <p>{body}</p>
-    </div>
-  );
-}
-
-/* ============================================================
    INSIGHTS WIDGETS
    ============================================================ */
 
@@ -869,11 +842,11 @@ body { margin: 0; }
    Backgrounds are <img>s absolutely positioned so loading="lazy"
    works (CSS background-image would eager-fetch on every visit). */
 .rl-story-section { padding: 30px 0 90px; background: ${P.bg}; }
-.rl-story-list { display: flex; flex-direction: column; gap: 20px; }
+.rl-story-list { display: flex; flex-direction: column; gap: 16px; }
 .rl-story {
   position: relative; overflow: hidden;
-  border-radius: 24px; border: 1px solid ${P.border};
-  height: 520px;
+  border-radius: 20px; border: 1px solid ${P.border};
+  height: 320px;
 }
 .rl-story-img {
   position: absolute; inset: 0;
@@ -891,15 +864,15 @@ body { margin: 0; }
 .rl-story-inner {
   position: relative; z-index: 2;
   height: 100%; display: flex; align-items: center;
-  padding: 0 clamp(28px, 6vw, 72px);
+  padding: 28px clamp(24px, 5vw, 56px);
 }
-.rl-story-copy { max-width: 520px; }
+.rl-story-copy { max-width: 460px; }
 .rl-story-copy h2 {
-  font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -0.4px;
-  color: ${P.ink}; margin: 12px 0 14px;
+  font-size: 24px; font-weight: 900; line-height: 1.15; letter-spacing: -0.3px;
+  color: ${P.ink}; margin: 8px 0 10px;
 }
 .rl-story-copy p {
-  font-size: 15px; line-height: 1.65; color: ${P.inkSoft}; margin: 0;
+  font-size: 14px; line-height: 1.6; color: ${P.inkSoft}; margin: 0;
 }
 /* Alternate side per block on desktop. Odd = image right, copy left;
    even = image left, copy right (scrim flipped so text stays lit). */
@@ -914,14 +887,16 @@ body { margin: 0; }
 .rl-story.side-right .rl-story-copy { text-align: left; }
 
 @media (max-width: 1024px) {
-  .rl-story { height: 380px; border-radius: 20px; }
-  .rl-story-copy h2 { font-size: 26px; }
+  .rl-story { height: 260px; border-radius: 18px; }
+  .rl-story-inner { padding: 22px clamp(22px, 4vw, 40px); }
+  .rl-story-copy h2 { font-size: 21px; }
 }
 @media (max-width: 640px) {
-  .rl-story { height: 320px; border-radius: 18px; }
-  .rl-story-inner { padding: 0 22px; }
-  .rl-story-copy h2 { font-size: 22px; }
-  .rl-story-copy p { font-size: 14px; }
+  .rl-story { height: 220px; border-radius: 16px; }
+  .rl-story-inner { padding: 18px 20px; }
+  .rl-story-copy { max-width: none; }
+  .rl-story-copy h2 { font-size: 18px; }
+  .rl-story-copy p { font-size: 13px; line-height: 1.55; }
   /* Uniform dark scrim on mobile so text is legible over any part
      of the underlying image — full-width layouts don't have room for
      the desktop side-fade. */
@@ -1024,27 +999,7 @@ function Hero() {
   );
 }
 
-function Features() {
-  return (
-    <section className="rl-section" id="features">
-      <div className="rl-container">
-        <div className="rl-section-head">
-          <span className="rl-eyebrow">Everything you need on the water</span>
-          <h2 className="rl-h2">A personal fishing intelligence platform.</h2>
-          <p className="rl-lead-2">
-            Log catches, spot patterns, save your bests, and share every unforgettable moment —
-            all in one app built to keep you on the bite.
-          </p>
-        </div>
-        <div className="rl-features">
-          {FEATURES.map((f, i) => <FeatureCard key={i} {...f} />)}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* Four full-width story blocks — sits between Features and Insights.
+/* Four full-width story blocks — sits between Hero and Insights.
    Renders lazy-loaded background <img>s (not CSS background-image) so
    Lighthouse counts them for LCP correctly and image budgets track. */
 const STORY_BLOCKS = [
@@ -1080,13 +1035,14 @@ const STORY_BLOCKS = [
 
 function IntelligencePlatform() {
   return (
-    <section className="rl-section rl-story-section" id="platform">
+    <section className="rl-section rl-story-section" id="features">
       <div className="rl-container">
         <div className="rl-section-head">
-          <span className="rl-eyebrow">The platform</span>
-          <h2 className="rl-h2">A Personal Fishing Intelligence Platform.</h2>
+          <span className="rl-eyebrow">Everything you need on the water</span>
+          <h2 className="rl-h2">A personal fishing intelligence platform.</h2>
           <p className="rl-lead-2">
-            Not just a logbook — a growing map of what works, where, and when, built from your own days on the water.
+            Log catches, spot patterns, save your bests, and share every unforgettable moment —
+            all in one app built to keep you on the bite.
           </p>
         </div>
         <div className="rl-story-list">
@@ -1296,7 +1252,6 @@ export function MarketingLanding() {
       <style>{cssRef}</style>
       <Nav />
       <Hero />
-      <Features />
       <IntelligencePlatform />
       <Insights />
       <ShareRelive />
