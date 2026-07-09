@@ -12,7 +12,7 @@ import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
-import { subscribe as subscribeAuth, sendMagicLink } from './auth.js';
+import { subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword } from './auth.js';
 import {
   pullAll as cloudPullAll,
   syncChanges as cloudSyncChanges,
@@ -234,10 +234,10 @@ export default function App() {
     dlog(`[App] session state: ${session ? 'signed in as ' + session.user?.email : 'signed out'}`);
   }, [session]);
 
-  // Splash login modal state — the same SignInModal we use from
-  // Settings. Both Sign in and Create account funnel here; the
-  // distinction is copy only.
+  // Splash auth modal state — Sign in and Create account both open
+  // the same modal; splashInitialMode picks which tab starts active.
   const [splashSignInOpen, setSplashSignInOpen] = useState(false);
+  const [splashInitialMode, setSplashInitialMode] = useState('signin');
 
   const [saveError, setSaveError] = useState(null); // 'quota' | 'other' | null
 
@@ -317,21 +317,33 @@ export default function App() {
           showLogin={showLogin}
           onContinue={() => loaded && session && setShowSplash(false)}
           onSignIn={() => {
-            dlog('[App] splash Sign in handler ran → opening SignInModal');
+            dlog('[App] splash Sign in tapped → mode=signin');
+            setSplashInitialMode('signin');
             setSplashSignInOpen(true);
           }}
           onCreateAccount={() => {
-            dlog('[App] splash Create account handler ran → opening SignInModal');
+            dlog('[App] splash Create account tapped → mode=signup');
+            setSplashInitialMode('signup');
             setSplashSignInOpen(true);
           }}
         />
         {splashSignInOpen && (
           <SignInModal
             initialEmail={state.anglerEmail || ''}
+            initialMode={splashInitialMode}
             onClose={() => setSplashSignInOpen(false)}
-            onSendLink={async ({ email }) => {
-              dlog(`[App] splash onSendLink wrapper email=${email}`);
-              const res = await sendMagicLink({ email });
+            onSignIn={async ({ email, password }) => {
+              const res = await signInWithPassword({ email, password });
+              if (res?.ok) update({ anglerEmail: email });
+              return res;
+            }}
+            onSignUp={async ({ email, password }) => {
+              const res = await signUp({ email, password });
+              if (res?.ok) update({ anglerEmail: email });
+              return res;
+            }}
+            onResetPassword={async ({ email }) => {
+              const res = await resetPassword({ email });
               if (res?.ok) update({ anglerEmail: email });
               return res;
             }}
@@ -371,13 +383,24 @@ export default function App() {
           }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, marginBottom: 10 }}>Sign in</div>
             <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 16px' }}>
-              Enter your email — we'll send a link.
+              Enter your email and password.
             </p>
             <SignInModal
               initialEmail={state.anglerEmail || ''}
+              initialMode="signin"
               onClose={() => {}}
-              onSendLink={async ({ email }) => {
-                const res = await sendMagicLink({ email });
+              onSignIn={async ({ email, password }) => {
+                const res = await signInWithPassword({ email, password });
+                if (res?.ok) update({ anglerEmail: email });
+                return res;
+              }}
+              onSignUp={async ({ email, password }) => {
+                const res = await signUp({ email, password });
+                if (res?.ok) update({ anglerEmail: email });
+                return res;
+              }}
+              onResetPassword={async ({ email }) => {
+                const res = await resetPassword({ email });
                 if (res?.ok) update({ anglerEmail: email });
                 return res;
               }}

@@ -404,125 +404,217 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
    button that runs a 60s cooldown so we can't spam Supabase's OTP
    endpoint.
    ============================================================ */
-export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
+/* Email + password auth modal. Four modes:
+     signin  — email/password → onSignIn
+     signup  — email/password/confirm → onSignUp
+     forgot  — email → onResetPassword → advances to 'sent'
+     sent    — post-reset "check your email" panel
+
+   Kept the export name SignInModal for callsite stability. */
+export function SignInModal({
+  initialEmail = '',
+  initialMode = 'signin',
+  onClose,
+  onSignIn,
+  onSignUp,
+  onResetPassword,
+}) {
+  const [mode, setMode] = useState(initialMode);           // signin | signup | forgot | sent
+  const [postSignup, setPostSignup] = useState(false);     // needs-confirmation panel after signUp
+
   const [email, setEmail] = useState(initialEmail || '');
-  const [phase, setPhase] = useState('input'); // 'input' | 'sent'
+  const [password, setPassword] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [cooldown, setCooldown] = useState(0); // seconds remaining
-  const timerRef = useRef(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  // Mount log so we can see the modal actually enter the tree on
-  // Sign in tap. Also log every phase transition so the debug
-  // overlay shows the state machine advancing.
-  useEffect(() => { dlog('[SignInModal] mounted'); return () => dlog('[SignInModal] unmounted'); }, []);
-  useEffect(() => { dlog(`[SignInModal] phase=${phase}`); }, [phase]);
+  useEffect(() => { dlog('[AuthModal] mounted'); return () => dlog('[AuthModal] unmounted'); }, []);
+  useEffect(() => { dlog(`[AuthModal] mode=${mode}`); }, [mode]);
 
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    timerRef.current = setTimeout(() => setCooldown(c => c - 1), 1000);
-    return () => clearTimeout(timerRef.current);
-  }, [cooldown]);
+  const validate = () => {
+    const errs = {};
+    const trimmed = (email || '').trim();
+    if (!trimmed || !trimmed.includes('@')) errs.email = 'Enter a valid email.';
+    if (mode !== 'forgot') {
+      if (!password || password.length < 8) errs.password = 'At least 8 characters.';
+    }
+    if (mode === 'signup') {
+      if (password !== confirmPw) errs.confirmPw = 'Passwords do not match.';
+    }
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
-  const send = async () => {
-    dlog(`[SignInModal] send tapped email=${email}`);
+  const submit = async () => {
+    if (busy) return;
+    if (!validate()) return;
     setBusy(true); setError('');
-    let res;
     try {
-      res = await onSendLink({ email });
+      if (mode === 'signin') {
+        dlog(`[AuthModal] submit signin email=${email}`);
+        const res = await onSignIn({ email, password });
+        dlog(`[AuthModal] signin returned ok=${!!res?.ok} error=${res?.error || ''}`);
+        if (!res?.ok) { setError(res?.error || 'Sign-in failed.'); setBusy(false); return; }
+        // Session lands via subscribe → App session-gate closes the modal.
+        setBusy(false);
+        onClose?.();
+      } else if (mode === 'signup') {
+        dlog(`[AuthModal] submit signup email=${email}`);
+        const res = await onSignUp({ email, password });
+        dlog(`[AuthModal] signup returned ok=${!!res?.ok} needsConfirmation=${!!res?.needsConfirmation}`);
+        if (!res?.ok) { setError(res?.error || 'Sign-up failed.'); setBusy(false); return; }
+        setBusy(false);
+        if (res.needsConfirmation) {
+          setPostSignup(true);
+        } else {
+          onClose?.();
+        }
+      } else if (mode === 'forgot') {
+        dlog(`[AuthModal] submit forgot email=${email}`);
+        const res = await onResetPassword({ email });
+        dlog(`[AuthModal] forgot returned ok=${!!res?.ok} error=${res?.error || ''}`);
+        setBusy(false);
+        if (!res?.ok) { setError(res?.error || 'Could not send reset link.'); return; }
+        setMode('sent');
+      }
     } catch (e) {
-      dlog(`[SignInModal] onSendLink THREW: ${e?.message || String(e)}`);
-      // Bulletproof error surface: even if the modal state is broken,
-      // alert() cannot fail to show. Diagnostic-only until auth ships.
-      // eslint-disable-next-line no-alert
-      alert('Sign-in threw: ' + (e?.message || String(e)));
+      dlog(`[AuthModal] submit THREW: ${e?.message || String(e)}`);
       setBusy(false);
       setError(e?.message || String(e));
-      return;
     }
-    setBusy(false);
-    dlog(`[SignInModal] onSendLink returned ok=${!!res?.ok} error=${res?.error || ''}`);
-    if (!res?.ok) {
-      // eslint-disable-next-line no-alert
-      alert('Sign-in error: ' + (res?.error || 'unknown'));
-      setError(res?.error || 'Send failed');
-      return;
-    }
-    setPhase('sent');
-    setCooldown(60);
   };
 
-  const resend = async () => {
-    if (cooldown > 0 || busy) return;
-    dlog(`[SignInModal] resend tapped email=${email}`);
-    setBusy(true); setError('');
-    let res;
-    try {
-      res = await onSendLink({ email });
-    } catch (e) {
-      dlog(`[SignInModal] resend THREW: ${e?.message || String(e)}`);
-      setBusy(false); setError(e?.message || String(e));
-      return;
-    }
-    setBusy(false);
-    if (!res?.ok) { setError(res?.error || 'Send failed'); return; }
-    setCooldown(60);
+  const switchMode = (next) => {
+    setError(''); setFieldErrors({}); setMode(next);
   };
+
+  const title =
+    mode === 'signin' ? 'Sign in' :
+    mode === 'signup' ? (postSignup ? 'Check your email' : 'Create account') :
+    mode === 'forgot' ? 'Reset password' :
+    /* sent */          'Check your email';
+
+  const inputWithErr = (err) => ({
+    ...inputStyle,
+    borderColor: err ? T.closed : (inputStyle.border || undefined),
+  });
 
   return (
     // z-index 300 — must render above the splash screen (zIndex 200).
-    // The default overlayStyle has zIndex 100 which puts the modal
-    // BEHIND the splash, so the user sees nothing when Sign in fires.
     <div style={{ ...overlayStyle, zIndex: 300 }}>
       <div style={modalStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <H1 size={20}>{phase === 'input' ? 'Sign in' : 'Check your email'}</H1>
+          <H1 size={20}>{title}</H1>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkMute, padding: 4 }}>
             <X size={20} />
           </button>
         </div>
 
-        {phase === 'input' ? (
+        {/* post-signup: confirmation-required panel */}
+        {postSignup && (
           <>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 12px' }}>
-              We'll email a link. Tap it on this device to sign in — no password required.
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
+              We sent a confirmation email to <strong style={{ color: T.ink }}>{email}</strong>.
+              Open it on any device and tap the link to activate your account.
             </p>
+            <p style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
+              After confirming, come back here and sign in with your email and password.
+            </p>
+            <PrimaryButton onClick={onClose}>Close</PrimaryButton>
+          </>
+        )}
+
+        {/* reset-sent panel */}
+        {!postSignup && mode === 'sent' && (
+          <>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
+              We sent a reset link to <strong style={{ color: T.ink }}>{email}</strong>.
+            </p>
+            <p style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
+              Open it on any device — Safari on your phone works — set a new password, then come back here to sign in.
+            </p>
+            <PrimaryButton onClick={onClose}>Close</PrimaryButton>
+          </>
+        )}
+
+        {/* signin / signup / forgot form */}
+        {!postSignup && mode !== 'sent' && (
+          <>
             <SectionLabel style={{ marginBottom: 6 }}>Email</SectionLabel>
             <input
               type="email"
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && email) send(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
               placeholder="you@example.com"
               autoComplete="email"
-              style={inputStyle}
+              style={inputWithErr(fieldErrors.email)}
             />
-            <div style={{ marginTop: 14 }}>
-              <PrimaryButton onClick={send} disabled={busy || !email}>
-                {busy ? 'Sending…' : 'Send magic link'}
+            {fieldErrors.email && <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{fieldErrors.email}</div>}
+
+            {mode !== 'forgot' && (
+              <>
+                <SectionLabel style={{ marginTop: 12, marginBottom: 6 }}>Password</SectionLabel>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                  placeholder={mode === 'signup' ? 'At least 8 characters' : ''}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  style={inputWithErr(fieldErrors.password)}
+                />
+                {fieldErrors.password && <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{fieldErrors.password}</div>}
+              </>
+            )}
+
+            {mode === 'signup' && (
+              <>
+                <SectionLabel style={{ marginTop: 12, marginBottom: 6 }}>Confirm password</SectionLabel>
+                <input
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                  autoComplete="new-password"
+                  style={inputWithErr(fieldErrors.confirmPw)}
+                />
+                {fieldErrors.confirmPw && <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{fieldErrors.confirmPw}</div>}
+              </>
+            )}
+
+            <div style={{ marginTop: 16 }}>
+              <PrimaryButton onClick={submit} disabled={busy}>
+                {busy ? 'Working…'
+                  : mode === 'signin' ? 'Sign in'
+                  : mode === 'signup' ? 'Create account'
+                  : /* forgot */        'Send reset link'}
               </PrimaryButton>
             </div>
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
-              We sent a link to <strong style={{ color: T.ink }}>{email}</strong>.
-            </p>
-            <p style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
-              Tap the link in Mail on this device. Delivery usually takes a few seconds; check spam if it doesn't arrive within a minute.
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <GhostButton onClick={onClose} style={{ flex: 1 }}>Close</GhostButton>
-              <GhostButton onClick={resend} disabled={cooldown > 0 || busy} style={{ flex: 1 }}>
-                {cooldown > 0 ? `Resend in ${cooldown}s` : (busy ? 'Sending…' : 'Resend link')}
-              </GhostButton>
+
+            {/* mode-switch links */}
+            <div style={{ marginTop: 14, display: 'flex', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              {mode === 'signin' && (
+                <>
+                  <button onClick={() => switchMode('forgot')} style={linkBtnStyle}>Forgot password?</button>
+                  <button onClick={() => switchMode('signup')} style={linkBtnStyle}>Create account</button>
+                </>
+              )}
+              {mode === 'signup' && (
+                <button onClick={() => switchMode('signin')} style={linkBtnStyle}>Have an account? Sign in</button>
+              )}
+              {mode === 'forgot' && (
+                <button onClick={() => switchMode('signin')} style={linkBtnStyle}>Back to sign in</button>
+              )}
             </div>
           </>
         )}
 
         {error && (
-          <div role="alert" style={{ marginTop: 10, fontSize: 12, color: T.closed, lineHeight: 1.45 }}>
+          <div role="alert" style={{ marginTop: 12, fontSize: 12, color: T.closed, lineHeight: 1.45 }}>
             {error}
           </div>
         )}
@@ -530,6 +622,12 @@ export function SignInModal({ initialEmail = '', onClose, onSendLink }) {
     </div>
   );
 }
+
+const linkBtnStyle = {
+  background: 'transparent', border: 'none', color: T.brass,
+  fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '4px 2px',
+  textDecoration: 'underline',
+};
 
 export function KeepConfirmModal({ species, onClose }) {
   return (

@@ -12,8 +12,9 @@
    unaffected — this module is dead-code eliminated in the iOS build.
    No TestFlight / beta copy anywhere — this is a real launch page. */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
+import { updatePassword, subscribe as subscribeAuth } from './auth.js';
 
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
@@ -1157,3 +1158,114 @@ export function MarketingLanding() {
     </div>
   );
 }
+
+/* ============================================================
+   /reset-password — web-only page
+   ============================================================
+   Landed on by password-reset emails from Supabase. The link URL
+   includes a recovery access token in the fragment. Supabase's
+   detectSessionInUrl:true (set in supabase-client.js) auto-parses
+   it and lands a temporary "recovery" session — sufficient to
+   call updateUser({ password }). Once updated, the user goes back
+   to the app and signs in with the new password. */
+export function ResetPasswordPage() {
+  const [password, setPassword]     = useState('');
+  const [confirm, setConfirm]       = useState('');
+  const [busy, setBusy]             = useState(false);
+  const [error, setError]           = useState('');
+  const [ready, setReady]           = useState(false); // recovery session present?
+  const [done, setDone]             = useState(false);
+
+  // Watch for the recovery session to land. Supabase parses the URL
+  // fragment on client() creation; onAuthStateChange fires PASSWORD_RECOVERY.
+  useEffect(() => {
+    const off = subscribeAuth((sess) => {
+      if (sess) setReady(true);
+    });
+    // Fallback: even without a session (e.g. user visited the URL
+    // directly), let them still submit — Supabase will 401 and we
+    // show the error. Better than a permanent spinner.
+    const t = setTimeout(() => setReady(true), 1200);
+    return () => { off(); clearTimeout(t); };
+  }, []);
+
+  const submit = async () => {
+    setError('');
+    if (!password || password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (password !== confirm)             { setError('Passwords do not match.'); return; }
+    setBusy(true);
+    const res = await updatePassword({ password });
+    setBusy(false);
+    if (!res.ok) { setError(res.error || 'Could not update password.'); return; }
+    setDone(true);
+  };
+
+  const wrap = {
+    minHeight: '100vh', background: T.bgDeep, color: T.parchment,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    fontFamily: '-apple-system, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif',
+  };
+  const card = {
+    background: '#0B2740', border: `1px solid ${'rgba(15, 94, 133, 0.35)'}`,
+    borderRadius: 16, padding: '28px 24px', maxWidth: 420, width: '100%',
+  };
+  const input = {
+    width: '100%', padding: '10px 12px', borderRadius: 8,
+    background: '#0e2f4e', border: `1px solid ${'rgba(15, 94, 133, 0.35)'}`,
+    color: T.ink, fontSize: 15, marginTop: 4, boxSizing: 'border-box',
+  };
+  const label = { fontSize: 11, letterSpacing: 1.4, color: T.brass, fontWeight: 800, marginTop: 14, display: 'block' };
+  const btn = {
+    marginTop: 18, width: '100%', padding: '12px 16px', borderRadius: 10,
+    background: T.brass, color: '#031B33', border: 'none', fontWeight: 800,
+    fontSize: 14, cursor: 'pointer', letterSpacing: 0.5,
+  };
+
+  return (
+    <div style={wrap}>
+      <div style={card}>
+        {done ? (
+          <>
+            <h1 style={{ fontSize: 22, margin: '0 0 10px' }}>Password updated</h1>
+            <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
+              You can now open the ReelIntel app and sign in with your new password.
+            </p>
+            <a href="/" style={{ ...btn, display: 'inline-block', textAlign: 'center', textDecoration: 'none', marginTop: 20 }}>
+              Go to home
+            </a>
+          </>
+        ) : (
+          <>
+            <h1 style={{ fontSize: 22, margin: '0 0 6px' }}>Set a new password</h1>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: 0 }}>
+              Enter a new password below. After saving, sign in from the ReelIntel app.
+            </p>
+            {!ready && (
+              <div style={{ fontSize: 12, color: T.inkMute, marginTop: 12 }}>Loading recovery session…</div>
+            )}
+
+            <label style={label}>NEW PASSWORD</label>
+            <input type="password" value={password}
+                   onChange={(e) => setPassword(e.target.value)}
+                   placeholder="At least 8 characters"
+                   autoComplete="new-password" style={input} />
+            <label style={label}>CONFIRM PASSWORD</label>
+            <input type="password" value={confirm}
+                   onChange={(e) => setConfirm(e.target.value)}
+                   onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                   autoComplete="new-password" style={input} />
+            {error && (
+              <div role="alert" style={{ marginTop: 12, fontSize: 12, color: '#FF4D4D', lineHeight: 1.45 }}>
+                {error}
+              </div>
+            )}
+            <button onClick={submit} disabled={busy || !ready} style={{ ...btn, opacity: busy ? 0.6 : 1 }}>
+              {busy ? 'Updating…' : 'Update password'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+

@@ -1,26 +1,28 @@
-/* Auth — Supabase magic-link email flow.
+/* Auth — Supabase email + password.
 
    Flow:
-     1. User enters email → sendMagicLink({ email }) → supabase sends an
-        OTP email whose link is `reelintel://auth?code=...` (the
-        emailRedirectTo we hand supabase-js).
-     2. User taps the link in Mail on the same device. iOS resolves the
-        reelintel:// scheme and hands the URL to our app.
-     3. Capacitor App plugin's appUrlOpen listener fires. handleDeepLink
-        parses the URL and calls supabase.auth.exchangeCodeForSession
-        which lands a session server-side and locally.
-     4. Any subscriber (SettingsScreen, sync layer) sees the session flip.
+     Sign in:  signInWithPassword → session lands → subscribers fire.
+     Sign up:  signUp → if Supabase's Confirm Email is OFF (build-22
+               default) the session lands immediately; if ON, we get
+               needsConfirmation=true and the caller shows "check your
+               email to confirm."
+     Reset:    resetPassword → email arrives → user opens the link →
+               Supabase parses a recovery session into the URL fragment
+               of https://reelintel.ai/reset-password → detectSessionInUrl
+               picks it up → ResetPasswordPage calls updatePassword.
 
-   Sign in with Apple was tried in an earlier build and produced
-   AuthenticationServices error 1000 on-device (likely OAuth allow-list
-   drift + presentation-context nuance). Magic link is simpler because
-   it uses the system Mail app + a plain deep-link — no
-   ASWebAuthenticationSession, no OAuth handshake surface. */
-import { Capacitor } from '@capacitor/core';
+   Magic-link was tried in earlier builds and never worked reliably on
+   device (some combination of email delivery, URL-scheme registration,
+   deep-link handler timing, and Supabase redirect allow-list). This
+   flow has zero exotic pieces — it's just a POST and back. */
 import { client } from './supabase-client.js';
 import { dlog } from './debug-log.js';
 
-const REDIRECT_URL = 'reelintel://auth';
+/* Where password-reset (and email-confirm) links land. Fixed to the
+   web deploy — no iOS deep-link involved. Even for anglers on iOS,
+   Safari opens reelintel.ai/reset-password, they set the new password,
+   and switch back to the app to sign in. */
+const RESET_REDIRECT = 'https://reelintel.ai/reset-password';
 
 let _lastSession = null;
 const listeners = new Set();
@@ -31,7 +33,7 @@ function notify(session) {
 }
 
 /** Subscribe to auth state. Fires immediately with the current session
-    (or null) so callers don't have to poll. Returns an unsubscribe fn. */
+    (or null) and again on every state change. */
 export function subscribe(fn) {
   listeners.add(fn);
   const c = client();
@@ -41,66 +43,104 @@ export function subscribe(fn) {
 
 export function getLastSession() { return _lastSession; }
 
-/** Kick off the magic-link email flow. Returns { ok, error } — the
-    caller shows a "check your email" state on ok. */
-export async function sendMagicLink({ email }) {
-  dlog(`[auth] sendMagicLink() called email=${(email || '').trim()}`);
-  const c = client();
-  if (!c) {
-    dlog('[auth] sendMagicLink: NO CLIENT — env vars missing?');
-    return { ok: false, error: 'Supabase is not configured.' };
-  }
+/** Sign in with email + password. Returns { ok, error?, session? }. */
+export async function signInWithPassword({ email, password }) {
   const trimmed = (email || '').trim();
-  if (!trimmed) return { ok: false, error: 'Enter an email address.' };
-  dlog(`[auth] calling signInWithOtp emailRedirectTo=${REDIRECT_URL}`);
+  dlog(`[auth] signInWithPassword called email=${trimmed}`);
+  const c = client();
+  if (!c) { dlog('[auth] signInWithPassword: NO CLIENT'); return { ok: false, error: 'Supabase is not configured.' }; }
   try {
-    const { error } = await c.auth.signInWithOtp({
-      email: trimmed,
-      options: { emailRedirectTo: REDIRECT_URL },
+    const { data, error } = await c.auth.signInWithPassword({ email: trimmed, password });
+    if (error) {
+      console.error('[auth] signInWithPassword failed', error);
+      dlog(`[auth] signInWithPassword ERROR: ${error.message || String(error)}`);
+      return { ok: false, error: error.message || String(error) };
+    }
+    dlog(`[auth] signInWithPassword OK email=${data.session?.user?.email || '(no email)'}`);
+    return { ok: true, session: data.session };
+  } catch (e) {
+    console.error('[auth] signInWithPassword threw', e);
+    dlog(`[auth] signInWithPassword THREW: ${e?.message || String(e)}`);
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/** Create a new account. If Supabase's Confirm Email is OFF the
+    session lands right away; if ON, needsConfirmation=true and the
+    caller shows a "check your email" state.
+    Returns { ok, error?, session?, needsConfirmation? }. */
+export async function signUp({ email, password }) {
+  const trimmed = (email || '').trim();
+  dlog(`[auth] signUp called email=${trimmed}`);
+  const c = client();
+  if (!c) { dlog('[auth] signUp: NO CLIENT'); return { ok: false, error: 'Supabase is not configured.' }; }
+  try {
+    const { data, error } = await c.auth.signUp({
+      email: trimmed, password,
+      options: { emailRedirectTo: RESET_REDIRECT },
     });
     if (error) {
-      console.error('[auth] signInWithOtp failed', error);
-      dlog(`[auth] signInWithOtp ERROR: ${error.message || String(error)}`);
+      console.error('[auth] signUp failed', error);
+      dlog(`[auth] signUp ERROR: ${error.message || String(error)}`);
       return { ok: false, error: error.message || String(error) };
     }
-    dlog('[auth] signInWithOtp OK — email sent');
+    const needsConfirmation = !data.session;
+    dlog(`[auth] signUp OK needsConfirmation=${needsConfirmation}`);
+    return { ok: true, session: data.session, needsConfirmation };
+  } catch (e) {
+    console.error('[auth] signUp threw', e);
+    dlog(`[auth] signUp THREW: ${e?.message || String(e)}`);
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/** Kick off a password-reset email. The user taps the link and lands
+    on https://reelintel.ai/reset-password with a recovery session in
+    the URL fragment. */
+export async function resetPassword({ email }) {
+  const trimmed = (email || '').trim();
+  dlog(`[auth] resetPassword called email=${trimmed}`);
+  const c = client();
+  if (!c) { dlog('[auth] resetPassword: NO CLIENT'); return { ok: false, error: 'Supabase is not configured.' }; }
+  try {
+    const { error } = await c.auth.resetPasswordForEmail(trimmed, {
+      redirectTo: RESET_REDIRECT,
+    });
+    if (error) {
+      console.error('[auth] resetPassword failed', error);
+      dlog(`[auth] resetPassword ERROR: ${error.message || String(error)}`);
+      return { ok: false, error: error.message || String(error) };
+    }
+    dlog('[auth] resetPassword OK — email sent');
     return { ok: true };
   } catch (e) {
-    console.error('[auth] signInWithOtp threw', e);
-    dlog(`[auth] signInWithOtp THREW: ${e?.message || String(e)}`);
+    console.error('[auth] resetPassword threw', e);
+    dlog(`[auth] resetPassword THREW: ${e?.message || String(e)}`);
     return { ok: false, error: e?.message || String(e) };
   }
 }
 
-/** Called from the appUrlOpen listener with the full deep-link URL.
-    Extracts the code and completes the session exchange. */
-export async function handleDeepLink(url) {
-  console.log('[auth] deep-link received:', url);
-  dlog(`[auth] appUrlOpen ${url ? url.slice(0, 80) : '(empty)'}`);
-  if (!url || !url.startsWith(REDIRECT_URL)) return { ok: false, error: 'not a reelintel:// link' };
+/** Called from the /reset-password page after a recovery session has
+    landed (via detectSessionInUrl). */
+export async function updatePassword({ password }) {
+  dlog('[auth] updatePassword called');
   const c = client();
-  if (!c) {
-    console.error('[auth] deep-link received but Supabase client is null');
-    return { ok: false, error: 'Supabase is not configured.' };
-  }
+  if (!c) return { ok: false, error: 'Supabase is not configured.' };
   try {
-    const { data, error } = await c.auth.exchangeCodeForSession(url);
+    const { error } = await c.auth.updateUser({ password });
     if (error) {
-      console.error('[auth] exchangeCodeForSession failed', error);
-      dlog(`[auth] exchangeCodeForSession ERROR: ${error.message || String(error)}`);
+      dlog(`[auth] updatePassword ERROR: ${error.message || String(error)}`);
       return { ok: false, error: error.message || String(error) };
     }
-    console.log('[auth] session exchange succeeded:', data?.session?.user?.email || '(no email)');
-    dlog(`[auth] exchangeCodeForSession OK email=${data?.session?.user?.email || '(no email)'}`);
-    return { ok: true, session: data?.session || null };
+    dlog('[auth] updatePassword OK');
+    return { ok: true };
   } catch (e) {
-    console.error('[auth] exchange threw', e);
-    dlog(`[auth] exchangeCodeForSession THREW: ${e?.message || String(e)}`);
+    dlog(`[auth] updatePassword THREW: ${e?.message || String(e)}`);
     return { ok: false, error: e?.message || String(e) };
   }
 }
 
-/** Sign out — clears Supabase session. Local catch data is untouched. */
+/** Sign out — clears the Supabase session. Local data untouched. */
 export async function signOut() {
   const c = client();
   if (!c) return;
@@ -124,30 +164,4 @@ export async function signOut() {
     dlog(`[auth] onAuthStateChange evt=${evt} sess=${sess ? sess.user?.email : 'null'}`);
     notify(sess || null);
   });
-})();
-
-// Register the Capacitor App URL-open handler once at module load so
-// the app can receive the magic-link tap immediately after iOS
-// deep-links back into the app. Silent no-op on web.
-(async function initDeepLinkHandler() {
-  if (!Capacitor.isNativePlatform()) {
-    dlog('[auth] initDeepLinkHandler: web (no Capacitor)');
-    return;
-  }
-  try {
-    const { App } = await import('@capacitor/app');
-    App.addListener('appUrlOpen', async (event) => {
-      const url = event?.url || '';
-      dlog(`[auth] appUrlOpen listener fired url=${url.slice(0, 80)}`);
-      if (url.startsWith(REDIRECT_URL)) {
-        await handleDeepLink(url);
-      } else {
-        dlog(`[auth] appUrlOpen ignored (prefix mismatch)`);
-      }
-    });
-    dlog('[auth] initDeepLinkHandler: listener registered');
-  } catch (e) {
-    console.warn('[auth] failed to register appUrlOpen listener', e);
-    dlog(`[auth] initDeepLinkHandler THREW: ${e?.message || String(e)}`);
-  }
 })();
