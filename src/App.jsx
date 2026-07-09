@@ -63,6 +63,7 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [stack, setStack] = useState([{ name: 'home' }]);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [disclaimerReadOnly, setDisclaimerReadOnly] = useState(false);
   const [showJur, setShowJur] = useState(false);
   const [showBoundaryInfo, setShowBoundaryInfo] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -90,7 +91,12 @@ export default function App() {
     setState(s);
     setLoaded(true);
     // Onboarding chain: disclaimer → jurisdiction → account → favorites.
-    if (s.disclaimerAcceptedVersion !== DISCLAIMER_VERSION) setShowDisclaimer(true);
+    // Disclaimer is accept-once for the app's lifetime — no forced
+    // re-accept on version bumps. Apple's guidance only requires the
+    // disclaimer be available to view, not re-accepted. The link in
+    // Settings covers ongoing access. Once ANY accepted-version value
+    // is on file we skip.
+    if (!s.disclaimerAcceptedVersion) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
     else if (!s.onboardingAccountComplete) setShowAccount(true);
     else if (!s.onboardingFavoritesComplete) setShowFavorites(true);
@@ -632,7 +638,7 @@ export default function App() {
       body = <RegulationsListScreen state={state} jurisdiction={jurisdiction} update={update} onPick={(id) => push({ name: 'regulation', id })} />;
       break;
     case 'regulation_alerts':
-      body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} />;
+      body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} onEditFavorites={() => setShowFavorites(true)} />;
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}
@@ -703,7 +709,7 @@ export default function App() {
                 lastSyncedAt={getCloudLastSynced()}
                 onForceSync={() => { const uid = session?.user?.id; if (uid) cloudForceSync(state, uid); }}
                 onChangeJurisdiction={() => setShowJur(true)}
-                onShowDisclaimer={() => setShowDisclaimer(true)}
+                onShowDisclaimer={() => { setDisclaimerReadOnly(true); setShowDisclaimer(true); }}
                 onEditFavorites={() => setShowFavorites(true)}
                 onEditAccount={() => setShowAccount(true)} />;
       break;
@@ -884,34 +890,41 @@ export default function App() {
           when iOS overscrolls. Safe-area padding leaves room for the
           home indicator. */}
       {/* Bottom tab bar — 5 slots with a raised center capture action.
-          Home | Fish ID | [camera] | Regulations | Logbook. The center
-          slot is an unlabeled action (not a tab): it never highlights,
-          it always triggers the shared capture flow. */}
+          Home | Logbook | [camera] | Regulations | Fish ID. Logbook
+          moved to slot 2 and Fish ID to slot 5 per angler feedback —
+          Logbook is a more frequent destination than Fish ID. The
+          center slot is an unlabeled action (not a tab): it never
+          highlights, it always triggers the shared capture flow.
+          Padding tightened so the row hugs the bottom safe area. */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         maxWidth: containerMaxWidth(size), margin: '0 auto',
         background: T.oceanDeep,
         borderTop: `1px solid ${T.cardEdge}`,
         display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
-        padding: `${size === 'phone' ? 10 : 14}px 4px 0`,
-        paddingBottom: `calc(${size === 'phone' ? 14 : 18}px + env(safe-area-inset-bottom))`,
+        padding: `${size === 'phone' ? 6 : 10}px 4px 0`,
+        paddingBottom: `calc(${size === 'phone' ? 4 : 8}px + env(safe-area-inset-bottom))`,
         zIndex: 50,
       }}>
         <TabBtn size={size} label="Home"        active={activeTab === 'home'}                          onClick={() => reset([{ name: 'home' }])}         icon={<HomeIcon />} />
-        <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
+        <TabBtn size={size} label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen />} />
         <CenterCaptureBtn size={size} onClick={() => startCaptureFlow('camera')} />
         <TabBtn size={size} label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList />} />
-        <TabBtn size={size} label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen />} />
+        <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
       </div>
 
       {showDisclaimer && (
-        <DisclaimerModal onAccept={() => {
-          update({ disclaimerAcceptedVersion: DISCLAIMER_VERSION });
-          setShowDisclaimer(false);
-          if (!state.jurisdiction) setShowJur(true);
-          else if (!state.onboardingAccountComplete) setShowAccount(true);
-          else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
-        }} />
+        <DisclaimerModal
+          readOnly={disclaimerReadOnly}
+          onClose={() => { setShowDisclaimer(false); setDisclaimerReadOnly(false); }}
+          onAccept={() => {
+            update({ disclaimerAcceptedVersion: DISCLAIMER_VERSION });
+            setShowDisclaimer(false);
+            if (!state.jurisdiction) setShowJur(true);
+            else if (!state.onboardingAccountComplete) setShowAccount(true);
+            else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+          }}
+        />
       )}
 
       {showJur && (

@@ -161,7 +161,9 @@ export const modalStyle = {
    MODALS
    ============================================================ */
 
-export function DisclaimerModal({ onAccept }) {
+/* DisclaimerModal — onboarding accept OR view-only.
+   Onboarding pass onAccept only; Settings pass readOnly + onClose. */
+export function DisclaimerModal({ onAccept, readOnly = false, onClose }) {
   const [checked, setChecked] = useState(false);
   return (
     <div style={overlayStyle}>
@@ -171,13 +173,19 @@ export function DisclaimerModal({ onAccept }) {
           <H1 size={22}>ReelIntel</H1>
           <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 12, marginTop: 4, letterSpacing: 0.5 }}>Fish smarter. Catch more.</div>
         </div>
-        <SectionLabel style={{ marginBottom: 8 }}>Before you start</SectionLabel>
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: T.inkSoft, margin: '0 0 14px', maxHeight: 200, overflowY: 'auto' }}>{DISCLAIMER_TEXT}</p>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 12, background: T.parchmentDeep, borderRadius: 4, cursor: 'pointer', marginBottom: 14 }}>
-          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop: 2, width: 18, height: 18, accentColor: T.brass }} />
-          <span style={{ fontSize: 13, color: T.ink, fontWeight: 600 }}>I understand and accept.</span>
-        </label>
-        <PrimaryButton disabled={!checked} onClick={onAccept}>Accept & Continue</PrimaryButton>
+        <SectionLabel style={{ marginBottom: 8 }}>{readOnly ? 'Disclaimer' : 'Before you start'}</SectionLabel>
+        <p style={{ fontSize: 13, lineHeight: 1.6, color: T.inkSoft, margin: '0 0 14px', maxHeight: 260, overflowY: 'auto' }}>{DISCLAIMER_TEXT}</p>
+        {readOnly ? (
+          <PrimaryButton onClick={onClose}>Close</PrimaryButton>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 12, background: T.parchmentDeep, borderRadius: 4, cursor: 'pointer', marginBottom: 14 }}>
+              <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop: 2, width: 18, height: 18, accentColor: T.brass }} />
+              <span style={{ fontSize: 13, color: T.ink, fontWeight: 600 }}>I understand and accept.</span>
+            </label>
+            <PrimaryButton disabled={!checked} onClick={onAccept}>Accept & Continue</PrimaryButton>
+          </>
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,35 @@ import {
   shareReport, fetchWeatherForTime,
 } from './helpers.js';
 
+/* <img> wrapper that falls back to the inline thumb data URL when
+   the primary display URL (usually a capacitor:// file URL) fails
+   to load. On iOS the local file path baked into `p.src` at save
+   time can go stale between installs — the thumb is always inline
+   and never breaks. */
+function PhotoImg({ photo, alt, style, onClick, className }) {
+  const primary = photoDisplayUrl(photo);
+  const [src, setSrc] = React.useState(primary);
+  const fellBackRef = React.useRef(false);
+  // Reset when the photo changes (e.g. carousel scroll).
+  React.useEffect(() => { setSrc(primary); fellBackRef.current = false; }, [primary]);
+  const onError = () => {
+    if (fellBackRef.current) return;
+    fellBackRef.current = true;
+    const t = photoThumbUrl(photo);
+    if (t && t !== primary) setSrc(t);
+  };
+  return (
+    <img
+      src={src}
+      alt={alt || ''}
+      style={style}
+      onClick={onClick}
+      className={className}
+      onError={onError}
+    />
+  );
+}
+
 /* Render a coordinate value as a tappable Apple Maps link. */
 function CoordsLink({ lat, lon }) {
   const href = appleMapsLink(lat, lon);
@@ -125,13 +154,49 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           {s.hms && <span style={{ background: T.warnBg, color: T.brassDeep, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1, marginRight: 6 }}>HMS PERMIT</span>}
           {s.reefFish && <span style={{ background: T.openBg, color: T.open, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>REEF FISH</span>}
         </div>
-        <button onClick={onAddPB} style={{
-          marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
-          padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 800,
-          letterSpacing: 0.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-        }}>
-          <Trophy size={14} /> {pb ? 'Edit Personal Best' : 'Add Personal Best'}
-        </button>
+        {pb ? (
+          <div style={{
+            marginTop: 14,
+            background: T.parchmentDeep,
+            border: `1.5px solid ${T.brass}`,
+            borderRadius: 10,
+            padding: '10px 14px',
+            display: 'flex', alignItems: 'center', gap: 12,
+            textAlign: 'left',
+          }}>
+            <Trophy size={26} color={T.brass} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>YOUR PERSONAL BEST</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.parchment, marginTop: 2 }}>
+                {pb.weight != null && `${pb.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`}
+                {pb.weight != null && pb.length != null && ' · '}
+                {pb.length != null && `${pb.length} ${state.units === 'metric' ? 'cm' : 'in'}`}
+                {pb.weight == null && pb.length == null && '—'}
+              </div>
+              <div style={{ fontSize: 11, color: '#B8C5CD', marginTop: 2 }}>
+                {pb.date || (pb.dateIso || '').slice(0, 10) || 'Date unknown'}
+                {pb.location ? ` · ${pb.location}` : ''}
+              </div>
+            </div>
+            <button onClick={onAddPB} style={{
+              background: 'transparent', color: T.brass,
+              border: `1px solid ${T.brass}`,
+              padding: '6px 12px', borderRadius: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+              cursor: 'pointer', flexShrink: 0,
+            }}>
+              <Pencil size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+              EDIT
+            </button>
+          </div>
+        ) : (
+          <button onClick={onAddPB} style={{
+            marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
+            padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+            letterSpacing: 0.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <Trophy size={14} /> Add Personal Best
+          </button>
+        )}
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
@@ -563,7 +628,7 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
 /* ============================================================
    REGULATION ALERTS — your-starred-first, additional, confirm-source.
    ============================================================ */
-export function RegulationAlertsScreen({ state, jurisdiction, onPick }) {
+export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavorites }) {
   const buckets = useMemo(() => {
     const favSet = new Set(state?.favorites || []);
     if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
@@ -612,7 +677,19 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick }) {
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
               <Star size={14} fill={T.brass} color={T.brass} />
-              <SectionLabel style={{ color: T.closed }}>Your fish — closed ({buckets.yourClosed.length})</SectionLabel>
+              <SectionLabel style={{ color: T.closed, flex: 1 }}>Your fish — closed ({buckets.yourClosed.length})</SectionLabel>
+              {onEditFavorites && (
+                <button onClick={onEditFavorites} aria-label="Edit your starred fish"
+                  style={{
+                    background: 'transparent', color: T.brass,
+                    border: `1px solid ${T.brass}`,
+                    padding: '4px 10px', borderRadius: 6,
+                    fontSize: 10.5, fontWeight: 800, letterSpacing: 1,
+                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                  <Pencil size={11} /> EDIT
+                </button>
+              )}
             </div>
             <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.closedBg, borderRadius: 6, border: `1px solid ${T.closed}55` }}>
               The species you star are closed in {jurisdiction ? jurisdiction.name : 'these waters'} right now. Do not retain.
@@ -674,7 +751,19 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick }) {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 8px' }}>
                 <Star size={12} fill={T.brass} color={T.brass} />
-                <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800 }}>Your fish</span>
+                <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800, flex: 1 }}>Your fish</span>
+                {onEditFavorites && (
+                  <button onClick={onEditFavorites} aria-label="Edit your starred fish"
+                    style={{
+                      background: 'transparent', color: T.brass,
+                      border: `1px solid ${T.brass}`,
+                      padding: '3px 8px', borderRadius: 6,
+                      fontSize: 9.5, fontWeight: 800, letterSpacing: 0.8,
+                      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}>
+                    <Pencil size={10} /> EDIT
+                  </button>
+                )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                 {buckets.yourUnknown.map(row => renderRow(row, { status: 'unknown', accentBorder: T.warn }))}
@@ -2173,7 +2262,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
       {cPhotos.length === 0
         ? <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>
         : cPhotos.length === 1
-          ? <img src={photoDisplayUrl(cPhotos[0])} alt="" onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
+          ? <PhotoImg photo={cPhotos[0]} onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
           : <div className="kyc-hscroll" style={{
               display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
               margin: '0 -16px 14px', padding: '0 16px 4px',
@@ -2181,7 +2270,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
             }}>
               {cPhotos.map((p, i) => (
                 <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
-                  <img src={photoDisplayUrl(p)} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+                  <PhotoImg photo={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
                 </div>
               ))}
             </div>}
@@ -2232,6 +2321,28 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
         {c.length != null && <DetailRow label="Length" value={`${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`} />}
         {c.weight != null && <DetailRow label="Weight" value={`${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`} />}
         {c.jurisdiction && <DetailRow label="Waters" value={(jurisdictionById(c.jurisdiction) || { name: c.jurisdiction }).name} />}
+        {c.outcome === 'kept' && (
+          <DetailRow label="Outcome" value={<span style={{ color: T.brass, fontWeight: 700 }}>Kept</span>} />
+        )}
+        {c.outcome === 'released' && (
+          <DetailRow label="Outcome" value={<span style={{ color: T.open, fontWeight: 700 }}>Released</span>} />
+        )}
+        {c.aiIdentifiedSpeciesId && (
+          <DetailRow
+            label="Identified by AI"
+            value={
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Sparkles size={12} color={T.brass} />
+                {(() => {
+                  const aiS = speciesById(c.aiIdentifiedSpeciesId);
+                  const conf = c.aiConfidence != null ? ` · ${Math.round(c.aiConfidence * 100)}%` : '';
+                  const confirmed = c.aiWasConfirmed ? ' · confirmed' : '';
+                  return `${aiS ? aiS.commonName : c.aiIdentifiedSpeciesId}${conf}${confirmed}`;
+                })()}
+              </span>
+            }
+          />
+        )}
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
