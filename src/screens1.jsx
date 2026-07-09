@@ -15,13 +15,13 @@ import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
-  sunPosition, moonPhase, fetchWeatherForTime,
+  sunPosition, moonPhase, fetchWeatherForTime, catchPhotos,
 } from './helpers.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
-import { savePhoto } from './photos-store.js';
+import { savePhoto, photoThumbUrl } from './photos-store.js';
 import { downscaleImageDataUrl } from './storage.js';
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
@@ -205,9 +205,16 @@ export function HomeScreen({
   state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
   onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
-  onCapture, onSelectFromLibrary,
+  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
+  // Recent catches strip below the quick-actions row. Show the 10
+  // newest; hidden if the angler hasn't logged anything yet.
+  const recentCatches = useMemo(() => {
+    const list = (state.catchLog || []).slice();
+    list.sort((a, b) => (b.dateIso || '').localeCompare(a.dateIso || ''));
+    return list.slice(0, 10);
+  }, [state.catchLog]);
   const jurId = jurisdiction?.id || 'fed_gulf';
   const featured = FEATURED_IDS
     .map(id => {
@@ -372,6 +379,84 @@ export function HomeScreen({
           onClick={onQuiz}
         />
       </div>
+
+      {/* Recent Catches — horizontally-scrolling preview strip. Tap a
+          tile to jump straight into the catch's detail view. Hidden
+          when the angler hasn't logged anything yet — no point in an
+          empty strip taking space. */}
+      {recentCatches.length > 0 && (
+        <>
+          <SectionHead
+            action={onViewCatches ? 'VIEW ALL' : undefined}
+            onAction={onViewCatches}
+          >
+            RECENT CATCHES
+          </SectionHead>
+          <div
+            className={isTablet ? undefined : 'kyc-hscroll'}
+            style={isTablet ? {
+              display: 'grid',
+              gridTemplateColumns: screenSize === 'tablet-landscape' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)',
+              gap: 12,
+            } : {
+              display: 'flex', gap: 10,
+              overflowX: 'auto', overflowY: 'hidden',
+              margin: '0 -16px', padding: '0 16px 6px',
+              scrollSnapType: 'x proximity',
+            }}
+          >
+            {recentCatches.map(c => {
+              const s = c.speciesId ? speciesById(c.speciesId) : null;
+              const cp = catchPhotos(c);
+              const thumb = cp.length > 0 ? photoThumbUrl(cp[0]) : null;
+              const when = new Date(c.dateIso);
+              const dateLabel = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const sizeLabel = c.length != null
+                ? `${c.length} ${state.units === 'metric' ? 'cm' : 'in'}`
+                : (c.weight != null ? `${c.weight} ${state.units === 'metric' ? 'kg' : 'lb'}` : '');
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => onViewCatch && onViewCatch(c.id)}
+                  style={{
+                    flex: '0 0 132px',
+                    background: T.card, border: `1px solid ${T.cardEdge}`,
+                    borderRadius: 14, padding: 0, cursor: 'pointer', textAlign: 'left',
+                    display: 'flex', flexDirection: 'column',
+                    scrollSnapAlign: 'start',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{
+                    width: '100%', aspectRatio: '1 / 1', background: T.parchmentDeep,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}>
+                    {thumb ? (
+                      <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    ) : s ? (
+                      <SpeciesImage species={s} size={80} />
+                    ) : (
+                      <Camera size={30} color={T.inkMute} />
+                    )}
+                  </div>
+                  <div style={{ padding: '8px 10px 10px' }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 800, color: T.ink,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {s ? s.commonName : 'Unknown'}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {sizeLabel ? `${sizeLabel} · ` : ''}{dateLabel}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Conditions + Regulation Alerts — both cards sized to their natural
           content with breathing room. The whole row scrolls horizontally

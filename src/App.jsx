@@ -493,6 +493,8 @@ export default function App() {
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
+    onViewCatch:  (id) => push({ name: 'catch_detail', id }),
+    onViewCatches: () => push({ name: 'catch_log' }),
   };
 
   // Build the body based on current screen.

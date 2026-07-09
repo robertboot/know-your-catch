@@ -830,22 +830,89 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose, hasMany, total]);
 
-  // Swipe gesture for touch devices.
-  const touch = useState({ x: 0, y: 0, t: 0 });
-  const onTouchStart = (e) => {
-    const t = e.changedTouches[0];
-    touch[0].x = t.clientX; touch[0].y = t.clientY; touch[0].t = Date.now();
-  };
-  const onTouchEnd = (e) => {
-    if (!hasMany) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touch[0].x;
-    const dy = t.clientY - touch[0].y;
-    const dt = Date.now() - touch[0].t;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && dt < 600) {
-      e.stopPropagation();
-      if (dx > 0) prev(); else next();
+  /* Pinch-to-zoom + pan handler.
+     - One touch: swipe-to-navigate when scale === 1, pan when scale > 1.
+     - Two touches: pinch — scale relative to initial distance, keep the
+       midpoint of the two fingers anchored (feels natural on iOS).
+     - Double-tap: toggle between 1× and 2.5× centered on tap point.
+     - Slide index change resets zoom + translation. */
+  const [scale, setScale] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  useEffect(() => { setScale(1); setTx(0); setTy(0); }, [idx]);
+
+  const pointersRef = useRef(new Map()); // id → { x, y }
+  const gestureRef  = useRef(null);      // { startDist, startScale, startTx, startTy, midX, midY }
+  const swipeRef    = useRef(null);      // { x, y, t }
+  const lastTapRef  = useRef(0);
+
+  const onPointerDown = (e) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size === 1) {
+      // Double-tap detect + swipe seed
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) {
+        // Double-tap → toggle zoom
+        setScale(s => s > 1 ? 1 : 2.5);
+        setTx(0); setTy(0);
+        lastTapRef.current = 0;
+      } else {
+        lastTapRef.current = now;
+      }
+      swipeRef.current = { x: e.clientX, y: e.clientY, t: Date.now(), startTx: tx, startTy: ty };
+    } else if (pointersRef.current.size === 2) {
+      const pts = Array.from(pointersRef.current.values());
+      const dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y;
+      gestureRef.current = {
+        startDist: Math.hypot(dx, dy),
+        startScale: scale,
+        startTx: tx, startTy: ty,
+        midX: (pts[0].x + pts[1].x) / 2,
+        midY: (pts[0].y + pts[1].y) / 2,
+      };
     }
+  };
+  const onPointerMove = (e) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size === 2 && gestureRef.current) {
+      const pts = Array.from(pointersRef.current.values());
+      const dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y;
+      const dist = Math.hypot(dx, dy);
+      const g = gestureRef.current;
+      const nextScale = Math.max(1, Math.min(4, g.startScale * (dist / g.startDist)));
+      setScale(nextScale);
+      // Anchor pan so the midpoint stays visually stable during the pinch.
+      const nowMidX = (pts[0].x + pts[1].x) / 2;
+      const nowMidY = (pts[0].y + pts[1].y) / 2;
+      setTx(g.startTx + (nowMidX - g.midX));
+      setTy(g.startTy + (nowMidY - g.midY));
+    } else if (pointersRef.current.size === 1 && scale > 1 && swipeRef.current) {
+      // Pan while zoomed.
+      setTx(swipeRef.current.startTx + (e.clientX - swipeRef.current.x));
+      setTy(swipeRef.current.startTy + (e.clientY - swipeRef.current.y));
+    }
+  };
+  const onPointerUp = (e) => {
+    const start = swipeRef.current;
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) gestureRef.current = null;
+    // Only run swipe-nav when NOT zoomed and this was a single-finger flick.
+    if (pointersRef.current.size === 0 && scale === 1 && start && hasMany) {
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const dt = Date.now() - start.t;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && dt < 600) {
+        if (dx > 0) prev(); else next();
+      }
+      swipeRef.current = null;
+    }
+  };
+  const onPointerCancel = (e) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) gestureRef.current = null;
   };
 
   if (list.length === 0) return null;
@@ -869,14 +936,23 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
         src={imgSrc}
         alt={alt || ''}
         onClick={(e) => e.stopPropagation()}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onError={onImgError}
+        draggable={false}
         style={{
           maxWidth: '100%',
           maxHeight: (caption || hasMany) ? '78vh' : '90vh',
           objectFit: 'contain', display: 'block',
           borderRadius: 8,
+          transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+          transformOrigin: 'center center',
+          transition: pointersRef.current.size === 0 ? 'transform 160ms ease' : 'none',
+          touchAction: 'none',
+          WebkitUserSelect: 'none', userSelect: 'none',
+          cursor: scale > 1 ? 'grab' : 'zoom-in',
         }}
       />
 
