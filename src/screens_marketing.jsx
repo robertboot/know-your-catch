@@ -15,6 +15,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
 import { updatePassword, subscribe as subscribeAuth } from './auth.js';
+import { client as supabaseClient } from './supabase-client.js';
+import { dlog } from './debug-log.js';
 
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
@@ -1173,24 +1175,76 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm]       = useState('');
   const [busy, setBusy]             = useState(false);
   const [error, setError]           = useState('');
-  const [ready, setReady]           = useState(false); // recovery session present?
+  const [ready, setReady]           = useState(false); // recovery session confirmed
+  const [linkError, setLinkError]   = useState('');    // fatal: link is bad
   const [done, setDone]             = useState(false);
 
-  // Watch for the recovery session to land. Supabase parses the URL
-  // fragment on client() creation; onAuthStateChange fires PASSWORD_RECOVERY.
+  // Exchange the recovery link for a session BEFORE letting the user
+  // submit. Supabase JS v2 defaults to the PKCE flow, so the reset
+  // link looks like:
+  //   https://reelintel.ai/reset-password?code=<uuid>
+  // We must call exchangeCodeForSession explicitly; detectSessionInUrl
+  // alone doesn't complete the exchange fast enough and users hit
+  // AUTH_SESSION_MISSING when submitting.
+  //
+  // Fallback: older implicit-flow links use a URL fragment like
+  //   #access_token=...&type=recovery
+  // The client's detectSessionInUrl:true handles those. If neither
+  // form is present, the link is invalid and we surface it as a
+  // fatal error rather than let the user type into a dead form.
   useEffect(() => {
+    let cancelled = false;
+    const c = supabaseClient();
+    if (!c) { setLinkError('Supabase is not configured on this deploy.'); return; }
+
+    const url  = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const err  = url.searchParams.get('error') || url.searchParams.get('error_description');
+    const hasImplicit = window.location.hash.includes('access_token');
+
+    dlog(`[reset] mount code=${code ? 'yes' : 'no'} implicit=${hasImplicit ? 'yes' : 'no'}`);
+
+    if (err) {
+      dlog(`[reset] link error: ${err}`);
+      setLinkError(err);
+      return;
+    }
+
+    // Set up the session subscription first so both flows can land it.
     const off = subscribeAuth((sess) => {
-      if (sess) setReady(true);
+      if (cancelled) return;
+      if (sess) {
+        dlog(`[reset] session ready email=${sess.user?.email || '(none)'}`);
+        setReady(true);
+      }
     });
-    // Fallback: even without a session (e.g. user visited the URL
-    // directly), let them still submit — Supabase will 401 and we
-    // show the error. Better than a permanent spinner.
-    const t = setTimeout(() => setReady(true), 1200);
-    return () => { off(); clearTimeout(t); };
+
+    if (code) {
+      // PKCE flow — exchange code for session
+      dlog('[reset] exchangeCodeForSession start');
+      c.auth.exchangeCodeForSession(window.location.href).then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          dlog(`[reset] exchange ERROR: ${error.message || String(error)}`);
+          setLinkError(error.message || 'This reset link is invalid or has expired. Request a new one.');
+          return;
+        }
+        dlog(`[reset] exchange OK email=${data?.session?.user?.email || '(none)'}`);
+        if (data?.session) setReady(true);
+        // Clean the code out of the URL so a refresh doesn't retry.
+        window.history.replaceState({}, '', url.pathname);
+      });
+    } else if (!hasImplicit) {
+      // No code + no fragment → nothing to exchange. Bad link.
+      setLinkError('This page must be opened from a password-reset email link. Request one from the app’s Sign in → Forgot password screen.');
+    }
+
+    return () => { cancelled = true; off(); };
   }, []);
 
   const submit = async () => {
     setError('');
+    if (!ready) { setError('Recovery session is not ready yet. Give it a moment and try again.'); return; }
     if (!password || password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (password !== confirm)             { setError('Passwords do not match.'); return; }
     setBusy(true);
@@ -1234,6 +1288,16 @@ export function ResetPasswordPage() {
               Go to home
             </a>
           </>
+        ) : linkError ? (
+          <>
+            <h1 style={{ fontSize: 22, margin: '0 0 10px' }}>Reset link problem</h1>
+            <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
+              {linkError}
+            </p>
+            <a href="/" style={{ ...btn, display: 'inline-block', textAlign: 'center', textDecoration: 'none', marginTop: 20 }}>
+              Go to home
+            </a>
+          </>
         ) : (
           <>
             <h1 style={{ fontSize: 22, margin: '0 0 6px' }}>Set a new password</h1>
@@ -1248,19 +1312,19 @@ export function ResetPasswordPage() {
             <input type="password" value={password}
                    onChange={(e) => setPassword(e.target.value)}
                    placeholder="At least 8 characters"
-                   autoComplete="new-password" style={input} />
+                   autoComplete="new-password" style={input} disabled={!ready} />
             <label style={label}>CONFIRM PASSWORD</label>
             <input type="password" value={confirm}
                    onChange={(e) => setConfirm(e.target.value)}
                    onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-                   autoComplete="new-password" style={input} />
+                   autoComplete="new-password" style={input} disabled={!ready} />
             {error && (
               <div role="alert" style={{ marginTop: 12, fontSize: 12, color: '#FF4D4D', lineHeight: 1.45 }}>
                 {error}
               </div>
             )}
-            <button onClick={submit} disabled={busy || !ready} style={{ ...btn, opacity: busy ? 0.6 : 1 }}>
-              {busy ? 'Updating…' : 'Update password'}
+            <button onClick={submit} disabled={busy || !ready} style={{ ...btn, opacity: (busy || !ready) ? 0.5 : 1, cursor: (busy || !ready) ? 'not-allowed' : 'pointer' }}>
+              {busy ? 'Updating…' : ready ? 'Update password' : 'Waiting for recovery session…'}
             </button>
           </>
         )}
