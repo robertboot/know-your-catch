@@ -4,7 +4,6 @@ import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
 import { photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
-import { dlog } from './debug-log.js';
 
 /* ============================================================
    STATUS PILL — colorblind-safe via shape + color
@@ -438,9 +437,6 @@ export function SignInModal({
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
-  useEffect(() => { dlog('[AuthModal] mounted'); return () => dlog('[AuthModal] unmounted'); }, []);
-  useEffect(() => { dlog(`[AuthModal] mode=${mode}`); }, [mode]);
-
   const validate = () => {
     const errs = {};
     const trimmed = (email || '').trim();
@@ -461,34 +457,24 @@ export function SignInModal({
     setBusy(true); setError('');
     try {
       if (mode === 'signin') {
-        dlog(`[AuthModal] submit signin email=${email}`);
         const res = await onSignIn({ email, password });
-        dlog(`[AuthModal] signin returned ok=${!!res?.ok} error=${res?.error || ''}`);
         if (!res?.ok) { setError(res?.error || 'Sign-in failed.'); setBusy(false); return; }
         // Session lands via subscribe → App session-gate closes the modal.
         setBusy(false);
         onClose?.();
       } else if (mode === 'signup') {
-        dlog(`[AuthModal] submit signup email=${email}`);
         const res = await onSignUp({ email, password });
-        dlog(`[AuthModal] signup returned ok=${!!res?.ok} needsConfirmation=${!!res?.needsConfirmation}`);
         if (!res?.ok) { setError(res?.error || 'Sign-up failed.'); setBusy(false); return; }
         setBusy(false);
-        if (res.needsConfirmation) {
-          setPostSignup(true);
-        } else {
-          onClose?.();
-        }
+        if (res.needsConfirmation) setPostSignup(true);
+        else onClose?.();
       } else if (mode === 'forgot') {
-        dlog(`[AuthModal] submit forgot email=${email}`);
         const res = await onResetPassword({ email });
-        dlog(`[AuthModal] forgot returned ok=${!!res?.ok} error=${res?.error || ''}`);
         setBusy(false);
         if (!res?.ok) { setError(res?.error || 'Could not send reset link.'); return; }
         setMode('sent');
       }
     } catch (e) {
-      dlog(`[AuthModal] submit THREW: ${e?.message || String(e)}`);
       setBusy(false);
       setError(e?.message || String(e));
     }

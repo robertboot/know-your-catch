@@ -1115,7 +1115,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
       {photos.length > 0 && (
         photos.length === 1 ? (
           <Card onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-            <img src={photoDisplayUrl(photos[0])} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
+            <PhotoImg photo={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
           </Card>
         ) : (
           <div className="kyc-hscroll" style={{
@@ -1125,7 +1125,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
           }}>
             {photos.map((p, i) => (
               <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
-                <img src={photoDisplayUrl(p)} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+                <PhotoImg photo={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
               </div>
             ))}
           </div>

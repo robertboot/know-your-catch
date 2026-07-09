@@ -9,7 +9,6 @@
    caller no-ops. That matches the pattern in cloudsync.js so the app
    still ships fine on an offline-first fallback. */
 import { createClient } from '@supabase/supabase-js';
-import { dlog } from './debug-log.js';
 
 const RAW_SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL || '';
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -44,13 +43,14 @@ function sanitizeSupabaseUrl(raw, anonKey) {
 
 export const SUPABASE_URL = sanitizeSupabaseUrl(RAW_SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Log at module load so the debug overlay picks up whether the env
-// vars actually reached the bundle. Show only the URL suffix — enough
-// to distinguish projects, safe to show. Anon key is yes/no.
+// Keep the sanitizer diagnostic — surface (only) when we had to
+// self-correct a bad env var. Silent when the env var was already
+// clean. Routed to console instead of the (now-removed) debug
+// overlay so Safari Web Inspector still sees it if we need to
+// diagnose again.
 if (RAW_SUPABASE_URL && RAW_SUPABASE_URL !== SUPABASE_URL) {
-  dlog(`[supabase] URL sanitized: raw=…${RAW_SUPABASE_URL.slice(-24)} clean=…${SUPABASE_URL.slice(-24)}`);
+  console.warn(`[supabase] URL sanitized: raw=…${RAW_SUPABASE_URL.slice(-24)} clean=…${SUPABASE_URL.slice(-24)}`);
 }
-dlog(`[supabase] url=${SUPABASE_URL ? '…' + SUPABASE_URL.slice(-16) : 'MISSING'} anonKey=${SUPABASE_ANON_KEY ? 'yes' : 'MISSING'}`);
 
 let _client = null;
 export function client() {
@@ -65,7 +65,6 @@ export function client() {
         detectSessionInUrl: true,
       },
     });
-    dlog('[supabase] client created');
   }
   return _client;
 }

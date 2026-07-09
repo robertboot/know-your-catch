@@ -22,8 +22,6 @@ import {
   forceSync as cloudForceSync,
 } from './cloudsync.js';
 import { SyncPill } from './auth-ui.jsx';
-import { dlog } from './debug-log.js';
-import { DebugOverlay } from './debug-overlay.jsx';
 import { jurisdictionById, isStale } from './helpers.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
@@ -233,13 +231,6 @@ export default function App() {
     return () => clearTimeout(t);
   }, [loaded, session]);
 
-  // Debug: log every auth state transition + first-boot session read
-  // so we can trace magic-link deep-link completion on device via
-  // the debug overlay. Cheap; safe to leave on in production for now.
-  useEffect(() => {
-    dlog(`[App] session state: ${session ? 'signed in as ' + session.user?.email : 'signed out'}`);
-  }, [session]);
-
   // Splash auth modal state — Sign in and Create account both open
   // the same modal; splashInitialMode picks which tab starts active.
   const [splashSignInOpen, setSplashSignInOpen] = useState(false);
@@ -318,20 +309,11 @@ export default function App() {
     const showLogin = loaded && !session;
     return (
       <>
-        <DebugOverlay />
         <SplashScreen
           showLogin={showLogin}
           onContinue={() => loaded && session && setShowSplash(false)}
-          onSignIn={() => {
-            dlog('[App] splash Sign in tapped → mode=signin');
-            setSplashInitialMode('signin');
-            setSplashSignInOpen(true);
-          }}
-          onCreateAccount={() => {
-            dlog('[App] splash Create account tapped → mode=signup');
-            setSplashInitialMode('signup');
-            setSplashSignInOpen(true);
-          }}
+          onSignIn={() => { setSplashInitialMode('signin'); setSplashSignInOpen(true); }}
+          onCreateAccount={() => { setSplashInitialMode('signup'); setSplashSignInOpen(true); }}
         />
         {splashSignInOpen && (
           <SignInModal
@@ -734,7 +716,6 @@ export default function App() {
   const screenCtx = { size, type, cols: gridCols, chrome };
   return (
     <ScreenSizeContext.Provider value={screenCtx}>
-    <DebugOverlay />
     <div data-screen-size={size} style={{
       background: T.bgGradient, minHeight: '100vh', color: T.ink,
       maxWidth: containerMaxWidth(size), margin: '0 auto', position: 'relative',

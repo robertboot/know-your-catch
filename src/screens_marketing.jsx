@@ -16,7 +16,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
 import { updatePassword, subscribe as subscribeAuth } from './auth.js';
 import { client as supabaseClient } from './supabase-client.js';
-import { dlog } from './debug-log.js';
 
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
@@ -1202,34 +1201,22 @@ export function ResetPasswordPage() {
     const err  = url.searchParams.get('error') || url.searchParams.get('error_description');
     const hasImplicit = window.location.hash.includes('access_token');
 
-    dlog(`[reset] mount code=${code ? 'yes' : 'no'} implicit=${hasImplicit ? 'yes' : 'no'}`);
-
-    if (err) {
-      dlog(`[reset] link error: ${err}`);
-      setLinkError(err);
-      return;
-    }
+    if (err) { setLinkError(err); return; }
 
     // Set up the session subscription first so both flows can land it.
     const off = subscribeAuth((sess) => {
       if (cancelled) return;
-      if (sess) {
-        dlog(`[reset] session ready email=${sess.user?.email || '(none)'}`);
-        setReady(true);
-      }
+      if (sess) setReady(true);
     });
 
     if (code) {
-      // PKCE flow — exchange code for session
-      dlog('[reset] exchangeCodeForSession start');
+      // PKCE flow — exchange code for session.
       c.auth.exchangeCodeForSession(window.location.href).then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          dlog(`[reset] exchange ERROR: ${error.message || String(error)}`);
           setLinkError(error.message || 'This reset link is invalid or has expired. Request a new one.');
           return;
         }
-        dlog(`[reset] exchange OK email=${data?.session?.user?.email || '(none)'}`);
         if (data?.session) setReady(true);
         // Clean the code out of the URL so a refresh doesn't retry.
         window.history.replaceState({}, '', url.pathname);
