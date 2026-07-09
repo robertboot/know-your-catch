@@ -30,6 +30,13 @@ const A = {
   cardBite:     `${M}card-hot-bite-window.png`,
   insightsDash: `${M}insights-dashboard.png`,
   shareGraphic: `${M}share-relive-graphic.png`,
+  // Story-block backgrounds — full-bleed imagery for the "Personal
+  // Fishing Intelligence Platform" section between Features and
+  // Insights.
+  bgIntelligence: `${M}bg-intelligence-map.jpg`,
+  bgUnderwater:   `${M}bg-underwater-catch.jpg`,
+  bgTrophy:       `${M}bg-trophy-pb.jpg`,
+  bgSunset:       `${M}bg-sunset-boat.jpg`,
   // Store badges + QR — still SVG placeholders. Swap for official
   // Apple / Google badges + a real QR pointing at the App Store URL
   // once the listing is live. See file comments in each SVG.
@@ -857,6 +864,73 @@ body { margin: 0; }
 .rl-footer-links a { color: ${P.inkMute}; font-size: 13px; text-decoration: none; }
 .rl-footer-links a:hover { color: ${P.accent}; }
 .rl-footer-legal { font-size: 12px; color: ${P.inkMute}; }
+
+/* Personal Fishing Intelligence Platform — full-width story blocks.
+   Backgrounds are <img>s absolutely positioned so loading="lazy"
+   works (CSS background-image would eager-fetch on every visit). */
+.rl-story-section { padding: 30px 0 90px; background: ${P.bg}; }
+.rl-story-list { display: flex; flex-direction: column; gap: 20px; }
+.rl-story {
+  position: relative; overflow: hidden;
+  border-radius: 24px; border: 1px solid ${P.border};
+  height: 520px;
+}
+.rl-story-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  z-index: 0;
+}
+.rl-story-scrim {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(90deg,
+    rgba(3,10,25,0.85) 0%,
+    rgba(3,10,25,0.55) 45%,
+    rgba(3,10,25,0.15) 75%,
+    rgba(3,10,25,0) 100%);
+}
+.rl-story-inner {
+  position: relative; z-index: 2;
+  height: 100%; display: flex; align-items: center;
+  padding: 0 clamp(28px, 6vw, 72px);
+}
+.rl-story-copy { max-width: 520px; }
+.rl-story-copy h2 {
+  font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -0.4px;
+  color: ${P.ink}; margin: 12px 0 14px;
+}
+.rl-story-copy p {
+  font-size: 15px; line-height: 1.65; color: ${P.inkSoft}; margin: 0;
+}
+/* Alternate side per block on desktop. Odd = image right, copy left;
+   even = image left, copy right (scrim flipped so text stays lit). */
+.rl-story.side-right .rl-story-scrim {
+  background: linear-gradient(270deg,
+    rgba(3,10,25,0.85) 0%,
+    rgba(3,10,25,0.55) 45%,
+    rgba(3,10,25,0.15) 75%,
+    rgba(3,10,25,0) 100%);
+}
+.rl-story.side-right .rl-story-inner { justify-content: flex-end; }
+.rl-story.side-right .rl-story-copy { text-align: left; }
+
+@media (max-width: 1024px) {
+  .rl-story { height: 380px; border-radius: 20px; }
+  .rl-story-copy h2 { font-size: 26px; }
+}
+@media (max-width: 640px) {
+  .rl-story { height: 320px; border-radius: 18px; }
+  .rl-story-inner { padding: 0 22px; }
+  .rl-story-copy h2 { font-size: 22px; }
+  .rl-story-copy p { font-size: 14px; }
+  /* Uniform dark scrim on mobile so text is legible over any part
+     of the underlying image — full-width layouts don't have room for
+     the desktop side-fade. */
+  .rl-story-scrim,
+  .rl-story.side-right .rl-story-scrim {
+    background: rgba(3,10,25,0.75);
+  }
+  .rl-story.side-right .rl-story-inner { justify-content: flex-start; }
+}
 `;
 
 /* ============================================================
@@ -964,6 +1038,77 @@ function Features() {
         </div>
         <div className="rl-features">
           {FEATURES.map((f, i) => <FeatureCard key={i} {...f} />)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* Four full-width story blocks — sits between Features and Insights.
+   Renders lazy-loaded background <img>s (not CSS background-image) so
+   Lighthouse counts them for LCP correctly and image budgets track. */
+const STORY_BLOCKS = [
+  {
+    img:     'bgIntelligence',
+    alt:     'Fishing intelligence mapped across the Gulf',
+    eyebrow: 'Intelligence',
+    h2:      'Fishing intelligence, mapped to you.',
+    body:    'Every catch adds another data point. See the patterns behind your best days — species, spots, depths, seasons — mapped across the Gulf.',
+  },
+  {
+    img:     'bgUnderwater',
+    alt:     'Underwater view of a snapper being caught',
+    eyebrow: 'Every detail, captured',
+    h2:      'Every catch, in context.',
+    body:    'Species, size, depth, location, weather, moon, sun — captured automatically the moment you log a fish. Nothing to type, nothing to remember.',
+  },
+  {
+    img:     'bgTrophy',
+    alt:     'Angler holding a personal-best trophy fish',
+    eyebrow: 'Personal Bests',
+    h2:      'Celebrate your biggest moments.',
+    body:    'Every species tracks your top catch. Compare against your own best — or share it with friends who might chase yours.',
+  },
+  {
+    img:     'bgSunset',
+    alt:     'Fishing boat at sunset',
+    eyebrow: 'Every trip, remembered',
+    h2:      'Relive every great day on the water.',
+    body:    'Your photos, your spots, your conditions — the full story of every trip, saved forever. Look back, learn, and plan the next one.',
+  },
+];
+
+function IntelligencePlatform() {
+  return (
+    <section className="rl-section rl-story-section" id="platform">
+      <div className="rl-container">
+        <div className="rl-section-head">
+          <span className="rl-eyebrow">The platform</span>
+          <h2 className="rl-h2">A Personal Fishing Intelligence Platform.</h2>
+          <p className="rl-lead-2">
+            Not just a logbook — a growing map of what works, where, and when, built from your own days on the water.
+          </p>
+        </div>
+        <div className="rl-story-list">
+          {STORY_BLOCKS.map((b, i) => (
+            <article key={i} className={`rl-story${i % 2 === 1 ? ' side-right' : ''}`}>
+              <img
+                className="rl-story-img"
+                src={A[b.img]}
+                alt={b.alt}
+                loading="lazy"
+                decoding="async"
+              />
+              <div className="rl-story-scrim" aria-hidden="true" />
+              <div className="rl-story-inner">
+                <div className="rl-story-copy">
+                  <span className="rl-eyebrow">{b.eyebrow}</span>
+                  <h2>{b.h2}</h2>
+                  <p>{b.body}</p>
+                </div>
+              </div>
+            </article>
+          ))}
         </div>
       </div>
     </section>
@@ -1152,6 +1297,7 @@ export function MarketingLanding() {
       <Nav />
       <Hero />
       <Features />
+      <IntelligencePlatform />
       <Insights />
       <ShareRelive />
       <DownloadCTA />
