@@ -16,14 +16,24 @@ const BUCKET = 'training-photos';
 /* ============================================================
    Coverage thresholds (Phase 2)
    ============================================================
-   Tuned so a species below MIN_TRAIN_THRESHOLD is excluded from
-   Phase 3's export → training set entirely (a too-small class trains
-   an overconfident wrong classifier). TARGET_COVERAGE is the "aim
-   for this" bar the dashboard renders and the copy references.
+   Practical minimums for transfer-learning fine-tuning with
+   aggressive augmentation. Below MIN_TRAIN_THRESHOLD a per-class
+   classifier really can't learn — augmenting 20 photos can't fake
+   200 real ones for shape/color variance. Above ADEQUATE_THRESHOLD
+   the model is trainable with acceptable lookalike risk.
+   TARGET_COVERAGE is the "solid v0.1" bar the dashboard renders and
+   the copy references.
+
+   Species that are visually distinct (Mahi, Cobia, Hogfish) work
+   at ADEQUATE. Species that live in lookalike groups (any snapper,
+   any grouper, any mackerel) need to hit TARGET before the model
+   can distinguish them reliably.
+
    Kept as constants for now; move to a Supabase meta table later
    if we start tuning per-species. */
-export const MIN_TRAIN_THRESHOLD = 200;
-export const TARGET_COVERAGE     = 500;
+export const MIN_TRAIN_THRESHOLD  = 30;
+export const ADEQUATE_THRESHOLD   = 75;
+export const TARGET_COVERAGE      = 200;
 
 /* Pre-seeded lookalike groups the Phase 2 balance widget watches.
    Each group is the exact set of species whose photos the classifier
@@ -95,11 +105,17 @@ export function buildLookalikeGroups() {
   ];
 }
 
-/* Classify a per-species verified count against the two thresholds.
-   Returns 'excluded' | 'thin' | 'good'. */
+/* Classify a per-species verified count against the three thresholds.
+   Returns 'excluded' | 'thin' | 'ok' | 'good':
+     'excluded' — below MIN_TRAIN_THRESHOLD; classifier drops entirely
+     'thin'     — MIN..ADEQUATE; trainable but risky, lookalikes suffer
+     'ok'       — ADEQUATE..TARGET; solid on distinct species, hedges
+                  on lookalikes
+     'good'     — TARGET+; confident on lookalikes, shippable v0.1 */
 export function classifyCoverage(verified) {
   if (verified >= TARGET_COVERAGE)     return 'good';
-  if (verified >= MIN_TRAIN_THRESHOLD)  return 'thin';
+  if (verified >= ADEQUATE_THRESHOLD)  return 'ok';
+  if (verified >= MIN_TRAIN_THRESHOLD) return 'thin';
   return 'excluded';
 }
 

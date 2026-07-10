@@ -30,7 +30,7 @@ import {
   uploadTrainingImage, listTrainingImages,
   approve, reject, correctSpecies, deleteTrainingImage,
   signedUrl, countsBySpecies,
-  MIN_TRAIN_THRESHOLD, TARGET_COVERAGE,
+  MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
 } from '../training-store.js';
 import { CATEGORIES } from '../data.js';
@@ -692,14 +692,15 @@ function CoveragePanel() {
   });
 
   const totals = useMemo(() => {
-    let good = 0, thin = 0, excluded = 0;
+    let good = 0, ok = 0, thin = 0, excluded = 0;
     for (const r of rows) {
-      if (r.status === 'good') good++;
-      else if (r.status === 'thin') thin++;
+      if (r.status === 'good')          good++;
+      else if (r.status === 'ok')       ok++;
+      else if (r.status === 'thin')     thin++;
       else excluded++;
     }
     const totalVerified = rows.reduce((sum, r) => sum + r.verified, 0);
-    return { good, thin, excluded, totalVerified, totalSpecies: rows.length };
+    return { good, ok, thin, excluded, totalVerified, totalSpecies: rows.length };
   }, [rows]);
 
   const groups = useMemo(() => buildLookalikeGroups(), []);
@@ -713,18 +714,28 @@ function CoveragePanel() {
             {loading ? 'Loading…' : 'Refresh'}
           </GhostButton>
         </div>
-        <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.65 }}>
+        <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.7 }}>
           <span style={{ fontWeight: 700, color: T.open }}>{totals.good}</span> at target
           {' '} · {' '}
-          <span style={{ fontWeight: 700, color: T.warn }}>{totals.thin}</span> thin (below {TARGET_COVERAGE})
+          <span style={{ fontWeight: 700, color: T.brass }}>{totals.ok}</span> ok
           {' '} · {' '}
-          <span style={{ fontWeight: 700, color: T.closed }}>{totals.excluded}</span> excluded (below {MIN_TRAIN_THRESHOLD})
+          <span style={{ fontWeight: 700, color: T.warn }}>{totals.thin}</span> thin
           {' '} · {' '}
-          <span style={{ color: T.inkMute }}>{totals.totalSpecies} active species, {totals.totalVerified.toLocaleString()} verified images total</span>
+          <span style={{ fontWeight: 700, color: T.closed }}>{totals.excluded}</span> excluded
+          <div style={{ color: T.inkMute, fontSize: 12, marginTop: 4 }}>
+            {totals.totalSpecies} active species, {totals.totalVerified.toLocaleString()} verified images total
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.55 }}>
-          Excluded species won't ship in the classifier — their verified count is below the {MIN_TRAIN_THRESHOLD} floor.
-          Thin species will train but risk overfitting; aim for {TARGET_COVERAGE}+ per species for reliable lookalike disambiguation.
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.6 }}>
+          <b style={{ color: T.closed }}>Excluded</b> (&lt; {MIN_TRAIN_THRESHOLD}) — classifier drops entirely; too few examples to learn from.
+          {' '}
+          <b style={{ color: T.warn }}>Thin</b> ({MIN_TRAIN_THRESHOLD}–{ADEQUATE_THRESHOLD - 1}) — trainable but risky; lookalike pairs will guess.
+          {' '}
+          <b style={{ color: T.brass }}>Ok</b> ({ADEQUATE_THRESHOLD}–{TARGET_COVERAGE - 1}) — solid on distinct species, hedges on lookalikes.
+          {' '}
+          <b style={{ color: T.open }}>Good</b> ({TARGET_COVERAGE}+) — shippable v0.1.
+          {' '}
+          Distinct species (Mahi, Cobia, Hogfish) work at ok; lookalike-group species need good.
         </div>
       </Card>
 
@@ -751,6 +762,7 @@ function CoveragePanel() {
               <option value="all">All</option>
               <option value="excluded">Excluded ({totals.excluded})</option>
               <option value="thin">Thin ({totals.thin})</option>
+              <option value="ok">Ok ({totals.ok})</option>
               <option value="good">Good ({totals.good})</option>
             </select>
           </div>
@@ -789,16 +801,15 @@ function CoveragePanel() {
 function CoverageRow({ row }) {
   const pct = Math.min(100, (row.verified / TARGET_COVERAGE) * 100);
   const barColor =
-    row.status === 'good'      ? T.open :
-    row.status === 'thin'      ? T.warn :
+    row.status === 'good'     ? T.open :
+    row.status === 'ok'       ? T.brass :
+    row.status === 'thin'     ? T.warn :
     T.closed;
-  const pillColor =
-    row.status === 'good'      ? T.open :
-    row.status === 'thin'      ? T.warn :
-    T.closed;
+  const pillColor = barColor;
   const pillLabel =
-    row.status === 'good'      ? 'Good' :
-    row.status === 'thin'      ? 'Thin' :
+    row.status === 'good'     ? 'Good' :
+    row.status === 'ok'       ? 'Ok' :
+    row.status === 'thin'     ? 'Thin' :
     'Excluded';
   const lastLabel = row.lastUploadedAt
     ? new Date(row.lastUploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
