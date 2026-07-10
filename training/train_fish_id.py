@@ -80,7 +80,12 @@ def build_model(num_classes: int):
     import tensorflow as tf
     from tensorflow.keras import layers, models
 
-    inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3), dtype="uint8")
+    # Float32 input in [0, 255]. Rescaling normalises to [0, 1] for
+    # MobileNet. The TFLite converter (see quantize_to_tflite) inserts
+    # the uint8→float32 quantize op at the input boundary via
+    # inference_input_type = tf.uint8, so the shipped .tflite still
+    # accepts uint8 tensors from the app.
+    inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3), dtype="float32")
     x = layers.Rescaling(1.0 / 255.0)(inputs)
 
     # Augmentation is train-time only via `training` kwarg propagation.
@@ -235,10 +240,22 @@ def quantize_to_tflite(model, val_ds, out_path: Path):
     import tensorflow as tf
 
     def rep_dataset():
+        # Model's native input dtype is float32 in [0, 255] (Rescaling
+        # inside the graph divides by 255). Yield tensors in that exact
+        # range so calibration matches the training-time distribution.
+        # The inference_input_type = uint8 below tells the converter to
+        # add a uint8 → float32 quantize op AT THE MODEL BOUNDARY,
+        # separate from calibration; the two mustn't be conflated.
         n = 0
         for x, _ in val_ds:
             for img in x:
-                yield [tf.expand_dims(tf.cast(img, tf.float32), 0)]
+                sample = tf.cast(img, tf.float32)
+                # image_dataset_from_directory + Keras 3 already returns
+                # tensors in [0, 255]. Clamp defensively so a stray
+                # sample outside that range can't spoil quantization
+                # stats.
+                sample = tf.clip_by_value(sample, 0.0, 255.0)
+                yield [tf.expand_dims(sample, 0)]
                 n += 1
                 if n >= 100:
                     return
@@ -249,8 +266,13 @@ def quantize_to_tflite(model, val_ds, out_path: Path):
     converter.target_spec.supported_ops = [
         tf.lite.OpsSet.TFLITE_BUILTINS_INT8,
     ]
+    # Boundary dtypes: the shipped .tflite accepts uint8 tensors from
+    # the app (0..255 straight from the RGB pixel bytes) and returns
+    # uint8 softmax scores. Consumers dequantize to [0, 1] with the
+    # scale + zero_point from the model's output tensor metadata; see
+    # normalizeScores in src/admin/TestImagePanel.jsx.
     converter.inference_input_type = tf.uint8
-    converter.inference_output_type = tf.float32
+    converter.inference_output_type = tf.uint8
     tflite = converter.convert()
     out_path.write_bytes(tflite)
 

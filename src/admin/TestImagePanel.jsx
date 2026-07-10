@@ -22,6 +22,38 @@ import { getProductionModel, modelSignedUrl } from '../model-store.js';
 
 const IMG_SIZE = 224; // must match training-time input size
 
+/* Dequantize a TFLite uint8 softmax output back into a proper [0, 1]
+   distribution. Handles three cases the tfjs-tflite runtime can
+   plausibly return:
+     - Already-dequantized float32 that sums to ~1 → pass through
+     - Raw uint8 integers [0, 255] → divide by 255, then renormalize
+     - Anything else that clearly isn't a probability distribution →
+       renormalize by sum so downstream band comparison works
+   Runs client-side each predict — cheap. */
+function normalizeScores(raw) {
+  const arr = raw instanceof Float32Array ? Array.from(raw) : Array.from(raw, Number);
+  if (arr.length === 0) return arr;
+  let max = -Infinity, sum = 0;
+  for (const v of arr) { if (v > max) max = v; sum += v; }
+  // Path A — looks like uint8 (max > 1.5 means we're clearly not on a
+  // [0, 1] distribution).
+  if (max > 1.5) {
+    // Divide by 255 first (standard uint8 → float dequantize proxy
+    // when scale/zero_point aren't exposed), then renormalize.
+    const scaled = arr.map(v => v / 255);
+    const s = scaled.reduce((a, b) => a + b, 0) || 1;
+    return scaled.map(v => v / s);
+  }
+  // Path B — floats but don't sum to ~1 (some tfjs-tflite versions
+  // return raw sigmoid-ish values). Rescale by sum to make them a
+  // legit probability distribution.
+  if (Math.abs(sum - 1) > 0.05 && sum > 0) {
+    return arr.map(v => v / sum);
+  }
+  // Path C — already normalized.
+  return arr;
+}
+
 /* tfjs-tflite doesn't Vite-bundle cleanly (WASM worker path breaks in
    Rollup). Load the UMD bundle from a CDN once and stash on window.
    Admin-only, so hitting a CDN is acceptable. */
@@ -125,8 +157,16 @@ export default function TestImagePanel() {
       );
 
       const out = runtime.tflite.predict(input);
-      const scores = await out.data();
+      const rawScores = await out.data();
       input.dispose(); out.dispose();
+
+      // The .tflite ships with inference_output_type = tf.uint8 (see
+      // training/train_fish_id.py quantize_to_tflite). tfjs-tflite
+      // sometimes auto-dequantizes on .data(), sometimes doesn't —
+      // depends on version. Normalize defensively: if the raw scores
+      // look like uint8 (max > 1.5) OR the whole set doesn't sum to
+      // ~1, remap them to a proper softmax distribution.
+      const scores = normalizeScores(rawScores);
 
       // Rank + apply confidence bands + excluded filter.
       const ranked = Array.from(scores)
