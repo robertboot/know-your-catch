@@ -9,8 +9,99 @@
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { ensureSpeciesRow } from './species-store.js';
+import { SPECIES } from './data.js';
 
 const BUCKET = 'training-photos';
+
+/* ============================================================
+   Coverage thresholds (Phase 2)
+   ============================================================
+   Tuned so a species below MIN_TRAIN_THRESHOLD is excluded from
+   Phase 3's export → training set entirely (a too-small class trains
+   an overconfident wrong classifier). TARGET_COVERAGE is the "aim
+   for this" bar the dashboard renders and the copy references.
+   Kept as constants for now; move to a Supabase meta table later
+   if we start tuning per-species. */
+export const MIN_TRAIN_THRESHOLD = 200;
+export const TARGET_COVERAGE     = 500;
+
+/* Pre-seeded lookalike groups the Phase 2 balance widget watches.
+   Each group is the exact set of species whose photos the classifier
+   will have to disambiguate at inference time — if one member has
+   500 photos and another has 40, the model learns "just say the
+   500-photo one" which is the failure mode we're avoiding. */
+export const LOOKALIKE_GROUP_SEEDS = [
+  ['red_snapper', 'vermilion_snapper', 'lane_snapper'],
+  ['gag_grouper', 'black_grouper', 'scamp', 'yellowmouth_grouper', 'red_grouper'],
+  ['king_mackerel', 'spanish_mackerel', 'cero_mackerel', 'atlantic_mackerel'],
+  ['greater_amberjack', 'lesser_amberjack', 'almaco_jack', 'banded_rudderfish'],
+  ['blackfin_tuna', 'yellowfin_tuna', 'bigeye_tuna', 'bluefin_tuna', 'albacore_tuna', 'little_tunny'],
+  ['blue_marlin', 'white_marlin', 'sailfish'],
+  ['summer_flounder', 'winter_flounder'],
+];
+
+/* Build the full lookalike group list: seeded groups + auto-derived
+   connected components from SPECIES.lookalikes[] for any species not
+   already covered by a seeded group. Each returned entry is an array
+   of speciesId strings, min length 2. Deterministic order so the
+   dashboard renders stably.
+
+   The auto-derive step uses a union-find on the lookalikes graph so
+   transitive lookalikes (A ↔ B, B ↔ C) end up in the same group. */
+export function buildLookalikeGroups() {
+  const seededSet = new Set();
+  for (const g of LOOKALIKE_GROUP_SEEDS) for (const id of g) seededSet.add(id);
+
+  // Union-find over SPECIES for the auto-derive pass.
+  const parent = new Map();
+  const find = (x) => {
+    while (parent.get(x) !== x) {
+      parent.set(x, parent.get(parent.get(x)));
+      x = parent.get(x);
+    }
+    return x;
+  };
+  const union = (a, b) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  const speciesIds = new Set(SPECIES.map(s => s.id));
+  for (const s of SPECIES) {
+    if (seededSet.has(s.id)) continue;
+    parent.set(s.id, s.id);
+  }
+  for (const s of SPECIES) {
+    if (seededSet.has(s.id)) continue;
+    for (const la of s.lookalikes || []) {
+      if (seededSet.has(la) || !speciesIds.has(la)) continue;
+      if (!parent.has(la)) parent.set(la, la);
+      union(s.id, la);
+    }
+  }
+  const buckets = new Map();
+  for (const id of parent.keys()) {
+    const root = find(id);
+    if (!buckets.has(root)) buckets.set(root, []);
+    buckets.get(root).push(id);
+  }
+
+  const auto = [...buckets.values()]
+    .filter(g => g.length >= 2)
+    .map(g => g.slice().sort());
+
+  return [
+    ...LOOKALIKE_GROUP_SEEDS.map(g => g.slice()),
+    ...auto,
+  ];
+}
+
+/* Classify a per-species verified count against the two thresholds.
+   Returns 'excluded' | 'thin' | 'good'. */
+export function classifyCoverage(verified) {
+  if (verified >= TARGET_COVERAGE)     return 'good';
+  if (verified >= MIN_TRAIN_THRESHOLD)  return 'thin';
+  return 'excluded';
+}
 
 /* Upload one file to storage, then insert a training_images row.
    Storage path: {species_id}/{uuid}.jpg. UUID is generated locally
@@ -126,22 +217,30 @@ export async function deleteTrainingImage(id, storagePath) {
   return { ok: true };
 }
 
-/* Fast per-species / status counts for the review dashboard.
-   Returns { [speciesId]: { pending, verified, rejected, corrected, total } }. */
+/* Fast per-species / status counts + last upload timestamp for the
+   review + coverage dashboards. Client-side aggregate over the raw
+   rows — one round-trip. Returns:
+     { [speciesId]: { pending, verified, rejected, corrected, total, lastUploadedAt } } */
 export async function countsBySpecies() {
   const c = client();
   if (!c) return { ok: false, counts: {}, error: 'not-configured' };
   const { data, error } = await c
     .from('training_images')
-    .select('species_id, status')
+    .select('species_id, status, uploaded_at')
     .limit(50000);
   if (error) return { ok: false, counts: {}, error: error.message };
   const counts = {};
   for (const r of data || []) {
     const sid = r.species_id;
-    counts[sid] ||= { pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0 };
-    counts[sid][r.status] += 1;
-    counts[sid].total += 1;
+    const b = (counts[sid] ||= {
+      pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0,
+      lastUploadedAt: null,
+    });
+    b[r.status] += 1;
+    b.total += 1;
+    if (!b.lastUploadedAt || r.uploaded_at > b.lastUploadedAt) {
+      b.lastUploadedAt = r.uploaded_at;
+    }
   }
   return { ok: true, counts };
 }

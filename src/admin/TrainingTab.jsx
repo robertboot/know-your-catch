@@ -30,7 +30,10 @@ import {
   uploadTrainingImage, listTrainingImages,
   approve, reject, correctSpecies, deleteTrainingImage,
   signedUrl, countsBySpecies,
+  MIN_TRAIN_THRESHOLD, TARGET_COVERAGE,
+  buildLookalikeGroups, classifyCoverage,
 } from '../training-store.js';
+import { CATEGORIES } from '../data.js';
 
 const REJECT_REASONS = [
   { key: 'blurry',    label: 'Blurry / low quality' },
@@ -44,15 +47,17 @@ const REJECT_REASONS = [
    Top-level TrainingTab
    ============================================================ */
 export default function TrainingTab() {
-  const [panel, setPanel] = useState('upload'); // 'upload' | 'review'
+  const [panel, setPanel] = useState('upload'); // 'upload' | 'review' | 'coverage'
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}` }}>
         <SubTabBtn active={panel === 'upload'} onClick={() => setPanel('upload')}>Upload</SubTabBtn>
         <SubTabBtn active={panel === 'review'} onClick={() => setPanel('review')}>Review</SubTabBtn>
+        <SubTabBtn active={panel === 'coverage'} onClick={() => setPanel('coverage')}>Coverage</SubTabBtn>
       </div>
       {panel === 'upload' && <UploadPanel />}
       {panel === 'review' && <ReviewPanel />}
+      {panel === 'coverage' && <CoveragePanel />}
     </div>
   );
 }
@@ -628,6 +633,272 @@ function ModalShell({ onCancel, title, children }) {
         <div style={{ marginTop: 14, textAlign: 'right' }}>
           <GhostButton onClick={onCancel}>Cancel</GhostButton>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Coverage panel — Phase 2
+   ============================================================ */
+function CoveragePanel() {
+  const [counts, setCounts] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [sortMode, setSortMode] = useState('gap'); // 'gap' | 'name' | 'count'
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'excluded' | 'thin' | 'good'
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const r = await countsBySpecies();
+    setLoading(false);
+    if (r.ok) setCounts(r.counts);
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const activeSpecies = useMemo(
+    () => SPECIES.filter(s => s.active !== false),
+    []
+  );
+
+  const rows = useMemo(() => activeSpecies.map(s => {
+    const c = counts[s.id] || { verified: 0, pending: 0, total: 0, lastUploadedAt: null };
+    const verified = c.verified;
+    const status = classifyCoverage(verified);
+    return {
+      speciesId: s.id,
+      commonName: s.commonName,
+      category: s.category,
+      verified,
+      pending: c.pending,
+      total: c.total,
+      lastUploadedAt: c.lastUploadedAt,
+      status,
+      gap: Math.max(0, TARGET_COVERAGE - verified),
+    };
+  }), [counts, activeSpecies]);
+
+  const filtered = rows.filter(r => {
+    if (categoryFilter && r.category !== categoryFilter) return false;
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    return true;
+  });
+  filtered.sort((a, b) => {
+    if (sortMode === 'name')  return a.commonName.localeCompare(b.commonName);
+    if (sortMode === 'count') return b.verified - a.verified;
+    // 'gap' default — largest gap first, then alphabetical
+    if (a.gap !== b.gap) return b.gap - a.gap;
+    return a.commonName.localeCompare(b.commonName);
+  });
+
+  const totals = useMemo(() => {
+    let good = 0, thin = 0, excluded = 0;
+    for (const r of rows) {
+      if (r.status === 'good') good++;
+      else if (r.status === 'thin') thin++;
+      else excluded++;
+    }
+    const totalVerified = rows.reduce((sum, r) => sum + r.verified, 0);
+    return { good, thin, excluded, totalVerified, totalSpecies: rows.length };
+  }, [rows]);
+
+  const groups = useMemo(() => buildLookalikeGroups(), []);
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+          <SectionLabel>Overall progress</SectionLabel>
+          <GhostButton onClick={refresh} disabled={loading} style={{ padding: '6px 12px', fontSize: 12 }}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </GhostButton>
+        </div>
+        <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.65 }}>
+          <span style={{ fontWeight: 700, color: T.open }}>{totals.good}</span> at target
+          {' '} · {' '}
+          <span style={{ fontWeight: 700, color: T.warn }}>{totals.thin}</span> thin (below {TARGET_COVERAGE})
+          {' '} · {' '}
+          <span style={{ fontWeight: 700, color: T.closed }}>{totals.excluded}</span> excluded (below {MIN_TRAIN_THRESHOLD})
+          {' '} · {' '}
+          <span style={{ color: T.inkMute }}>{totals.totalSpecies} active species, {totals.totalVerified.toLocaleString()} verified images total</span>
+        </div>
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.55 }}>
+          Excluded species won't ship in the classifier — their verified count is below the {MIN_TRAIN_THRESHOLD} floor.
+          Thin species will train but risk overfitting; aim for {TARGET_COVERAGE}+ per species for reliable lookalike disambiguation.
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 10 }}>
+          <div>
+            <SectionLabel style={{ marginBottom: 4 }}>Sort</SectionLabel>
+            <select value={sortMode} onChange={e => setSortMode(e.target.value)} style={{ ...inputStyle, padding: '8px 10px', fontSize: 12 }}>
+              <option value="gap">Largest gap</option>
+              <option value="count">Most verified</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
+          <div>
+            <SectionLabel style={{ marginBottom: 4 }}>Category</SectionLabel>
+            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, padding: '8px 10px', fontSize: 12 }}>
+              <option value="">All</option>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <SectionLabel style={{ marginBottom: 4 }}>Status</SectionLabel>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...inputStyle, padding: '8px 10px', fontSize: 12 }}>
+              <option value="all">All</option>
+              <option value="excluded">Excluded ({totals.excluded})</option>
+              <option value="thin">Thin ({totals.thin})</option>
+              <option value="good">Good ({totals.good})</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 6 }}>
+          {filtered.map(r => <CoverageRow key={r.speciesId} row={r} />)}
+          {filtered.length === 0 && (
+            <div style={{ fontSize: 13, color: T.inkMute, padding: 20, textAlign: 'center' }}>
+              No species match those filters.
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel style={{ marginBottom: 6 }}>Lookalike group balance</SectionLabel>
+        <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 10, lineHeight: 1.5 }}>
+          When one member of a lookalike group has ≥ 2× the verified photos of another, the classifier learns
+          "just guess the majority" instead of the actual visual difference. Balance the small side first.
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {groups.map((group, i) => (
+            <LookalikeGroupRow
+              key={i}
+              members={group}
+              counts={counts}
+            />
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function CoverageRow({ row }) {
+  const pct = Math.min(100, (row.verified / TARGET_COVERAGE) * 100);
+  const barColor =
+    row.status === 'good'      ? T.open :
+    row.status === 'thin'      ? T.warn :
+    T.closed;
+  const pillColor =
+    row.status === 'good'      ? T.open :
+    row.status === 'thin'      ? T.warn :
+    T.closed;
+  const pillLabel =
+    row.status === 'good'      ? 'Good' :
+    row.status === 'thin'      ? 'Thin' :
+    'Excluded';
+  const lastLabel = row.lastUploadedAt
+    ? new Date(row.lastUploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—';
+
+  return (
+    <div style={{
+      display: 'flex', gap: 12, alignItems: 'center',
+      background: T.parchmentDeep, borderRadius: 8, padding: '10px 12px',
+      border: `1px solid ${T.cardEdge}`,
+    }}>
+      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {row.commonName}
+        </div>
+        <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>{row.speciesId}</div>
+      </div>
+
+      <div style={{ flex: '2 1 260px', minWidth: 160 }}>
+        <div style={{
+          height: 8, background: T.card, borderRadius: 4, overflow: 'hidden',
+          border: `1px solid ${T.cardEdge}`,
+        }}>
+          <div style={{
+            height: '100%', width: `${pct}%`, background: barColor,
+            transition: 'width 220ms ease',
+          }} />
+        </div>
+        <div style={{ fontSize: 10, color: T.inkMute, marginTop: 3, display: 'flex', justifyContent: 'space-between' }}>
+          <span>
+            <strong style={{ color: T.ink }}>{row.verified}</strong> / {TARGET_COVERAGE} verified
+            {row.pending > 0 && <span style={{ color: T.brass, marginLeft: 6 }}>+{row.pending} pending</span>}
+          </span>
+          <span>{row.gap > 0 ? `${row.gap} to target` : '✓'}</span>
+        </div>
+      </div>
+
+      <span style={{
+        fontSize: 10, fontWeight: 800, letterSpacing: 1,
+        color: T.oceanDeep, background: pillColor,
+        padding: '3px 8px', borderRadius: 999,
+        flexShrink: 0,
+      }}>{pillLabel}</span>
+
+      <div style={{ fontSize: 11, color: T.inkMute, flexShrink: 0, minWidth: 60, textAlign: 'right' }}>
+        {lastLabel}
+      </div>
+    </div>
+  );
+}
+
+function LookalikeGroupRow({ members, counts }) {
+  const memberData = members.map(id => {
+    const sp = SPECIES.find(s => s.id === id);
+    const c = counts[id] || { verified: 0 };
+    return { id, name: sp?.commonName || id, verified: c.verified };
+  });
+  const verifiedCounts = memberData.map(m => m.verified);
+  const max = Math.max(...verifiedCounts);
+  const min = Math.min(...verifiedCounts);
+  const unbalanced = max > 0 && max >= 2 * Math.max(1, min);
+  const anyEmpty = min === 0 && max > 0;
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      background: (unbalanced || anyEmpty) ? T.warnBg : T.parchmentDeep,
+      border: `1px solid ${(unbalanced || anyEmpty) ? T.warn : T.cardEdge}`,
+      borderRadius: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.ink }}>
+          {memberData.map(m => m.name).join(' · ')}
+        </div>
+        {(unbalanced || anyEmpty) && (
+          <span style={{
+            fontSize: 9, fontWeight: 800, letterSpacing: 1,
+            color: T.oceanDeep, background: T.warn,
+            padding: '2px 7px', borderRadius: 999,
+          }}>
+            {anyEmpty ? 'Empty member' : 'Unbalanced'}
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'grid', gap: 4 }}>
+        {memberData.map(m => {
+          const pct = max > 0 ? Math.min(100, (m.verified / max) * 100) : 0;
+          const isMin = m.verified === min && max > min;
+          return (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 11, color: T.inkSoft, width: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {m.name}
+              </div>
+              <div style={{ flex: 1, height: 6, background: T.card, borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: isMin ? T.closed : T.brass }} />
+              </div>
+              <div style={{ fontSize: 11, color: T.ink, width: 40, textAlign: 'right' }}>{m.verified}</div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
