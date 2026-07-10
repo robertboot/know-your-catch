@@ -8,6 +8,7 @@
    in the admin bundle only. */
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
+import { ensureSpeciesRow } from './species-store.js';
 
 const BUCKET = 'training-photos';
 
@@ -21,6 +22,13 @@ export async function uploadTrainingImage(file, speciesId) {
   if (!file || !speciesId) return { ok: false, error: 'missing file or species' };
   const sess = getLastSession();
   const email = sess?.user?.email || null;
+
+  // Seed the FK target BEFORE the storage upload so a bundled-only
+  // species (never touched via the admin edit form) doesn't fail the
+  // insert AFTER we've already burned a storage write. Idempotent
+  // upsert; no-op if the row is already there.
+  const seed = await ensureSpeciesRow(speciesId);
+  if (!seed.ok) return { ok: false, error: seed.error };
 
   const id = crypto.randomUUID();
   const ext = (file.name?.match(/\.([a-z0-9]+)$/i)?.[1] || 'jpg').toLowerCase();
@@ -74,8 +82,16 @@ export async function reject(ids, reason) {
 }
 
 /* Correct a batch: move to a different species_id, preserve the
-   original in original_species_id so we can audit later. */
+   original in original_species_id so we can audit later. Both the
+   destination and the source are FK targets; seed either if they
+   only exist in the bundled data seed. */
 export async function correctSpecies(ids, newSpeciesId, currentSpeciesId) {
+  const destSeed = await ensureSpeciesRow(newSpeciesId);
+  if (!destSeed.ok) return { ok: false, error: destSeed.error };
+  if (currentSpeciesId) {
+    const srcSeed = await ensureSpeciesRow(currentSpeciesId);
+    if (!srcSeed.ok) return { ok: false, error: srcSeed.error };
+  }
   return _reviewUpdate(ids, {
     status: 'corrected',
     species_id: newSpeciesId,

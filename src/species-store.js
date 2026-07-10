@@ -207,10 +207,11 @@ export async function refreshSpecies() {
 
 /** Ensure a species row exists in Supabase so FK inserts succeed.
     Only most species live in the bundled SPECIES const, not in the DB
-    (the DB holds edits/overlays). Adding a photo needs the FK target,
-    so we lazily seed the row from the bundled record when missing.
-    Safe to call redundantly — upsert on id primary key. */
-async function ensureSpeciesRow(speciesId) {
+    (the DB holds edits/overlays). Adding a photo, training image, or
+    any other FK-target write needs the row present. Lazily seeds from
+    the bundled record when missing. Safe to call redundantly — upsert
+    on id primary key with ignoreDuplicates. */
+export async function ensureSpeciesRow(speciesId) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
   const sp = SPECIES.find(s => s.id === speciesId);
