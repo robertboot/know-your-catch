@@ -22,6 +22,7 @@ import {
   addSpeciesPhoto, deleteSpeciesPhoto, setPrimarySpeciesPhoto,
   subscribe as subscribeSpeciesStore,
 } from '../species-store.js';
+import TrainingTab from './TrainingTab.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
 } from '../brand-store.js';
@@ -265,6 +266,7 @@ function SignedInShell({ email, onExit }) {
       {tab === 'species'    && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
       {tab === 'branding'   && !detailView && <BrandingTab />}
       {tab === 'categories' && !detailView && <CategoriesTab />}
+      {tab === 'training'   && !detailView && <TrainingTab />}
     </Chrome>
   );
 }
@@ -272,6 +274,7 @@ function SignedInShell({ email, onExit }) {
 function TabBar({ tab, onTab }) {
   const tabs = [
     { id: 'species',    label: 'Species' },
+    { id: 'training',   label: 'Training' },
     { id: 'categories', label: 'Categories' },
     { id: 'branding',   label: 'Branding' },
   ];
@@ -295,20 +298,30 @@ function TabBar({ tab, onTab }) {
    ============================================================ */
 function SpeciesTab({ detailView, setDetailView }) {
   const [filter, setFilter] = useState('');
+  // 'active' | 'deactivated' | 'all' — default 'active' since most
+  // review passes only care about live species.
+  const [statusFilter, setStatusFilter] = useState('active');
 
   const sorted = useMemo(() =>
     [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName)),
     // Re-sort when SPECIES changes (add / edit lands via species-store notify)
-    [SPECIES.length, SPECIES.map(s => s.id).join(',')]
+    [SPECIES.length, SPECIES.map(s => s.id + (s.active === false ? ':d' : '')).join(',')]
   );
+  const activeCount      = sorted.filter(s => s.active !== false).length;
+  const deactivatedCount = sorted.length - activeCount;
+  const byStatus = sorted.filter(s => {
+    if (statusFilter === 'active')       return s.active !== false;
+    if (statusFilter === 'deactivated')  return s.active === false;
+    return true;
+  });
   const filtered = filter.trim()
-    ? sorted.filter(s => {
+    ? byStatus.filter(s => {
         const q = filter.toLowerCase();
         return s.commonName.toLowerCase().includes(q)
           || (s.scientific || '').toLowerCase().includes(q)
           || s.id.toLowerCase().includes(q);
       })
-    : sorted;
+    : byStatus;
 
   if (detailView?.kind === 'species-edit') {
     const editing = detailView.id ? SPECIES.find(s => s.id === detailView.id) : null;
@@ -323,6 +336,20 @@ function SpeciesTab({ detailView, setDetailView }) {
 
   return (
     <>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        <StatusChip
+          active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}
+          label={`Active · ${activeCount}`} color={T.open}
+        />
+        <StatusChip
+          active={statusFilter === 'deactivated'} onClick={() => setStatusFilter('deactivated')}
+          label={`Deactivated · ${deactivatedCount}`} color={T.warn}
+        />
+        <StatusChip
+          active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}
+          label={`All · ${sorted.length}`} color={T.brass}
+        />
+      </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <input
           type="search" placeholder="Filter by name, scientific, or id…"
@@ -335,7 +362,7 @@ function SpeciesTab({ detailView, setDetailView }) {
         >+ Add</GhostButton>
       </div>
       <div style={{ fontSize: 11, color: T.inkMute, margin: '0 4px 10px' }}>
-        {SPECIES.length} species total; {filtered.length} shown.
+        {filtered.length} shown · {activeCount} active · {deactivatedCount} deactivated.
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         {filtered.map(sp => {
@@ -380,6 +407,21 @@ function SpeciesTab({ detailView, setDetailView }) {
         )}
       </div>
     </>
+  );
+}
+
+/* Small toggleable chip used by the Species tab's active/deactivated
+   filter row. Kept local since no other tab needs it right now. */
+function StatusChip({ active, onClick, label, color }) {
+  return (
+    <button onClick={onClick} style={{
+      background: active ? color : 'transparent',
+      color: active ? T.oceanDeep : color,
+      border: `1.5px solid ${color}`,
+      padding: '5px 12px', borderRadius: 999,
+      fontSize: 11, fontWeight: 800, letterSpacing: 0.5,
+      cursor: 'pointer',
+    }}>{label}</button>
   );
 }
 
