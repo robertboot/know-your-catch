@@ -35,6 +35,8 @@ import {
   planExport,
 } from '../training-store.js';
 import { CATEGORIES } from '../data.js';
+import ModelsPanel from './ModelsPanel.jsx';
+import TestImagePanel from './TestImagePanel.jsx';
 
 const REJECT_REASONS = [
   { key: 'blurry',    label: 'Blurry / low quality' },
@@ -66,6 +68,8 @@ export default function TrainingTab() {
         <SubTabBtn active={panel === 'review'} onClick={() => setPanel('review')}>Review</SubTabBtn>
         <SubTabBtn active={panel === 'coverage'} onClick={() => setPanel('coverage')}>Coverage</SubTabBtn>
         <SubTabBtn active={panel === 'export'} onClick={() => setPanel('export')}>Export</SubTabBtn>
+        <SubTabBtn active={panel === 'models'} onClick={() => setPanel('models')}>Models</SubTabBtn>
+        <SubTabBtn active={panel === 'test'} onClick={() => setPanel('test')}>Test image</SubTabBtn>
       </div>
       {panel === 'upload' && (
         <UploadPanel
@@ -76,6 +80,8 @@ export default function TrainingTab() {
       {panel === 'review' && <ReviewPanel />}
       {panel === 'coverage' && <CoveragePanel onUploadSpecies={jumpToUpload} />}
       {panel === 'export' && <ExportPanel />}
+      {panel === 'models' && <ModelsPanel onOpenTestTool={() => setPanel('test')} />}
+      {panel === 'test' && <TestImagePanel />}
     </div>
   );
 }
