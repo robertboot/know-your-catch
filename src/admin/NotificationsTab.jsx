@@ -120,7 +120,13 @@ function LaunchEmailsPanel() {
       )}
 
       {waitlists.map(w => (
-        <Card key={w.feature} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Card
+          key={w.feature}
+          style={{
+            display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', gap: 12,
+          }}
+        >
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: T.ink, fontFamily: 'monospace' }}>
               {w.feature}
@@ -131,7 +137,7 @@ function LaunchEmailsPanel() {
           </div>
           <PrimaryButton
             onClick={() => setSelectedFeature(w)}
-            style={{ padding: '10px 16px' }}
+            style={{ padding: '10px 16px', width: 'auto', flexShrink: 0 }}
           >
             Compose &amp; send
           </PrimaryButton>
@@ -318,7 +324,7 @@ function AnnouncementsPanel() {
         <GhostButton onClick={refresh} disabled={loading} style={{ padding: '8px 12px', fontSize: 12 }}>
           {loading ? 'Loading…' : 'Refresh'}
         </GhostButton>
-        <PrimaryButton onClick={() => setEditing('new')} style={{ padding: '10px 16px' }}>
+        <PrimaryButton onClick={() => setEditing('new')} style={{ padding: '10px 16px', width: 'auto', flexShrink: 0 }}>
           New announcement
         </PrimaryButton>
       </Card>
