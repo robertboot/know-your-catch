@@ -270,3 +270,117 @@ export async function signedUrl(storagePath, ttlSeconds = 3600) {
   if (error) return null;
   return data?.signedUrl || null;
 }
+
+/* ============================================================
+   Phase 3 — Export
+   ============================================================
+   Fetch every verified training image, filter out excluded species,
+   deterministic-shuffle within each species, 85/15 split, and hand
+   back an object shape the Coverage UI can drive JSZip with. */
+
+/* Deterministic seeded PRNG (mulberry32). Same seed → same shuffle
+   → reproducible splits across export runs. */
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* Fisher–Yates shuffle with a seeded PRNG. Mutates in place. */
+function shuffleInPlace(arr, seed) {
+  const rng = mulberry32(seed);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/* Simple string hash → 32-bit int for the shuffle seed. */
+function hashSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/* Group verified images by species, apply the coverage-tier filter,
+   split each species 85/15 with a deterministic seed. Returns:
+     {
+       plan: [{ species_id, storage_path, split: 'train'|'val', filename }],
+       counts: { species_id: { verified, train, val } },
+       excluded: [species_id, ...]     // classifyCoverage → 'excluded'
+       species: [species_id, ...]      // classifyCoverage NOT 'excluded'
+     }
+   Does NOT download bytes — that's the caller's job so a big export
+   can stream through JSZip without exhausting memory. */
+export async function planExport({ splitSeed = 'reelintel-v1' } = {}) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+
+  const rows = [];
+  let from = 0;
+  const page = 1000;
+  // Page through in case the dataset outgrows a single request.
+  // Order by id so pagination stays consistent across pages.
+  while (true) {
+    const { data, error } = await c.from('training_images')
+      .select('id, species_id, storage_path, crop_bbox')
+      .eq('status', 'verified')
+      .order('id', { ascending: true })
+      .range(from, from + page - 1);
+    if (error) return { ok: false, error: error.message };
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < page) break;
+    from += page;
+  }
+
+  const bySpecies = new Map();
+  for (const r of rows) {
+    if (!bySpecies.has(r.species_id)) bySpecies.set(r.species_id, []);
+    bySpecies.get(r.species_id).push(r);
+  }
+
+  const species = [];
+  const excluded = [];
+  const counts = {};
+  const plan = [];
+
+  const speciesIds = [...bySpecies.keys()].sort();
+  for (const sid of speciesIds) {
+    const list = bySpecies.get(sid);
+    const tier = classifyCoverage(list.length);
+    if (tier === 'excluded') { excluded.push(sid); continue; }
+
+    // Deterministic split — seed combines the export seed + species id
+    // so re-running an export produces the same split.
+    shuffleInPlace(list, hashSeed(`${splitSeed}::${sid}`));
+    const valCount   = Math.max(1, Math.round(list.length * 0.15));
+    const trainCount = list.length - valCount;
+    counts[sid] = { verified: list.length, train: trainCount, val: valCount };
+    species.push(sid);
+
+    list.forEach((row, i) => {
+      const split = i < trainCount ? 'train' : 'val';
+      const seq = String(i).padStart(4, '0');
+      const ext = row.storage_path.split('.').pop() || 'jpg';
+      const filename = `${sid}_${seq}.${ext}`;
+      plan.push({
+        species_id: sid,
+        storage_path: row.storage_path,
+        crop_bbox: row.crop_bbox,
+        split,
+        filename,
+      });
+    });
+  }
+
+  return { ok: true, plan, counts, excluded, species, splitSeed };
+}

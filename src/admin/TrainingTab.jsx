@@ -32,6 +32,7 @@ import {
   signedUrl, countsBySpecies,
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
+  planExport,
 } from '../training-store.js';
 import { CATEGORIES } from '../data.js';
 
@@ -64,6 +65,7 @@ export default function TrainingTab() {
         <SubTabBtn active={panel === 'upload'} onClick={() => setPanel('upload')}>Upload</SubTabBtn>
         <SubTabBtn active={panel === 'review'} onClick={() => setPanel('review')}>Review</SubTabBtn>
         <SubTabBtn active={panel === 'coverage'} onClick={() => setPanel('coverage')}>Coverage</SubTabBtn>
+        <SubTabBtn active={panel === 'export'} onClick={() => setPanel('export')}>Export</SubTabBtn>
       </div>
       {panel === 'upload' && (
         <UploadPanel
@@ -73,6 +75,7 @@ export default function TrainingTab() {
       )}
       {panel === 'review' && <ReviewPanel />}
       {panel === 'coverage' && <CoveragePanel onUploadSpecies={jumpToUpload} />}
+      {panel === 'export' && <ExportPanel />}
     </div>
   );
 }
@@ -902,6 +905,211 @@ function CoverageRow({ row, onUpload }) {
       <div style={{ fontSize: 11, color: T.inkMute, flexShrink: 0, minWidth: 60, textAlign: 'right' }}>
         {lastLabel}
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Export panel — Phase 3
+   ============================================================
+   Runs planExport (verified rows → deterministic 85/15 split,
+   excluded species dropped), fetches each image via signed URL,
+   packages train/{species}/*.jpg + val/{species}/*.jpg + manifest.json
+   into a ZIP via JSZip, downloads. Streaming-ish: fetches sequentially
+   and blobs go straight into JSZip so peak memory is dominated by
+   one image at a time plus the zip's compressed buffer. */
+function ExportPanel() {
+  const [plan, setPlan] = useState(null);
+  const [planning, setPlanning] = useState(false);
+  const [error, setError] = useState('');
+  const [progress, setProgress] = useState(null); // { done, total, status }
+  const [downloadUrl, setDownloadUrl] = useState(null);
+
+  const runPlan = async () => {
+    setPlanning(true);
+    setError(''); setPlan(null); setDownloadUrl(null);
+    const r = await planExport();
+    setPlanning(false);
+    if (!r.ok) { setError(r.error || 'plan failed'); return; }
+    setPlan(r);
+  };
+
+  useEffect(() => { runPlan(); }, []); // Auto-plan on open.
+
+  const runExport = async () => {
+    if (!plan) return;
+    setError('');
+    setProgress({ done: 0, total: plan.plan.length, status: 'starting' });
+    setDownloadUrl(null);
+
+    try {
+      // Lazy-load JSZip so the admin bundle doesn't eat it when not needed.
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+
+      const manifest = {
+        version: 1,
+        created_at: new Date().toISOString(),
+        split_seed: plan.splitSeed,
+        thresholds: {
+          min_train_threshold: MIN_TRAIN_THRESHOLD,
+          adequate_threshold:  ADEQUATE_THRESHOLD,
+          target_coverage:     TARGET_COVERAGE,
+        },
+        species: plan.species,
+        excluded: plan.excluded,
+        counts: plan.counts,
+        images: plan.plan.map(p => ({
+          path: `${p.split}/${p.species_id}/${p.filename}`,
+          species_id: p.species_id,
+          split: p.split,
+          crop_bbox: p.crop_bbox || null,
+        })),
+      };
+      zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+      // Sequential fetch + add — keeps memory pressure low on larger
+      // datasets. Every N images we let React tick to update progress.
+      for (let i = 0; i < plan.plan.length; i++) {
+        const p = plan.plan[i];
+        setProgress({ done: i, total: plan.plan.length, status: `Fetching ${p.filename}…` });
+        // Signed URL valid for the export session only.
+        const url = await signedUrl(p.storage_path, 60 * 60);
+        if (!url) throw new Error(`no signed url for ${p.storage_path}`);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`fetch ${resp.status} for ${p.storage_path}`);
+        const blob = await resp.blob();
+        zip.file(`${p.split}/${p.species_id}/${p.filename}`, blob);
+      }
+
+      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Building ZIP…' });
+      const out = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+      });
+      const url = URL.createObjectURL(out);
+      setDownloadUrl(url);
+      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Ready to download.' });
+    } catch (e) {
+      setError(e?.message || String(e));
+      setProgress(null);
+    }
+  };
+
+  const totalImages = plan?.plan.length || 0;
+  const speciesCount = plan?.species.length || 0;
+  const excludedCount = plan?.excluded.length || 0;
+  const zipName = `reelintel-training-${new Date().toISOString().slice(0, 10)}.zip`;
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Card>
+        <SectionLabel style={{ marginBottom: 8 }}>Export plan</SectionLabel>
+        {planning && <div style={{ fontSize: 12, color: T.inkMute }}>Planning…</div>}
+        {!planning && plan && (
+          <>
+            <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.7 }}>
+              <span style={{ fontWeight: 700, color: T.brass }}>{totalImages.toLocaleString()}</span> verified images across
+              <span style={{ fontWeight: 700, color: T.ink }}> {speciesCount}</span> species.
+              {excludedCount > 0 && (
+                <>
+                  {' '}Excluding <span style={{ fontWeight: 700, color: T.closed }}>{excludedCount}</span> species below the {MIN_TRAIN_THRESHOLD}-image floor.
+                </>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.55 }}>
+              85/15 train/val split, deterministic (seed <code style={{ background: T.parchmentDeep, padding: '1px 5px', borderRadius: 3 }}>{plan.splitSeed}</code>).
+              ZIP layout: <code>train/{'{species_id}'}/*.jpg</code>, <code>val/{'{species_id}'}/*.jpg</code>, <code>manifest.json</code>.
+            </div>
+          </>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <GhostButton onClick={runPlan} disabled={planning}>
+            {planning ? 'Planning…' : 'Refresh plan'}
+          </GhostButton>
+          <PrimaryButton
+            onClick={runExport}
+            disabled={!plan || totalImages === 0 || (progress && !downloadUrl && !error)}
+            style={{ flex: 1 }}
+          >
+            {progress && !downloadUrl && !error ? 'Exporting…' :
+             downloadUrl ? 'Rebuild export'
+                        : `Build ZIP (${totalImages.toLocaleString()} images)`}
+          </PrimaryButton>
+        </div>
+      </Card>
+
+      {plan && plan.species.length > 0 && (
+        <Card>
+          <SectionLabel style={{ marginBottom: 8 }}>Species included ({speciesCount})</SectionLabel>
+          <div style={{ display: 'grid', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
+            {plan.species.map(sid => {
+              const c = plan.counts[sid];
+              const sp = SPECIES.find(s => s.id === sid);
+              return (
+                <div key={sid} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                  padding: '4px 6px', fontSize: 12, color: T.ink,
+                  borderBottom: `1px dashed ${T.cardEdge}`,
+                }}>
+                  <span>{sp?.commonName || sid} <span style={{ color: T.inkMute, fontFamily: 'monospace', fontSize: 10 }}>· {sid}</span></span>
+                  <span style={{ color: T.inkMute, fontSize: 11 }}>{c.verified} total · {c.train} train / {c.val} val</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {plan && plan.excluded.length > 0 && (
+        <Card style={{ borderColor: T.warn }}>
+          <SectionLabel style={{ marginBottom: 6, color: T.warn }}>Excluded ({plan.excluded.length})</SectionLabel>
+          <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+            These species have &lt; {MIN_TRAIN_THRESHOLD} verified images so they won't be in the training set. Upload more to include them.
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: T.inkMute, fontFamily: 'monospace' }}>
+            {plan.excluded.join(', ')}
+          </div>
+        </Card>
+      )}
+
+      {progress && (
+        <Card>
+          <SectionLabel style={{ marginBottom: 6 }}>Progress</SectionLabel>
+          <div style={{ fontSize: 12, color: T.ink, marginBottom: 6 }}>
+            {progress.status} <span style={{ color: T.inkMute }}>({progress.done} / {progress.total})</span>
+          </div>
+          <div style={{ height: 6, background: T.parchmentDeep, borderRadius: 3, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
+            <div style={{
+              height: '100%',
+              width: `${(progress.done / Math.max(1, progress.total)) * 100}%`,
+              background: T.brass,
+              transition: 'width 220ms ease',
+            }} />
+          </div>
+          {downloadUrl && (
+            <div style={{ marginTop: 12 }}>
+              <a href={downloadUrl} download={zipName} style={{
+                display: 'inline-block', background: T.brass, color: T.oceanDeep,
+                padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+                letterSpacing: 0.4, textDecoration: 'none',
+              }}>
+                Download {zipName}
+              </a>
+              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8 }}>
+                Upload this ZIP to Google Colab (see the Phase 4 notebook) to train the model.
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {error && (
+        <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }
