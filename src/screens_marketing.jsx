@@ -842,18 +842,18 @@ body { margin: 0; }
    Backgrounds are <img>s absolutely positioned so loading="lazy"
    works (CSS background-image would eager-fetch on every visit). */
 .rl-story-section { padding: 30px 0 90px; background: ${P.bg}; }
-/* 2×2 grid on desktop. Each block is narrower than the full-width
-   vertical stack was, so the alternating side-fade doesn't earn its
-   keep — one darker uniform scrim keeps every headline legible. */
+/* Single row of 4 columns on desktop. Narrow blocks so scrim is a
+   uniform vertical fade (light top → dark bottom) with copy anchored
+   at the bottom. */
 .rl-story-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
 }
 .rl-story {
   position: relative; overflow: hidden;
-  border-radius: 20px; border: 1px solid ${P.border};
-  height: 280px;
+  border-radius: 18px; border: 1px solid ${P.border};
+  height: 340px;
 }
 .rl-story-img {
   position: absolute; inset: 0;
@@ -870,26 +870,27 @@ body { margin: 0; }
 .rl-story-inner {
   position: relative; z-index: 2;
   height: 100%; display: flex; align-items: flex-end;
-  padding: 24px 26px;
+  padding: 20px 20px;
 }
 .rl-story-copy { max-width: 100%; }
 .rl-story-copy h2 {
-  font-size: 22px; font-weight: 900; line-height: 1.15; letter-spacing: -0.3px;
-  color: ${P.ink}; margin: 8px 0 8px;
+  font-size: 18px; font-weight: 900; line-height: 1.2; letter-spacing: -0.2px;
+  color: ${P.ink}; margin: 6px 0 6px;
 }
 .rl-story-copy p {
-  font-size: 13.5px; line-height: 1.55; color: ${P.inkSoft}; margin: 0;
+  font-size: 12.5px; line-height: 1.5; color: ${P.inkSoft}; margin: 0;
 }
 
-@media (max-width: 900px) {
-  /* Tablet portrait — keep 2 columns but shrink slightly. */
-  .rl-story { height: 240px; border-radius: 18px; }
-  .rl-story-inner { padding: 20px 22px; }
-  .rl-story-copy h2 { font-size: 19px; }
+@media (max-width: 1024px) {
+  /* Tablet — fall back to 2 columns so blocks aren't too skinny. */
+  .rl-story-list { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .rl-story { height: 260px; }
+  .rl-story-inner { padding: 22px 22px; }
+  .rl-story-copy h2 { font-size: 20px; }
   .rl-story-copy p { font-size: 13px; }
 }
 @media (max-width: 640px) {
-  /* Phone — single column stack, tighter. */
+  /* Phone — single column stack. */
   .rl-story-list { grid-template-columns: 1fr; gap: 12px; }
   .rl-story { height: 200px; border-radius: 16px; }
   .rl-story-inner { padding: 18px 20px; }
