@@ -944,16 +944,13 @@ function Hero() {
       <div className="rl-hero-scrim" />
       <div className="rl-container rl-hero-inner">
         <div>
-          <div className="rl-eyebrow">Built for Anglers</div>
+          <div className="rl-eyebrow">Built by Anglers</div>
           <h1 className="rl-h1">
-            Turn your catches into<br/>
-            <span>patterns, trends,</span> and<br/>
-            smarter fishing days.
+            <span>Fish smarter.</span><br/>
+            Remember every trip.
           </h1>
           <p className="rl-lead">
-            Log every catch, discover powerful patterns, save your Personal Bests,
-            and share your most memorable catches with friends and family so you
-            can relive every great trip.
+            Log catches, discover patterns, save Personal Bests, and share your best moments with friends.
           </p>
           <div className="rl-cta-row">
             <a className="rl-btn rl-btn-primary" href="#download">
