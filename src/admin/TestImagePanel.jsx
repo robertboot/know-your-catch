@@ -168,19 +168,32 @@ export default function TestImagePanel() {
       img.src = testImage.url;
       await new Promise((r, rj) => { img.onload = r; img.onerror = () => rj(new Error('image decode failed')); });
 
-      // Decode → resize → normalize → INT8 tensor to match the model's
-      // input signature.
+      // Decode → resize → uint8 RGB tensor matching the model's
+      // uint8 input signature.
       const canvas = canvasRef.current;
       canvas.width = runtime.inputSize;
       canvas.height = runtime.inputSize;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, runtime.inputSize, runtime.inputSize);
-      // The model expects uint8 [0, 255] with the /255 rescale baked
-      // into its graph (see training/train_fish_id.py Rescaling layer).
-      const input = tf.tidy(() =>
-        tf.browser.fromPixels(canvas).expandDims(0)
-      );
-      console.log('[test-image] input tensor built', input.shape, input.dtype);
+      // The v0.1-2026-07-10 model was compiled with an internal
+      // int32→uint8 cast op that hangs on Safari's XNNPACK-fallback
+      // path. Preempt it by feeding pixel bytes straight in as uint8
+      // (skipping tf.browser.fromPixels which returns int32 and
+      // triggers the runtime's own conversion). We still wrap in a
+      // tf.Tensor because that's what predict() takes — tfjs itself
+      // has no uint8 dtype, but tfjs-tflite's setModelInputFromTensor
+      // funnels the payload through Uint8Array.from(dataSync()) which
+      // is cheap when the values are already in [0,255].
+      const rgba = ctx.getImageData(0, 0, runtime.inputSize, runtime.inputSize).data;
+      const N = runtime.inputSize * runtime.inputSize;
+      const rgb = new Uint8Array(N * 3);
+      for (let i = 0; i < N; i++) {
+        rgb[i * 3]     = rgba[i * 4];
+        rgb[i * 3 + 1] = rgba[i * 4 + 1];
+        rgb[i * 3 + 2] = rgba[i * 4 + 2];
+      }
+      const input = tf.tensor4d(rgb, [1, runtime.inputSize, runtime.inputSize, 3], 'int32');
+      console.log('[test-image] input tensor built', input.shape, input.dtype, 'first bytes:', Array.from(rgb.slice(0, 6)));
 
       const out = runtime.tflite.predict(input);
       console.log('[test-image] predict returned', out);
