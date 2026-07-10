@@ -1,163 +1,178 @@
 /* ============================================================
-   PHOTO IDENTIFICATION — INTEGRATION POINT FOR ML MODEL
+   PHOTO IDENTIFICATION PIPELINE
    ============================================================
 
-   This file is THE stub the rest of the app calls.
-   Right now it returns canned sample results to drive the UI.
-   When the real on-device ML model is built (TensorFlow Lite,
-   Core ML, ONNX Runtime, etc.), replace the body of
-   `identifyPhoto()` below. The rest of the app does not change.
+   Public API used by src/screens1.jsx PhotoAnalyzingScreen. The
+   pipeline runs six stages inside identifyPhoto():
 
-   CONTRACT — the function must return:
-   {
-     confidence: 'high' | 'medium' | 'low',
-     candidates: [
-       {
-         speciesId: string,           // must match an id in data.js SPECIES
-         score:     number,           // 0..1 model probability
-         evidence:  string[],         // human-readable feature list shown to user
-       },
-       ...
-     ]
-   }
+     1. Detect & crop           (inside adapter, TODO in Scope B)
+     2. Preprocess              (inside adapter)
+     3. Classify                (via src/identify/adapter.js — the
+                                 swappable seam. TF.js or Core ML.)
+     4. Map labels → speciesId  (LABEL_TO_SPECIES_ID + identity)
+     5. Constrain to jurisdiction (penalize out-of-range instead of
+                                   silently dropping — rare catches
+                                   surface at low confidence)
+     6. Rank, band, and shape into the public contract
+
+   FULLY OFFLINE: no fetch / XHR / remote URLs anywhere in this
+   file OR the adapter. The model, when bundled, loads from a
+   packaged static asset only — never downloaded at runtime.
+
+   CONTRACT — must remain identical to the original stub so the
+   rest of the app doesn't change:
+     {
+       confidence: 'high' | 'medium' | 'low',
+       candidates: [
+         { speciesId: string,
+           score:     number,       // 0..1
+           evidence:  string[] }
+       ]
+     }
 
    UI INTERPRETATION:
-     - 'high'   : show "Confirmed: <species>" with lookalike cross-check.
-     - 'medium' : show "Narrowed to N species" with side-by-side cards.
-     - 'low'    : show "Couldn't identify confidently" + manual fallback.
-                   (candidates array may be empty.)
+     high   — one confident candidate; UI prefills species.
+     medium — 2–3 candidates, side-by-side disambiguation.
+     low    — no confident pick; UI routes to manual species entry.
+   ============================================================ */
 
-   IMPLEMENTATION NOTES FOR THE REAL MODEL:
-     - Run inference on-device. Do not call an external API. This app
-       must work offshore without internet.
-     - Decode the image at a reasonable resolution (256x256 or 320x320
-       is typical for mobile classification models).
-     - Map model output classes 1:1 to speciesId values in src/data.js.
-     - Use temperature scaling on softmax outputs so 'high' actually
-       means high — overconfident models are the failure mode this app
-       was built to avoid.
-     - Suggested thresholds (tune with real data):
-         top1 > 0.85 and top1 - top2 > 0.30  → 'high'
-         top1 > 0.40                          → 'medium'
-         else                                 → 'low'
-     - Generate `evidence` strings from feature activations or from a
-       lookup table keyed on the predicted species + visible features.
-============================================================ */
+import { SPECIES, REGULATIONS } from './data.js';
+import { classify, LABEL_TO_SPECIES_ID } from './identify/adapter.js';
 
-const SAMPLE_RESULTS = [
-  {
-    confidence: 'high',
-    candidates: [
-      {
-        speciesId: 'red_snapper',
-        score: 0.94,
-        evidence: [
-          'Pinkish-red body coloration',
-          'Pointed anal fin shape',
-          'Red iris detected',
-          'Deep, stocky body proportions',
-        ],
-      },
-    ],
-  },
-  {
-    confidence: 'high',
-    candidates: [
-      {
-        speciesId: 'mahi',
-        score: 0.97,
-        evidence: [
-          'Brilliant green / blue / gold coloration',
-          'Long continuous dorsal fin',
-          'Deeply forked tail',
-        ],
-      },
-    ],
-  },
-  {
-    confidence: 'medium',
-    candidates: [
-      {
-        speciesId: 'spanish_mackerel',
-        score: 0.52,
-        evidence: [
-          'Mackerel body profile',
-          'Yellow spots visible on flank',
-          'Lateral line: angle unclear from this angle',
-        ],
-      },
-      {
-        speciesId: 'king_mackerel',
-        score: 0.41,
-        evidence: [
-          'Mackerel body profile',
-          'Spot pattern unclear',
-        ],
-      },
-    ],
-  },
-  {
-    confidence: 'medium',
-    candidates: [
-      {
-        speciesId: 'greater_amberjack',
-        score: 0.48,
-        evidence: ['Jack body profile', 'Amber stripe partially visible'],
-      },
-      {
-        speciesId: 'almaco_jack',
-        score: 0.39,
-        evidence: ['Deep body shape', 'Tall dorsal fin lobe'],
-      },
-      {
-        speciesId: 'lesser_amberjack',
-        score: 0.13,
-        evidence: ['Small relative size'],
-      },
-    ],
-  },
-  {
-    confidence: 'medium',
-    candidates: [
-      {
-        speciesId: 'red_snapper',
-        score: 0.49,
-        evidence: ['Reddish coloration', 'Snapper body shape'],
-      },
-      {
-        speciesId: 'vermilion_snapper',
-        score: 0.46,
-        evidence: ['Reddish coloration', 'Slender body'],
-      },
-    ],
-  },
-  {
-    confidence: 'low',
-    candidates: [],
-  },
-];
+/* Confidence-band thresholds. Computed from a numeric top-1 score +
+   the margin over #2, then translated to the string bands the rest of
+   the app already branches on. Conservative on purpose: this is a
+   "stay legal" app, so a confidently-wrong ID has real consequences.
+   Tune the numbers once real-model accuracy is measured. */
+const BAND = {
+  highScore:       0.85,   // top-1 must clear this to earn 'high'
+  highMargin:      0.20,   //   AND margin over #2 must clear this
+  mediumScore:     0.40,   // top-1 (or a competitor) must clear this
+  lookalikeFloor:  0.25,   // #2 above this triggers lookalike collision
+  outOfRangePenalty: 0.5,  // multiplier for jurisdiction-missing species
+};
 
-/**
- * @param {string} imageDataUrl  base64 data URL of the captured image
- * @returns {Promise<{confidence: 'high'|'medium'|'low', candidates: Array}>}
- */
-export async function identifyPhoto(imageDataUrl) {
-  // === STUB BEHAVIOR — REPLACE THIS WHEN INTEGRATING REAL MODEL ===
-  // Simulate model inference time so the analyzing UI is meaningful.
-  await new Promise(r => setTimeout(r, 1800));
+const SPECIES_BY_ID = Object.fromEntries(SPECIES.map((s) => [s.id, s]));
 
-  // For prototype: rotate through canned results. Pick a result whose
-  // index varies with the image data so repeated tests don't all look
-  // the same.
-  const seed = imageDataUrl ? imageDataUrl.length % SAMPLE_RESULTS.length : 0;
-  return SAMPLE_RESULTS[seed];
-  // === END STUB ===
+/* Stage 4 — Map raw model labels to our internal speciesIds.
+   Order:
+     1. LABEL_TO_SPECIES_ID (populated by the real model in Scope B)
+     2. Identity fallback if the label already IS a speciesId
+        (the stub emits speciesId strings directly)
+   Anything unmapped is dropped. */
+function mapLabelsToSpecies(topK) {
+  return topK
+    .map((p) => {
+      const mapped =
+        LABEL_TO_SPECIES_ID[p.label] ||
+        (SPECIES_BY_ID[p.label] ? p.label : null);
+      return mapped ? { speciesId: mapped, score: p.score } : null;
+    })
+    .filter(Boolean);
 }
 
-/**
- * Features the model is examining — surfaced to the user in the
- * analyzing screen so the app feels honest about its method.
- */
+/* Stage 5 — Constrain to the angler's current jurisdiction.
+   REGULATIONS[speciesId][jurisdictionId] being present is our proxy
+   for "this species is caught here." Out-of-range candidates are
+   penalized rather than dropped so a genuinely rare catch can still
+   surface at low confidence instead of vanishing. */
+function constrainToJurisdiction(candidates, jurisdictionId) {
+  if (!jurisdictionId) return candidates;
+  return candidates.map((c) => {
+    const inRange = !!REGULATIONS[c.speciesId]?.[jurisdictionId];
+    if (inRange) return c;
+    return { ...c, score: c.score * BAND.outOfRangePenalty, outOfRange: true };
+  });
+}
+
+/* Evidence — pull the species' key ID cues from the local dataset.
+   These are the same "why" bullets the angler already sees on
+   Species Detail, so the confirmation card shows a familiar
+   rationale rather than model-speak. */
+function evidenceFor(speciesId, outOfRange) {
+  const s = SPECIES_BY_ID[speciesId];
+  const cues = s?.keyIds?.slice(0, 4) || [];
+  if (outOfRange) return [...cues, 'Uncommon in your current waters'];
+  return cues;
+}
+
+/* Lookalike cross-check — if the top pick looks confident but a known
+   lookalike also scored above the floor, downgrade to medium so the
+   UI presents them side-by-side. Prevents the "confidently wrong
+   snapper" failure mode. */
+function lookalikeCollision(top, rest) {
+  if (!top) return false;
+  const lookalikes = new Set(SPECIES_BY_ID[top.speciesId]?.lookalikes || []);
+  return rest.some(
+    (c) => lookalikes.has(c.speciesId) && c.score >= BAND.lookalikeFloor
+  );
+}
+
+/* Stage 6 — Rank, band, and shape into the public contract. */
+function rankAndBand(candidates) {
+  const sorted = candidates.slice().sort((a, b) => b.score - a.score);
+  if (sorted.length === 0) return { confidence: 'low', candidates: [] };
+
+  const top = sorted[0];
+  const rest = sorted.slice(1);
+  const margin = top.score - (rest[0]?.score ?? 0);
+  const collision = lookalikeCollision(top, rest);
+
+  const shape = (c) => ({
+    speciesId: c.speciesId,
+    score: c.score,
+    evidence: evidenceFor(c.speciesId, c.outOfRange),
+  });
+
+  if (
+    top.score >= BAND.highScore &&
+    margin      >= BAND.highMargin &&
+    !collision
+  ) {
+    return { confidence: 'high', candidates: [shape(top)] };
+  }
+
+  if (
+    top.score >= BAND.mediumScore ||
+    (rest[0] && rest[0].score >= BAND.mediumScore)
+  ) {
+    return {
+      confidence: 'medium',
+      candidates: sorted.slice(0, 3).map(shape),
+    };
+  }
+
+  return { confidence: 'low', candidates: [] };
+}
+
+/* ============================================================
+   PUBLIC API — signature and return shape unchanged from the stub.
+
+   Called by src/screens1.jsx PhotoAnalyzingScreen.
+     imageDataUrl: base64 data URL of the captured image
+     options.jurisdictionId: pass the angler's current waters so
+       Stage 5 can filter out implausible-for-region species.
+       Optional and backward-compatible — missing = no constraint.
+   ============================================================ */
+export async function identifyPhoto(imageDataUrl, options = {}) {
+  const { jurisdictionId = null } = options;
+
+  // Stages 1–3: detect / preprocess / classify happen inside the
+  // adapter so runtime specifics stay behind the seam.
+  const topK = await classify(imageDataUrl);
+
+  // Stage 4: raw labels → our speciesIds.
+  const mapped = mapLabelsToSpecies(topK);
+
+  // Stage 5: apply jurisdiction constraint.
+  const constrained = constrainToJurisdiction(mapped, jurisdictionId);
+
+  // Stage 6: rank + band + shape.
+  return rankAndBand(constrained);
+}
+
+/* Kept unchanged — surfaced by PhotoAnalyzingScreen while the model
+   runs so the app "shows its work" instead of a mystery spinner. */
 export const ANALYSIS_FEATURES = [
   'Body profile and proportions',
   'Fin shape and position',

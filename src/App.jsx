@@ -519,6 +519,7 @@ export default function App() {
     case 'photo_analyzing':
       body = <PhotoAnalyzingScreen
         imageDataUrl={screen.imageDataUrl}
+        jurisdictionId={jurisdiction?.id || null}
         onResult={(result) => {
           // Capture-flow origin: interpose the identification
           // confirmation card between the analyzing animation and

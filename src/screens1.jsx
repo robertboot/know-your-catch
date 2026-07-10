@@ -732,20 +732,20 @@ export function QuickLogScreen({ state, jurisdiction, update, onDone, onCancel }
 /* ============================================================
    PHOTO — analyzing
    ============================================================ */
-export function PhotoAnalyzingScreen({ imageDataUrl, onResult }) {
+export function PhotoAnalyzingScreen({ imageDataUrl, jurisdictionId, onResult }) {
   const [step, setStep] = useState(0);
   useEffect(() => {
     let alive = true;
     const stepTimer = setInterval(() => {
       setStep(s => (s + 1) % ANALYSIS_FEATURES.length);
     }, 500);
-    identifyPhoto(imageDataUrl).then(result => {
+    identifyPhoto(imageDataUrl, { jurisdictionId }).then(result => {
       if (!alive) return;
       clearInterval(stepTimer);
       onResult(result);
     });
     return () => { alive = false; clearInterval(stepTimer); };
-  }, [imageDataUrl, onResult]);
+  }, [imageDataUrl, jurisdictionId, onResult]);
 
   return (
     <div style={{ position: 'relative', minHeight: '70vh' }}>
