@@ -48,6 +48,16 @@ const REJECT_REASONS = [
    ============================================================ */
 export default function TrainingTab() {
   const [panel, setPanel] = useState('upload'); // 'upload' | 'review' | 'coverage'
+  // Coverage → Upload jump: when set, UploadPanel preselects this
+  // species in Batch mode. Cleared once consumed so navigating back
+  // doesn't re-force the picker.
+  const [pendingUploadSpecies, setPendingUploadSpecies] = useState(null);
+
+  const jumpToUpload = (speciesId) => {
+    setPendingUploadSpecies(speciesId);
+    setPanel('upload');
+  };
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}` }}>
@@ -55,9 +65,14 @@ export default function TrainingTab() {
         <SubTabBtn active={panel === 'review'} onClick={() => setPanel('review')}>Review</SubTabBtn>
         <SubTabBtn active={panel === 'coverage'} onClick={() => setPanel('coverage')}>Coverage</SubTabBtn>
       </div>
-      {panel === 'upload' && <UploadPanel />}
+      {panel === 'upload' && (
+        <UploadPanel
+          initialSpeciesId={pendingUploadSpecies}
+          onConsumeInitial={() => setPendingUploadSpecies(null)}
+        />
+      )}
       {panel === 'review' && <ReviewPanel />}
-      {panel === 'coverage' && <CoveragePanel />}
+      {panel === 'coverage' && <CoveragePanel onUploadSpecies={jumpToUpload} />}
     </div>
   );
 }
@@ -77,9 +92,11 @@ function SubTabBtn({ active, onClick, children }) {
 /* ============================================================
    Upload panel
    ============================================================ */
-function UploadPanel() {
+function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
   const [mode, setMode] = useState('batch'); // 'batch' | 'per-image'
-  const [batchSpeciesId, setBatchSpeciesId] = useState(SPECIES[0]?.id || '');
+  const [batchSpeciesId, setBatchSpeciesId] = useState(
+    initialSpeciesId || SPECIES[0]?.id || ''
+  );
   const [queue, setQueue] = useState([]); // [{ file, id, speciesId, status, error, path }]
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
@@ -89,6 +106,16 @@ function UploadPanel() {
       .sort((a, b) => a.commonName.localeCompare(b.commonName)),
     []
   );
+
+  // Coverage → Upload jump: force batch mode with the target species
+  // pre-selected. Consume the intent so the panel doesn't override
+  // manual dropdown changes on future visits.
+  useEffect(() => {
+    if (!initialSpeciesId) return;
+    setMode('batch');
+    setBatchSpeciesId(initialSpeciesId);
+    onConsumeInitial?.();
+  }, [initialSpeciesId, onConsumeInitial]);
 
   const addFiles = (files) => {
     const arr = Array.from(files || []);
@@ -641,7 +668,7 @@ function ModalShell({ onCancel, title, children }) {
 /* ============================================================
    Coverage panel — Phase 2
    ============================================================ */
-function CoveragePanel() {
+function CoveragePanel({ onUploadSpecies }) {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(false);
   const [sortMode, setSortMode] = useState('gap'); // 'gap' | 'name' | 'count'
@@ -769,7 +796,13 @@ function CoveragePanel() {
         </div>
 
         <div style={{ display: 'grid', gap: 6 }}>
-          {filtered.map(r => <CoverageRow key={r.speciesId} row={r} />)}
+          {filtered.map(r => (
+            <CoverageRow
+              key={r.speciesId}
+              row={r}
+              onUpload={() => onUploadSpecies?.(r.speciesId)}
+            />
+          ))}
           {filtered.length === 0 && (
             <div style={{ fontSize: 13, color: T.inkMute, padding: 20, textAlign: 'center' }}>
               No species match those filters.
@@ -790,6 +823,7 @@ function CoveragePanel() {
               key={i}
               members={group}
               counts={counts}
+              onUploadSpecies={onUploadSpecies}
             />
           ))}
         </div>
@@ -798,7 +832,7 @@ function CoveragePanel() {
   );
 }
 
-function CoverageRow({ row }) {
+function CoverageRow({ row, onUpload }) {
   const pct = Math.min(100, (row.verified / TARGET_COVERAGE) * 100);
   const barColor =
     row.status === 'good'     ? T.open :
@@ -822,9 +856,20 @@ function CoverageRow({ row }) {
       border: `1px solid ${T.cardEdge}`,
     }}>
       <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <button
+          onClick={onUpload}
+          title={`Upload photos for ${row.commonName}`}
+          style={{
+            background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, color: T.brass,
+            textAlign: 'left', textDecoration: 'underline', textDecorationThickness: 1,
+            textUnderlineOffset: 2,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            width: '100%',
+          }}
+        >
           {row.commonName}
-        </div>
+        </button>
         <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>{row.speciesId}</div>
       </div>
 
@@ -861,7 +906,7 @@ function CoverageRow({ row }) {
   );
 }
 
-function LookalikeGroupRow({ members, counts }) {
+function LookalikeGroupRow({ members, counts, onUploadSpecies }) {
   const memberData = members.map(id => {
     const sp = SPECIES.find(s => s.id === id);
     const c = counts[id] || { verified: 0 };
@@ -900,9 +945,18 @@ function LookalikeGroupRow({ members, counts }) {
           const isMin = m.verified === min && max > min;
           return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ fontSize: 11, color: T.inkSoft, width: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <button
+                onClick={() => onUploadSpecies?.(m.id)}
+                title={`Upload photos for ${m.name}`}
+                style={{
+                  background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+                  fontSize: 11, color: T.brass, textAlign: 'left',
+                  textDecoration: 'underline', textDecorationThickness: 1, textUnderlineOffset: 2,
+                  width: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
                 {m.name}
-              </div>
+              </button>
               <div style={{ flex: 1, height: 6, background: T.card, borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: isMin ? T.closed : T.brass }} />
               </div>
