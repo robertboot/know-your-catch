@@ -163,6 +163,58 @@ export async function uploadTrainingImage(file, speciesId) {
   return { ok: true, id: data.id, storagePath };
 }
 
+/* Save a labeled example produced by the Test Image page.
+   Two sources are legal:
+     - 'model_confirmation' — user clicked Confirm on the model's top
+       pick. speciesId === originalSpeciesId.
+     - 'model_correction'   — user clicked Wrong and picked the true
+       species from the picker. originalSpeciesId is what the model
+       predicted (kept so we can measure confusion later).
+   Both land as status='verified' (owner-vetted) and are safe to
+   include in the next export.
+   Returns { ok, id, storagePath, error }. */
+export async function saveModelFeedback({ file, speciesId, originalSpeciesId, source }) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  if (!file || !speciesId) return { ok: false, error: 'missing file or species' };
+  if (source !== 'model_confirmation' && source !== 'model_correction') {
+    return { ok: false, error: `invalid source: ${source}` };
+  }
+  const sess = getLastSession();
+  const email = sess?.user?.email || null;
+
+  // Same Phase-1 fix: seed the FK target before storage write.
+  const seed = await ensureSpeciesRow(speciesId);
+  if (!seed.ok) return { ok: false, error: seed.error };
+
+  const id = crypto.randomUUID();
+  const ext = (file.name?.match(/\.([a-z0-9]+)$/i)?.[1] || 'jpg').toLowerCase();
+  const storagePath = `${speciesId}/${id}.${ext}`;
+
+  const up = await c.storage.from(BUCKET).upload(storagePath, file, {
+    contentType: file.type || 'image/jpeg',
+    upsert: false,
+  });
+  if (up.error) return { ok: false, error: up.error.message };
+
+  const { data, error } = await c.from('training_images').insert({
+    id,
+    species_id: speciesId,
+    storage_path: storagePath,
+    source,
+    status: 'verified',
+    original_species_id: originalSpeciesId || null,
+    uploaded_by: email,
+    reviewed_by: email,
+    reviewed_at: new Date().toISOString(),
+  }).select('id').single();
+  if (error) {
+    await c.storage.from(BUCKET).remove([storagePath]).catch(() => {});
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, id: data.id, storagePath };
+}
+
 /* List training images, optionally filtered by species + status. */
 export async function listTrainingImages({ speciesId = null, status = null, limit = 500 } = {}) {
   const c = client();

@@ -12,13 +12,15 @@
    normal admin session doesn't pay the ~1 MB WASM cost). Inference
    happens entirely in the browser; no network calls once the model
    is loaded. */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { T } from '../theme.js';
 import { SPECIES } from '../data.js';
 import {
-  Card, PrimaryButton, GhostButton, SectionLabel, inputStyle,
+  Card, PrimaryButton, GhostButton, SectionLabel,
 } from '../components.jsx';
 import { getProductionModel, modelSignedUrl } from '../model-store.js';
+import { saveModelFeedback } from '../training-store.js';
+import { SpeciesPickerModal } from './pickers.jsx';
 
 const IMG_SIZE = 224; // must match training-time input size
 
@@ -85,8 +87,17 @@ export default function TestImagePanel() {
   const [error, setError]               = useState('');
   const [testImage, setTestImage]       = useState(null); // { url, file }
   const [predictions, setPredictions]   = useState(null);
+  const [pickerOpen, setPickerOpen]     = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [toast, setToast]               = useState(''); // "Added kingfish to training data"
   const canvasRef                       = useRef(null);
   const fileInputRef                    = useRef(null);
+
+  const speciesOptions = useMemo(
+    () => [...SPECIES].filter(s => s.active !== false)
+      .sort((a, b) => a.commonName.localeCompare(b.commonName)),
+    []
+  );
 
   // On mount: fetch which model is promoted, then lazy-load the
   // runtime and the .tflite bytes into memory.
@@ -152,6 +163,53 @@ export default function TestImagePanel() {
     if (testImage?.url) URL.revokeObjectURL(testImage.url);
     setTestImage({ url: URL.createObjectURL(file), file });
     setPredictions(null);
+    setError('');
+  };
+
+  const clearTest = () => {
+    if (testImage?.url) URL.revokeObjectURL(testImage.url);
+    setTestImage(null);
+    setPredictions(null);
+    setError('');
+  };
+
+  // Toast auto-dismiss.
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(''), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const saveFeedback = async ({ speciesId, source }) => {
+    if (!testImage?.file || !predictions?.top) return;
+    setSaving(true);
+    setError('');
+    const originalSpeciesId = predictions.top.speciesId;
+    const r = await saveModelFeedback({
+      file: testImage.file,
+      speciesId,
+      originalSpeciesId,
+      source,
+    });
+    setSaving(false);
+    if (!r.ok) {
+      setError(`Save failed: ${r.error || 'unknown error'}`);
+      return;
+    }
+    const sp = SPECIES.find(s => s.id === speciesId);
+    const name = sp?.commonName || speciesId;
+    setToast(`Added to training data as ${name}`);
+    clearTest();
+  };
+
+  const confirmTop = () => {
+    if (!predictions?.top) return;
+    saveFeedback({ speciesId: predictions.top.speciesId, source: 'model_confirmation' });
+  };
+
+  const correctTo = (speciesId) => {
+    setPickerOpen(false);
+    saveFeedback({ speciesId, source: 'model_correction' });
   };
 
   const run = async () => {
@@ -331,6 +389,19 @@ export default function TestImagePanel() {
                           })}
                         </div>
                       </div>
+
+                      {/* Correct-and-save flow. Both Confirm and Wrong
+                          land the image in training_images with
+                          status='verified' — the only difference is
+                          the source flag and, for corrections, the
+                          species_id vs original_species_id split. */}
+                      <FeedbackButtons
+                        top={predictions.top}
+                        saving={saving}
+                        onConfirm={confirmTop}
+                        onWrong={() => setPickerOpen(true)}
+                        onDiscard={clearTest}
+                      />
                     </div>
                   )}
                 </div>
@@ -345,6 +416,88 @@ export default function TestImagePanel() {
           {error}
         </div>
       )}
+
+      {toast && <Toast message={toast} onDismiss={() => setToast('')} />}
+
+      {pickerOpen && (
+        <SpeciesPickerModal
+          speciesOptions={speciesOptions}
+          currentSpeciesId={predictions?.top?.speciesId}
+          onPick={correctTo}
+          onCancel={() => setPickerOpen(false)}
+          title="Pick the true species"
+        />
+      )}
+    </div>
+  );
+}
+
+function FeedbackButtons({ top, saving, onConfirm, onWrong, onDiscard }) {
+  const sp = SPECIES.find(s => s.id === top?.speciesId);
+  const topName = sp?.commonName || top?.speciesId || 'top pick';
+  const confirmDisabled = saving || !top || top.excluded;
+  return (
+    <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
+      <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 2 }}>
+        Every labeled example makes the next model better — even the ones the model got right.
+      </div>
+      <button
+        onClick={onConfirm}
+        disabled={confirmDisabled}
+        style={{
+          width: '100%', padding: '12px 14px', borderRadius: 8,
+          border: 'none', fontSize: 14, fontWeight: 700,
+          cursor: confirmDisabled ? 'not-allowed' : 'pointer',
+          background: confirmDisabled ? '#2A3E4D' : T.open,
+          color: confirmDisabled ? T.inkMute : T.oceanDeep,
+        }}
+        title={top?.excluded ? 'Excluded species — pick the true one instead' : ''}
+      >
+        {saving ? 'Saving…' : `Confirm — this is a ${topName}`}
+      </button>
+      <button
+        onClick={onWrong}
+        disabled={saving}
+        style={{
+          width: '100%', padding: '12px 14px', borderRadius: 8,
+          border: 'none', fontSize: 14, fontWeight: 700,
+          cursor: saving ? 'not-allowed' : 'pointer',
+          background: saving ? '#2A3E4D' : T.brass,
+          color: saving ? T.inkMute : T.oceanDeep,
+        }}
+      >
+        Wrong — pick the correct species
+      </button>
+      <button
+        onClick={onDiscard}
+        disabled={saving}
+        style={{
+          width: '100%', padding: '10px 14px', borderRadius: 8,
+          border: `1px solid ${T.cardEdge}`, fontSize: 13, fontWeight: 600,
+          cursor: saving ? 'not-allowed' : 'pointer',
+          background: 'transparent', color: T.inkSoft,
+        }}
+      >
+        Discard
+      </button>
+    </div>
+  );
+}
+
+function Toast({ message, onDismiss }) {
+  return (
+    <div
+      onClick={onDismiss}
+      style={{
+        position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 600, cursor: 'pointer',
+        background: T.open, color: T.oceanDeep,
+        padding: '12px 18px', borderRadius: 10,
+        fontSize: 13, fontWeight: 700,
+        boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+      }}
+    >
+      {message}
     </div>
   );
 }
