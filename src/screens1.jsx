@@ -184,12 +184,14 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
         </>
       )}
 
-      {/* Icon — top-left. */}
-      <div style={{
-        position: 'absolute', top: 14, left: 14,
-        color: T.brass,
-        filter: iconShadow,
-      }}>{icon}</div>
+      {/* Icon — top-left. Only shown in the fallback (no-bg) state;
+          the tile artwork already bakes in the icon. */}
+      {!usingBg && (
+        <div style={{
+          position: 'absolute', top: 14, left: 14,
+          color: T.brass,
+        }}>{icon}</div>
+      )}
 
       {/* Title + subtitle — bottom-left. Uppercase title reads over
           the scrim; subtitle stays soft but with a subtle text-shadow
