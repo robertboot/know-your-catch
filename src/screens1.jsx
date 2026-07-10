@@ -28,6 +28,7 @@ import {
   inputStyle,
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
+import AnnouncementBanner from './AnnouncementBanner.jsx';
 
 /* ============================================================
    SPLASH
@@ -341,6 +342,8 @@ export function HomeScreen({
           </div>
         </Card>
       )}
+
+      <AnnouncementBanner />
 
       {/* Hero — Identify Your Catch.
           Content drives height; the image fills the resulting card via

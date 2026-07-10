@@ -23,6 +23,7 @@ import {
   subscribe as subscribeSpeciesStore,
 } from '../species-store.js';
 import TrainingTab from './TrainingTab.jsx';
+import NotificationsTab from './NotificationsTab.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
 } from '../brand-store.js';
@@ -263,20 +264,22 @@ function SignedInShell({ email, onExit }) {
           </div>
         </>
       )}
-      {tab === 'species'    && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
-      {tab === 'branding'   && !detailView && <BrandingTab />}
-      {tab === 'categories' && !detailView && <CategoriesTab />}
-      {tab === 'training'   && !detailView && <TrainingTab />}
+      {tab === 'species'       && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
+      {tab === 'branding'      && !detailView && <BrandingTab />}
+      {tab === 'categories'    && !detailView && <CategoriesTab />}
+      {tab === 'training'      && !detailView && <TrainingTab />}
+      {tab === 'notifications' && !detailView && <NotificationsTab />}
     </Chrome>
   );
 }
 
 function TabBar({ tab, onTab }) {
   const tabs = [
-    { id: 'species',    label: 'Species' },
-    { id: 'training',   label: 'Training' },
-    { id: 'categories', label: 'Categories' },
-    { id: 'branding',   label: 'Branding' },
+    { id: 'species',       label: 'Species' },
+    { id: 'training',      label: 'Training' },
+    { id: 'notifications', label: 'Notifications' },
+    { id: 'categories',    label: 'Categories' },
+    { id: 'branding',      label: 'Branding' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
