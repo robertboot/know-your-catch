@@ -117,7 +117,17 @@ export default function TestImagePanel() {
         const tf = await import('@tensorflow/tfjs');
         window.tf = tf;
         await loadTfliteRuntime();
-        const model = await window.tflite.loadTFLiteModel(new Uint8Array(bytes));
+        // numThreads: 1 forces the non-threaded WASM variant so we
+        // don't try to use SharedArrayBuffer (needs COOP+COEP headers
+        // Vercel doesn't set — the runtime crashes the tab rather
+        // than falling back on Safari).
+        // enableXnnpackDelegate: false — alpha.10's XNNPACK delegate
+        // has a known Safari-crash bug during Prepare(). We're fine
+        // with the default CPU delegate for admin-side sanity checks.
+        const model = await window.tflite.loadTFLiteModel(
+          new Uint8Array(bytes),
+          { numThreads: 1, enableXnnpackDelegate: false },
+        );
         if (!alive) return;
         setRuntime({
           tflite: model,
