@@ -66,7 +66,12 @@ function mapLabelsToSpecies(topK) {
       const mapped =
         LABEL_TO_SPECIES_ID[p.label] ||
         (SPECIES_BY_ID[p.label] ? p.label : null);
-      return mapped ? { speciesId: mapped, score: p.score } : null;
+      if (!mapped) return null;
+      // Deactivated species never surface as a classifier candidate,
+      // even if the model has a label for one. Historical catches still
+      // resolve elsewhere; the ID surface only offers active options.
+      if (SPECIES_BY_ID[mapped]?.active === false) return null;
+      return { speciesId: mapped, score: p.score };
     })
     .filter(Boolean);
 }

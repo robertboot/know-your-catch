@@ -42,6 +42,11 @@ export function rowToSpecies(row) {
     typicalSize: row.typical_size || '',
     reefFish:    row.reef_fish === true ? true : undefined,
     hms:         row.hms === true ? true : undefined,
+    // Soft-delete flag. `undefined` (older cached rows) is treated as
+    // active — only an explicit `false` from Supabase hides a species
+    // from pickers. Deactivated species are NOT removed from SPECIES
+    // so existing catches referencing them still resolve.
+    active:      row.is_active === false ? false : true,
   };
 }
 
@@ -60,6 +65,10 @@ export function speciesToRow(sp) {
     typical_size: sp.typicalSize || '',
     reef_fish:     sp.reefFish === true,
     hms:           sp.hms === true,
+    // Default TRUE at write time. Deactivation goes through
+    // deactivateSpecies() below, not the shared upsert path, so the
+    // bulk edit form doesn't accidentally re-activate a hidden row.
+    is_active:     sp.active === false ? false : true,
   };
   return row;
 }
@@ -167,7 +176,7 @@ export async function refreshSpecies() {
   if (!c) return { ok: false, error: 'not-configured' };
   try {
     const [speciesRes, photosRes] = await Promise.all([
-      c.from('species').select('id, common_name, alt_names, scientific, category, key_ids, lookalikes, habitat, typical_size, reef_fish, hms'),
+      c.from('species').select('id, common_name, alt_names, scientific, category, key_ids, lookalikes, habitat, typical_size, reef_fish, hms, is_active'),
       c.from('species_photos').select('id, species_id, url, credit, license, source, is_primary, sort_order').order('sort_order', { ascending: true }),
     ]);
     if (speciesRes.error) return { ok: false, error: speciesRes.error.message };
@@ -268,4 +277,38 @@ export async function upsertSpecies(sp) {
   // Re-pull to keep the cache honest; cheap since the table is tiny.
   await refreshSpecies();
   return { ok: true };
+}
+
+/** Soft-delete: flip is_active=false. Species stays in the table so
+    historical catches still resolve, but disappears from pickers +
+    classifier candidates on the next mobile refresh. */
+export async function deactivateSpecies(id) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  // ensureSpeciesRow so we can toggle even a bundled-only species (no
+  // upsert override yet). Seeds from the JS record if needed.
+  const seed = await ensureSpeciesRow(id);
+  if (!seed.ok) return { ok: false, error: seed.error };
+  const { error } = await c.from('species').update({ is_active: false }).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  await refreshSpecies();
+  return { ok: true };
+}
+
+/** Reactivate a previously deactivated species. */
+export async function reactivateSpecies(id) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const { error } = await c.from('species').update({ is_active: true }).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  await refreshSpecies();
+  return { ok: true };
+}
+
+/** Filter helper — SPECIES entries that consumers should offer in
+    pickers, classifier candidates, etc. Historical lookups (e.g.
+    resolving a catch's speciesId) should read the raw SPECIES array
+    directly so a deactivated species still renders its details. */
+export function activeSpecies() {
+  return SPECIES.filter(s => s.active !== false);
 }

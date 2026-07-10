@@ -17,6 +17,7 @@ import { SPECIES, CATEGORIES } from '../data.js';
 import { client, isConfigured } from '../supabase-client.js';
 import {
   upsertSpecies, refreshSpecies,
+  deactivateSpecies, reactivateSpecies,
   speciesPhotoOverrideAll,
   addSpeciesPhoto, deleteSpeciesPhoto, setPrimarySpeciesPhoto,
   subscribe as subscribeSpeciesStore,
@@ -357,7 +358,16 @@ function SpeciesTab({ detailView, setDetailView }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{sp.commonName}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {sp.commonName}
+                    {sp.active === false && (
+                      <span style={{
+                        fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase',
+                        background: T.warnBg, color: T.warn, border: `1px solid ${T.warn}`,
+                        padding: '2px 6px', borderRadius: 4, fontWeight: 800,
+                      }}>Deactivated</span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>{sp.id}</div>
                 </div>
                 <div style={{ fontSize: 12, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>{sp.scientific}</div>
@@ -468,6 +478,45 @@ function SpeciesForm({ initial, onDone, onCancel }) {
           </label>
         </div>
       </Card>
+
+      {!isNew && (
+        <Card>
+          <SectionLabel style={{ marginBottom: 6 }}>Status</SectionLabel>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, flex: 1 }}>
+              {initial.active === false
+                ? 'Deactivated — hidden from pickers and classifier. Historical catches still resolve.'
+                : 'Active — offered in pickers and classifier candidates.'}
+            </div>
+            {initial.active === false ? (
+              <GhostButton
+                onClick={async () => {
+                  setSaving(true);
+                  const res = await reactivateSpecies(initial.id);
+                  setSaving(false);
+                  if (!res.ok) setError(res.error || 'Reactivate failed.');
+                  else onDone();
+                }}
+                disabled={saving}
+                style={{ padding: '8px 14px', color: T.open, borderColor: T.open }}
+              >Reactivate</GhostButton>
+            ) : (
+              <GhostButton
+                onClick={async () => {
+                  if (!window.confirm(`Deactivate ${initial.commonName}? Historical catches will still resolve, but it will disappear from pickers and the classifier.`)) return;
+                  setSaving(true);
+                  const res = await deactivateSpecies(initial.id);
+                  setSaving(false);
+                  if (!res.ok) setError(res.error || 'Deactivate failed.');
+                  else onDone();
+                }}
+                disabled={saving}
+                style={{ padding: '8px 14px', color: T.closed, borderColor: T.closed }}
+              >Deactivate</GhostButton>
+            )}
+          </div>
+        </Card>
+      )}
 
       {error && <div role="alert" style={{ fontSize: 12, color: T.closed }}>{error}</div>}
 

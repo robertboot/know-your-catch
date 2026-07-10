@@ -850,11 +850,13 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
 
   const rows = useMemo(() => {
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
-    const list = SPECIES.map(s => {
-      const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
-      const status = reg ? seasonState(reg.open).status : 'unknown';
-      return { s, reg, status };
-    });
+    const list = SPECIES
+      .filter(s => s.active !== false)
+      .map(s => {
+        const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+        const status = reg ? seasonState(reg.open).status : 'unknown';
+        return { s, reg, status };
+      });
     list.sort((a, b) => {
       if (sort === 'status') return (statusRank[a.status] - statusRank[b.status]) || a.s.commonName.localeCompare(b.s.commonName);
       if (sort === 'type')   return ((catOrder[a.s.category] ?? 99) - (catOrder[b.s.category] ?? 99)) || a.s.commonName.localeCompare(b.s.commonName);
@@ -3063,6 +3065,7 @@ const _shuffle = (arr) => arr.slice().sort(() => Math.random() - 0.5);
 // telling lookalikes apart instead of "tuna or shark".
 function pickSpeciesQuestion(prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
+    if (s.active === false) return false;
     const p = speciesPhoto(s.id);
     return p && p.url && s.id !== prevSpeciesId;
   });
@@ -3089,6 +3092,7 @@ const _BAG_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 10, 15, 20];
 
 function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
+    if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
     const reg = REGULATIONS[s.id]?.[jurisdiction.id];
     return reg && reg.bagLimit != null;
@@ -3109,6 +3113,7 @@ function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
 
 function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
+    if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
     const reg = REGULATIONS[s.id]?.[jurisdiction.id];
     return reg && reg.minSize != null;

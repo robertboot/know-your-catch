@@ -117,6 +117,10 @@ export const SPECIES = [
     keyIds: ['Extremely long pectoral fins — extend past the second dorsal fin (key feature)', 'Dark blue back fading to silvery-white belly', 'White trailing edge on the tail', 'Smaller, rounded body relative to other tunas', 'Yellow finlets without distinct black edges'],
     lookalikes: ['yellowfin_tuna', 'blackfin_tuna', 'bigeye_tuna'],
     habitat: 'Offshore temperate and tropical waters, surface to 1,300 ft. Less common in the Gulf — more typical of Atlantic offshore.', typicalSize: '30–50 in', hms: true },
+  { id: 'little_tunny', commonName: 'Little Tunny', altNames: ['Bonito', 'False Albacore', 'Fat Albert'], scientific: 'Euthynnus alletteratus', category: 'tuna',
+    keyIds: ['Dark wavy / vermiculated stripes across the back above the lateral line only', 'Cluster of 3–7 dark fingerprint-like spots below pectoral fin (key feature)', 'No stripes on belly', 'Smaller than blackfin/yellowfin — rarely over 20 lb'],
+    lookalikes: ['blackfin_tuna', 'skipjack_tuna'],
+    habitat: 'Coastal and offshore surface waters, blitzing bait schools. Common Gulf-wide.', typicalSize: '20–32 in' },
   { id: 'bigeye_tuna', commonName: 'Bigeye Tuna', altNames: ['Ahi'], scientific: 'Thunnus obesus', category: 'tuna',
     keyIds: ['Very large eye relative to head', 'Pectoral fins reach past second dorsal in juveniles', 'Yellow finlets edged in black (similar to yellowfin)', 'Deeper, more rounded body than yellowfin'],
     lookalikes: ['yellowfin_tuna'],
@@ -290,6 +294,10 @@ export const SPECIES = [
     keyIds: ['Long pig-like snout (key feature)', 'First three dorsal spines very long and trailing', 'Pinkish to reddish body; large males show a dark blotch behind pectoral fin', 'Sharp protruding canine teeth at the front of the mouth', 'A wrasse — not a snapper despite the "hog snapper" name'],
     lookalikes: [],
     habitat: 'Reefs and hard bottom, 10–200 ft. Common around Florida and the eastern Gulf.', typicalSize: '14–24 in', reefFish: true },
+  { id: 'black_drum', commonName: 'Black Drum', altNames: ['Drum'], scientific: 'Pogonias cromis', category: 'reef',
+    keyIds: ['Deep, arched body with a high back — often called "puppy drum" as juveniles', 'Multiple chin barbels under the lower jaw (key feature — separates from red drum)', 'Silver-gray body with 4–6 dark vertical bars in juveniles (bars fade with age)', 'Large, blunt head; crushing pharyngeal teeth for shellfish', 'No black tail spot (which red drum has)'],
+    lookalikes: [],
+    habitat: 'Coastal bays, estuaries, oyster bars, jetties, and nearshore structure across the Gulf and South Atlantic.', typicalSize: '18–36 in' },
 ];
 
 export const COMPARISONS = {

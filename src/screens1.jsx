@@ -989,7 +989,7 @@ export function CategoryScreen({ catId, state, update, onPick }) {
     update({ favorites: Array.from(next) });
   };
   const list = useMemo(() => {
-    const base = SPECIES.filter(s => s.category === catId)
+    const base = SPECIES.filter(s => s.category === catId && s.active !== false)
       .sort((a, b) => a.commonName.localeCompare(b.commonName));
     return base.sort((a, b) => (favSet.has(b.id) ? 1 : 0) - (favSet.has(a.id) ? 1 : 0));
   }, [catId, favSet]);
@@ -1013,7 +1013,7 @@ export function SearchScreen({ state, onPick }) {
   const results = useMemo(() => {
     if (!q.trim()) return [];
     const lower = q.toLowerCase().trim();
-    return SPECIES.map(s => {
+    return SPECIES.filter(s => s.active !== false).map(s => {
       let score = 0; let matchedAlt = null;
       if (s.commonName.toLowerCase().includes(lower)) score += 10;
       if (s.scientific.toLowerCase().includes(lower)) score += 5;
