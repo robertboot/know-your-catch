@@ -176,17 +176,42 @@ function UploadArtifactsPanel({ onDone }) {
   const [error, setError] = useState('');
   const inputRef = useRef(null);
 
+  const applyEntry = async ({ name, blob, textFn }) => {
+    if (name.endsWith('.tflite')) {
+      const file = blob instanceof File
+        ? blob
+        : new File([blob], name, { type: 'application/octet-stream' });
+      setTfliteFile(file);
+    } else if (name === 'fish_id_labels.json') {
+      try { setLabels(JSON.parse(await textFn())); }
+      catch (e) { setParseError(`labels.json parse: ${e.message}`); }
+    } else if (name === 'fish_id_metrics.json') {
+      try { setMetrics(JSON.parse(await textFn())); }
+      catch (e) { setParseError(`metrics.json parse: ${e.message}`); }
+    }
+  };
+
   const handleFiles = async (fileList) => {
     setParseError(''); setError('');
     for (const f of Array.from(fileList || [])) {
-      if (f.name.endsWith('.tflite')) setTfliteFile(f);
-      else if (f.name === 'fish_id_labels.json') {
-        try { setLabels(JSON.parse(await f.text())); }
-        catch (e) { setParseError(`labels.json parse: ${e.message}`); }
-      }
-      else if (f.name === 'fish_id_metrics.json') {
-        try { setMetrics(JSON.parse(await f.text())); }
-        catch (e) { setParseError(`metrics.json parse: ${e.message}`); }
+      if (f.name.toLowerCase().endsWith('.zip')) {
+        // Colab hands artifacts back as a single ZIP. Expand it and
+        // treat each entry as if the user had dropped it directly.
+        try {
+          const { default: JSZip } = await import('jszip');
+          const zip = await JSZip.loadAsync(f);
+          for (const entryName of Object.keys(zip.files)) {
+            const entry = zip.files[entryName];
+            if (entry.dir) continue;
+            const base = entryName.split('/').pop();
+            const blob = await entry.async('blob');
+            await applyEntry({ name: base, blob, textFn: () => blob.text() });
+          }
+        } catch (e) {
+          setParseError(`Could not read ${f.name}: ${e.message}`);
+        }
+      } else {
+        await applyEntry({ name: f.name, blob: f, textFn: () => f.text() });
       }
     }
   };
@@ -220,7 +245,7 @@ function UploadArtifactsPanel({ onDone }) {
           <GhostButton onClick={onDone}>← Back</GhostButton>
         </div>
         <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10, lineHeight: 1.5 }}>
-          Drop the three files the Colab notebook produced. The .tflite goes to storage; the two JSONs are parsed inline and stored on the row.
+          Drop the <code>fish_id_artifacts.zip</code> from Colab (or the three files individually). The .tflite goes to storage; the two JSONs are parsed inline and stored on the row.
         </div>
 
         <Card
@@ -236,10 +261,10 @@ function UploadArtifactsPanel({ onDone }) {
             Drop artifacts (or click to pick)
           </div>
           <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6 }}>
-            fish_id_model.tflite · fish_id_labels.json · fish_id_metrics.json
+            fish_id_artifacts.zip · or fish_id_model.tflite + fish_id_labels.json + fish_id_metrics.json
           </div>
           <input
-            ref={inputRef} type="file" multiple accept=".tflite,.json,application/json,application/octet-stream" hidden
+            ref={inputRef} type="file" multiple accept=".tflite,.json,.zip,application/json,application/zip,application/octet-stream" hidden
             onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
           />
         </Card>
