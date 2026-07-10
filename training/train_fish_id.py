@@ -336,6 +336,14 @@ def main():
 
     history = train(model, base, train_ds, val_ds, epochs=args.epochs)
 
+    # Checkpoint the trained Keras model BEFORE quantization. If the
+    # TFLite converter later throws, the trained weights are still
+    # on disk and can be reloaded to skip retraining. Delete after a
+    # successful quantize so it doesn't ride into the artifacts dir.
+    keras_ckpt = out_dir / "trained_model.keras"
+    print(f"Checkpointing trained model → {keras_ckpt}")
+    model.save(keras_ckpt)
+
     print("Evaluating on val split…")
     metrics = evaluate(model, val_ds, labels)
     metrics["lookalike_group_confusion"] = compute_lookalike_group_confusion(
@@ -349,6 +357,11 @@ def main():
     tflite_path = out_dir / "fish_id_model.tflite"
     print(f"Quantizing to INT8 → {tflite_path}")
     quantize_to_tflite(model, val_ds, tflite_path)
+
+    # Quantize succeeded — the .keras checkpoint has served its
+    # purpose. Drop it so the artifacts dir stays lean.
+    if keras_ckpt.exists():
+        keras_ckpt.unlink()
 
     (out_dir / "fish_id_labels.json").write_text(json.dumps({
         "labels": labels,
