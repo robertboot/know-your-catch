@@ -55,24 +55,24 @@ function normalizeScores(raw) {
 }
 
 /* tfjs-tflite doesn't Vite-bundle cleanly (WASM worker path breaks in
-   Rollup). Load the UMD bundle from a CDN once and stash on window.
-   Admin-only, so hitting a CDN is acceptable. */
-const TFLITE_PKG_BASE = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/';
-function loadTfliteViaCDN() {
+   Rollup). Self-host the UMD JS + WASM under public/models/tflite/
+   (copied verbatim from node_modules/@tensorflow/tfjs-tflite/). This
+   avoids jsdelivr's wrong MIME + nosniff blocking the follow-on
+   scripts, and keeps admin working with no external network deps. */
+const TFLITE_LOCAL_BASE = `${import.meta.env.BASE_URL}models/tflite/`;
+function loadTfliteRuntime() {
   if (window.tflite) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = `${TFLITE_PKG_BASE}dist/tf-tflite.min.js`;
+    s.src = `${TFLITE_LOCAL_BASE}tf-tflite.min.js`;
     s.onload = () => {
       if (!window.tflite) return reject(new Error('tflite global not set'));
-      // The WASM binaries live in the package's wasm/ subdir, NOT dist/.
-      // Without this, the runtime 404s fetching tflite_web_api_cc.wasm,
-      // Module._malloc stays undefined, and loadTFLiteModel throws
-      // "undefined is not an object (evaluating 'l._malloc')".
-      window.tflite.setWasmPath(`${TFLITE_PKG_BASE}wasm/`);
+      // Point the runtime at the same directory so it can fetch the
+      // matching wasm binaries and worker JS.
+      window.tflite.setWasmPath(TFLITE_LOCAL_BASE);
       resolve();
     };
-    s.onerror = () => reject(new Error('failed to load tfjs-tflite from CDN'));
+    s.onerror = () => reject(new Error('failed to load tfjs-tflite runtime'));
     document.head.appendChild(s);
   });
 }
@@ -110,15 +110,13 @@ export default function TestImagePanel() {
         if (!resp.ok) throw new Error(`fetch model ${resp.status}`);
         const bytes = await resp.arrayBuffer();
 
-        // tfjs-tflite has to load via CDN — its WASM worker doesn't
-        // survive Vite bundling. Admin-only surface, so a one-time
-        // CDN fetch is fine. Core tfjs stays as a real npm dep, but
-        // we have to hoist it onto window so the UMD tflite bundle
-        // can find it — otherwise predict() throws
+        // The UMD tflite bundle reaches for a global `tf`; hoist the
+        // ESM tfjs module namespace onto window so its lookup works,
+        // otherwise predict() throws
         // "undefined is not an object (evaluating 'tfjsCore.Tensor')".
         const tf = await import('@tensorflow/tfjs');
         window.tf = tf;
-        await loadTfliteViaCDN();
+        await loadTfliteRuntime();
         const model = await window.tflite.loadTFLiteModel(new Uint8Array(bytes));
         if (!alive) return;
         setRuntime({
@@ -147,13 +145,18 @@ export default function TestImagePanel() {
   };
 
   const run = async () => {
-    if (!runtime || !testImage) return;
+    console.log('[test-image] run() clicked. runtime=', !!runtime, 'testImage=', !!testImage);
+    if (!runtime || !testImage) {
+      setError(`Not ready — runtime=${!!runtime}, image=${!!testImage}. Reload the page.`);
+      return;
+    }
     setInferring(true); setError(''); setPredictions(null);
     try {
       const tf = await import('@tensorflow/tfjs');
+      console.log('[test-image] tfjs ready, decoding image');
       const img = new Image();
       img.src = testImage.url;
-      await new Promise((r) => { img.onload = r; });
+      await new Promise((r, rj) => { img.onload = r; img.onerror = () => rj(new Error('image decode failed')); });
 
       // Decode → resize → normalize → INT8 tensor to match the model's
       // input signature.
@@ -162,15 +165,17 @@ export default function TestImagePanel() {
       canvas.height = runtime.inputSize;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, runtime.inputSize, runtime.inputSize);
-      const pixels = ctx.getImageData(0, 0, runtime.inputSize, runtime.inputSize);
       // The model expects uint8 [0, 255] with the /255 rescale baked
       // into its graph (see training/train_fish_id.py Rescaling layer).
       const input = tf.tidy(() =>
         tf.browser.fromPixels(canvas).expandDims(0)
       );
+      console.log('[test-image] input tensor built', input.shape, input.dtype);
 
       const out = runtime.tflite.predict(input);
+      console.log('[test-image] predict returned', out);
       const rawScores = await out.data();
+      console.log('[test-image] got scores, len=', rawScores?.length);
       input.dispose(); out.dispose();
 
       // The .tflite ships with inference_output_type = tf.uint8 (see
@@ -205,7 +210,9 @@ export default function TestImagePanel() {
         },
       });
     } catch (e) {
-      setError(e?.message || String(e));
+      console.error('[test-image] run() failed', e);
+      const msg = e?.message || e?.toString?.() || String(e) || 'unknown error';
+      setError(`Inference failed: ${msg}`);
     } finally {
       setInferring(false);
     }
