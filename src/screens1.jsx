@@ -119,66 +119,107 @@ const STATUS_TEXT = {
 // home. Fixed flex-basis so each tile keeps a comfortable size and the
 // row scrolls instead of squeezing.
 //
-// Two render modes:
-//   1. Icon + text (default) — icon on top, uppercase title stack,
-//      subtitle, corner chevron. Original layout.
-//   2. Background image (bgImage prop) — <img> covers the whole tile;
-//      title/subtitle/icon are baked into the artwork already, so we
-//      DO NOT overlay them. Only the corner chevron survives, with a
-//      subtle glow so it stays legible over any tile artwork.
+// Layout — always the same, whether or not a background image is set:
+//   - Icon: top-left. When bgImage is set, gets a drop-shadow so it
+//     stays legible over any artwork; otherwise plain cyan on the
+//     card's dark background.
+//   - Title stack (titleA / optional titleB): bottom-left, bold
+//     uppercase.
+//   - Subtitle: below title stack, one line.
+//   - Chevron: bottom-right.
+// When bgImage is set:
+//   - <img> covers the tile via absolute inset:0 + objectFit:cover.
+//   - A dark bottom-anchored gradient scrim (transparent top → dark
+//     bottom) sits between the image and the text so titles stay
+//     legible without dimming the artwork.
+//   - If the image fails to load, we fall back to the flat
+//     card-background layout so a missing asset doesn't ship a blank
+//     tile.
 function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
   const hasBg = !!bgImage;
   const [bgFailed, setBgFailed] = React.useState(false);
   const usingBg = hasBg && !bgFailed;
+
+  const textShadow = usingBg
+    ? '0 1px 3px rgba(0,0,0,0.85), 0 0 12px rgba(0,0,0,0.55)'
+    : 'none';
+  const iconShadow = usingBg
+    ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.7)) drop-shadow(0 0 8px rgba(25,212,242,0.35))'
+    : 'none';
+
   return (
     <button onClick={onClick} style={{
       flex: '0 0 168px',
       position: 'relative',
-      background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
-      padding: usingBg ? 0 : '16px 14px 14px', cursor: 'pointer', textAlign: 'left',
-      display: 'flex', flexDirection: 'column', gap: usingBg ? 0 : 10,
+      background: usingBg ? T.oceanDeep : T.card,
+      border: `1px solid ${T.cardEdge}`, borderRadius: 18,
+      padding: 0, cursor: 'pointer', textAlign: 'left',
       minHeight: 176,
       scrollSnapAlign: 'start',
       boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
       overflow: 'hidden',
     }}>
       {usingBg && (
-        <img
-          src={bgImage}
-          alt={alt || ''}
-          loading="eager"
-          onError={() => setBgFailed(true)}
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', display: 'block', userSelect: 'none',
-            pointerEvents: 'none',
-          }}
-        />
-      )}
-
-      {/* Text/icon layout — hidden when the tile is running the
-          background-image variant since art already includes them. */}
-      {!usingBg && (
         <>
-          <div style={{ color: T.brass, marginBottom: 4 }}>{icon}</div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-            {titleA}
-            {titleB && <><br />{titleB}</>}
-          </div>
-          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
+          <img
+            src={bgImage}
+            alt={alt || ''}
+            loading="eager"
+            onError={() => setBgFailed(true)}
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', display: 'block', userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          />
+          {/* Bottom-anchored gradient scrim keeps the title stack
+              legible over any artwork focal point. Light at the top so
+              the icon area shows the illustration; dark at the bottom
+              where the copy lives. */}
+          <div aria-hidden="true" style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(180deg, rgba(3,10,25,0) 0%, rgba(3,10,25,0.15) 45%, rgba(3,10,25,0.80) 100%)',
+            pointerEvents: 'none',
+          }} />
         </>
       )}
 
-      {/* Chevron always rides in the bottom-right. Absolutely
-          positioned + drop-shadow so it stays legible over any
-          background art without dimming it. */}
+      {/* Icon — top-left. */}
+      <div style={{
+        position: 'absolute', top: 14, left: 14,
+        color: T.brass,
+        filter: iconShadow,
+      }}>{icon}</div>
+
+      {/* Title + subtitle — bottom-left. Uppercase title reads over
+          the scrim; subtitle stays soft but with a subtle text-shadow
+          so it doesn't disappear over a light patch. */}
+      <div style={{
+        position: 'absolute', left: 14, right: 44, bottom: 12,
+      }}>
+        <div style={{
+          fontSize: 15, fontWeight: 800, color: T.ink,
+          lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase',
+          textShadow,
+        }}>
+          {titleA}
+          {titleB && <><br />{titleB}</>}
+        </div>
+        {subtitle && (
+          <div style={{
+            fontSize: 12, color: usingBg ? '#D3E3EC' : T.inkMute,
+            lineHeight: 1.4, marginTop: 4, textShadow,
+          }}>{subtitle}</div>
+        )}
+      </div>
+
+      {/* Chevron — bottom-right. */}
       <ChevronRight
         size={18}
         color={T.brass}
         style={{
-          position: 'absolute',
-          bottom: 10, right: 10,
-          filter: usingBg ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.55)) drop-shadow(0 0 6px rgba(25,212,242,0.35))' : 'none',
+          position: 'absolute', bottom: 12, right: 12,
+          filter: iconShadow,
         }}
       />
     </button>
@@ -404,7 +445,7 @@ export function HomeScreen({
           titleA="PATTERNS"
           subtitle="What's working in your log"
           onClick={onPatterns}
-          bgImage={`${import.meta.env.BASE_URL}marketing/tile-patterns.png`}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-patterns.jpg`}
           alt="Patterns — what's working in your log"
         />
         <QuickTile
@@ -412,7 +453,7 @@ export function HomeScreen({
           titleA="FISH" titleB="ID"
           subtitle="Point, shoot, get the species"
           onClick={onIdentify}
-          bgImage={`${import.meta.env.BASE_URL}marketing/tile-fish-id.png`}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-fish-id.jpg`}
           alt="Fish ID — point, shoot, get the species"
         />
         <QuickTile
@@ -420,7 +461,7 @@ export function HomeScreen({
           titleA="CHECK" titleB="REGULATIONS"
           subtitle="Rules, limits, and seasons"
           onClick={onRegulations}
-          bgImage={`${import.meta.env.BASE_URL}marketing/tile-check-regs.png`}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-check-regs.jpg`}
           alt="Check regulations — rules, limits, and seasons"
         />
         <QuickTile
@@ -428,7 +469,7 @@ export function HomeScreen({
           titleA="FISH ID" titleB="QUIZ"
           subtitle="Test your ID, limits, and seasons"
           onClick={onQuiz}
-          bgImage={`${import.meta.env.BASE_URL}marketing/tile-fish-quiz.png`}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-fish-quiz.jpg`}
           alt="Fish ID quiz — test your ID, limits, and seasons"
         />
       </div>
