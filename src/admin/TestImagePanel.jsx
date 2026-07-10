@@ -168,19 +168,29 @@ export default function TestImagePanel() {
       img.src = testImage.url;
       await new Promise((r, rj) => { img.onload = r; img.onerror = () => rj(new Error('image decode failed')); });
 
-      // Decode → resize → normalize → INT8 tensor to match the model's
-      // input signature.
+      // Decode → resize → uint8 RGB tensor matching the model's
+      // uint8 input signature. Skip tf.browser.fromPixels (which
+      // returns int32 and provokes the tflite runtime to insert an
+      // int32→uint8 conversion op that hangs on Safari's CPU
+      // fallback path). Instead pull uint8 bytes straight out of the
+      // canvas, strip alpha, and hand the runtime a Tensor whose
+      // backing values are already what the graph wants — its
+      // Uint8Array.from(dataSync()) then becomes a same-range copy.
       const canvas = canvasRef.current;
       canvas.width = runtime.inputSize;
       canvas.height = runtime.inputSize;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, runtime.inputSize, runtime.inputSize);
-      // The model expects uint8 [0, 255] with the /255 rescale baked
-      // into its graph (see training/train_fish_id.py Rescaling layer).
-      const input = tf.tidy(() =>
-        tf.browser.fromPixels(canvas).expandDims(0)
-      );
-      console.log('[test-image] input tensor built', input.shape, input.dtype);
+      const rgba = ctx.getImageData(0, 0, runtime.inputSize, runtime.inputSize).data;
+      const pixelCount = runtime.inputSize * runtime.inputSize;
+      const rgb = new Uint8Array(pixelCount * 3);
+      for (let i = 0; i < pixelCount; i++) {
+        rgb[i * 3]     = rgba[i * 4];
+        rgb[i * 3 + 1] = rgba[i * 4 + 1];
+        rgb[i * 3 + 2] = rgba[i * 4 + 2];
+      }
+      const input = tf.tensor4d(rgb, [1, runtime.inputSize, runtime.inputSize, 3], 'int32');
+      console.log('[test-image] input tensor built', input.shape, input.dtype, 'first bytes:', Array.from(rgb.slice(0, 6)));
 
       const out = runtime.tflite.predict(input);
       console.log('[test-image] predict returned', out);
