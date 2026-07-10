@@ -41,7 +41,10 @@ epoch is the slowest (JIT compilation); later epochs run at
 Requires a GPU-equipped machine with recent TensorFlow.
 
 ```bash
-pip install tensorflow==2.15.* pillow numpy scikit-learn
+# TensorFlow 2.16 or newer — anything that gives you a working
+# tf.keras.applications.MobileNetV3Small. Colab already ships TF so
+# the notebook path doesn't need a pip install of it.
+pip install 'tensorflow>=2.16' scikit-learn pillow numpy
 python training/train_fish_id.py \
   --export /path/to/reelintel-training-2026-07-10.zip \
   --out    /path/to/artifacts/
