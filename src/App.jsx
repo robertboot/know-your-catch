@@ -40,6 +40,7 @@ import {
   CatchLogScreen, CatchEntryScreen, CatchDetailScreen, QuizScreen,
 } from './screens2.jsx';
 import { PatternsScreen } from './screens_patterns.jsx';
+import NotificationsDrawer, { useAnnouncementInbox } from './notifications-inbox.jsx';
 
 // Web-only admin console. When __KYC_ADMIN__ is false (ios:build) the
 // ternary constant-folds to null and Rollup drops both the dynamic
@@ -49,8 +50,6 @@ const AdminApp = __KYC_ADMIN__
   : null;
 
 const ADMIN_EMAIL = 'robertb1023@me.com';
-
-const ALERT_COUNT = 2;
 
 const currentHashRoute = () =>
   (typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '')) || '';
@@ -66,6 +65,7 @@ export default function App() {
   const [showBoundaryInfo, setShowBoundaryInfo] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [keepFor, setKeepFor] = useState(null);
   const [hashRoute, setHashRoute] = useState(currentHashRoute);
   // Bump on every species-store notify so components that read SPECIES
@@ -82,6 +82,10 @@ export default function App() {
   // prompt on Logbook / PBs; syncStatus feeds the header pill.
   const [session, setSession] = useState(null);
   const [syncStatus, setSyncStatus] = useState(getSyncStatus());
+  // Bell badge count — active + not-dismissed notifications
+  // (announcements + launch emails). The drawer reads the same
+  // hook internally so both stay in sync.
+  const { unreadCount: inboxUnread } = useAnnouncementInbox();
 
   // Load persisted state on mount.
   useEffect(() => {
@@ -793,15 +797,19 @@ export default function App() {
             <SyncPill status={syncStatus} onClick={() => push({ name: 'settings' })} />
           )}
           {isHome && (
-            <button onClick={() => push({ name: 'regulations' })} style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }} aria-label="Alerts">
+            <button
+              onClick={() => setShowNotifications(true)}
+              style={{ background: 'transparent', border: 'none', color: T.parchment, padding: 4, cursor: 'pointer', position: 'relative' }}
+              aria-label={inboxUnread > 0 ? `Notifications (${inboxUnread})` : 'Notifications'}
+            >
               <Bell size={24} strokeWidth={1.8} />
-              {ALERT_COUNT > 0 && (
+              {inboxUnread > 0 && (
                 <span style={{
                   position: 'absolute', top: -3, right: -4, background: T.brass, color: T.oceanDeep,
                   fontSize: 11, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
                   boxShadow: '0 0 10px rgba(25, 212, 242, 0.55)',
-                }}>{ALERT_COUNT}</span>
+                }}>{inboxUnread}</span>
               )}
             </button>
           )}
@@ -970,6 +978,11 @@ export default function App() {
       )}
 
       {keepFor && <KeepConfirmModal species={keepFor} onClose={() => setKeepFor(null)} />}
+
+      <NotificationsDrawer
+        open={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
     </div>
     </ScreenSizeContext.Provider>
   );

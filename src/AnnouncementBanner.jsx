@@ -41,23 +41,38 @@ export default function AnnouncementBanner() {
     window.open(visible.cta_url, '_blank', 'noopener,noreferrer');
   };
 
+  // Absolute-positioned X in the top-right so long titles/bodies
+  // wrap under it without shifting horizontally.
+  const dismissBtnSize = 22;
+  const dismissReserve = visible.dismissible ? dismissBtnSize + 8 : 0;
+
   return (
     <div
       role="region"
       aria-label="Announcement"
       style={{
-        marginTop: 12, padding: '10px 12px',
+        position: 'relative',
+        boxSizing: 'border-box', width: '100%',
+        marginTop: 12,
+        padding: '10px 12px',
         background: 'linear-gradient(90deg, rgba(25, 212, 242, 0.14), rgba(25, 212, 242, 0.06))',
         border: `1px solid ${T.brass}`,
         borderRadius: 10,
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: T.ink, letterSpacing: 0.2 }}>
+      <div style={{ flex: 1, minWidth: 0, paddingRight: dismissReserve }}>
+        <div style={{
+          fontSize: 12, fontWeight: 800, color: T.ink, letterSpacing: 0.2,
+          wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal',
+        }}>
           {visible.title}
         </div>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2, lineHeight: 1.35 }}>
+        <div style={{
+          fontSize: 12, color: T.inkSoft, marginTop: 2, lineHeight: 1.35,
+          wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal',
+        }}>
           {visible.body}
         </div>
       </div>
@@ -68,7 +83,8 @@ export default function AnnouncementBanner() {
             background: T.brass, color: T.oceanDeep, border: 'none',
             padding: '7px 12px', borderRadius: 6,
             fontSize: 12, fontWeight: 800, cursor: 'pointer',
-            whiteSpace: 'nowrap',
+            whiteSpace: 'nowrap', flexShrink: 0,
+            marginTop: 2,
           }}
         >
           {visible.cta_label || 'Open'}
@@ -79,8 +95,12 @@ export default function AnnouncementBanner() {
           onClick={dismiss}
           aria-label="Dismiss announcement"
           style={{
+            position: 'absolute', top: 6, right: 6,
+            width: dismissBtnSize, height: dismissBtnSize,
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: T.inkSoft, padding: 4, display: 'flex',
+            color: T.inkSoft,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 0,
           }}
         >
           <X size={16} />

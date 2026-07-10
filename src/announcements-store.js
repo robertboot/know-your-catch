@@ -5,23 +5,28 @@ import { client } from './supabase-client.js';
 
 const TABLE = 'announcements';
 
-/* List announcements that should be shown right now:
-   - starts_at <= now
-   - ends_at IS NULL OR ends_at > now
-   - audience matches the session state
-   Client-side sort so we can pick the most recent to render first
-   without an ORDER BY that would need extra RLS thought. */
+/* List announcements that should be shown right now.
+   The prior version combined .lte('starts_at') with a PostgREST
+   .or('ends_at.is.null,...') expression that was silently returning
+   zero rows in some environments. Fetch the small table wholesale
+   and filter client-side — same net result, no query-shape drift. */
 export async function listActiveAnnouncements(session) {
   const c = client();
   if (!c) return { ok: true, rows: [] };
-  const nowIso = new Date().toISOString();
   const { data, error } = await c.from(TABLE)
-    .select('id, title, body, cta_label, cta_url, starts_at, ends_at, audience, dismissible, created_at')
-    .lte('starts_at', nowIso)
-    .or(`ends_at.is.null,ends_at.gt.${nowIso}`);
-  if (error) return { ok: false, rows: [], error: error.message };
+    .select('id, title, body, cta_label, cta_url, starts_at, ends_at, audience, dismissible, created_at');
+  if (error) {
+    console.warn('[announcements] fetch failed:', error.message);
+    return { ok: false, rows: [], error: error.message };
+  }
+  const now = Date.now();
   const audience = session ? 'signed_in' : 'signed_out';
   const rows = (data || [])
+    .filter(r => {
+      const startsMs = new Date(r.starts_at).getTime();
+      const endsMs   = r.ends_at ? new Date(r.ends_at).getTime() : Infinity;
+      return startsMs <= now && now < endsMs;
+    })
     .filter(r => r.audience === 'all' || r.audience === audience)
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   return { ok: true, rows };
@@ -65,7 +70,8 @@ export async function deleteAnnouncement(id) {
 }
 
 /* localStorage-backed dismiss state. Keeps banner dismissals per
-   device so the same X-tap sticks across page reloads. */
+   device so the same X-tap sticks across page reloads. Shared
+   between the top-of-Home banner and the inbox drawer. */
 const LS_KEY = 'kyc_dismissed_announcements';
 
 export function loadDismissedIds() {
@@ -85,4 +91,28 @@ export function markDismissed(id) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(Array.from(s)));
   } catch {}
+}
+
+export function markManyDismissed(ids) {
+  const s = loadDismissedIds();
+  for (const id of ids) s.add(id);
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(Array.from(s)));
+  } catch {}
+}
+
+/* Fetch the current user's launch-email history from the
+   feature_notifications table. Only rows where the fan-out actually
+   ran (notified_at IS NOT NULL) are returned — pending waitlist
+   entries don't belong in the inbox. */
+export async function listMyLaunchEmails() {
+  const c = client();
+  if (!c) return { ok: true, rows: [] };
+  const { data, error } = await c.from('feature_notifications')
+    .select('id, feature, notified_at')
+    .not('notified_at', 'is', null)
+    .order('notified_at', { ascending: false })
+    .limit(50);
+  if (error) return { ok: false, rows: [], error: error.message };
+  return { ok: true, rows: data || [] };
 }

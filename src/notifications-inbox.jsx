@@ -1,0 +1,263 @@
+/* Notifications inbox drawer + hook.
+
+   Behaves as the in-app inbox. Combines:
+     - Active announcements (from public.announcements)
+     - Launch emails sent to me (from public.feature_notifications
+       where notified_at is not null)
+   Dismissed items — keyed off the same kyc_dismissed_announcements
+   localStorage set used by the top-of-Home banner — sink into a
+   "Cleared" section below with lighter styling.
+
+   The bell badge is the count of active + not-dismissed items. */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { X, Bell, Mail, Megaphone } from 'lucide-react';
+import { T } from './theme.js';
+import { getLastSession, subscribe } from './auth.js';
+import {
+  listActiveAnnouncements, listMyLaunchEmails,
+  loadDismissedIds, markDismissed, markManyDismissed,
+} from './announcements-store.js';
+
+const POLL_INTERVAL_MS = 60_000;
+
+/* Feature-slug → human label for the launch-email row title. */
+const FEATURE_LABELS = {
+  fish_id: 'Fish ID',
+};
+function labelForFeature(slug) {
+  return FEATURE_LABELS[slug] || slug.replace(/_/g, ' ');
+}
+
+/* Shared hook powering both the bell badge and the drawer.
+   Fetches on mount + on window focus + on a slow poll so the badge
+   ticks up without a full page reload. */
+export function useAnnouncementInbox() {
+  const [session,      setSession]     = useState(getLastSession());
+  const [announcements, setAnnouncements] = useState([]);
+  const [launchEmails,  setLaunchEmails]  = useState([]);
+  const [dismissed,     setDismissedIds]  = useState(() => loadDismissedIds());
+
+  useEffect(() => subscribe(setSession), []);
+
+  const refresh = useCallback(async () => {
+    const [ann, mail] = await Promise.all([
+      listActiveAnnouncements(session),
+      session ? listMyLaunchEmails() : Promise.resolve({ ok: true, rows: [] }),
+    ]);
+    if (ann.ok)  setAnnouncements(ann.rows);
+    if (mail.ok) setLaunchEmails(mail.rows);
+  }, [session]);
+
+  useEffect(() => {
+    refresh();
+    const onFocus = () => refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(timer);
+    };
+  }, [refresh]);
+
+  // Reload dismissed IDs from LS on every refresh — the Home banner
+  // may have dismissed a row before the drawer opened.
+  useEffect(() => {
+    setDismissedIds(loadDismissedIds());
+  }, [announcements, launchEmails]);
+
+  const items = useMemo(() => {
+    const out = [];
+    for (const a of announcements) {
+      out.push({
+        id: `announcement:${a.id}`,
+        dismissKey: a.id,
+        kind: 'announcement',
+        title: a.title,
+        body: a.body,
+        stamp: a.created_at,
+        source: 'System',
+      });
+    }
+    for (const m of launchEmails) {
+      out.push({
+        id: `launch:${m.id}`,
+        dismissKey: `launch:${m.id}`,
+        kind: 'launch',
+        title: `${labelForFeature(m.feature)} — you were emailed`,
+        body: `We emailed you about the ${labelForFeature(m.feature)} launch.`,
+        stamp: m.notified_at,
+        source: 'ReelIntel launch',
+      });
+    }
+    return out.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
+  }, [announcements, launchEmails]);
+
+  const active   = items.filter(i => !dismissed.has(i.dismissKey));
+  const cleared  = items.filter(i =>  dismissed.has(i.dismissKey));
+  const unreadCount = active.length;
+
+  const dismiss = (dismissKey) => {
+    markDismissed(dismissKey);
+    setDismissedIds(new Set(dismissed).add(dismissKey));
+  };
+
+  const dismissAll = () => {
+    const keys = active.map(i => i.dismissKey);
+    if (keys.length === 0) return;
+    markManyDismissed(keys);
+    const next = new Set(dismissed);
+    for (const k of keys) next.add(k);
+    setDismissedIds(next);
+  };
+
+  return { unreadCount, active, cleared, refresh, dismiss, dismissAll };
+}
+
+/* Modal drawer — full-screen on phone, centered card on wider
+   viewports. Renders on top via a fixed overlay + inner card. */
+export default function NotificationsDrawer({ open, onClose }) {
+  const { active, cleared, dismiss, dismissAll } = useAnnouncementInbox();
+  if (!open) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 500,
+        background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: 0,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: T.card,
+          borderTop: `1px solid ${T.cardEdge}`,
+          borderTopLeftRadius: 14, borderTopRightRadius: 14,
+          width: '100%', maxWidth: 640,
+          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '14px 16px', borderBottom: `1px solid ${T.cardEdge}`,
+          flexShrink: 0,
+        }}>
+          <Bell size={18} color={T.brass} />
+          <div style={{ flex: 1, fontSize: 15, fontWeight: 800, color: T.ink }}>
+            Notifications
+          </div>
+          {active.length > 0 && (
+            <button
+              onClick={dismissAll}
+              style={{
+                background: 'transparent', border: `1px solid ${T.cardEdge}`,
+                color: T.inkSoft, borderRadius: 6,
+                padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              Dismiss all
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            aria-label="Close notifications"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: T.inkSoft, padding: 4, display: 'flex',
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: 12, overflowY: 'auto' }}>
+          {active.length === 0 && cleared.length === 0 && (
+            <div style={{
+              textAlign: 'center', color: T.inkMute, fontSize: 13,
+              padding: '30px 20px', lineHeight: 1.5,
+            }}>
+              No new notifications — you'll see feature launches and regs updates here.
+            </div>
+          )}
+
+          {active.length > 0 && (
+            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+              {active.map(item => (
+                <InboxRow key={item.id} item={item} onDismiss={() => dismiss(item.dismissKey)} />
+              ))}
+            </div>
+          )}
+
+          {cleared.length > 0 && (
+            <>
+              <div style={{
+                fontSize: 10, fontWeight: 800, color: T.inkMute,
+                letterSpacing: 1, textTransform: 'uppercase',
+                marginBottom: 6, padding: '0 4px',
+              }}>
+                Cleared
+              </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {cleared.map(item => (
+                  <InboxRow key={item.id} item={item} cleared />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InboxRow({ item, onDismiss, cleared }) {
+  const Icon = item.kind === 'launch' ? Mail : Megaphone;
+  const stampDisplay = item.stamp
+    ? new Date(item.stamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : '';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '10px 12px',
+      background: cleared ? 'transparent' : T.parchmentDeep,
+      border: `1px solid ${cleared ? 'transparent' : T.cardEdge}`,
+      borderRadius: 8,
+      opacity: cleared ? 0.55 : 1,
+      boxSizing: 'border-box',
+    }}>
+      <Icon size={16} color={cleared ? T.inkMute : T.brass} style={{ marginTop: 2, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 13, fontWeight: 700, color: T.ink,
+          wordBreak: 'break-word', overflowWrap: 'anywhere',
+        }}>
+          {item.title}
+        </div>
+        <div style={{
+          fontSize: 12, color: T.inkSoft, marginTop: 2, lineHeight: 1.4,
+          wordBreak: 'break-word', overflowWrap: 'anywhere',
+        }}>
+          {item.body}
+        </div>
+        <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4 }}>
+          {item.source}{stampDisplay ? ` · ${stampDisplay}` : ''}
+        </div>
+      </div>
+      {onDismiss && (
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: T.inkSoft, padding: 4, display: 'flex', flexShrink: 0,
+          }}
+        >
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
