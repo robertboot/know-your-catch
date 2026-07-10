@@ -112,8 +112,12 @@ export default function TestImagePanel() {
 
         // tfjs-tflite has to load via CDN — its WASM worker doesn't
         // survive Vite bundling. Admin-only surface, so a one-time
-        // CDN fetch is fine. Core tfjs stays as a real npm dep.
-        await import('@tensorflow/tfjs');
+        // CDN fetch is fine. Core tfjs stays as a real npm dep, but
+        // we have to hoist it onto window so the UMD tflite bundle
+        // can find it — otherwise predict() throws
+        // "undefined is not an object (evaluating 'tfjsCore.Tensor')".
+        const tf = await import('@tensorflow/tfjs');
+        window.tf = tf;
         await loadTfliteViaCDN();
         const model = await window.tflite.loadTFLiteModel(new Uint8Array(bytes));
         if (!alive) return;
