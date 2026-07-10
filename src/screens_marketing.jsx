@@ -16,6 +16,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
 import { updatePassword, subscribe as subscribeAuth } from './auth.js';
 import { client as supabaseClient } from './supabase-client.js';
+import AnnouncementBanner from './AnnouncementBanner.jsx';
 
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
@@ -1239,6 +1240,14 @@ export function MarketingLanding() {
     <div className="rl-root">
       <style>{cssRef}</style>
       <Nav />
+      {/* Announcement strip sits directly under the nav so news
+          reaches signed-out marketing visitors too. Wrapped in a
+          max-width container to match the marketing layout. */}
+      <div style={{
+        maxWidth: 1120, margin: '0 auto', padding: '0 20px', boxSizing: 'border-box',
+      }}>
+        <AnnouncementBanner />
+      </div>
       <Hero />
       <IntelligencePlatform />
       <Insights />
