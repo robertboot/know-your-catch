@@ -48,8 +48,18 @@ def unzip_export(zip_path: Path, work_dir: Path) -> tuple[Path, dict]:
 def build_datasets(data_root: Path, labels: list[str], seed: int):
     """train_ds, val_ds — image_dataset_from_directory over the
     train/ and val/ subdirs. class_names is pinned to `labels` so
-    the head's output index matches manifest species order."""
+    the head's output index matches manifest species order.
+
+    Augmentation lives in the training data pipeline (via .map)
+    rather than as layers inside the model graph. Rationale: TFLite
+    INT8 quantization has no kernels for RandomFlip / RandomRotation
+    / RandomBrightness etc. If those layers are baked into the model,
+    quantization fails silently mid-conversion and the .tflite is
+    never written. Applying augmentation as a dataset transform
+    trains through the same distribution but leaves the export
+    graph clean (input → rescale → mobilenet → head → softmax). """
     import tensorflow as tf
+    from tensorflow.keras import layers
 
     def make(split):
         return tf.keras.utils.image_dataset_from_directory(
@@ -66,7 +76,23 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
 
     train_ds = make("train")
     val_ds   = make("val")
+
+    # Composed augmentation pipeline — kept as separate layers so
+    # each keeps its own PRNG state, invoked with training=True on
+    # every batch so they actually mutate the pixels.
+    augment = tf.keras.Sequential([
+        layers.RandomFlip("horizontal"),
+        layers.RandomRotation(0.10),
+        layers.RandomZoom(0.10),
+        layers.RandomContrast(0.20),
+        layers.RandomBrightness(0.20),
+    ], name="augment")
+
     autotune = tf.data.AUTOTUNE
+    train_ds = train_ds.map(
+        lambda x, y: (augment(x, training=True), y),
+        num_parallel_calls=autotune,
+    )
     return train_ds.prefetch(autotune), val_ds.prefetch(autotune)
 
 
@@ -74,9 +100,9 @@ def build_model(num_classes: int):
     """MobileNetV3-Small backbone + tiny classification head.
 
     Two-stage training: backbone frozen for FROZEN_EPOCHS, then last
-    UNFREEZE_LAST_N layers unfrozen. Aggressive augmentation lives
-    inside the model graph so quantization sees the exact input
-    pipeline production will use."""
+    UNFREEZE_LAST_N layers unfrozen. Augmentation is applied via the
+    dataset .map (see build_datasets), NOT via layers inside this
+    graph — those don't have INT8 kernels and break quantization."""
     import tensorflow as tf
     from tensorflow.keras import layers, models
 
@@ -87,13 +113,6 @@ def build_model(num_classes: int):
     # accepts uint8 tensors from the app.
     inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3), dtype="float32")
     x = layers.Rescaling(1.0 / 255.0)(inputs)
-
-    # Augmentation is train-time only via `training` kwarg propagation.
-    x = layers.RandomFlip("horizontal")(x)
-    x = layers.RandomRotation(0.10)(x)
-    x = layers.RandomZoom(0.10)(x)
-    x = layers.RandomContrast(0.20)(x)
-    x = layers.RandomBrightness(0.20)(x)
 
     base = tf.keras.applications.MobileNetV3Small(
         input_shape=(IMG_SIZE, IMG_SIZE, 3),
@@ -260,20 +279,30 @@ def quantize_to_tflite(model, val_ds, out_path: Path):
                 if n >= 100:
                     return
 
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.representative_dataset = rep_dataset
-    converter.target_spec.supported_ops = [
-        tf.lite.OpsSet.TFLITE_BUILTINS_INT8,
-    ]
-    # Boundary dtypes: the shipped .tflite accepts uint8 tensors from
-    # the app (0..255 straight from the RGB pixel bytes) and returns
-    # uint8 softmax scores. Consumers dequantize to [0, 1] with the
-    # scale + zero_point from the model's output tensor metadata; see
-    # normalizeScores in src/admin/TestImagePanel.jsx.
-    converter.inference_input_type = tf.uint8
-    converter.inference_output_type = tf.uint8
-    tflite = converter.convert()
+    # Try full INT8 first — that's what the iOS Neural Engine wants
+    # and what makes the .tflite tiny. If any op in the graph doesn't
+    # have an INT8 kernel in the current TF version, fall back to
+    # dynamic-range quantization (weights INT8, activations FP32) so
+    # the run still produces a shippable model. The dynamic model is
+    # ~2× larger but still runs on device.
+    def try_convert(strict_int8: bool):
+        conv = tf.lite.TFLiteConverter.from_keras_model(model)
+        conv.optimizations = [tf.lite.Optimize.DEFAULT]
+        if strict_int8:
+            conv.representative_dataset = rep_dataset
+            conv.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+            conv.inference_input_type = tf.uint8
+            conv.inference_output_type = tf.uint8
+        return conv.convert()
+
+    try:
+        tflite = try_convert(strict_int8=True)
+        print("Quantization: full INT8 succeeded.")
+    except Exception as e:
+        print(f"Quantization: full INT8 failed ({e.__class__.__name__}: {e})")
+        print("Quantization: falling back to dynamic-range quantization.")
+        tflite = try_convert(strict_int8=False)
+        print("Quantization: dynamic-range succeeded.")
     out_path.write_bytes(tflite)
 
 
