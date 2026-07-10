@@ -28,8 +28,22 @@ import { getLastSession } from './auth.js';
 
 const NATIVE = Capacitor.isNativePlatform();
 const PHOTO_DIR = 'photos';
-const THUMB_DIM = 240;
-const THUMB_QUALITY = 0.65;
+
+/* Downscale + quality tiers.
+   NATIVE (iOS) gets more headroom because the JPEG lives on the app's
+   Documents directory via Capacitor Filesystem — no browser storage
+   cap in the way. A 2400 px / 0.90 quality photo runs ~400–700 KB and
+   holds up cleanly in the lightbox at pinch-zoom levels.
+   WEB stays at 1600 / 0.82 because photos ride inline in
+   localStorage, which has a hard ~5 MB browser cap. */
+const NATIVE_MAX_DIM  = 2400;
+const NATIVE_QUALITY  = 0.90;
+const WEB_MAX_DIM     = 1600;
+const WEB_QUALITY     = 0.82;
+const FULL_MAX_DIM    = NATIVE ? NATIVE_MAX_DIM : WEB_MAX_DIM;
+const FULL_QUALITY    = NATIVE ? NATIVE_QUALITY : WEB_QUALITY;
+const THUMB_DIM       = 240;
+const THUMB_QUALITY   = 0.65;
 
 function newPhotoId() {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -39,8 +53,11 @@ async function makeThumb(dataUrl) {
   return downscaleImageDataUrl(dataUrl, THUMB_DIM, THUMB_QUALITY);
 }
 
-/* Save a downscaled full-res photo. fullDataUrl should already be at
-   target dims (callers run it through downscaleImageDataUrl first).
+/* Save a photo. Accepts either the RAW full-res data URL from the
+   camera (preferred — savePhoto is the single downscale site) or an
+   already-downscaled one (idempotent — re-encoding at target dims
+   costs one pass but preserves correctness).
+
    Returns a PhotoEntry: { thumb, src, path?, cloudUrl? }.
 
    Background: when a Supabase session is active we also upload the
@@ -49,16 +66,20 @@ async function makeThumb(dataUrl) {
    can render the photo on the other device without re-downloading
    the raw bytes. The upload is fire-and-forget after the local write
    so a slow network never blocks the save. */
-export async function savePhoto(fullDataUrl) {
-  const thumb = await makeThumb(fullDataUrl);
+export async function savePhoto(rawDataUrl) {
+  // Single downscale site — tier constants above pick native vs web
+  // dims. Callers pass whatever the camera / picker returned; we
+  // decide the target size.
+  const full = await downscaleImageDataUrl(rawDataUrl, FULL_MAX_DIM, FULL_QUALITY);
+  const thumb = await makeThumb(full);
 
   let entry;
   if (!NATIVE) {
-    entry = { thumb, src: fullDataUrl };
+    entry = { thumb, src: full };
   } else {
     const id = newPhotoId();
     const path = `${PHOTO_DIR}/${id}.jpg`;
-    const base64 = fullDataUrl.replace(/^data:image\/[^;]+;base64,/, '');
+    const base64 = full.replace(/^data:image\/[^;]+;base64,/, '');
     await Filesystem.writeFile({
       path, data: base64, directory: Directory.Data, recursive: true,
     });
@@ -67,7 +88,7 @@ export async function savePhoto(fullDataUrl) {
   }
 
   // Best-effort cloud upload. Silent if no session or Supabase config.
-  await uploadToCloud(entry, fullDataUrl);
+  await uploadToCloud(entry, full);
   return entry;
 }
 
@@ -155,10 +176,9 @@ export async function migratePhotosToStore(state) {
     if (typeof entry !== 'string') return entry;
     if (!entry.startsWith('data:')) return entry;
     changed = true;
-    // The legacy entry is already a downscaled (or oversized) data URL.
-    // Re-downscale to be safe — idempotent for already-small images.
-    const downscaled = await downscaleImageDataUrl(entry);
-    return await savePhoto(downscaled);
+    // savePhoto owns the downscale — idempotent for already-small
+    // images (single re-encode pass at tier-target dims).
+    return await savePhoto(entry);
   };
 
   const migrateArray = async (arr) => {

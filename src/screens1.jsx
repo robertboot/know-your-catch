@@ -22,7 +22,6 @@ import { useScreenSize } from './screen-size.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
 import { savePhoto, photoThumbUrl } from './photos-store.js';
-import { downscaleImageDataUrl } from './storage.js';
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
@@ -663,8 +662,7 @@ export function QuickLogScreen({ state, jurisdiction, update, onDone, onCancel }
           .then(pos => ({ lat: pos.lat, lon: pos.lon }))
           .catch(() => ({ lat: null, lon: null }));
 
-        const downscaled = await downscaleImageDataUrl(dataUrl);
-        const photoEntry = await savePhoto(downscaled);
+        const photoEntry = await savePhoto(dataUrl);
 
         const { lat, lon } = await gpsPromise;
         const when = new Date();

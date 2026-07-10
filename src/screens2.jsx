@@ -10,7 +10,7 @@ import {
   JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
-import { saveState, downscaleImageDataUrl, compactStatePhotos, storageBytes, photoStats } from './storage.js';
+import { saveState } from './storage.js';
 import {
   savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl,
 } from './photos-store.js';
@@ -1202,12 +1202,9 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
     if (files.length === 0 || photos.length >= 3) return;
     const slotsLeft = 3 - photos.length;
     const batch = files.slice(0, slotsLeft);
-    // Downscale → savePhoto: full-res JPEG lands on the filesystem
-    // (iOS) or stays inline (web). State only carries thumb + URL.
-    Promise.all(batch.map(async (f) => {
-      const dataUrl = await downscaleImageDataUrl(f);
-      return savePhoto(dataUrl);
-    })).then((entries) => {
+    // savePhoto owns the tier-aware downscale — pass raw File and it
+    // decides target dims (native: 2400 px / 0.90, web: 1600 / 0.82).
+    Promise.all(batch.map((f) => savePhoto(f))).then((entries) => {
       setPhotos(p => [...p, ...entries].slice(0, 3));
     });
     const f = batch[0];
@@ -1381,49 +1378,6 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
    ============================================================ */
 export function SettingsScreen({ state, jurisdiction, update, session, syncStatus, lastSyncedAt, onForceSync, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
   const setUnits = (u) => update({ units: u });
-  // Storage diagnostic — useful when the angler reports "edits aren't
-  // saving". Re-reads on every interaction so the meter stays current.
-  const [storage, setStorage] = useState({ bytes: storageBytes(), wrote: null, error: null });
-  const refreshStorage = () => setStorage(s => ({ ...s, bytes: storageBytes() }));
-  const testSave = () => {
-    const res = saveState(state);
-    setStorage({ bytes: storageBytes(), wrote: res.ok ? Date.now() : null, error: res.ok ? null : res.code });
-  };
-  const [compacting, setCompacting] = useState(false);
-  const runCompact = async () => {
-    setCompacting(true);
-    try {
-      const before = storageBytes();
-      // First pass: standard 1600px / 0.82. If localStorage still
-      // rejects the write afterwards, retry with an aggressive
-      // 1000px / 0.7 pass which roughly halves the per-photo bytes.
-      let compacted = await compactStatePhotos(state);
-      let res = saveState(compacted);
-      let tier = 'standard';
-      if (!res.ok && res.code === 'quota') {
-        tier = 'aggressive';
-        compacted = await compactStatePhotos(state, 1000, 0.7);
-        res = saveState(compacted);
-      }
-      if (res.ok) {
-        update({ ...compacted });
-        setStorage({ bytes: storageBytes(), wrote: Date.now(), error: null });
-        const after = storageBytes();
-        window.alert(
-          `Compacted (${tier}).\n` +
-          `${(before * 2 / 1024).toFixed(0)} KB → ${(after * 2 / 1024).toFixed(0)} KB on disk.`
-        );
-      } else {
-        setStorage(s => ({ ...s, error: res.code }));
-        window.alert(
-          "Even the aggressive compact couldn't fit in localStorage. " +
-          "Delete some catches to free space — or export a backup first if you want to keep them."
-        );
-      }
-    } finally {
-      setCompacting(false);
-    }
-  };
 
   const exportData = () => {
     const payload = {
@@ -1571,59 +1525,6 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         </div>
       </Card>
 
-      {/* Storage diagnostic — surfaces what's actually on disk + a
-          manual compact when in-browser localStorage is near full. */}
-      <Card style={{ marginBottom: 10 }}>
-        <SectionLabel style={{ marginBottom: 8 }}>Storage</SectionLabel>
-        {(() => {
-          // Safari stores localStorage internally as UTF-16, so each
-          // character takes ~2 bytes. The 5MB advertised cap is the
-          // on-disk byte count, not the string length.
-          const onDiskKb = (storage.bytes * 2) / 1024;
-          const cap = 5 * 1024;
-          const pct = Math.min(100, (onDiskKb / cap) * 100);
-          const barColor = pct > 90 ? T.closed : pct > 70 ? T.warn : T.open;
-          const stats = photoStats(state);
-          const photoKb = (stats.bytes * 2) / 1024;
-          const avgKb = stats.count > 0 ? photoKb / stats.count : 0;
-          return (
-            <>
-              <div style={{ fontSize: 13, color: T.ink, fontWeight: 700 }}>
-                {onDiskKb < 1024 ? `${onDiskKb.toFixed(0)} KB` : `${(onDiskKb / 1024).toFixed(2)} MB`} used
-                <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 500, marginLeft: 6 }}>
-                  of ~{(cap / 1024).toFixed(0)} MB browser cap
-                </span>
-              </div>
-              <div style={{ height: 6, background: T.parchmentDeep, borderRadius: 4, marginTop: 6, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: barColor }} />
-              </div>
-              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>
-                <span>{stats.count} photo{stats.count === 1 ? '' : 's'}</span>
-                <span>{photoKb < 1024 ? `${photoKb.toFixed(0)} KB` : `${(photoKb / 1024).toFixed(2)} MB`}{stats.count > 0 ? ` · avg ${avgKb.toFixed(0)} KB` : ''}</span>
-              </div>
-              {storage.wrote && (
-                <div style={{ fontSize: 11, color: T.open, marginTop: 6 }}>
-                  Last test write succeeded {new Date(storage.wrote).toLocaleTimeString()}.
-                </div>
-              )}
-              {storage.error && (
-                <div style={{ fontSize: 11, color: T.closed, marginTop: 6 }}>
-                  Test write failed ({storage.error}). Compact or delete some catches.
-                </div>
-              )}
-            </>
-          );
-        })()}
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <GhostButton onClick={testSave} style={{ flex: 1, fontSize: 12, padding: '8px' }}>Test save</GhostButton>
-          <GhostButton onClick={runCompact} disabled={compacting} style={{ flex: 2, fontSize: 12, padding: '8px' }}>
-            {compacting ? 'Compacting…' : 'Compact photos'}
-          </GhostButton>
-        </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
-          Compact re-downscales every photo on file to ~1600px at 0.82 JPEG quality. Idempotent — no-op for photos already at that size. The native iOS build will move photos to filesystem storage and remove this constraint entirely.
-        </div>
-      </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Report or contact</SectionLabel>
         <a href="mailto:corrections@reelintel.example?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2515,14 +2416,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   useEffect(() => { if (!isEdit) fetchGps(); }, []);
 
   // The Identify flow hands us a full-res data URL (FileReader output,
-  // no downscale step). Downscale + savePhoto so the catch's slot 1
-  // entry is in the new shape from the start.
+  // no downscale step). savePhoto owns the tier-aware downscale.
   useEffect(() => {
     if (!prefilledPhoto) return;
     let cancelled = false;
     (async () => {
-      const small = await downscaleImageDataUrl(prefilledPhoto);
-      const entry = await savePhoto(small);
+      const entry = await savePhoto(prefilledPhoto);
       if (cancelled) return;
       setPhotos(p => p.map(slot => slot === prefilledPhoto ? entry : slot));
     })();
@@ -2574,8 +2473,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const acceptCameraPhoto = async (rawDataUrl) => {
     if (!rawDataUrl || photos.length >= 3) return;
     const isFirst = photos.length === 0;
-    const dataUrl = await downscaleImageDataUrl(rawDataUrl);
-    const entry = await savePhoto(dataUrl);
+    const entry = await savePhoto(rawDataUrl);
     setPhotos(p => [...p, entry].slice(0, 3));
     setPhotoSource('camera');
     if (isFirst) {
@@ -2619,12 +2517,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     // Was the catch empty before this batch? If so, the first file in
     // the batch becomes Photo 1 and drives the location + time.
     const wasEmpty = photos.length === 0;
-    // Downscale → savePhoto: full-res JPEG lands on filesystem (iOS)
-    // or stays inline (web). State only carries thumb + display URL.
-    Promise.all(batch.map(async (f) => {
-      const dataUrl = await downscaleImageDataUrl(f);
-      return savePhoto(dataUrl);
-    })).then((entries) => {
+    // savePhoto owns the tier-aware downscale (native 2400/0.90,
+    // web 1600/0.82). Pass raw Files; state only carries thumb + URL.
+    Promise.all(batch.map((f) => savePhoto(f))).then((entries) => {
       setPhotos(p => [...p, ...entries].slice(0, 3));
       setPhotoSource('upload');
     });
