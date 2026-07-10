@@ -325,6 +325,30 @@ export default function TestImagePanel() {
       </Card>
 
       {runtime && (
+        <details style={{
+          background: T.parchmentDeep, borderRadius: 8, padding: '8px 12px',
+          border: `1px solid ${T.cardEdge}`, fontSize: 12, color: T.inkSoft,
+        }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: T.ink }}>
+            How does learning work?
+          </summary>
+          <div style={{ marginTop: 8, lineHeight: 1.55 }}>
+            Confirm / Wrong add the photo to <strong>training_images</strong> as verified data — they do
+            NOT change the model on the fly. This model file is frozen bytes; it only improves
+            when you retrain and promote a new version:
+            <ol style={{ margin: '6px 0 6px 18px', padding: 0 }}>
+              <li>Corrections accumulate here (source = <code>model_correction</code> / <code>model_confirmation</code>).</li>
+              <li>When a confused species has ~30+ examples, Training → Coverage → Export ZIP.</li>
+              <li>Run the Colab notebook on the ZIP to produce new artifacts.</li>
+              <li>Models → Upload artifacts → Promote. The Test Image page then loads the new model.</li>
+            </ol>
+            Repeated copies of the same photo don't help — the model needs different angles, lighting,
+            and specimens to actually generalize.
+          </div>
+        </details>
+      )}
+
+      {runtime && (
         <>
           <Card
             onDragOver={(e) => e.preventDefault()}
