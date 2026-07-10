@@ -13,7 +13,7 @@
     "validate-feeds": "node regulations/validate.mjs",
     "validate-photos": "node photos/validate.mjs",
     "ios:init": "cap add ios && npm run ios:sync",
-    "ios:build": "KYC_BASE=./ KYC_ADMIN=false vite build && rm -rf dist/marketing",
+    "ios:build": "KYC_BASE=./ KYC_ADMIN=false vite build && find dist/marketing -type f ! -name 'tile-*.png' -delete && find dist/marketing -type d -empty -delete 2>/dev/null || true",
     "ios:sync": "npm run ios:build && cap sync ios",
     "ios:assets": "capacitor-assets generate --ios --assetPath resources",
     "ios:prepare": "bash scripts/ios-prepare.sh",

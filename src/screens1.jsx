@@ -118,23 +118,69 @@ const STATUS_TEXT = {
 // Action tile used in the horizontally scrolling quick-actions row on
 // home. Fixed flex-basis so each tile keeps a comfortable size and the
 // row scrolls instead of squeezing.
-function QuickTile({ icon, titleA, titleB, subtitle, onClick }) {
+//
+// Two render modes:
+//   1. Icon + text (default) — icon on top, uppercase title stack,
+//      subtitle, corner chevron. Original layout.
+//   2. Background image (bgImage prop) — <img> covers the whole tile;
+//      title/subtitle/icon are baked into the artwork already, so we
+//      DO NOT overlay them. Only the corner chevron survives, with a
+//      subtle glow so it stays legible over any tile artwork.
+function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
+  const hasBg = !!bgImage;
+  const [bgFailed, setBgFailed] = React.useState(false);
+  const usingBg = hasBg && !bgFailed;
   return (
     <button onClick={onClick} style={{
       flex: '0 0 168px',
+      position: 'relative',
       background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
-      padding: '16px 14px 14px', cursor: 'pointer', textAlign: 'left',
-      display: 'flex', flexDirection: 'column', gap: 10, minHeight: 176,
+      padding: usingBg ? 0 : '16px 14px 14px', cursor: 'pointer', textAlign: 'left',
+      display: 'flex', flexDirection: 'column', gap: usingBg ? 0 : 10,
+      minHeight: 176,
       scrollSnapAlign: 'start',
       boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
+      overflow: 'hidden',
     }}>
-      <div style={{ color: T.brass, marginBottom: 4 }}>{icon}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-        {titleA}
-        {titleB && <><br />{titleB}</>}
-      </div>
-      <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
-      <ChevronRight size={16} color={T.brass} style={{ alignSelf: 'flex-end' }} />
+      {usingBg && (
+        <img
+          src={bgImage}
+          alt={alt || ''}
+          loading="eager"
+          onError={() => setBgFailed(true)}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', display: 'block', userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+
+      {/* Text/icon layout — hidden when the tile is running the
+          background-image variant since art already includes them. */}
+      {!usingBg && (
+        <>
+          <div style={{ color: T.brass, marginBottom: 4 }}>{icon}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+            {titleA}
+            {titleB && <><br />{titleB}</>}
+          </div>
+          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.4, flex: 1 }}>{subtitle}</div>
+        </>
+      )}
+
+      {/* Chevron always rides in the bottom-right. Absolutely
+          positioned + drop-shadow so it stays legible over any
+          background art without dimming it. */}
+      <ChevronRight
+        size={18}
+        color={T.brass}
+        style={{
+          position: 'absolute',
+          bottom: 10, right: 10,
+          filter: usingBg ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.55)) drop-shadow(0 0 6px rgba(25,212,242,0.35))' : 'none',
+        }}
+      />
     </button>
   );
 }
@@ -358,24 +404,32 @@ export function HomeScreen({
           titleA="PATTERNS"
           subtitle="What's working in your log"
           onClick={onPatterns}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-patterns.png`}
+          alt="Patterns — what's working in your log"
         />
         <QuickTile
           icon={<Camera size={28} strokeWidth={1.8} />}
           titleA="FISH" titleB="ID"
           subtitle="Point, shoot, get the species"
           onClick={onIdentify}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-fish-id.png`}
+          alt="Fish ID — point, shoot, get the species"
         />
         <QuickTile
           icon={<ClipboardList size={28} strokeWidth={1.8} />}
           titleA="CHECK" titleB="REGULATIONS"
           subtitle="Rules, limits, and seasons"
           onClick={onRegulations}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-check-regs.png`}
+          alt="Check regulations — rules, limits, and seasons"
         />
         <QuickTile
           icon={<Sparkles size={28} strokeWidth={1.8} />}
           titleA="FISH ID" titleB="QUIZ"
           subtitle="Test your ID, limits, and seasons"
           onClick={onQuiz}
+          bgImage={`${import.meta.env.BASE_URL}marketing/tile-fish-quiz.png`}
+          alt="Fish ID quiz — test your ID, limits, and seasons"
         />
       </div>
 
