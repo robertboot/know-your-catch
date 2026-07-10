@@ -57,12 +57,20 @@ function normalizeScores(raw) {
 /* tfjs-tflite doesn't Vite-bundle cleanly (WASM worker path breaks in
    Rollup). Load the UMD bundle from a CDN once and stash on window.
    Admin-only, so hitting a CDN is acceptable. */
+const TFLITE_CDN_BASE = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/';
 function loadTfliteViaCDN() {
   if (window.tflite) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js';
-    s.onload = () => window.tflite ? resolve() : reject(new Error('tflite global not set'));
+    s.src = `${TFLITE_CDN_BASE}tf-tflite.min.js`;
+    s.onload = () => {
+      if (!window.tflite) return reject(new Error('tflite global not set'));
+      // Tell the runtime where its WASM binaries live. Without this
+      // the Module._malloc export is undefined and loadTFLiteModel
+      // throws "undefined is not an object (evaluating 'l._malloc')".
+      window.tflite.setWasmPath(TFLITE_CDN_BASE);
+      resolve();
+    };
     s.onerror = () => reject(new Error('failed to load tfjs-tflite from CDN'));
     document.head.appendChild(s);
   });
