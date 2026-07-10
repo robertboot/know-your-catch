@@ -44,16 +44,19 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
         effective === 'library' ? CameraSource.Photos :
                                   CameraSource.Prompt;
       const photo = await Camera.getPhoto({
-        quality: 85,
+        // Max JPEG quality Capacitor's Camera plugin will hand us.
+        // Every subsequent re-encode (thumb, cloud upload) is pure
+        // loss on top of this baseline, so we start high. 100 stalls
+        // on some devices; 95 is the safe ceiling.
+        quality: 95,
         allowEditing: false,
         source: capacitorSource,
         resultType: CameraResultType.DataUrl,
         // Dual-write: when the source is the camera the full-res
         // capture also lands in the iOS Photos library. Anglers
         // expect their fish photos in Recents. The app keeps its own
-        // downscaled copy in Filesystem for fast render / share
-        // regardless. Silent skip if the user denies the "add to
-        // Photos" permission.
+        // copy in Filesystem for fast render / share regardless.
+        // Silent skip if the user denies the "add to Photos" permission.
         saveToGallery: true,
       });
       return photo.dataUrl || null;

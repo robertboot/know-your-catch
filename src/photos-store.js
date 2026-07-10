@@ -29,24 +29,39 @@ import { getLastSession } from './auth.js';
 const NATIVE = Capacitor.isNativePlatform();
 const PHOTO_DIR = 'photos';
 
-/* Downscale + quality tiers.
-   NATIVE (iOS) gets more headroom because the JPEG lives on the app's
-   Documents directory via Capacitor Filesystem — no browser storage
-   cap in the way. A 2400 px / 0.90 quality photo runs ~400–700 KB and
-   holds up cleanly in the lightbox at pinch-zoom levels.
-   WEB stays at 1600 / 0.82 because photos ride inline in
-   localStorage, which has a hard ~5 MB browser cap. */
-const NATIVE_MAX_DIM  = 2400;
-const NATIVE_QUALITY  = 0.90;
+/* Photo quality strategy.
+
+   NATIVE (iOS): DO NOT re-encode the full-res photo. Capacitor's
+   Camera plugin already hands us a quality:95 JPEG at the iPhone's
+   native capture resolution (~4032 × 3024 on modern devices). Every
+   canvas-round-trip is pure loss on top of that baseline — the fish
+   scales blur, the gill-plate texture flattens. We write the raw
+   bytes straight to Filesystem, generate a small inline thumb for
+   list rendering, and leave the full-res untouched.
+
+   WEB: still re-encode at 1600 / 0.82 because photos ride inline in
+   localStorage which has a hard ~5 MB browser cap.
+
+   Thumb: 240 px / 0.65 — cheap to generate, only used for list rows. */
 const WEB_MAX_DIM     = 1600;
 const WEB_QUALITY     = 0.82;
-const FULL_MAX_DIM    = NATIVE ? NATIVE_MAX_DIM : WEB_MAX_DIM;
-const FULL_QUALITY    = NATIVE ? NATIVE_QUALITY : WEB_QUALITY;
 const THUMB_DIM       = 240;
 const THUMB_QUALITY   = 0.65;
 
 function newPhotoId() {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/* Read a File/Blob as a data URL — used only on native when a caller
+   hands us a File (e.g. web-shim library picker in dev on iOS). The
+   real iOS Capacitor Camera plugin always returns a data URL directly. */
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
 }
 
 async function makeThumb(dataUrl) {
@@ -67,10 +82,12 @@ async function makeThumb(dataUrl) {
    the raw bytes. The upload is fire-and-forget after the local write
    so a slow network never blocks the save. */
 export async function savePhoto(rawDataUrl) {
-  // Single downscale site — tier constants above pick native vs web
-  // dims. Callers pass whatever the camera / picker returned; we
-  // decide the target size.
-  const full = await downscaleImageDataUrl(rawDataUrl, FULL_MAX_DIM, FULL_QUALITY);
+  // Web: re-encode the full-res down to 1600 / 0.82 so it fits in the
+  // localStorage cap. Native: skip the full re-encode entirely — the
+  // Camera plugin's quality:95 output goes straight to Filesystem.
+  const full = NATIVE
+    ? (typeof rawDataUrl === 'string' ? rawDataUrl : await fileToDataUrl(rawDataUrl))
+    : await downscaleImageDataUrl(rawDataUrl, WEB_MAX_DIM, WEB_QUALITY);
   const thumb = await makeThumb(full);
 
   let entry;
