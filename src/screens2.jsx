@@ -68,6 +68,7 @@ import {
   inputStyle,
 } from './components.jsx';
 import { AccountSection } from './auth-ui.jsx';
+import { getMyPreferences, optOutOfFeatureEmails } from './preferences-store.js';
 import { useScreenSize } from './screen-size.js';
 import { getLocation, getPhoto, isNative } from './native.js';
 import exifr from 'exifr';
@@ -1378,6 +1379,66 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
 /* ============================================================
    SETTINGS
    ============================================================ */
+
+/* Feature-email preferences row. One-way opt-out for now — new
+   signups are auto-enrolled via the on_auth_user_created trigger;
+   this card lets the user turn those launch emails off. Re-opt-in
+   surface can be added when we have more than one feature to
+   subscribe to. */
+function FeatureEmailPrefsCard() {
+  const [loading, setLoading]     = useState(true);
+  const [optedOut, setOptedOut]   = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const r = await getMyPreferences();
+      if (!alive) return;
+      if (r.ok) setOptedOut(!!r.prefs?.featureEmailsOptedOut);
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const optOut = async () => {
+    if (!window.confirm('Turn off feature launch emails? You can turn them back on later by contacting support.')) return;
+    setSaving(true); setError('');
+    const r = await optOutOfFeatureEmails();
+    setSaving(false);
+    if (!r.ok) { setError(r.error || 'save failed'); return; }
+    setOptedOut(true);
+  };
+
+  return (
+    <Card style={{ marginBottom: 10 }}>
+      <SectionLabel style={{ marginBottom: 6 }}>Feature launch emails</SectionLabel>
+      {loading ? (
+        <div style={{ fontSize: 12, color: T.inkMute }}>Loading…</div>
+      ) : optedOut ? (
+        <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
+          You're opted out. We won't email you when new ReelIntel features ship.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, fontSize: 12, color: T.inkSoft, lineHeight: 1.45 }}>
+            We'll email you once when new features go live (like Fish ID). One email per launch, not a newsletter.
+          </div>
+          <GhostButton onClick={optOut} disabled={saving} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>
+            {saving ? 'Turning off…' : 'Turn off'}
+          </GhostButton>
+        </div>
+      )}
+      {error && (
+        <div role="alert" style={{ marginTop: 8, fontSize: 12, color: T.closed }}>
+          {error}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function SettingsScreen({ state, jurisdiction, update, session, syncStatus, lastSyncedAt, onForceSync, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
   const setUnits = (u) => update({ units: u });
 
@@ -1474,6 +1535,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
           <GhostButton onClick={onEditAccount} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Edit</GhostButton>
         </div>
       </Card>
+      {session?.user?.id && <FeatureEmailPrefsCard />}
       {/* Admin console entry — web-only, admin allowlist only. When
           __KYC_ADMIN__ is false (ios:build) the whole Card constant-
           folds out and never reaches the iOS bundle. */}

@@ -140,6 +140,20 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ sent: 0, failed: 0, remaining: 0, message: 'no_recipients' });
   }
 
+  // Filter out anyone who has opted out of feature emails. We leave
+  // their feature_notifications row in place (so opt-in later is a
+  // cheap flip) and just skip them here.
+  const { data: optedOutRows, error: prefErr } = await admin
+    .from('user_preferences')
+    .select('user_id')
+    .eq('feature_emails_opted_out', true);
+  if (prefErr) return jsonResponse({ error: 'prefs_query_failed', detail: prefErr.message }, 500);
+  const optedOut = new Set((optedOutRows || []).map((r) => r.user_id));
+  const eligibleRows = rows.filter((r) => !optedOut.has(r.user_id));
+  if (eligibleRows.length === 0) {
+    return jsonResponse({ sent: 0, failed: 0, remaining: 0, message: 'all_opted_out' });
+  }
+
   // Batch-lookup emails via the admin API. listUsers is paginated —
   // for a small launch list this fits in one page. If we ever
   // outgrow that, add pagination.
@@ -155,8 +169,8 @@ Deno.serve(async (req: Request) => {
 
   let sent = 0;
   let failed = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (let i = 0; i < eligibleRows.length; i++) {
+    const row = eligibleRows[i];
     const email = emailByUserId.get(row.user_id);
     if (!email) { failed++; continue; }
     const outcome = await sendOne(email);
@@ -171,7 +185,7 @@ Deno.serve(async (req: Request) => {
     } else {
       failed++;
     }
-    if (i < rows.length - 1) {
+    if (i < eligibleRows.length - 1) {
       await new Promise((r) => setTimeout(r, SEND_INTERVAL_MS));
     }
   }
