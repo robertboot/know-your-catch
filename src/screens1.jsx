@@ -761,7 +761,6 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
         ref={fileRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleFile}
         style={{ display: 'none' }}
       />
