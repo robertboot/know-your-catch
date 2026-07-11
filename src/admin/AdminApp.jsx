@@ -119,6 +119,19 @@ function AdminAppInner({ localAnglerEmail, onExit }) {
 
   useEffect(() => {
     if (session) {
+      // Post-Pro-upgrade guard: force a token refresh so the storage
+      // + REST clients don't ride into a request loop on a JWT signed
+      // by a now-rotated key. No-op if the token is fresh. Runs once
+      // per admin boot after we know we have a session.
+      client()?.auth.refreshSession().then((r) => {
+        if (r?.error) {
+          console.warn('[admin] auth.refreshSession error', r.error);
+        } else {
+          console.log('[admin] auth.refreshSession ok, expires_at=', r?.data?.session?.expires_at);
+        }
+      }).catch((e) => {
+        console.warn('[admin] auth.refreshSession threw', e);
+      });
       refreshSpecies().catch(() => {});
       refreshBrandAssets().catch(() => {});
     }

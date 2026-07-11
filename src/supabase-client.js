@@ -52,6 +52,12 @@ if (RAW_SUPABASE_URL && RAW_SUPABASE_URL !== SUPABASE_URL) {
   console.warn(`[supabase] URL sanitized: raw=…${RAW_SUPABASE_URL.slice(-24)} clean=…${SUPABASE_URL.slice(-24)}`);
 }
 
+// Stash the resolved URL on window so the training-upload store can
+// include it in its pre-upload snapshot without a fresh import chain.
+if (typeof window !== 'undefined') {
+  window.__KYC_SUPABASE_URL__ = SUPABASE_URL;
+}
+
 let _client = null;
 export function client() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;

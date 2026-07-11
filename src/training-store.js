@@ -146,20 +146,63 @@ export async function uploadTrainingImage(file, speciesId) {
   const ext = (file.name?.match(/\.([a-z0-9]+)$/i)?.[1] || 'jpg').toLowerCase();
   const storagePath = `${speciesId}/${id}.${ext}`;
 
-  const up = await c.storage.from(BUCKET).upload(storagePath, file, {
-    contentType: file.type || 'image/jpeg',
-    upsert: false,
+  // Snapshot everything we know about the caller + client BEFORE the
+  // upload so if the URL comes out malformed we can see why.
+  const sessNow = getLastSession();
+  const authedEmail = sessNow?.user?.email || null;
+  const authedRole  = sessNow?.user?.role  || null;
+  const tokenTail   = sessNow?.access_token
+    ? `…${sessNow.access_token.slice(-8)}`
+    : '(no token)';
+  const supabaseUrlSnapshot = (typeof window !== 'undefined' && window.__KYC_SUPABASE_URL__) || '(unknown)';
+  console.log('[training upload] pre-upload snapshot', {
+    supabaseUrl: supabaseUrlSnapshot,
+    bucket: BUCKET, storagePath,
+    authedEmail, authedRole, tokenTail,
+    file: file.name, size: file.size, type: file.type,
   });
+
+  let up;
+  try {
+    up = await c.storage.from(BUCKET).upload(storagePath, file, {
+      contentType: file.type || 'image/jpeg',
+      upsert: false,
+    });
+  } catch (thrown) {
+    // Safari "bad URL" arrives here as a thrown TypeError — storage.upload
+    // internally fetch()es and a URL parse failure never returns a
+    // structured { error } shape. Capture the throw so we can classify.
+    console.error('[training upload] storage.upload THREW (not returned)', {
+      bucket: BUCKET, storagePath, file: file.name,
+      thrown, thrownMessage: thrown?.message, thrownName: thrown?.name,
+      stack: thrown?.stack?.split('\n').slice(0, 5).join('\n'),
+    });
+    return {
+      ok: false,
+      stage: 'storage_upload',
+      error: thrown?.message || String(thrown),
+      statusCode: null,
+      rawError: thrown,
+    };
+  }
   if (up.error) {
-    // Preserve raw error so the caller can classify quota-exceeded vs
-    // RLS-denied vs anything else and show the right banner.
+    // Error objects don't JSON.stringify cleanly by default —
+    // getOwnPropertyNames pulls out message/name/statusCode/etc.
+    let fullDump = '(could not stringify)';
+    try {
+      fullDump = JSON.stringify(up.error, Object.getOwnPropertyNames(up.error), 2);
+    } catch {}
     console.error('[training upload] storage.upload failed', {
       bucket: BUCKET, storagePath, file: file.name, size: file.size, type: file.type,
+      supabaseUrl: supabaseUrlSnapshot,
+      tokenTail, authedEmail,
       error: up.error,
       name: up.error?.name,
       message: up.error?.message,
       statusCode: up.error?.statusCode || up.error?.status,
+      cause: up.error?.cause,
     });
+    console.error('[training upload] full error:', fullDump);
     return {
       ok: false,
       stage: 'storage_upload',
