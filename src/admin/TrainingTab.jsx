@@ -378,18 +378,35 @@ function ModeBtn({ active, onClick, children }) {
 function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState(false);
+  // FileReader → data: URL. Safari refuses to render some File
+  // objects through blob: URLs (HEIC + certain drag-sourced JPEGs
+  // hit "<img> load failed"). data: URLs are guaranteed to render
+  // for any format Safari can decode.
   useEffect(() => {
+    let cancelled = false;
+    if (!row.file) return undefined;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (cancelled) return;
+      setPreview(reader.result);
+    };
+    reader.onerror = () => {
+      if (cancelled) return;
+      console.error('[training upload] FileReader failed', {
+        file: row.file?.name, size: row.file?.size, type: row.file?.type,
+        error: reader.error,
+      });
+      setPreviewError(true);
+    };
     try {
-      const url = URL.createObjectURL(row.file);
-      setPreview(url);
-      return () => URL.revokeObjectURL(url);
+      reader.readAsDataURL(row.file);
     } catch (e) {
-      console.error('[training upload] preview URL failed', {
+      console.error('[training upload] readAsDataURL threw', {
         file: row.file?.name, size: row.file?.size, type: row.file?.type, error: e,
       });
       setPreviewError(true);
-      return undefined;
     }
+    return () => { cancelled = true; reader.abort(); };
   }, [row.file]);
 
   const statusColor =
@@ -412,14 +429,15 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
         width: 56, height: 56, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
         background: T.card, display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {preview
+        {preview && !previewError
           ? <img
               src={preview}
               alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               onError={(e) => {
                 console.error('[training upload] preview <img> load failed', {
-                  file: row.file?.name, size: row.file?.size, type: row.file?.type, src: e.currentTarget.src,
+                  file: row.file?.name, size: row.file?.size, type: row.file?.type,
+                  srcHead: (e.currentTarget.src || '').slice(0, 64),
                 });
                 setPreviewError(true);
               }}
