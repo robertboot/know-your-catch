@@ -190,8 +190,23 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
       error: null,
       path: null,
     }));
+    console.log('[training upload] queued', rows.length, 'files',
+      { mode, batchSpeciesId, firstFile: rows[0]?.file?.name });
     setQueue(q => [...q, ...rows]);
   };
+
+  // When switching to batch mode (or changing the batch species) with
+  // queued rows already present, retroactively tag every queued row
+  // that has no species set. That way switching modes doesn't leave a
+  // queue full of orphans that can't be uploaded.
+  useEffect(() => {
+    if (mode !== 'batch' || !batchSpeciesId) return;
+    setQueue(q => q.map(r =>
+      r.status === 'queued' && !r.speciesId
+        ? { ...r, speciesId: batchSpeciesId }
+        : r
+    ));
+  }, [mode, batchSpeciesId]);
 
   const onPick = (e) => { addFiles(e.target.files); e.target.value = ''; };
   const onDrop = (e) => {
@@ -304,11 +319,25 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
             <PrimaryButton
               onClick={uploadAll}
               disabled={uploading || readyCount === 0}
-              style={{ fontSize: 12, padding: '8px 14px' }}
+              style={{ fontSize: 12, padding: '8px 14px', width: 'auto', flexShrink: 0 }}
             >
               {uploading ? 'Uploading…' : `Upload ${readyCount} file${readyCount === 1 ? '' : 's'}`}
             </PrimaryButton>
           </div>
+
+          {/* Why is Upload disabled? Explicit hint so it's not a
+              silent dead-end. */}
+          {!uploading && readyCount === 0 && queue.some(r => r.status === 'queued') && (
+            <div style={{
+              marginBottom: 10, padding: '8px 10px', borderRadius: 6,
+              background: T.warnBg, color: T.brassDeep, fontSize: 12,
+              border: `1px solid ${T.warn}`,
+            }}>
+              {mode === 'batch'
+                ? 'Pick a batch species above — queued rows will inherit it.'
+                : 'Pick a species on each queued row before uploading.'}
+            </div>
+          )}
 
           <div style={{ display: 'grid', gap: 6 }}>
             {queue.map(row => (
@@ -348,10 +377,19 @@ function ModeBtn({ active, onClick, children }) {
 
 function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
   const [preview, setPreview] = useState(null);
+  const [previewError, setPreviewError] = useState(false);
   useEffect(() => {
-    const url = URL.createObjectURL(row.file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    try {
+      const url = URL.createObjectURL(row.file);
+      setPreview(url);
+      return () => URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[training upload] preview URL failed', {
+        file: row.file?.name, size: row.file?.size, type: row.file?.type, error: e,
+      });
+      setPreviewError(true);
+      return undefined;
+    }
   }, [row.file]);
 
   const statusColor =
@@ -370,8 +408,25 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
       display: 'flex', alignItems: 'center', gap: 10, padding: 8,
       background: T.parchmentDeep, borderRadius: 8, border: `1px solid ${T.cardEdge}`,
     }}>
-      <div style={{ width: 56, height: 56, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: T.card }}>
-        {preview && <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+      <div style={{
+        width: 56, height: 56, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
+        background: T.card, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {preview
+          ? <img
+              src={preview}
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => {
+                console.error('[training upload] preview <img> load failed', {
+                  file: row.file?.name, size: row.file?.size, type: row.file?.type, src: e.currentTarget.src,
+                });
+                setPreviewError(true);
+              }}
+            />
+          : previewError
+            ? <span style={{ fontSize: 9, color: T.closed, textAlign: 'center', padding: 2 }}>preview<br/>failed</span>
+            : <span style={{ fontSize: 9, color: T.inkMute }}>…</span>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
