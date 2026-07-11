@@ -30,7 +30,7 @@ import {
 } from './components.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
-  PhotoAnalyzingScreen, PhotoResultScreen,
+  PhotoAnalyzingScreen, PhotoResultScreen, WeatherForecastScreen,
 } from './screens1.jsx';
 import { getPhoto } from './native.js';
 import {
@@ -494,6 +494,7 @@ export default function App() {
     onCapture:            () => startCaptureFlow('camera'),
     onSelectFromLibrary:  () => startCaptureFlow('library'),
     onPatterns:   () => push({ name: 'patterns' }),
+    onForecast:   () => push({ name: 'forecast' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
@@ -628,6 +629,9 @@ export default function App() {
       break;
     case 'regulation_alerts':
       body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} onEditFavorites={() => setShowFavorites(true)} />;
+      break;
+    case 'forecast':
+      body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} />;
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}

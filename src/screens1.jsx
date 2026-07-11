@@ -148,26 +148,26 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTa
     ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.7)) drop-shadow(0 0 8px rgba(25,212,242,0.35))'
     : 'none';
 
-  // Tablet scaling. Grid-child sizing (auto-width) with a shorter
-  // minHeight than the previous 380 — feedback was the tiles ate way
-  // too much vertical real estate. Halved. object-fit stays 'cover'
-  // (contain letterboxed the artwork) and we anchor to the top edge
-  // so the icon + title baked into the top of each illustration
-  // stay visible when the container clips a bottom strip.
-  const tileFlex        = isTablet ? undefined : '0 0 168px';
-  const tileMinHeight   = isTablet ? 200 : 176;
-  const tileBorderRadius= isTablet ? 22 : 18;
-  const bgFit           = 'cover';
-  const bgPosition      = 'top';
-  const bgBackground    = usingBg ? T.oceanDeep : T.card;
-  const titleFontSize   = isTablet ? 20 : 15;
-  const subtitleFontSize= isTablet ? 14 : 12;
-  const iconInset       = isTablet ? 18 : 14;
-  const textInset       = isTablet ? 18 : 14;
-  const textBottom      = isTablet ? 14 : 12;
-  const chevronBottom   = isTablet ? 14 : 12;
-  const chevronRight    = isTablet ? 14 : 12;
-  const chevronSize     = isTablet ? 22 : 18;
+  // Tablet: tile container is locked to the artwork's native 4:5
+  // aspect ratio (600×750). With object-fit:cover and matched aspect,
+  // no cropping happens — the full illustration renders. Titles scale
+  // down slightly because the 4-column grid gives each tile ~1/4 of
+  // the container width.
+  const tileFlex         = isTablet ? undefined : '0 0 168px';
+  const tileAspectRatio  = isTablet ? '4 / 5' : undefined;
+  const tileMinHeight    = isTablet ? undefined : 176;
+  const tileBorderRadius = isTablet ? 20 : 18;
+  const bgFit            = 'cover';
+  const bgPosition       = 'top';
+  const bgBackground     = usingBg ? T.oceanDeep : T.card;
+  const titleFontSize    = isTablet ? 14 : 15;
+  const subtitleFontSize = isTablet ? 11 : 12;
+  const iconInset        = isTablet ? 12 : 14;
+  const textInset        = isTablet ? 12 : 14;
+  const textBottom       = isTablet ? 10 : 12;
+  const chevronBottom    = isTablet ? 10 : 12;
+  const chevronRight     = isTablet ? 10 : 12;
+  const chevronSize      = isTablet ? 18 : 18;
 
   return (
     <button onClick={onClick} style={{
@@ -176,6 +176,7 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTa
       background: bgBackground,
       border: `1px solid ${T.cardEdge}`, borderRadius: tileBorderRadius,
       padding: 0, cursor: 'pointer', textAlign: 'left',
+      aspectRatio: tileAspectRatio,
       minHeight: tileMinHeight,
       scrollSnapAlign: 'start',
       boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
@@ -316,7 +317,7 @@ export function HomeScreen({
   state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
   onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
-  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches,
+  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   // Recent catches strip below the quick-actions row. Show the 10
@@ -450,15 +451,15 @@ export function HomeScreen({
       </div>
 
       {/* Quick Actions — phone: horizontally scrolling row so tiles
-          keep a comfortable width; tablet: 2×2 grid so the tablet
-          canvas is used and each tile is large enough for the
-          artwork to breathe (no crop). */}
+          keep a comfortable width; tablet: one row, 4 equal columns,
+          each tile locked to the artwork's 4:5 aspect ratio so the
+          full illustration renders with zero crop. */}
       <div
         className={isTablet ? undefined : 'kyc-hscroll'}
         style={isTablet ? {
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: 16,
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 14,
           margin: '18px 0 0',
         } : {
           display: 'flex', gap: 10,
@@ -607,6 +608,9 @@ export function HomeScreen({
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
             <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>TODAY'S CONDITIONS</span>
+            {onForecast && (
+              <button onClick={onForecast} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW FORECAST</button>
+            )}
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -1190,4 +1194,267 @@ export function SearchScreen({ state, onPick }) {
       </div>
     </div>
   );
+}
+
+/* ============================================================
+   WEATHER FORECAST
+   ============================================================
+   Multi-day forecast driven by Open-Meteo. Uses the last catch's
+   coordinates as an anchor if the user hasn't granted geolocation
+   this session, otherwise asks native. Falls back to the geographic
+   center of the current jurisdiction so the screen always shows
+   *something* actionable rather than a blank error state. */
+export function WeatherForecastScreen({ jurisdiction, state }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const [coords, setCoords]   = useState(null);
+  const [locLabel, setLocLabel] = useState('');
+  const [current, setCurrent] = useState(null);
+  const [daily, setDaily]     = useState([]);
+  const [hourly, setHourly]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+
+  // Resolve a lat/lon to fetch from. Priority:
+  //   1) Live geolocation (best-effort, silent fallback).
+  //   2) Most recent catch's coords.
+  //   3) Jurisdiction center (data.js).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const recent = (state?.catchLog || []).find(c => c.lat != null && c.lon != null);
+      const jurCenter = jurisdiction?.center;
+      const fallback = recent
+        ? { lat: recent.lat, lon: recent.lon, label: 'Last catch location' }
+        : jurCenter
+          ? { lat: jurCenter.lat, lon: jurCenter.lon, label: jurisdiction.name || 'Selected waters' }
+          : { lat: 27.5, lon: -84, label: 'Gulf of Mexico' };
+      try {
+        const loc = await getLocation();
+        if (!alive) return;
+        if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)) {
+          setCoords({ lat: loc.lat, lon: loc.lon });
+          setLocLabel('Your current location');
+          return;
+        }
+      } catch {}
+      if (!alive) return;
+      setCoords({ lat: fallback.lat, lon: fallback.lon });
+      setLocLabel(fallback.label);
+    })();
+    return () => { alive = false; };
+  }, [state?.catchLog, jurisdiction]);
+
+  useEffect(() => {
+    if (!coords) return undefined;
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { lat, lon } = coords;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+          + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl,weather_code`
+          + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant`
+          + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code`
+          + `&forecast_days=7`
+          + `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`open-meteo ${r.status}`);
+        const j = await r.json();
+        if (!alive) return;
+        setCurrent(j.current || null);
+        // daily arrays are parallel by index
+        const d = j.daily || {};
+        const days = (d.time || []).map((iso, i) => ({
+          date: iso,
+          weatherCode: d.weather_code?.[i],
+          tMax: d.temperature_2m_max?.[i],
+          tMin: d.temperature_2m_min?.[i],
+          precip: d.precipitation_sum?.[i],
+          windMax: d.wind_speed_10m_max?.[i],
+          windDir: d.wind_direction_10m_dominant?.[i],
+        }));
+        setDaily(days);
+        const h = j.hourly || {};
+        const nowMs = Date.now();
+        const hoursOut = (h.time || []).map((iso, i) => ({
+          when: new Date(iso).getTime(),
+          temp: h.temperature_2m?.[i],
+          precipPct: h.precipitation_probability?.[i],
+          wind: h.wind_speed_10m?.[i],
+          weatherCode: h.weather_code?.[i],
+        })).filter(x => x.when >= nowMs - 60 * 60 * 1000).slice(0, 24);
+        setHourly(hoursOut);
+      } catch (e) {
+        if (!alive) return;
+        setError(e?.message || 'Could not load forecast.');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [coords]);
+
+  return (
+    <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
+      <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Weather Forecast</H1>
+      <div style={{ fontSize: isTablet ? 15 : 12, color: T.brassDeep, fontWeight: 600, marginBottom: isTablet ? 16 : 12 }}>
+        {locLabel || (coords ? `${coords.lat.toFixed(2)}°, ${coords.lon.toFixed(2)}°` : '—')}
+      </div>
+
+      {loading && !current && (
+        <Card style={{ padding: 20, textAlign: 'center', color: T.inkMute, fontSize: 13 }}>
+          Loading forecast…
+        </Card>
+      )}
+
+      {error && !loading && (
+        <Card style={{ padding: 14, borderColor: T.closed, fontSize: 13, color: T.closed }}>
+          {error}
+        </Card>
+      )}
+
+      {current && !loading && (
+        <>
+          {/* Current conditions hero */}
+          <Card style={{
+            marginBottom: 14, padding: isTablet ? 22 : 16,
+            display: 'flex', alignItems: 'center', gap: 20,
+            background: T.oceanDeep,
+          }}>
+            <div style={{ textAlign: 'center', flexShrink: 0 }}>
+              {weatherIcon(current.weather_code, isTablet ? 56 : 44, T.warn)}
+              <div style={{ fontSize: isTablet ? 44 : 36, fontWeight: 900, color: T.ink, marginTop: 6, lineHeight: 1 }}>
+                {Math.round(current.temperature_2m)}°
+              </div>
+              <div style={{ fontSize: isTablet ? 14 : 11, color: T.inkMute, marginTop: 6 }}>
+                {weatherLabel(current.weather_code)}
+              </div>
+            </div>
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: isTablet ? 14 : 10 }}>
+              <ConditionStat label="WIND"     value={`${compassDir(current.wind_direction_10m || 0)} ${Math.round(current.wind_speed_10m || 0)} mph`} />
+              <ConditionStat label="CLOUDS"   value={`${Math.round(current.cloud_cover || 0)}%`} />
+              <ConditionStat label="PRESSURE" value={`${(current.pressure_msl || 0).toFixed(1)} mb`} />
+              <ConditionStat label="RAIN"     value={`${(current.precipitation || 0).toFixed(2)} mm`} />
+            </div>
+          </Card>
+
+          {/* Next 24 hours strip */}
+          {hourly.length > 0 && (
+            <Card style={{ marginBottom: 14, padding: isTablet ? 20 : 14 }}>
+              <SectionLabel style={{ marginBottom: 10 }}>Next 24 hours</SectionLabel>
+              <div className="kyc-hscroll" style={{
+                display: 'flex', gap: isTablet ? 14 : 10,
+                overflowX: 'auto', overflowY: 'hidden',
+                margin: '0 -8px', padding: '0 8px 6px',
+                scrollSnapType: 'x proximity',
+              }}>
+                {hourly.map((h, i) => {
+                  const d = new Date(h.when);
+                  const hour = d.getHours();
+                  const label = hour === 0 ? '12a' : hour < 12 ? `${hour}a` : hour === 12 ? '12p' : `${hour - 12}p`;
+                  return (
+                    <div key={i} style={{
+                      flex: `0 0 ${isTablet ? 84 : 66}px`,
+                      textAlign: 'center', padding: '10px 6px',
+                      background: T.parchmentDeep, borderRadius: 8,
+                      border: `1px solid ${T.cardEdge}`,
+                      scrollSnapAlign: 'start',
+                    }}>
+                      <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, letterSpacing: 0.8 }}>{label}</div>
+                      <div style={{ margin: '6px auto' }}>{weatherIcon(h.weatherCode, isTablet ? 26 : 22, T.brass)}</div>
+                      <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 800, color: T.ink }}>{Math.round(h.temp)}°</div>
+                      <div style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute, marginTop: 4 }}>{Math.round(h.precipPct || 0)}% rain</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* 7-day outlook */}
+          {daily.length > 0 && (
+            <Card style={{ padding: isTablet ? 20 : 14 }}>
+              <SectionLabel style={{ marginBottom: 10 }}>7-day outlook</SectionLabel>
+              <div style={{ display: 'grid', gap: isTablet ? 10 : 6 }}>
+                {daily.map((d, i) => {
+                  const dt = new Date(d.date + 'T00:00:00');
+                  const day = i === 0
+                    ? 'Today'
+                    : dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                  return (
+                    <div key={d.date} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: isTablet ? '12px 14px' : '10px 12px',
+                      background: T.parchmentDeep, borderRadius: 8,
+                      border: `1px solid ${T.cardEdge}`,
+                    }}>
+                      <div style={{
+                        fontSize: isTablet ? 15 : 13, fontWeight: 700, color: T.ink,
+                        width: isTablet ? 140 : 110,
+                      }}>{day}</div>
+                      {weatherIcon(d.weatherCode, isTablet ? 28 : 24, T.brass)}
+                      <div style={{ flex: 1, fontSize: isTablet ? 14 : 12, color: T.inkSoft }}>
+                        {weatherLabel(d.weatherCode)}
+                      </div>
+                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, minWidth: isTablet ? 96 : 76, textAlign: 'right' }}>
+                        {compassDir(d.windDir || 0)} {Math.round(d.windMax || 0)} mph
+                      </div>
+                      <div style={{
+                        fontSize: isTablet ? 16 : 14, fontWeight: 800, color: T.ink,
+                        minWidth: isTablet ? 96 : 76, textAlign: 'right',
+                      }}>
+                        <span style={{ color: T.warn }}>{Math.round(d.tMax)}°</span>
+                        <span style={{ color: T.inkMute, margin: '0 6px' }}>·</span>
+                        <span style={{ color: T.inkSoft }}>{Math.round(d.tMin)}°</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          <div style={{ fontSize: isTablet ? 12 : 11, color: T.inkMute, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>
+            Data from Open-Meteo. Always confirm marine conditions with your local NOAA/NWS forecast before heading out.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* Local copy of the compass helper — screens2 keeps its own copy for
+   the catch detail screen; duplicating avoids a circular import here. */
+function compassDir(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(((deg % 360) / 22.5)) % 16];
+}
+
+/* Compact WMO weather-code → label + icon. Open-Meteo returns a
+   code; we map to a coarse category rather than string-per-code. */
+function weatherLabel(code) {
+  if (code == null) return 'Unknown';
+  if (code === 0) return 'Clear';
+  if (code >= 1 && code <= 3) return 'Partly cloudy';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 51 && code <= 57) return 'Drizzle';
+  if (code >= 61 && code <= 67) return 'Rain';
+  if (code >= 71 && code <= 77) return 'Snow';
+  if (code >= 80 && code <= 82) return 'Rain showers';
+  if (code >= 85 && code <= 86) return 'Snow showers';
+  if (code >= 95 && code <= 99) return 'Thunderstorm';
+  return 'Mixed';
+}
+function weatherIcon(code, size, color) {
+  // Coarse mapping to the icons already imported in this file — same
+  // vocabulary as HomeScreen's Today's Conditions card, so the two
+  // surfaces feel consistent without a new icon set.
+  if (code == null) return <CloudSun size={size} color={color} strokeWidth={1.8} />;
+  if (code >= 95 && code <= 99) return <Waves size={size} color={color} strokeWidth={1.8} />; // thunderstorm proxy
+  if (code >= 51 && code <= 82) return <Waves size={size} color={color} strokeWidth={1.8} />; // rain
+  if (code >= 71 && code <= 77) return <CloudSun size={size} color={color} strokeWidth={1.8} />;
+  if (code === 45 || code === 48) return <CloudSun size={size} color={color} strokeWidth={1.8} />;
+  return <CloudSun size={size} color={color} strokeWidth={1.8} />;
 }
