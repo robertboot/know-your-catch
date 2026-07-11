@@ -6,7 +6,7 @@
 
    NEVER referenced by mobile-app code paths — this module lives
    in the admin bundle only. */
-import { client } from './supabase-client.js';
+import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { ensureSpeciesRow } from './species-store.js';
 import { SPECIES } from './data.js';
@@ -162,55 +162,67 @@ export async function uploadTrainingImage(file, speciesId) {
     file: file.name, size: file.size, type: file.type,
   });
 
-  let up;
+  // Direct-fetch upload — bypass supabase-js's storage client entirely.
+  // Prior symptom on Safari was a bare "Load failed / StorageUnknownError"
+  // with no HTTP status, which means storage-js's internal fetch was
+  // rejected at the network layer without a round-trip. Doing the fetch
+  // ourselves lets us see the actual response (status, headers, body)
+  // and eliminates any library-side ReadableStream / duplex-half quirks
+  // Safari trips over.
+  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${storagePath}`;
+  const accessToken = sessNow?.access_token;
+  if (!accessToken) {
+    console.error('[training upload] no access_token on session', { authedEmail });
+    return {
+      ok: false, stage: 'storage_upload',
+      error: 'no access token — sign out and back in', statusCode: null,
+    };
+  }
+  let resp;
   try {
-    up = await c.storage.from(BUCKET).upload(storagePath, file, {
-      contentType: file.type || 'image/jpeg',
-      upsert: false,
+    resp = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        apikey: SUPABASE_ANON_KEY,
+        'content-type': file.type || 'image/jpeg',
+        'cache-control': 'max-age=3600',
+        'x-upsert': 'false',
+      },
+      body: file,
     });
   } catch (thrown) {
-    // Safari "bad URL" arrives here as a thrown TypeError — storage.upload
-    // internally fetch()es and a URL parse failure never returns a
-    // structured { error } shape. Capture the throw so we can classify.
-    console.error('[training upload] storage.upload THREW (not returned)', {
-      bucket: BUCKET, storagePath, file: file.name,
+    // Safari's "Load failed" TypeError lands here. Log everything we
+    // have so we can tell CORS from certificate from network.
+    console.error('[training upload] direct-fetch THREW', {
+      uploadUrl, bucket: BUCKET, storagePath, file: file.name,
       thrown, thrownMessage: thrown?.message, thrownName: thrown?.name,
       stack: thrown?.stack?.split('\n').slice(0, 5).join('\n'),
     });
     return {
-      ok: false,
-      stage: 'storage_upload',
+      ok: false, stage: 'storage_upload',
       error: thrown?.message || String(thrown),
-      statusCode: null,
-      rawError: thrown,
+      statusCode: null, rawError: thrown,
     };
   }
-  if (up.error) {
-    // Error objects don't JSON.stringify cleanly by default —
-    // getOwnPropertyNames pulls out message/name/statusCode/etc.
-    let fullDump = '(could not stringify)';
-    try {
-      fullDump = JSON.stringify(up.error, Object.getOwnPropertyNames(up.error), 2);
-    } catch {}
-    console.error('[training upload] storage.upload failed', {
-      bucket: BUCKET, storagePath, file: file.name, size: file.size, type: file.type,
-      supabaseUrl: supabaseUrlSnapshot,
-      tokenTail, authedEmail,
-      error: up.error,
-      name: up.error?.name,
-      message: up.error?.message,
-      statusCode: up.error?.statusCode || up.error?.status,
-      cause: up.error?.cause,
+  if (!resp.ok) {
+    let bodyText = '';
+    try { bodyText = await resp.text(); } catch {}
+    const respHeaders = {};
+    resp.headers.forEach((v, k) => { respHeaders[k] = v; });
+    console.error('[training upload] direct-fetch non-2xx', {
+      uploadUrl, status: resp.status, statusText: resp.statusText,
+      bodyText: bodyText.slice(0, 400),
+      responseHeaders: respHeaders,
     });
-    console.error('[training upload] full error:', fullDump);
     return {
-      ok: false,
-      stage: 'storage_upload',
-      error: up.error?.message || String(up.error),
-      statusCode: up.error?.statusCode || up.error?.status || null,
-      rawError: up.error,
+      ok: false, stage: 'storage_upload',
+      error: bodyText || resp.statusText || 'upload failed',
+      statusCode: resp.status,
     };
   }
+  // Shape a fake { data, error } for parity with the rest of the code.
+  const up = { data: { path: storagePath }, error: null };
 
   const { data, error } = await c.from('training_images').insert({
     id,
