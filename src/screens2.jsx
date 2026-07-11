@@ -644,6 +644,9 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
    REGULATION ALERTS — your-starred-first, additional, confirm-source.
    ============================================================ */
 export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavorites }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const buckets = useMemo(() => {
     const favSet = new Set(state?.favorites || []);
     if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
@@ -666,25 +669,33 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
   const totalClosed = buckets.yourClosed.length + buckets.otherClosed.length;
   const totalUnknown = buckets.yourUnknown.length + buckets.otherUnknown.length;
 
+  const rowImgSize   = isTablet ? 60 : 38;
+  const rowNameSize  = isTablet ? 21 : 15;
+  const rowMetaSize  = isTablet ? 14 : 11;
+  const rowPad       = isTablet ? 14 : 10;
+  const rowGap       = isTablet ? 14 : 12;
+  const chevronSize  = isTablet ? 20 : 14;
+  const pillSize     = isTablet ? 'large' : 'small';
+
   const renderRow = ({ s, reg }, opts = {}) => (
-    <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10, borderColor: opts.accentBorder || T.cardEdge }}>
-      <SpeciesImage species={s} size={opts.imgSize || 38} />
+    <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: rowGap, alignItems: 'center', padding: rowPad, borderColor: opts.accentBorder || T.cardEdge }}>
+      <SpeciesImage species={s} size={isTablet ? rowImgSize : (opts.imgSize || 38)} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</span>
-          {buckets.favSet.has(s.id) && <Star size={12} fill={T.brass} color={T.brass} />}
+          <span style={{ fontFamily: 'Georgia, serif', fontSize: rowNameSize, fontWeight: 600, color: T.ink }}>{s.commonName}</span>
+          {buckets.favSet.has(s.id) && <Star size={isTablet ? 16 : 12} fill={T.brass} color={T.brass} />}
         </div>
-        {opts.showSeason && <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{cleanSeason(reg?.open) || 'Season closed'}</div>}
+        {opts.showSeason && <div style={{ fontSize: rowMetaSize, color: T.inkMute, marginTop: isTablet ? 4 : 2 }}>{cleanSeason(reg?.open) || 'Season closed'}</div>}
       </div>
-      <StatusPill status={opts.status} size="small" />
-      <ChevronRight size={14} color={T.brass} />
+      <StatusPill status={opts.status} size={pillSize} />
+      <ChevronRight size={chevronSize} color={T.brass} />
     </Card>
   );
 
   return (
-    <div style={{ padding: '16px 16px' }}>
-      <H1 size={22} style={{ marginBottom: 4 }}>Regulation Alerts</H1>
-      {jurisdiction && <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600, marginBottom: 14 }}>{jurisdiction.name}</div>}
+    <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
+      <H1 size={isTablet ? (isLandscape ? 30 : 28) : 22} style={{ marginBottom: 4 }}>Regulation Alerts</H1>
+      {jurisdiction && <div style={{ fontSize: isTablet ? 16 : 13, color: T.brassDeep, fontWeight: 600, marginBottom: isTablet ? 18 : 14 }}>{jurisdiction.name}</div>}
 
       {/* PRIORITY: Your starred fish that are closed right now. */}
       {hasAnyFavorites && (
@@ -706,7 +717,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
                 </button>
               )}
             </div>
-            <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.closedBg, borderRadius: 6, border: `1px solid ${T.closed}55` }}>
+            <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, marginBottom: isTablet ? 16 : 12, lineHeight: 1.5, padding: isTablet ? '12px 14px' : '8px 10px', background: T.closedBg, borderRadius: 6, border: `1px solid ${T.closed}55` }}>
               The species you star are closed in {jurisdiction ? jurisdiction.name : 'these waters'} right now. Do not retain.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
@@ -714,11 +725,11 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
             </div>
           </>
         ) : totalClosed > 0 ? (
-          <Card style={{ marginBottom: 22, padding: 14, borderColor: T.open, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <CheckCircle2 size={24} color={T.open} style={{ flexShrink: 0, marginTop: 2 }} />
+          <Card style={{ marginBottom: 22, padding: isTablet ? 20 : 14, borderColor: T.open, display: 'flex', alignItems: 'flex-start', gap: isTablet ? 14 : 10 }}>
+            <CheckCircle2 size={isTablet ? 30 : 24} color={T.open} style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>None of your starred fish are closed</div>
-              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4 }}>
+              <div style={{ fontSize: isTablet ? 18 : 14, fontWeight: 700, color: T.ink }}>None of your starred fish are closed</div>
+              <div style={{ fontSize: isTablet ? 15 : 12, color: T.inkSoft, marginTop: isTablet ? 6 : 4 }}>
                 See "Additional closures" below for {totalClosed} other species closed in these waters.
               </div>
             </div>
@@ -728,10 +739,10 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
 
       {/* No favourites at all + no closures: show the existing all-clear card. */}
       {totalClosed === 0 && (
-        <Card style={{ marginBottom: 22, padding: 16, textAlign: 'center', borderColor: T.open }}>
-          <CheckCircle2 size={32} color={T.open} style={{ display: 'block', margin: '0 auto 8px' }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 4 }}>No active closures</div>
-          <div style={{ fontSize: 12, color: T.inkSoft }}>
+        <Card style={{ marginBottom: 22, padding: isTablet ? 24 : 16, textAlign: 'center', borderColor: T.open }}>
+          <CheckCircle2 size={isTablet ? 42 : 32} color={T.open} style={{ display: 'block', margin: '0 auto 8px' }} />
+          <div style={{ fontSize: isTablet ? 20 : 14, fontWeight: 700, color: T.ink, marginBottom: isTablet ? 6 : 4 }}>No active closures</div>
+          <div style={{ fontSize: isTablet ? 15 : 12, color: T.inkSoft }}>
             All species with available rules are open in {jurisdiction ? jurisdiction.name : 'these waters'}.
           </div>
         </Card>
@@ -759,7 +770,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
             <AlertTriangle size={14} color={T.warn} />
             <SectionLabel style={{ color: T.warn }}>Confirm source ({totalUnknown})</SectionLabel>
           </div>
-          <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5, padding: '8px 10px', background: T.warnBg, borderRadius: 6, border: `1px solid ${T.warn}55` }}>
+          <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, marginBottom: isTablet ? 16 : 12, lineHeight: 1.5, padding: isTablet ? '12px 14px' : '8px 10px', background: T.warnBg, borderRadius: 6, border: `1px solid ${T.warn}55` }}>
             Flagged <strong>Confirm Source</strong> because we don't yet have verified status data for them in {jurisdiction ? jurisdiction.name : 'these waters'}. Check the official source before keeping any.
           </div>
           {buckets.yourUnknown.length > 0 && (

@@ -607,7 +607,6 @@ export function HomeScreen({
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
             <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>TODAY'S CONDITIONS</span>
-            <button onClick={onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW FORECAST</button>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ textAlign: 'center', flexShrink: 0 }}>
