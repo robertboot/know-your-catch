@@ -148,22 +148,26 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTa
     ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.7)) drop-shadow(0 0 8px rgba(25,212,242,0.35))'
     : 'none';
 
-  // Tablet scaling. Grid-child sizing (auto-width) + larger minHeight
-  // so each cell has room for the artwork uncropped. object-fit:contain
-  // preserves the original composition instead of chopping edges.
+  // Tablet scaling. Grid-child sizing (auto-width) with a shorter
+  // minHeight than the previous 380 — feedback was the tiles ate way
+  // too much vertical real estate. Halved. object-fit stays 'cover'
+  // (contain letterboxed the artwork) and we anchor to the top edge
+  // so the icon + title baked into the top of each illustration
+  // stay visible when the container clips a bottom strip.
   const tileFlex        = isTablet ? undefined : '0 0 168px';
-  const tileMinHeight   = isTablet ? 380 : 176;
+  const tileMinHeight   = isTablet ? 200 : 176;
   const tileBorderRadius= isTablet ? 22 : 18;
-  const bgFit           = isTablet ? 'contain' : 'cover';
-  const bgBackground    = usingBg && isTablet ? '#04182B' : (usingBg ? T.oceanDeep : T.card);
-  const titleFontSize   = isTablet ? 22 : 15;
-  const subtitleFontSize= isTablet ? 15 : 12;
-  const iconInset       = isTablet ? 22 : 14;
-  const textInset       = isTablet ? 22 : 14;
-  const textBottom      = isTablet ? 18 : 12;
-  const chevronBottom   = isTablet ? 18 : 12;
-  const chevronRight    = isTablet ? 18 : 12;
-  const chevronSize     = isTablet ? 26 : 18;
+  const bgFit           = 'cover';
+  const bgPosition      = 'top';
+  const bgBackground    = usingBg ? T.oceanDeep : T.card;
+  const titleFontSize   = isTablet ? 20 : 15;
+  const subtitleFontSize= isTablet ? 14 : 12;
+  const iconInset       = isTablet ? 18 : 14;
+  const textInset       = isTablet ? 18 : 14;
+  const textBottom      = isTablet ? 14 : 12;
+  const chevronBottom   = isTablet ? 14 : 12;
+  const chevronRight    = isTablet ? 14 : 12;
+  const chevronSize     = isTablet ? 22 : 18;
 
   return (
     <button onClick={onClick} style={{
@@ -186,7 +190,8 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTa
             onError={() => setBgFailed(true)}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: bgFit, display: 'block', userSelect: 'none',
+              objectFit: bgFit, objectPosition: bgPosition,
+              display: 'block', userSelect: 'none',
               pointerEvents: 'none',
             }}
           />
@@ -578,13 +583,17 @@ export function HomeScreen({
         </>
       )}
 
-      {/* Conditions + Regulation Alerts — both cards sized to their natural
-          content with breathing room. The whole row scrolls horizontally
-          so neither card has to squeeze itself into half-width. */}
+      {/* Conditions + Regulation Alerts.
+          Phone: horizontal scroll row so each card keeps a comfortable
+          width and the user swipes between them.
+          Tablet: split the row 50/50 across the full container width —
+          scrolling makes no sense with the room the iPad canvas offers. */}
       <div
-        className="kyc-hscroll"
-        style={{
-          display: 'flex', gap: 12, marginTop: 14,
+        className={isTablet ? undefined : 'kyc-hscroll'}
+        style={isTablet ? {
+          display: 'flex', gap: 16, marginTop: 14,
+        } : {
+          display: 'flex', gap: 12,
           overflowX: 'auto', overflowY: 'hidden',
           margin: '14px -16px 0', padding: '0 16px 6px',
           scrollSnapType: 'x proximity',
@@ -592,7 +601,8 @@ export function HomeScreen({
       >
         {/* Conditions */}
         <Card style={{
-          flex: '0 0 320px', padding: 14, borderRadius: 18,
+          flex: isTablet ? '1 1 0' : '0 0 320px',
+          padding: 14, borderRadius: 18,
           display: 'flex', flexDirection: 'column', scrollSnapAlign: 'start',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
@@ -616,7 +626,8 @@ export function HomeScreen({
 
         {/* Regulation Alerts */}
         <Card style={{
-          flex: '0 0 320px', padding: 14, borderRadius: 18,
+          flex: isTablet ? '1 1 0' : '0 0 320px',
+          padding: 14, borderRadius: 18,
           display: 'flex', flexDirection: 'column', scrollSnapAlign: 'start',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
