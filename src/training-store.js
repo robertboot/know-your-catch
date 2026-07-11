@@ -178,50 +178,83 @@ export async function uploadTrainingImage(file, speciesId) {
       error: 'no access token — sign out and back in', statusCode: null,
     };
   }
-  let resp;
-  try {
-    resp = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        apikey: SUPABASE_ANON_KEY,
-        'content-type': file.type || 'image/jpeg',
-        'cache-control': 'max-age=3600',
-        'x-upsert': 'false',
-      },
-      body: file,
-    });
-  } catch (thrown) {
-    // Safari's "Load failed" TypeError lands here. Log everything we
-    // have so we can tell CORS from certificate from network.
-    console.error('[training upload] direct-fetch THREW', {
-      uploadUrl, bucket: BUCKET, storagePath, file: file.name,
-      thrown, thrownMessage: thrown?.message, thrownName: thrown?.name,
-      stack: thrown?.stack?.split('\n').slice(0, 5).join('\n'),
+  // XMLHttpRequest instead of fetch. On Safari, `fetch` to Supabase's
+  // Pro storage endpoint has been throwing bare "TypeError: Load
+  // failed" — no status, no body, request never lands. That's the
+  // classic WebKit HTTP/3 / duplex-half fetch bug. XHR uses a
+  // separate networking stack and typically negotiates HTTP/2
+  // cleanly, so we're routing around the fetch fault line.
+  const xhrResult = await new Promise((resolve) => {
+    let xhr;
+    try {
+      xhr = new XMLHttpRequest();
+    } catch (e) {
+      resolve({ kind: 'ctor_threw', thrown: e });
+      return;
+    }
+    xhr.open('POST', uploadUrl, true);
+    xhr.setRequestHeader('authorization', `Bearer ${accessToken}`);
+    xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+    xhr.setRequestHeader('content-type', file.type || 'image/jpeg');
+    xhr.setRequestHeader('cache-control', 'max-age=3600');
+    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.onload = () => {
+      resolve({
+        kind: xhr.status >= 200 && xhr.status < 300 ? 'ok' : 'non_2xx',
+        status: xhr.status,
+        statusText: xhr.statusText,
+        body: xhr.responseText || '',
+        responseHeaders: xhr.getAllResponseHeaders?.() || '',
+      });
+    };
+    xhr.onerror = () => {
+      resolve({
+        kind: 'network_error',
+        status: xhr.status,
+        statusText: xhr.statusText,
+        body: xhr.responseText || '',
+      });
+    };
+    xhr.ontimeout = () => resolve({ kind: 'timeout' });
+    xhr.timeout = 60_000;
+    try {
+      xhr.send(file);
+    } catch (e) {
+      resolve({ kind: 'send_threw', thrown: e });
+    }
+  });
+
+  if (xhrResult.kind === 'ok') {
+    // fabricate { data, error } for the rest of the code
+    // eslint-disable-next-line no-unused-vars
+    const up = { data: { path: storagePath }, error: null };
+  } else if (xhrResult.kind === 'non_2xx') {
+    console.error('[training upload] xhr non-2xx', {
+      uploadUrl, status: xhrResult.status, statusText: xhrResult.statusText,
+      body: xhrResult.body.slice(0, 400),
+      responseHeaders: xhrResult.responseHeaders,
     });
     return {
       ok: false, stage: 'storage_upload',
-      error: thrown?.message || String(thrown),
-      statusCode: null, rawError: thrown,
+      error: xhrResult.body || xhrResult.statusText || 'upload failed',
+      statusCode: xhrResult.status,
     };
-  }
-  if (!resp.ok) {
-    let bodyText = '';
-    try { bodyText = await resp.text(); } catch {}
-    const respHeaders = {};
-    resp.headers.forEach((v, k) => { respHeaders[k] = v; });
-    console.error('[training upload] direct-fetch non-2xx', {
-      uploadUrl, status: resp.status, statusText: resp.statusText,
-      bodyText: bodyText.slice(0, 400),
-      responseHeaders: respHeaders,
+  } else {
+    console.error('[training upload] xhr transport failed', {
+      uploadUrl, kind: xhrResult.kind,
+      status: xhrResult.status, statusText: xhrResult.statusText,
+      body: xhrResult.body,
+      thrown: xhrResult.thrown,
+      thrownMessage: xhrResult.thrown?.message,
+      thrownName: xhrResult.thrown?.name,
     });
     return {
       ok: false, stage: 'storage_upload',
-      error: bodyText || resp.statusText || 'upload failed',
-      statusCode: resp.status,
+      error: `xhr ${xhrResult.kind}${xhrResult.status ? ` (status ${xhrResult.status})` : ''}`,
+      statusCode: xhrResult.status || null,
     };
   }
-  // Shape a fake { data, error } for parity with the rest of the code.
+  // Shape the parity object for the DB-insert branch below.
   const up = { data: { path: storagePath }, error: null };
 
   const { data, error } = await c.from('training_images').insert({
