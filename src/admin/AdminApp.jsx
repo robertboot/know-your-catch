@@ -101,6 +101,11 @@ class ErrorBoundary extends React.Component {
 function AdminAppInner({ localAnglerEmail, onExit }) {
   const [session, setSession] = useState(null);
   const [sessionChecked, setSessionChecked] = useState(false);
+  // Guard: refreshSession itself emits TOKEN_REFRESHED which fires
+  // onAuthStateChange which updates `session` which re-fires the
+  // refresh effect → 429 rate limit within a second. This ref ensures
+  // one refresh per full admin-console boot.
+  const refreshedOnce = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -118,11 +123,13 @@ function AdminAppInner({ localAnglerEmail, onExit }) {
   }, []);
 
   useEffect(() => {
-    if (session) {
+    if (session && !refreshedOnce.current) {
+      refreshedOnce.current = true;
       // Post-Pro-upgrade guard: force a token refresh so the storage
       // + REST clients don't ride into a request loop on a JWT signed
-      // by a now-rotated key. No-op if the token is fresh. Runs once
-      // per admin boot after we know we have a session.
+      // by a now-rotated key. No-op if the token is fresh. Guarded so
+      // it never re-fires on the TOKEN_REFRESHED event this call
+      // itself emits.
       client()?.auth.refreshSession().then((r) => {
         if (r?.error) {
           console.warn('[admin] auth.refreshSession error', r.error);
