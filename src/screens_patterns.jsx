@@ -24,6 +24,7 @@ import { CATEGORIES } from './data.js';
 import { speciesById, formatSize, formatWeight, jurisdictionById } from './helpers.js';
 import { Card, PrimaryButton, GhostButton, SectionLabel, H1 } from './components.jsx';
 import { isNative } from './native.js';
+import { useScreenSize } from './screen-size.js';
 
 const THRESHOLD_OVERALL = 10;
 const THRESHOLD_SPECIES = 5;
@@ -202,6 +203,9 @@ async function exportFile({ filename, mime, content }) {
    Main screen
    ============================================================ */
 export function PatternsScreen({ state, onPickSpecies }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const catchLog = state.catchLog || [];
   const pbs = state.pbs || {};
   const [drillId, setDrillId] = useState(null);
@@ -230,9 +234,9 @@ export function PatternsScreen({ state, onPickSpecies }) {
 
   if (total < THRESHOLD_OVERALL) {
     return (
-      <div style={{ padding: '18px 16px' }}>
-        <H1 size={22} style={{ marginBottom: 6 }}>Patterns</H1>
-        <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: 18 }}>
+      <div style={{ padding: isTablet ? '26px 22px' : '18px 16px' }}>
+        <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22} style={{ marginBottom: 6 }}>Patterns</H1>
+        <p style={{ fontSize: isTablet ? 17 : 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: isTablet ? 22 : 18 }}>
           Log more catches to unlock patterns. Every catch adds to what your log knows.
         </p>
         <Card>
@@ -293,9 +297,9 @@ export function PatternsScreen({ state, onPickSpecies }) {
   };
 
   return (
-    <div style={{ padding: '16px 16px 24px' }}>
-      <H1 size={22} style={{ marginBottom: 6 }}>Patterns</H1>
-      <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: 14 }}>
+    <div style={{ padding: isTablet ? '22px 22px 32px' : '16px 16px 24px' }}>
+      <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22} style={{ marginBottom: 6 }}>Patterns</H1>
+      <p style={{ fontSize: isTablet ? 17 : 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: isTablet ? 18 : 14 }}>
         What your logbook knows about your fishing — based on {total} catch{total === 1 ? '' : 'es'} across {speciesMix.distinct} species.
       </p>
 

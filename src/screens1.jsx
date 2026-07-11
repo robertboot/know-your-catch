@@ -320,6 +320,7 @@ export function HomeScreen({
   onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
+  const isLandscape = screenSize === 'tablet-landscape';
   // Recent catches strip below the quick-actions row. Show the 10
   // newest; hidden if the angler hasn't logged anything yet.
   const recentCatches = useMemo(() => {
@@ -379,7 +380,7 @@ export function HomeScreen({
         position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
         border: `1px solid ${T.cardEdge}`,
         background: '#031B33',
-        minHeight: isTablet ? 380 : undefined,
+        minHeight: isTablet ? (isLandscape ? 520 : 460) : undefined,
       }}>
         <img
           src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
@@ -406,25 +407,25 @@ export function HomeScreen({
           maxWidth: isTablet ? 500 : 320,
         }}>
           <div style={{
-            fontSize: isTablet ? 16 : 13, fontWeight: 800, color: T.brass,
+            fontSize: isTablet ? 19 : 13, fontWeight: 800, color: T.brass,
             letterSpacing: 1.4,
           }}>BUILD YOUR</div>
           {/* Two-line headline so the copy never overflows the fish
               art at narrow widths. Line-height ~0.95 keeps them
               feeling like one thought. */}
           <div style={{
-            fontSize: isTablet ? 54 : 34, fontWeight: 900, color: T.ink,
+            fontSize: isTablet ? (isLandscape ? 76 : 68) : 34, fontWeight: 900, color: T.ink,
             letterSpacing: 0.5, lineHeight: 0.95,
-            marginTop: isTablet ? 8 : 4,
+            marginTop: isTablet ? 10 : 4,
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
           }}>
             <span style={{ display: 'block' }}>Log your</span>
             <span style={{ display: 'block' }}>catch</span>
           </div>
           <div style={{
-            fontSize: isTablet ? 18 : 13.5, color: T.ink, lineHeight: 1.45,
-            marginTop: isTablet ? 16 : 10,
-            maxWidth: isTablet ? 420 : 260,
+            fontSize: isTablet ? 21 : 13.5, color: T.ink, lineHeight: 1.45,
+            marginTop: isTablet ? 20 : 10,
+            maxWidth: isTablet ? 480 : 260,
           }}>
             Snap your catch. We'll log the species, location, and conditions — and build your fishing map.
           </div>
@@ -720,6 +721,9 @@ export function HomeScreen({
    IDENTIFY — photo-first
    ============================================================ */
 export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const fileRef = useRef(null);
 
   // When user picks/captures a photo, read it as base64 and hand to onPhoto.
@@ -734,24 +738,31 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
   };
 
   return (
-    <div style={{ padding: '18px 16px' }}>
-      <H1 size={24} style={{ marginBottom: 6 }}>Fish ID</H1>
-      <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: 16 }}>
+    <div style={{ padding: isTablet ? '26px 22px' : '18px 16px' }}>
+      <H1 size={isTablet ? (isLandscape ? 32 : 30) : 24} style={{ marginBottom: 6 }}>Fish ID</H1>
+      <p style={{ fontSize: isTablet ? 16 : 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: isTablet ? 22 : 16 }}>
         Take or upload a photo to identify your catch.
       </p>
 
       {/* Primary photo capture card */}
       <button onClick={() => fileRef.current?.click()} style={{
         width: '100%', background: T.oceanDeep, color: T.parchment,
-        border: `2px solid ${T.brass}`, borderRadius: 6, padding: '28px 18px',
-        cursor: 'pointer', textAlign: 'center', marginBottom: 18,
+        border: `2px solid ${T.brass}`, borderRadius: 6,
+        padding: isTablet ? '40px 24px' : '28px 18px',
+        cursor: 'pointer', textAlign: 'center', marginBottom: isTablet ? 22 : 18,
         boxShadow: '0 2px 0 rgba(124, 86, 24, 0.15)',
       }}>
-        <div style={{ background: T.brass, color: T.oceanDeep, width: 72, height: 72, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-          <Camera size={36} />
+        <div style={{
+          background: T.brass, color: T.oceanDeep,
+          width: isTablet ? 100 : 72, height: isTablet ? 100 : 72,
+          borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: isTablet ? '0 auto 20px' : '0 auto 14px',
+        }}>
+          <Camera size={isTablet ? 52 : 36} />
         </div>
-        <div style={{ fontFamily: 'Georgia, serif', fontSize: 20, fontWeight: 600 }}>Photo identification</div>
-        <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 4 }}>Take a photo or pick from your library</div>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 28 : 20, fontWeight: 600 }}>Photo identification</div>
+        <div style={{ fontSize: isTablet ? 15 : 12, color: '#B8C5CD', marginTop: isTablet ? 8 : 4 }}>Take a photo or pick from your library</div>
       </button>
 
       <input
@@ -763,15 +774,15 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
         style={{ display: 'none' }}
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 14px', color: T.inkMute }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: isTablet ? '14px 0 20px' : '8px 0 14px', color: T.inkMute }}>
         <div style={{ flex: 1, height: 1, background: T.cardEdge }} />
-        <SectionLabel style={{ fontSize: 11 }}>or identify manually</SectionLabel>
+        <SectionLabel style={{ fontSize: isTablet ? 13 : 11 }}>or identify manually</SectionLabel>
         <div style={{ flex: 1, height: 1, background: T.cardEdge }} />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <BigButton onClick={onBrowse} icon={<Layers size={24} />} title="Browse by category" subtitle="Snapper, grouper, mackerel, jacks…" />
-        <BigButton onClick={onSearch} icon={<Search size={24} />} title="Search by name" subtitle="Common names, scientific, regional" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isTablet ? 14 : 10 }}>
+        <BigButton isTablet={isTablet} onClick={onBrowse} icon={<Layers size={isTablet ? 32 : 24} />} title="Browse by category" subtitle="Snapper, grouper, mackerel, jacks…" />
+        <BigButton isTablet={isTablet} onClick={onSearch} icon={<Search size={isTablet ? 32 : 24} />} title="Search by name" subtitle="Common names, scientific, regional" />
       </div>
     </div>
   );
@@ -1233,6 +1244,57 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
   const [hourly, setHourly]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [changing, setChanging]     = useState(false);
+  const [searchQ, setSearchQ]       = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching]   = useState(false);
+  const [searchError, setSearchError] = useState('');
+
+  const useMyLocation = async () => {
+    setChanging(false); setSearchQ(''); setSearchResults([]);
+    try {
+      const loc = await getLocation();
+      if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)) {
+        setCoords({ lat: loc.lat, lon: loc.lon });
+        setLocLabel('Your current location');
+        return;
+      }
+    } catch {}
+    // If geolocation fails, fall back to jurisdiction center as a safe default.
+    const jc = jurisdiction?.center;
+    if (jc) {
+      setCoords({ lat: jc.lat, lon: jc.lon });
+      setLocLabel(jurisdiction.name || 'Selected waters');
+    }
+  };
+
+  const runSearch = async () => {
+    const q = searchQ.trim();
+    if (!q) return;
+    setSearching(true); setSearchError('');
+    try {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`geocoding ${r.status}`);
+      const j = await r.json();
+      const results = (j?.results || []).map(x => ({
+        lat: x.latitude, lon: x.longitude,
+        label: [x.name, x.admin1, x.country_code].filter(Boolean).join(', '),
+      }));
+      setSearchResults(results);
+      if (results.length === 0) setSearchError('No matches. Try a city name or zip code.');
+    } catch (e) {
+      setSearchError(e?.message || 'Search failed.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickResult = (r) => {
+    setCoords({ lat: r.lat, lon: r.lon });
+    setLocLabel(r.label);
+    setChanging(false); setSearchQ(''); setSearchResults([]);
+  };
 
   // Resolve a lat/lon to fetch from. Priority:
   //   1) Live geolocation (best-effort, silent fallback).
@@ -1318,9 +1380,80 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
   return (
     <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
       <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Weather Forecast</H1>
-      <div style={{ fontSize: isTablet ? 15 : 12, color: T.brassDeep, fontWeight: 600, marginBottom: isTablet ? 16 : 12 }}>
-        {locLabel || (coords ? `${coords.lat.toFixed(2)}°, ${coords.lon.toFixed(2)}°` : '—')}
-      </div>
+
+      {/* Location bar: current label + change button OR the search UI. */}
+      {!changing ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isTablet ? 18 : 14 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: isTablet ? 15 : 12, color: T.brassDeep, fontWeight: 600 }}>
+              {locLabel || (coords ? `${coords.lat.toFixed(2)}°, ${coords.lon.toFixed(2)}°` : '—')}
+            </div>
+            {coords && (
+              <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 2 }}>
+                {coords.lat.toFixed(3)}°, {coords.lon.toFixed(3)}°
+              </div>
+            )}
+          </div>
+          <GhostButton onClick={() => setChanging(true)} style={{ padding: '6px 12px', fontSize: 12 }}>
+            Change
+          </GhostButton>
+        </div>
+      ) : (
+        <Card style={{ marginBottom: 14, padding: isTablet ? 16 : 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <SectionLabel style={{ flex: 1 }}>Change location</SectionLabel>
+            <button onClick={() => { setChanging(false); setSearchQ(''); setSearchResults([]); setSearchError(''); }}
+              style={{ background: 'transparent', border: 'none', color: T.inkSoft, fontSize: 12, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <input
+              type="search" value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') runSearch(); }}
+              placeholder="City, state, or zip"
+              autoFocus
+              style={{
+                flex: 1, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+                borderRadius: 6, color: T.ink, padding: '10px 12px', fontSize: 14,
+              }}
+            />
+            <PrimaryButton onClick={runSearch} disabled={searching || !searchQ.trim()} style={{ width: 'auto', padding: '10px 16px', fontSize: 13 }}>
+              {searching ? 'Searching…' : 'Search'}
+            </PrimaryButton>
+          </div>
+          <div style={{ marginBottom: searchResults.length ? 8 : 0 }}>
+            <button onClick={useMyLocation} style={{
+              background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
+              borderRadius: 6, padding: '8px 12px', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              <MapPin size={14} /> Use my current location
+            </button>
+          </div>
+          {searchError && (
+            <div style={{ fontSize: 12, color: T.closed, marginTop: 4 }}>{searchError}</div>
+          )}
+          {searchResults.length > 0 && (
+            <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+              {searchResults.map((r, i) => (
+                <button key={i} onClick={() => pickResult(r)} style={{
+                  background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 6,
+                  color: T.ink, padding: '10px 12px', fontSize: 13,
+                  textAlign: 'left', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                }}>
+                  <span>{r.label}</span>
+                  <span style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>
+                    {r.lat.toFixed(2)}°, {r.lon.toFixed(2)}°
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {loading && !current && (
         <Card style={{ padding: 20, textAlign: 'center', color: T.inkMute, fontSize: 13 }}>

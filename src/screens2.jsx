@@ -2323,19 +2323,21 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
     });
   };
   const cPhotos = catchPhotos(c);
-  // Tablet: keep the photo narrower than the content column so the
-  // wide viewport doesn't stretch the shot until it crops. Center it,
-  // use object-fit:contain so the whole fish stays visible.
-  const photoWrapStyle = isTablet ? {
-    maxWidth: isLandscape ? 620 : 560, margin: '0 auto 14px',
-  } : null;
+  // Tablet: show the photo at its intrinsic size, capped by max-width
+  // and max-height so a huge camera roll shot doesn't blow past the
+  // viewport. width/height auto means we NEVER upscale — no Retina
+  // resampling that made photos look pixelated in the previous pass.
   const singlePhotoStyle = {
-    width: '100%',
-    maxHeight: isTablet ? (isLandscape ? 560 : 500) : 280,
-    objectFit: isTablet ? 'contain' : 'cover',
-    background: isTablet ? T.parchmentDeep : undefined,
-    borderRadius: 8, display: 'block',
+    display: 'block',
+    maxWidth: '100%',
+    maxHeight: isTablet ? '80vh' : 280,
+    width: isTablet ? 'auto' : '100%',
+    height: 'auto',
+    margin: isTablet ? '0 auto' : undefined,
     marginBottom: isTablet ? 0 : 14,
+    background: isTablet ? T.parchmentDeep : undefined,
+    borderRadius: 8,
+    objectFit: isTablet ? 'contain' : 'cover',
     cursor: 'zoom-in',
   };
   return (
@@ -2344,7 +2346,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
         ? <div style={{ width: '100%', height: isTablet ? 220 : 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={isTablet ? 48 : 36} color={T.inkMute} /></div>
         : cPhotos.length === 1
           ? (isTablet
-              ? <div style={photoWrapStyle}>
+              ? <div style={{ textAlign: 'center', marginBottom: 14 }}>
                   <PhotoImg photo={cPhotos[0]} onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={singlePhotoStyle} />
                 </div>
               : <PhotoImg photo={cPhotos[0]} onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={singlePhotoStyle} />)
@@ -2352,21 +2354,20 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
               display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
               margin: '0 -16px 14px', padding: '0 16px 4px',
               scrollSnapType: 'x proximity',
-              justifyContent: isTablet ? 'center' : undefined,
             }}>
               {cPhotos.map((p, i) => (
                 <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{
-                  flex: isTablet ? `0 0 ${isLandscape ? 600 : 520}px` : '0 0 78%',
-                  maxWidth: isTablet ? '90%' : undefined,
+                  flex: isTablet ? `0 0 ${isLandscape ? 720 : 620}px` : '0 0 78%',
+                  maxWidth: isTablet ? '92%' : undefined,
                   borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start',
                   border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in',
                   background: isTablet ? T.parchmentDeep : undefined,
                 }}>
                   <PhotoImg photo={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{
-                    width: '100%',
-                    height: isTablet ? (isLandscape ? 480 : 440) : 240,
+                    display: 'block', width: '100%',
+                    height: isTablet ? 'auto' : 240,
+                    maxHeight: isTablet ? '75vh' : undefined,
                     objectFit: isTablet ? 'contain' : 'cover',
-                    display: 'block',
                   }} />
                 </div>
               ))}
@@ -3411,6 +3412,9 @@ function classifyAnswer(question, picked) {
 }
 
 export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const [seenAnchorIds] = useState(() => new Set());
   const [question, setQuestion] = useState(() => pickQuizQuestion(state, jurisdiction));
   const [selectedKey, setSelectedKey] = useState(null);
@@ -3497,10 +3501,10 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
   const revealSpeciesName = question.type !== 'species';
 
   return (
-    <div style={{ padding: '16px 16px 24px' }}>
+    <div style={{ padding: isTablet ? '22px 22px 32px' : '16px 16px 24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <H1 size={22}>Fish ID Quiz</H1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: T.inkSoft }}>
+        <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22}>Fish ID Quiz</H1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: isTablet ? 16 : 12, color: T.inkSoft }}>
           <span title={`${score.full} correct · ${score.partial} partial · ${score.wrong} wrong`}>
             {fmtScore(score.points)} / {score.total}
           </span>
@@ -3508,11 +3512,11 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
         </div>
       </div>
       {score.total > 0 && score.partial > 0 && (
-        <div style={{ fontSize: 10, color: T.inkMute, marginBottom: 6, letterSpacing: 0.4 }}>
+        <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginBottom: 6, letterSpacing: 0.4 }}>
           {score.full} full · {score.partial} partial · {score.wrong} wrong
         </div>
       )}
-      <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 14 }}>
+      <div style={{ fontSize: isTablet ? 15 : 12, color: T.inkMute, marginBottom: isTablet ? 18 : 14 }}>
         {typeLabel}
       </div>
 
@@ -3520,22 +3524,23 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
       <div style={{
         background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
         borderRadius: 14, border: `1px solid ${T.cardEdge}`,
-        height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden', marginBottom: revealSpeciesName ? 6 : 14,
+        height: isTablet ? (isLandscape ? 420 : 380) : 240,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', marginBottom: revealSpeciesName ? 6 : (isTablet ? 18 : 14),
         position: 'relative',
       }}>
         {photo?.url
           ? <img src={photo.url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
-          : <SpeciesImage species={sp} size={200} style={{ height: 200 }} />}
+          : <SpeciesImage species={sp} size={isTablet ? 280 : 200} style={{ height: isTablet ? 280 : 200 }} />}
       </div>
       {revealSpeciesName && (
-        <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: T.ink, marginBottom: 14, textAlign: 'center' }}>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 24 : 18, fontWeight: 700, color: T.ink, marginBottom: isTablet ? 18 : 14, textAlign: 'center' }}>
           {sp.commonName}
         </div>
       )}
 
       {/* Prompt */}
-      <div style={{ fontSize: 13, color: T.inkSoft, margin: '0 2px 10px', lineHeight: 1.5 }}>
+      <div style={{ fontSize: isTablet ? 17 : 13, color: T.inkSoft, margin: '0 2px 10px', lineHeight: 1.5 }}>
         {question.prompt}
       </div>
 
@@ -3573,8 +3578,10 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
           return (
             <button key={opt.key} onClick={() => pick(opt)} disabled={!!selectedKey} style={{
               background: bg, border: `1.5px solid ${border}`, borderRadius: 10,
-              padding: '12px 14px', cursor: selectedKey ? 'default' : 'pointer',
-              textAlign: 'left', color, fontSize: 14, fontWeight: 700,
+              padding: isTablet ? '18px 20px' : '12px 14px',
+              cursor: selectedKey ? 'default' : 'pointer',
+              textAlign: 'left', color,
+              fontSize: isTablet ? 17 : 14, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
             }}>
               <span>{opt.label}</span>
@@ -3590,7 +3597,7 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
           {/* Tier-aware verdict line — lookalikes get three-tier phrasing
               (full / partial / wrong); other types keep the classic
               green-check or red-X messaging. */}
-          <div style={{ fontSize: 15, fontWeight: 800, color: question.type === 'lookalikes' ? tierColor : (isCorrect ? T.open : T.closed), marginBottom: 10, lineHeight: 1.4 }}>
+          <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 800, color: question.type === 'lookalikes' ? tierColor : (isCorrect ? T.open : T.closed), marginBottom: 10, lineHeight: 1.4 }}>
             {question.type === 'lookalikes' ? (
               tier === 'full' ? (
                 <>✓ Correct — {sp.commonName} is often confused with {pickedSpecies?.commonName}.</>

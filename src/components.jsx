@@ -1214,18 +1214,22 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
 /* ============================================================
    BIG HOME-STYLE BUTTON
    ============================================================ */
-export function BigButton({ icon, title, subtitle, onClick, accent = T.brass }) {
+export function BigButton({ icon, title, subtitle, onClick, accent = T.brass, isTablet = false }) {
   return (
     <button onClick={onClick} style={{
       background: T.card, border: `1.5px solid ${T.cardEdge}`, borderLeft: `4px solid ${accent}`, borderRadius: 4,
-      padding: '16px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14,
+      padding: isTablet ? '22px 20px' : '16px 14px',
+      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: isTablet ? 18 : 14,
       width: '100%', textAlign: 'left',
       boxShadow: '0 1px 0 rgba(124, 86, 24, 0.06)',
     }}>
-      <div style={{ background: T.parchmentDeep, color: T.brass, padding: 10, borderRadius: 4, flexShrink: 0 }}>{icon}</div>
+      <div style={{
+        background: T.parchmentDeep, color: T.brass,
+        padding: isTablet ? 14 : 10, borderRadius: 4, flexShrink: 0,
+      }}>{icon}</div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 600, color: T.ink }}>{title}</div>
-        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 22 : 17, fontWeight: 600, color: T.ink }}>{title}</div>
+        <div style={{ fontSize: isTablet ? 15 : 12, color: T.inkMute, marginTop: isTablet ? 4 : 2 }}>{subtitle}</div>
       </div>
     </button>
   );
