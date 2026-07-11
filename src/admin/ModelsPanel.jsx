@@ -20,7 +20,7 @@ import {
 } from '../components.jsx';
 import {
   importModelVersion, listModelVersions, promoteModelVersion,
-  deleteModelVersion, getModelVersion,
+  deleteModelVersion, getModelVersion, publishPromotedModel,
 } from '../model-store.js';
 import {
   listPendingBundles, downloadPendingBundle, markBundleImported,
@@ -113,6 +113,13 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
     const r = await promoteModelVersion(id);
     if (!r.ok) { setError(r.error || 'promote failed'); return; }
     refresh();
+  };
+
+  const republish = async () => {
+    setError('');
+    const r = await publishPromotedModel();
+    if (!r.ok) { setError(r.error || 'republish failed'); return; }
+    alert('Model republished to public bucket. Mobile app will pick it up on next launch or Check for updates.');
   };
 
   const del = async (id, path) => {
@@ -230,6 +237,12 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
                   {!r.is_production && (
                     <GhostButton onClick={() => promote(r.id)} style={{ padding: '6px 10px', fontSize: 11, color: T.open, borderColor: T.open }}>
                       Promote
+                    </GhostButton>
+                  )}
+                  {r.is_production && (
+                    <GhostButton onClick={() => republish()} style={{ padding: '6px 10px', fontSize: 11, color: T.brass, borderColor: T.brass }}
+                      title="Copy this model to the public bucket so the mobile app can fetch it.">
+                      Republish
                     </GhostButton>
                   )}
                   <GhostButton onClick={() => del(r.id, r.model_file_path)} style={{ padding: '6px 10px', fontSize: 11, color: T.closed, borderColor: T.closed }}>
