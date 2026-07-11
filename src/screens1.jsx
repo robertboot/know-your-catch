@@ -4,7 +4,7 @@ import {
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
-  CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2,
+  CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -16,12 +16,13 @@ import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
   sunPosition, moonPhase, fetchWeatherForTime, catchPhotos,
+  pbPhotos, buildPBReport, shareReport,
 } from './helpers.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
-import { savePhoto, photoThumbUrl } from './photos-store.js';
+import { savePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
@@ -690,25 +691,16 @@ export function HomeScreen({
         <ScrollDots count={Math.min(featured.length, 4)} active={0} />
       </Card>
 
-      {/* My Personal Bests */}
-      <button onClick={onPBs} style={{
-        marginTop: 14, width: '100%',
-        background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
-        padding: '16px 14px', cursor: 'pointer', textAlign: 'left',
-        display: 'flex', alignItems: 'center', gap: 14,
-      }}>
-        <Trophy size={28} color={T.brass} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.ink, letterSpacing: 1.3 }}>MY PERSONAL BESTS</div>
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>View your top catches and milestones</div>
-        </div>
-        {state?.pbs && Object.keys(state.pbs).length > 0 && (
-          <span style={{ background: T.brass, color: T.oceanDeep, fontSize: 11, fontWeight: 800, padding: '2px 9px', borderRadius: 999 }}>
-            {Object.keys(state.pbs).length}
-          </span>
-        )}
-        <ChevronRight size={18} color={T.brass} />
-      </button>
+      {/* My Personal Bests — dynamic. When the angler has one or
+          more PBs on file, show a rotating spotlight card with the
+          photo, key stats, share, and shuffle. Otherwise the compact
+          entry-point button. */}
+      <PBSpotlightCard
+        state={state}
+        onPBs={onPBs}
+        onView={(id) => onPBs && onPBs(id)}
+        isTablet={isTablet}
+      />
 
       <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
         ReelIntel · Built for the Gulf of America · v{DATA_VERSION}
@@ -1234,6 +1226,223 @@ export function SearchScreen({ state, onPick }) {
    this session, otherwise asks native. Falls back to the geographic
    center of the current jurisdiction so the screen always shows
    *something* actionable rather than a blank error state. */
+/* ============================================================
+   Home — PB spotlight card (dynamic random pick + share)
+   ============================================================
+   Renders a random PB with photo, key stats, and Share + Shuffle
+   controls. Falls back to the old static entry-point button when
+   the angler has no PBs on file yet. */
+function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
+  const pbs = state?.pbs || {};
+  const ids = useMemo(() => Object.keys(pbs), [pbs]);
+  // Pick a random PB; a shuffle counter forces a new pick without
+  // reshuffling every render.
+  const [shuffle, setShuffle] = useState(0);
+  const currentId = useMemo(() => {
+    if (ids.length === 0) return null;
+    return ids[Math.floor(Math.random() * ids.length)];
+    // shuffle dep is intentional to reroll
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shuffle, ids]);
+  const [sharing, setSharing] = useState(false);
+
+  // Zero-PB case: keep the compact button so onboarding is unchanged.
+  if (!currentId) {
+    return (
+      <button onClick={onPBs} style={{
+        marginTop: 14, width: '100%',
+        background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
+        padding: '16px 14px', cursor: 'pointer', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <Trophy size={28} color={T.brass} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.ink, letterSpacing: 1.3 }}>MY PERSONAL BESTS</div>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>Log a catch to earn your first PB</div>
+        </div>
+        <ChevronRight size={18} color={T.brass} />
+      </button>
+    );
+  }
+
+  const pb = pbs[currentId];
+  const sp = speciesById(currentId);
+  const photos = pbPhotos(pb);
+  const photo = photos[0] || null;
+  const photoUrl = photo ? photoDisplayUrl(photo) : null;
+  const anglerName = state.anglerName || '';
+  const units = state.units;
+  const primary = pb.primaryMetric === 'weight'
+    ? { val: formatWeight(pb.weight, units), label: 'Weight' }
+    : { val: formatSize(pb.length, units), label: 'Length' };
+  const secondary = pb.primaryMetric === 'weight'
+    ? { val: formatSize(pb.length, units), label: 'Length' }
+    : { val: formatWeight(pb.weight, units), label: 'Weight' };
+  const dateLabel = pb.date
+    ? new Date(pb.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : null;
+
+  const doShare = async (e) => {
+    e.stopPropagation();
+    if (sharing || !sp) return;
+    setSharing(true);
+    try {
+      const text = buildPBReport({ anglerName, species: sp, pb, units });
+      const dataUrls = (await Promise.all(photos.slice(0, 3).map(photoAsDataUrl))).filter(Boolean);
+      await shareReport({
+        title: `${(anglerName || 'My').trim() || 'My'} ${sp.commonName} PB`,
+        text, photoDataUrls: dataUrls,
+        fileName: `pb-${currentId}`,
+      });
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const doShuffle = (e) => {
+    e.stopPropagation();
+    if (ids.length <= 1) return;
+    setShuffle(n => n + 1);
+  };
+
+  const openDetail = () => onView && onView(currentId);
+
+  return (
+    <div style={{
+      marginTop: 14,
+      background: T.card, border: `1px solid ${T.brass}55`, borderRadius: 18,
+      overflow: 'hidden', position: 'relative',
+      boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
+    }}>
+      {/* Header row — clickable to open PB detail. */}
+      <button onClick={openDetail} style={{
+        width: '100%', background: 'transparent', border: 'none',
+        padding: isTablet ? '14px 18px 8px' : '12px 14px 6px',
+        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+        textAlign: 'left',
+      }}>
+        <Trophy size={isTablet ? 24 : 20} color={T.brass} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: isTablet ? 14 : 11, fontWeight: 800, color: T.brass, letterSpacing: 1.4 }}>
+            PERSONAL BEST SPOTLIGHT
+          </div>
+          <div style={{ fontSize: isTablet ? 11 : 10, color: T.inkMute, marginTop: 2 }}>
+            {ids.length} on file · showing 1 at random
+          </div>
+        </div>
+        <ChevronRight size={isTablet ? 20 : 18} color={T.brass} />
+      </button>
+
+      {/* Media + stats */}
+      <button onClick={openDetail} style={{
+        width: '100%', background: 'transparent', border: 'none',
+        padding: 0, cursor: 'pointer', textAlign: 'left',
+        display: isTablet ? 'flex' : 'block', gap: isTablet ? 18 : 0,
+      }}>
+        <div style={{
+          width: isTablet ? '45%' : '100%',
+          minHeight: isTablet ? 200 : 180,
+          background: T.parchmentDeep,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
+        }}>
+          {photoUrl
+            ? <img src={photoUrl} alt="" style={{
+                width: '100%', height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                minHeight: isTablet ? 200 : 180,
+              }} />
+            : <Fish size={isTablet ? 72 : 56} color={T.inkMute} strokeWidth={1.3} />}
+        </div>
+        <div style={{
+          flex: isTablet ? 1 : undefined,
+          padding: isTablet ? '18px 20px' : '14px 16px',
+        }}>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 24 : 20, fontWeight: 700, color: T.ink }}>
+            {sp ? sp.commonName : (currentId || 'Unknown species')}
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 8, flexWrap: 'wrap',
+          }}>
+            <div>
+              <div style={{ fontSize: isTablet ? 11 : 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>
+                {primary.label.toUpperCase()}
+              </div>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 32 : 26, fontWeight: 800, color: T.brass, marginTop: 2 }}>
+                {primary.val || '—'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: isTablet ? 11 : 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>
+                {secondary.label.toUpperCase()}
+              </div>
+              <div style={{ fontSize: isTablet ? 16 : 14, fontWeight: 700, color: T.ink, marginTop: 2 }}>
+                {secondary.val || '—'}
+              </div>
+            </div>
+          </div>
+          {dateLabel && (
+            <div style={{ fontSize: isTablet ? 13 : 11, color: T.inkSoft, marginTop: 8 }}>
+              {dateLabel}{pb.location ? ` · ${pb.location}` : ''}
+            </div>
+          )}
+        </div>
+      </button>
+
+      {/* Actions row */}
+      <div style={{
+        display: 'flex', gap: 8,
+        padding: isTablet ? '12px 20px 16px' : '10px 14px 14px',
+        borderTop: `1px solid ${T.cardEdge}`,
+      }}>
+        <button
+          onClick={doShare}
+          disabled={sharing}
+          style={{
+            flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
+            padding: isTablet ? '12px 14px' : '10px 12px', borderRadius: 8,
+            fontSize: isTablet ? 14 : 12.5, fontWeight: 800, letterSpacing: 0.8,
+            cursor: sharing ? 'not-allowed' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            opacity: sharing ? 0.7 : 1,
+          }}
+        >
+          <Share2 size={isTablet ? 18 : 15} /> {sharing ? 'Sharing…' : 'Share'}
+        </button>
+        <button
+          onClick={doShuffle}
+          disabled={ids.length <= 1}
+          aria-label="Shuffle to another PB"
+          style={{
+            background: 'transparent', color: T.brass,
+            border: `1.5px solid ${T.brass}`,
+            padding: isTablet ? '12px 14px' : '10px 12px', borderRadius: 8,
+            fontSize: isTablet ? 14 : 12.5, fontWeight: 800, letterSpacing: 0.8,
+            cursor: ids.length <= 1 ? 'not-allowed' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            opacity: ids.length <= 1 ? 0.5 : 1,
+          }}
+        >
+          <Shuffle size={isTablet ? 18 : 15} /> Shuffle
+        </button>
+        <button
+          onClick={openDetail}
+          style={{
+            background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
+            padding: isTablet ? '12px 14px' : '10px 12px', borderRadius: 8,
+            fontSize: isTablet ? 14 : 12.5, fontWeight: 800, letterSpacing: 0.8,
+            cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
+        >
+          View all
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function WeatherForecastScreen({ jurisdiction, state }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
