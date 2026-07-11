@@ -511,9 +511,13 @@ function ReviewPanel() {
 
   const refresh = useCallback(async () => {
     if (!speciesId) { setRows([]); return; }
+    // '__all__' means "no species filter" — pull rows for every
+    // species at the chosen status. Everything else stays a normal
+    // species-specific query.
+    const speciesArg = speciesId === '__all__' ? null : speciesId;
     setLoading(true);
     const [imgRes, cRes] = await Promise.all([
-      listTrainingImages({ speciesId, status: statusFilter === 'all' ? null : statusFilter }),
+      listTrainingImages({ speciesId: speciesArg, status: statusFilter === 'all' ? null : statusFilter }),
       countsBySpecies(),
     ]);
     setLoading(false);
@@ -565,6 +569,25 @@ function ReviewPanel() {
     refresh();
   };
   const doCorrect = async (ids, newSpeciesId) => {
+    // In All-species mode each row can belong to a different species,
+    // so we can't hand correctSpecies a single currentSpeciesId. Group
+    // the ids by their row's own species_id and call once per group.
+    if (speciesId === '__all__') {
+      const bySpecies = new Map();
+      for (const id of ids) {
+        const row = rows.find(r => r.id === id);
+        if (!row) continue;
+        const cur = row.species_id;
+        if (!bySpecies.has(cur)) bySpecies.set(cur, []);
+        bySpecies.get(cur).push(id);
+      }
+      for (const [cur, groupIds] of bySpecies) {
+        const r = await correctSpecies(groupIds, newSpeciesId, cur);
+        if (!r.ok) { setError(r.error || 'correct failed'); return; }
+      }
+      refresh();
+      return;
+    }
     const r = await correctSpecies(ids, newSpeciesId, speciesId);
     if (!r.ok) return setError(r.error || 'correct failed');
     refresh();
@@ -580,7 +603,17 @@ function ReviewPanel() {
 
   const focusedIds = selected.size > 0 ? Array.from(selected) : (rows[cursor] ? [rows[cursor].id] : []);
   const focusedSpecies = SPECIES.find(s => s.id === speciesId);
-  const c = counts[speciesId] || { pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0 };
+  // Aggregate counts across every species when browsing All. Keeps
+  // the header stat readout meaningful in that mode.
+  const c = speciesId === '__all__'
+    ? Object.values(counts).reduce((acc, x) => ({
+        pending:   acc.pending   + (x.pending   || 0),
+        verified:  acc.verified  + (x.verified  || 0),
+        rejected:  acc.rejected  + (x.rejected  || 0),
+        corrected: acc.corrected + (x.corrected || 0),
+        total:     acc.total     + (x.total     || 0),
+      }), { pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0 })
+    : (counts[speciesId] || { pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0 });
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -590,6 +623,7 @@ function ReviewPanel() {
             <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
             <select value={speciesId} onChange={e => setSpeciesId(e.target.value)} style={inputStyle}>
               <option value="">— select species —</option>
+              <option value="__all__">All species (every row at the chosen status)</option>
               {speciesOptions.map(s => {
                 const cc = counts[s.id];
                 const tail = cc ? ` — ${cc.pending}P / ${cc.verified}V / ${cc.total}T` : '';
@@ -614,7 +648,9 @@ function ReviewPanel() {
 
         {speciesId && (
           <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 10, lineHeight: 1.5 }}>
-            <strong style={{ color: T.ink }}>{focusedSpecies?.commonName || speciesId}</strong> — {c.total} total ·
+            <strong style={{ color: T.ink }}>
+              {speciesId === '__all__' ? 'All species' : (focusedSpecies?.commonName || speciesId)}
+            </strong> — {c.total} total ·
             <span style={{ color: T.brass }}> {c.pending} pending</span> ·
             <span style={{ color: T.open }}> {c.verified} verified</span> ·
             <span style={{ color: T.closed }}> {c.rejected} rejected</span> ·
@@ -661,6 +697,7 @@ function ReviewPanel() {
               <ReviewTile
                 key={r.id}
                 row={r}
+                showSpecies={speciesId === '__all__'}
                 selected={selected.has(r.id)}
                 focused={i === cursor && selected.size === 0}
                 onClick={(e) => { setCursor(i); if (e.shiftKey || e.metaKey || e.ctrlKey) toggleSelect(r.id); }}
@@ -673,7 +710,8 @@ function ReviewPanel() {
 
       {speciesId && rows.length === 0 && !loading && (
         <Card style={{ fontSize: 13, color: T.inkMute, textAlign: 'center', padding: 24 }}>
-          No {statusFilter} images for {focusedSpecies?.commonName || speciesId}.
+          No {statusFilter} images
+          {' '}{speciesId === '__all__' ? 'across all species' : `for ${focusedSpecies?.commonName || speciesId}`}.
         </Card>
       )}
 
@@ -702,7 +740,7 @@ function ReviewPanel() {
   );
 }
 
-function ReviewTile({ row, selected, focused, onClick, onToggle }) {
+function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = false }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     let alive = true;
@@ -715,6 +753,12 @@ function ReviewTile({ row, selected, focused, onClick, onToggle }) {
     row.status === 'rejected'  ? T.closed :
     row.status === 'corrected' ? T.brass :
     T.warn; // pending
+
+  // In "All species" mode the reviewer needs to know what species a
+  // tile is claiming to be — otherwise you can't tell what you're
+  // approving/correcting. Cheap lookup against the bundled SPECIES.
+  const sp = showSpecies ? SPECIES.find(s => s.id === row.species_id) : null;
+  const speciesLabel = sp?.commonName || row.species_id;
 
   return (
     <div
@@ -729,6 +773,15 @@ function ReviewTile({ row, selected, focused, onClick, onToggle }) {
       <div style={{ width: '100%', aspectRatio: '1 / 1', background: T.parchmentDeep }}>
         {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
       </div>
+      {showSpecies && (
+        <div style={{
+          padding: '5px 8px 0 8px',
+          fontSize: 11, fontWeight: 700, color: T.ink,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {speciesLabel}
+        </div>
+      )}
       <div style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <div style={{
           width: 8, height: 8, borderRadius: 4, background: statusColor, flexShrink: 0,
