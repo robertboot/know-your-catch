@@ -90,7 +90,11 @@ export async function getProductionModel() {
 
 /* Promote a version to production. Enforces at most one production
    row via the partial unique index on the table — the demote step
-   happens in the same transaction. */
+   happens in the same transaction.
+   Also publishes the promoted model to the models-published public
+   bucket so the mobile app can fetch it at runtime. Publish failures
+   are surfaced but the DB promote is left committed — a stale public
+   manifest is a strictly better state than an inconsistent DB. */
 export async function promoteModelVersion(id) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
@@ -103,7 +107,79 @@ export async function promoteModelVersion(id) {
   const { error: promoteErr } = await c.from('model_versions')
     .update({ is_production: true }).eq('id', id);
   if (promoteErr) return { ok: false, error: promoteErr.message };
+  // Publish to the public bucket the mobile app reads.
+  const pub = await publishPromotedModel();
+  if (!pub.ok) return { ok: true, publishWarning: pub.error };
   return { ok: true };
+}
+
+const PUBLIC_BUCKET = 'models-published';
+const PUBLIC_MODEL_KEY    = 'current.tflite';
+const PUBLIC_MANIFEST_KEY = 'current.json';
+
+/* Copy the currently-promoted model into the public bucket and write
+   an accompanying manifest.json the mobile app polls on launch. The
+   manifest is small (~2KB) so the version-check round trip is cheap
+   even on cellular. Only the tflite bytes get re-downloaded when the
+   version_name actually changes. */
+export async function publishPromotedModel() {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const prod = await getProductionModel();
+  if (!prod) return { ok: false, error: 'no promoted model' };
+
+  // Pull the .tflite bytes from the private admin bucket.
+  const { data: modelBlob, error: dlErr } = await c.storage
+    .from('model-artifacts').download(prod.model_file_path);
+  if (dlErr) return { ok: false, error: `download: ${dlErr.message}` };
+
+  // Overwrite the public copy.
+  const upModel = await c.storage.from(PUBLIC_BUCKET)
+    .upload(PUBLIC_MODEL_KEY, modelBlob, {
+      contentType: 'application/octet-stream',
+      cacheControl: 'no-cache',
+      upsert: true,
+    });
+  if (upModel.error) return { ok: false, error: `upload model: ${upModel.error.message}` };
+
+  const manifest = {
+    version_name:    prod.version_name,
+    input_size:      prod.labels_json?.input_size      ?? 224,
+    labels:          prod.labels_json?.labels          || [],
+    excluded_species:prod.labels_json?.excluded_species || [],
+    min_confidence:  prod.labels_json?.min_confidence  ?? 0.6,
+    high_confidence: prod.labels_json?.high_confidence ?? 0.85,
+    published_at:    new Date().toISOString(),
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], {
+    type: 'application/json',
+  });
+  const upMan = await c.storage.from(PUBLIC_BUCKET)
+    .upload(PUBLIC_MANIFEST_KEY, manifestBlob, {
+      contentType: 'application/json',
+      cacheControl: 'no-cache',
+      upsert: true,
+    });
+  if (upMan.error) return { ok: false, error: `upload manifest: ${upMan.error.message}` };
+
+  return { ok: true };
+}
+
+/* Public URLs the mobile app uses. Return the string so callers can
+   embed it in build-time constants if we ever want to skip the
+   getPublicUrl round-trip on boot. */
+export function publishedModelUrl() {
+  const c = client();
+  if (!c) return null;
+  const { data } = c.storage.from(PUBLIC_BUCKET).getPublicUrl(PUBLIC_MODEL_KEY);
+  return data?.publicUrl || null;
+}
+
+export function publishedManifestUrl() {
+  const c = client();
+  if (!c) return null;
+  const { data } = c.storage.from(PUBLIC_BUCKET).getPublicUrl(PUBLIC_MANIFEST_KEY);
+  return data?.publicUrl || null;
 }
 
 export async function deleteModelVersion(id, modelFilePath) {

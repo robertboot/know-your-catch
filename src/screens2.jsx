@@ -1622,6 +1622,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         <DetailRow label="Built" value={DATA_BUILD_DATE} />
         <DetailRow label="Last sync" value={state.syncMeta?.lastSyncDate || '—'} />
       </Card>
+      <FishIdModelCard />
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Your fishing data</SectionLabel>
         <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 10 }}>
@@ -1649,6 +1650,78 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         </button>
       </Card>
     </div>
+  );
+}
+
+/* Fish ID model status card.
+   Shows the currently-loaded model version + a "Check for updates"
+   button. Runtime state comes from model-loader.js — kept as a
+   subscription so pushing a new promoted model updates the card
+   without a manual refresh. */
+function FishIdModelCard() {
+  const [tick, setTick] = React.useState(0);
+  const [checking, setChecking] = React.useState(false);
+
+  React.useEffect(() => {
+    // Lazy-import so the module isn't force-loaded before boot init
+    // ran (which happens in App.jsx).
+    let unsub;
+    (async () => {
+      const { subscribeModel } = await import('./model-loader.js');
+      unsub = subscribeModel(() => setTick(t => t + 1));
+    })();
+    return () => { if (unsub) unsub(); };
+  }, []);
+
+  const [status, setStatus] = React.useState('loading');
+  const [info, setInfo] = React.useState(null);
+  React.useEffect(() => {
+    (async () => {
+      const { getModelStatus, getModelInfo } = await import('./model-loader.js');
+      setStatus(getModelStatus());
+      setInfo(getModelInfo());
+    })();
+  }, [tick]);
+
+  const check = async () => {
+    setChecking(true);
+    try {
+      const { forceRefreshModel } = await import('./model-loader.js');
+      await forceRefreshModel();
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const label =
+    status === 'ready'      ? info?.version_name || '—'
+  : status === 'loading'    ? 'Loading…'
+  : status === 'no-network' ? 'Not yet synced'
+  : status === 'error'      ? 'Failed to load'
+  : '—';
+
+  return (
+    <Card style={{ marginBottom: 10 }}>
+      <SectionLabel style={{ marginBottom: 6 }}>Fish ID model</SectionLabel>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>{label}</div>
+          {status === 'ready' && info?.labels && (
+            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 3 }}>
+              {info.labels.length} species · updates over the air
+            </div>
+          )}
+          {status === 'no-network' && (
+            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 3 }}>
+              Open the app once online to download the current model.
+            </div>
+          )}
+        </div>
+        <GhostButton onClick={check} disabled={checking} style={{ padding: '6px 12px', fontSize: 12 }}>
+          {checking ? 'Checking…' : 'Check for updates'}
+        </GhostButton>
+      </div>
+    </Card>
   );
 }
 

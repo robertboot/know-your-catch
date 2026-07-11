@@ -1,77 +1,136 @@
 /* Classifier adapter — the swappable seam for the ID pipeline.
 
-   All model-runtime knowledge lives behind classify(); the rest of
-   identifyPhoto.js is runtime-agnostic. Swapping from the stub to a
-   real Scope B (TF.js + fine-tuned MobileNet) or Scope C (native
-   Core ML via Capacitor plugin) implementation only touches this file.
+   Runtime: tfjs-tflite over the published MobileNetV3-Small model
+   fetched by model-loader.js. Same preprocess + softmax renormalize
+   as the admin Test Image panel so behavior is identical across
+   admin and mobile.
 
-   Fully offline by construction:
-     - No fetch() / XHR / remote URLs.
-     - The real adapter, when written, will load its model from a
-       packaged app asset via import.meta.glob or a static asset URL
-       served from public/ — NEVER downloaded at runtime. */
+   Fully offline after first sync: the model + manifest are cached
+   to Capacitor Filesystem (native) or localStorage (web) on the
+   first successful launch. Subsequent runs go straight to the cache.
 
-/* Flip to false when a real model asset is bundled. Kept true today
-   so PhotoAnalyzingScreen → IdentificationConfirmCard → CatchEntry
-   preserves the same UX-test path we've been shipping. */
-export const USE_STUB_MODEL = true;
+   Fallback: on first launch with no cache and no network the stub
+   returns an empty top-K, which routes users to the manual species
+   picker via identifyPhoto.js's "low" band handling — a graceful
+   degradation, not a crash. */
 
-/* label → speciesId lookup — Stage 4 of the pipeline consults this
-   first. Empty until Scope B lands the fine-tuned MobileNet, whose
-   output labels will look something like "L_campechanus" or a
-   numeric class ID. The stub emits speciesId strings directly, so
-   the pipeline's identity fallback matches them without an entry
-   needing to be added here. */
-export const LABEL_TO_SPECIES_ID = {
-  // e.g. 'L_campechanus': 'red_snapper',
-  // Filled in Scope B when the trained model's label file lands.
-};
+import { getReadyModel, getModelInfo, initModel } from '../model-loader.js';
 
-/* Canned top-K sequences the stub cycles through — one per hash of
-   the image data URL length so repeat tests don't all look the same.
-   Scores match the original stub's narrative (high / medium / low)
-   and land on the same bands after §6 remapping. */
-const STUB_SEQUENCES = [
-  [{ label: 'red_snapper',       score: 0.94 }],
-  [{ label: 'mahi',              score: 0.97 }],
-  [{ label: 'spanish_mackerel',  score: 0.52 }, { label: 'king_mackerel',      score: 0.41 }],
-  [{ label: 'greater_amberjack', score: 0.48 }, { label: 'almaco_jack',        score: 0.39 }, { label: 'lesser_amberjack', score: 0.13 }],
-  [{ label: 'red_snapper',       score: 0.49 }, { label: 'vermilion_snapper',  score: 0.46 }],
-  [],
-];
+/* Kept for the identify pipeline import — populated at build time
+   when we bake in the label→speciesId map for edge cases. Empty means
+   the pipeline falls back to identity mapping (label === speciesId),
+   which matches how our Colab training script emits labels. */
+export const LABEL_TO_SPECIES_ID = {};
 
-async function stubClassify(imageDataUrl) {
-  // Simulate model inference time so the analyzing UI stays meaningful.
-  await new Promise((r) => setTimeout(r, 1200));
-  const seed = imageDataUrl ? imageDataUrl.length % STUB_SEQUENCES.length : 0;
-  return STUB_SEQUENCES[seed];
+/* Feature flag for the stub path. Kept as an export for tests / dev
+   overrides; wired to the "no-network first-launch" fallback in
+   classify() below. Defaults false — production always uses the
+   real classifier. */
+export const USE_STUB_MODEL = false;
+
+const IMG_SIZE_DEFAULT = 224;
+
+/* Decode a data URL / URL string into an HTMLImageElement so we can
+   rasterize to a fixed size + get pixel bytes. Kept sync to the tab
+   we're already on — no Web Workers, matches the admin Test Image
+   panel path. */
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('image decode failed'));
+    img.src = src;
+  });
 }
 
-/* TODO(scope-B): implement the real classifier.
+/* Extract 224x224 uint8 RGB bytes from an image. Skips
+   tf.browser.fromPixels' int32 route so the tflite runtime never has
+   to insert an int32→uint8 conversion op (which hangs on Safari's
+   CPU fallback). */
+function imageToRgb(img, size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, size, size);
+  const rgba = ctx.getImageData(0, 0, size, size).data;
+  const pixelCount = size * size;
+  const rgb = new Uint8Array(pixelCount * 3);
+  for (let i = 0; i < pixelCount; i++) {
+    rgb[i * 3]     = rgba[i * 4];
+    rgb[i * 3 + 1] = rgba[i * 4 + 1];
+    rgb[i * 3 + 2] = rgba[i * 4 + 2];
+  }
+  return rgb;
+}
 
-   Expected shape:
-     - Runtime: TF.js in the WebView. Options:
-         @tensorflow/tfjs-tflite   (best for a quantized MobileNet)
-         @tensorflow/tfjs + tfjs-converter GraphModel
-     - Model: MobileNetV3 or EfficientNet-Lite0 fine-tuned on our
-       Gulf species. Bundle as a public/ static asset (path fixed
-       at build time; no runtime download).
-     - Preprocess:
-         1. Decode dataUrl → HTMLImageElement (already do this in
-            src/storage.js downscaleImageDataUrl — reuse that path).
-         2. Optional: run a small detector (tiny YOLOv8 fish head)
-            to crop to the fish. Falls back to center crop if no
-            box is found.
-         3. Resize to model input dims (typ. 224×224).
-         4. Normalize per model spec (usually mean/scale).
-     - Return top-K { label, score } sorted best-first. */
-async function realClassify(_imageDataUrl) {
-  return [];
+/* Dequantize + renormalize the TFLite output to a proper softmax
+   distribution. Verbatim copy of the admin Test Image path — see
+   the comments there for why this defensive coding is required
+   across tfjs-tflite versions. */
+function normalizeScores(raw) {
+  const arr = raw instanceof Float32Array ? Array.from(raw) : Array.from(raw, Number);
+  if (arr.length === 0) return arr;
+  let max = -Infinity, sum = 0;
+  for (const v of arr) { if (v > max) max = v; sum += v; }
+  if (max > 1.5) {
+    const scaled = arr.map(v => v / 255);
+    const s = scaled.reduce((a, b) => a + b, 0) || 1;
+    return scaled.map(v => v / s);
+  }
+  if (Math.abs(sum - 1) > 0.05 && sum > 0) {
+    return arr.map(v => v / sum);
+  }
+  return arr;
+}
+
+/* Real classifier — used when a model is loaded. */
+async function realClassify(imageDataUrl) {
+  // Prod boot kicks off initModel() in App.jsx, so this should be
+  // resolved already. But if the pipeline runs before boot init
+  // finishes we'd rather wait than fail — the analyzing UI already
+  // shows a spinner.
+  const model = await (getReadyModel() || initModel());
+  if (!model) return [];
+  const info = getModelInfo();
+  if (!info) return [];
+
+  const tf = await import('@tensorflow/tfjs');
+  const img = await loadImage(imageDataUrl);
+  const size = info.input_size || IMG_SIZE_DEFAULT;
+  const rgb = imageToRgb(img, size);
+  const input = tf.tensor4d(rgb, [1, size, size, 3], 'int32');
+  let output;
+  try {
+    output = model.predict(input);
+    const raw = await output.data();
+    const scores = normalizeScores(raw);
+    const labels = info.labels || [];
+    const excluded = new Set(info.excluded_species || []);
+    // Return every label so the pipeline's Stage 5 (jurisdiction
+    // constrain) has full context; sort best-first for its top-K
+    // selection. Filter out the excluded set — matches the admin
+    // Test Image behavior.
+    return labels
+      .map((label, i) => ({ label, score: scores[i] || 0 }))
+      .filter((r) => !excluded.has(r.label))
+      .sort((a, b) => b.score - a.score);
+  } finally {
+    input.dispose();
+    if (output) output.dispose();
+  }
 }
 
 /* Adapter public interface — invoked by identifyPhoto.js pipeline
    Stage 3. Signature is intentionally minimal so both TF.js and
    Core-ML adapters can implement it identically. */
 export async function classify(imageDataUrl) {
-  return USE_STUB_MODEL ? stubClassify(imageDataUrl) : realClassify(imageDataUrl);
+  if (USE_STUB_MODEL) return [];
+  try {
+    return await realClassify(imageDataUrl);
+  } catch (e) {
+    console.error('[classify] failed:', e);
+    return [];
+  }
 }

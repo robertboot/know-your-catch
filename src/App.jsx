@@ -10,6 +10,7 @@ import { loadState, saveState, defaultState } from './storage.js';
 import { migratePhotosToStore } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
+import { initModel } from './model-loader.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword } from './auth.js';
@@ -128,6 +129,12 @@ export default function App() {
     refreshSpecies().catch(() => {});
     refreshBrandAssets().catch(() => {});
     refreshCategories().catch(() => {});
+    // Kick off the ML model fetch/cache in the background. First
+    // launch online: downloads the promoted model (~1 MB) and caches
+    // it. Subsequent launches: fast cache-hit unless a newer version
+    // has been published. Failures are silent — the classifier
+    // gracefully degrades to the manual-picker fallback.
+    initModel().catch(() => {});
   }, []);
 
   // Overlay subscriptions: bump a version counter on every notify so
