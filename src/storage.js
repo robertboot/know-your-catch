@@ -29,6 +29,9 @@ export const defaultState = {
     consentVersion: 0,
   },
   syncMeta: { lastSyncDate: DATA_BUILD_DATE },
+  // Highest consecutive-correct run in the Fish ID quiz, ever. Beat
+  // this to set a new best. Session streak is transient.
+  quizBestStreak: 0,
 };
 
 export function loadState() {

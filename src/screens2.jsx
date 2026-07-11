@@ -3484,7 +3484,7 @@ function classifyAnswer(question, picked) {
   return picked.__isCorrect ? { tier: 'full', score: 1 } : { tier: 'wrong', score: 0 };
 }
 
-export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
+export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const isLandscape = size === 'tablet-landscape';
@@ -3495,6 +3495,15 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
   // many were full / partial / wrong for the end-of-session summary.
   const [score, setScore] = useState({ points: 0, total: 0, full: 0, partial: 0, wrong: 0 });
   const [streak, setStreak] = useState(0);
+  // Toast state: 'full' | 'partial' | 'wrong' | null.
+  // Shown right after the user picks — Correct gets a Next-question CTA,
+  // Close / Wrong get a Learn-more CTA that dismisses to the fish detail.
+  const [toastTier, setToastTier] = useState(null);
+  // Snapshot of the best streak at mount so a new best animates in
+  // without interrupting the session. Persisted via update() when a
+  // new best is set.
+  const bestStreak = state?.quizBestStreak ?? 0;
+  const [newBestFlash, setNewBestFlash] = useState(false);
 
   // Register the anchor so the next question doesn't repeat it.
   useEffect(() => {
@@ -3505,6 +3514,7 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
 
   const next = () => {
     setSelectedKey(null);
+    setToastTier(null);
     setQuestion(pickQuizQuestion(state, jurisdiction, question?.species?.id, seenAnchorIds));
   };
 
@@ -3523,7 +3533,17 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
       partial: s.partial + (tier === 'partial' ? 1 : 0),
       wrong: s.wrong + (tier === 'wrong' ? 1 : 0),
     }));
-    setStreak(prev => tier === 'full' ? prev + 1 : 0);
+    // Update session streak + persist best if beaten.
+    setStreak(prev => {
+      const nextStreak = tier === 'full' ? prev + 1 : 0;
+      if (nextStreak > bestStreak && update) {
+        update({ quizBestStreak: nextStreak });
+        setNewBestFlash(true);
+        setTimeout(() => setNewBestFlash(false), 1600);
+      }
+      return nextStreak;
+    });
+    setToastTier(tier);
   };
 
   if (!question) {
@@ -3575,13 +3595,27 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
 
   return (
     <div style={{ padding: isTablet ? '22px 22px 32px' : '16px 16px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4, gap: 8, flexWrap: 'wrap' }}>
         <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22}>Fish ID Quiz</H1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: isTablet ? 16 : 12, color: T.inkSoft }}>
           <span title={`${score.full} correct · ${score.partial} partial · ${score.wrong} wrong`}>
             {fmtScore(score.points)} / {score.total}
           </span>
-          {streak >= 2 && <span style={{ color: T.brass, fontWeight: 800 }}>{streak} streak</span>}
+          {streak >= 2 && (
+            <span style={{
+              color: T.brass, fontWeight: 800,
+              transform: newBestFlash ? 'scale(1.15)' : 'scale(1)',
+              transition: 'transform 220ms ease',
+            }}>
+              🔥 {streak}
+            </span>
+          )}
+          {bestStreak > 0 && (
+            <span style={{ color: T.inkMute, fontWeight: 600, fontSize: isTablet ? 14 : 11 }}
+              title="Best streak — beat it!">
+              best {bestStreak}
+            </span>
+          )}
         </div>
       </div>
       {score.total > 0 && score.partial > 0 && (
@@ -3664,9 +3698,21 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
         })}
       </div>
 
+      {/* Next question — placed ABOVE the fish detail so the angler
+          never has to scroll past the review section to move on. For a
+          full-credit answer the toast's Next-question CTA is the
+          faster path; for close/wrong picks this button IS the CTA
+          (the toast dismisses to Learn instead). */}
+      {selectedKey && (
+        <PrimaryButton onClick={next} style={{ marginTop: 14, marginBottom: 6 }}>
+          Next question
+          <ChevronRight size={16} style={{ display: 'inline', marginLeft: 6, verticalAlign: 'middle' }} />
+        </PrimaryButton>
+      )}
+
       {/* Result + species review */}
       {selectedKey && (
-        <Card style={{ marginTop: 14, background: question.type === 'lookalikes' ? tierBg : undefined, borderColor: question.type === 'lookalikes' ? tierColor : undefined }}>
+        <Card style={{ marginTop: 8, background: question.type === 'lookalikes' ? tierBg : undefined, borderColor: question.type === 'lookalikes' ? tierColor : undefined }}>
           {/* Tier-aware verdict line — lookalikes get three-tier phrasing
               (full / partial / wrong); other types keep the classic
               green-check or red-X messaging. */}
@@ -3773,12 +3819,128 @@ export function QuizScreen({ state, jurisdiction, onPickSpecies, onBack }) {
         </Card>
       )}
 
-      {selectedKey && (
-        <PrimaryButton onClick={next} style={{ marginTop: 14 }}>
-          Next question
-          <ChevronRight size={16} style={{ display: 'inline', marginLeft: 6, verticalAlign: 'middle' }} />
-        </PrimaryButton>
+      {/* Result popup — appears on answer pick. Full-credit shows a
+          big green "Correct!" with a Next-question CTA. Close / wrong
+          picks dismiss to the fish detail below so the angler learns
+          before moving on. Tap outside / close to dismiss on any tier. */}
+      {toastTier && (
+        <QuizResultPopup
+          tier={toastTier}
+          streak={streak}
+          bestStreak={bestStreak}
+          newBest={newBestFlash}
+          isTablet={isTablet}
+          onNext={next}
+          onLearn={() => setToastTier(null)}
+        />
       )}
+    </div>
+  );
+}
+
+/* Result popup for the quiz. Non-blocking on close / wrong — dismisses
+   to reveal the fish detail card so the angler can learn what they
+   got wrong. Full-credit answers get a Next-question CTA that skips
+   the review entirely. */
+function QuizResultPopup({ tier, streak, bestStreak, newBest, isTablet, onNext, onLearn }) {
+  const isFull    = tier === 'full';
+  const isPartial = tier === 'partial';
+  const color     = isFull ? T.open : isPartial ? T.warn : T.closed;
+  const bg        = isFull ? T.openBg : isPartial ? T.warnBg : T.closedBg;
+  const label     = isFull ? 'Correct!' : isPartial ? 'Close!' : 'Wrong';
+  const emoji     = isFull ? '🎣' : isPartial ? '🐟' : '🎯';
+  const subline   = isFull
+    ? 'Great eye. Keep the streak going.'
+    : isPartial
+      ? 'Right family, wrong species — scroll to learn the tell.'
+      : 'Scroll to learn the ID cues for next time.';
+
+  return (
+    <div
+      role="dialog"
+      aria-live="polite"
+      onClick={onLearn}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 900,
+        background: 'rgba(0, 0, 0, 0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: bg,
+          border: `2px solid ${color}`,
+          borderRadius: 16,
+          padding: isTablet ? '28px 32px' : '20px 22px',
+          maxWidth: 420, width: '100%',
+          textAlign: 'center',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+        }}
+      >
+        <div style={{ fontSize: isTablet ? 60 : 44, lineHeight: 1, marginBottom: 6 }}>
+          {emoji}
+        </div>
+        <div style={{
+          fontSize: isTablet ? 36 : 28, fontWeight: 900,
+          color, letterSpacing: 1, marginBottom: 8,
+        }}>
+          {label}
+        </div>
+        <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, lineHeight: 1.5, marginBottom: 16 }}>
+          {subline}
+        </div>
+        {isFull && streak >= 2 && (
+          <div style={{
+            fontSize: isTablet ? 15 : 13, color: T.brass, fontWeight: 800, marginBottom: 12,
+            transform: newBest ? 'scale(1.1)' : 'scale(1)',
+            transition: 'transform 220ms ease',
+          }}>
+            🔥 {streak} in a row{newBest ? ' — new best!' : bestStreak > 0 ? ` · best ${bestStreak}` : ''}
+          </div>
+        )}
+        {isFull ? (
+          <>
+            <button
+              onClick={onNext}
+              style={{
+                width: '100%', padding: '14px 16px', borderRadius: 10,
+                background: color, color: T.oceanDeep,
+                border: 'none', fontSize: isTablet ? 17 : 15, fontWeight: 800,
+                cursor: 'pointer', letterSpacing: 0.4,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              Next question <ChevronRight size={18} />
+            </button>
+            <button
+              onClick={onLearn}
+              style={{
+                width: '100%', marginTop: 8,
+                background: 'transparent', color: T.inkSoft,
+                border: 'none', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', textDecoration: 'underline',
+                padding: '6px 8px',
+              }}
+            >
+              See details first
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onLearn}
+            style={{
+              width: '100%', padding: '14px 16px', borderRadius: 10,
+              background: color, color: T.oceanDeep,
+              border: 'none', fontSize: isTablet ? 17 : 15, fontWeight: 800,
+              cursor: 'pointer', letterSpacing: 0.4,
+            }}
+          >
+            Learn what to look for
+          </button>
+        )}
+      </div>
     </div>
   );
 }

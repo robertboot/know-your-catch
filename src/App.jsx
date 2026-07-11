@@ -642,6 +642,7 @@ export default function App() {
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}
+        update={update}
         onPickSpecies={(id) => push({ name: 'species', id })}
         onBack={pop} />;
       break;
