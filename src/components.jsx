@@ -16,8 +16,8 @@ export function StatusPill({ status, size = 'normal' }) {
     caution:  { label: 'VERIFY',      bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
     unknown: { label: 'CONFIRM SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
   }[status] || { label: 'CONFIRM SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
-  const pad = size === 'small' ? '2px 8px' : '4px 10px';
-  const fs = size === 'small' ? 10 : 11;
+  const pad = size === 'small' ? '2px 8px' : size === 'large' ? '6px 14px' : '4px 10px';
+  const fs = size === 'small' ? 10 : size === 'large' ? 13 : 11;
   const shape = m.shape === 'circle'
     ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: m.fg, display: 'inline-block' }} />
     : m.shape === 'square'

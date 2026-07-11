@@ -136,7 +136,7 @@ const STATUS_TEXT = {
 //   - If the image fails to load, we fall back to the flat
 //     card-background layout so a missing asset doesn't ship a blank
 //     tile.
-function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
+function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTablet = false }) {
   const hasBg = !!bgImage;
   const [bgFailed, setBgFailed] = React.useState(false);
   const usingBg = hasBg && !bgFailed;
@@ -148,14 +148,31 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
     ? 'drop-shadow(0 1px 3px rgba(0,0,0,0.7)) drop-shadow(0 0 8px rgba(25,212,242,0.35))'
     : 'none';
 
+  // Tablet scaling. Grid-child sizing (auto-width) + larger minHeight
+  // so each cell has room for the artwork uncropped. object-fit:contain
+  // preserves the original composition instead of chopping edges.
+  const tileFlex        = isTablet ? undefined : '0 0 168px';
+  const tileMinHeight   = isTablet ? 380 : 176;
+  const tileBorderRadius= isTablet ? 22 : 18;
+  const bgFit           = isTablet ? 'contain' : 'cover';
+  const bgBackground    = usingBg && isTablet ? '#04182B' : (usingBg ? T.oceanDeep : T.card);
+  const titleFontSize   = isTablet ? 22 : 15;
+  const subtitleFontSize= isTablet ? 15 : 12;
+  const iconInset       = isTablet ? 22 : 14;
+  const textInset       = isTablet ? 22 : 14;
+  const textBottom      = isTablet ? 18 : 12;
+  const chevronBottom   = isTablet ? 18 : 12;
+  const chevronRight    = isTablet ? 18 : 12;
+  const chevronSize     = isTablet ? 26 : 18;
+
   return (
     <button onClick={onClick} style={{
-      flex: '0 0 168px',
+      flex: tileFlex,
       position: 'relative',
-      background: usingBg ? T.oceanDeep : T.card,
-      border: `1px solid ${T.cardEdge}`, borderRadius: 18,
+      background: bgBackground,
+      border: `1px solid ${T.cardEdge}`, borderRadius: tileBorderRadius,
       padding: 0, cursor: 'pointer', textAlign: 'left',
-      minHeight: 176,
+      minHeight: tileMinHeight,
       scrollSnapAlign: 'start',
       boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
       overflow: 'hidden',
@@ -169,7 +186,7 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
             onError={() => setBgFailed(true)}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', display: 'block', userSelect: 'none',
+              objectFit: bgFit, display: 'block', userSelect: 'none',
               pointerEvents: 'none',
             }}
           />
@@ -189,7 +206,7 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
           the tile artwork already bakes in the icon. */}
       {!usingBg && (
         <div style={{
-          position: 'absolute', top: 14, left: 14,
+          position: 'absolute', top: iconInset, left: iconInset,
           color: T.brass,
         }}>{icon}</div>
       )}
@@ -198,10 +215,10 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
           the scrim; subtitle stays soft but with a subtle text-shadow
           so it doesn't disappear over a light patch. */}
       <div style={{
-        position: 'absolute', left: 14, right: 44, bottom: 12,
+        position: 'absolute', left: textInset, right: chevronRight + chevronSize + 8, bottom: textBottom,
       }}>
         <div style={{
-          fontSize: 15, fontWeight: 800, color: T.ink,
+          fontSize: titleFontSize, fontWeight: 800, color: T.ink,
           lineHeight: 1.18, letterSpacing: 0.3, textTransform: 'uppercase',
           textShadow,
         }}>
@@ -210,7 +227,7 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
         </div>
         {subtitle && (
           <div style={{
-            fontSize: 12, color: usingBg ? '#D3E3EC' : T.inkMute,
+            fontSize: subtitleFontSize, color: usingBg ? '#D3E3EC' : T.inkMute,
             lineHeight: 1.4, marginTop: 4, textShadow,
           }}>{subtitle}</div>
         )}
@@ -218,10 +235,10 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt }) {
 
       {/* Chevron — bottom-right. */}
       <ChevronRight
-        size={18}
+        size={chevronSize}
         color={T.brass}
         style={{
-          position: 'absolute', bottom: 12, right: 12,
+          position: 'absolute', bottom: chevronBottom, right: chevronRight,
           filter: iconShadow,
         }}
       />
@@ -428,15 +445,15 @@ export function HomeScreen({
       </div>
 
       {/* Quick Actions — phone: horizontally scrolling row so tiles
-          keep a comfortable width; tablet: multi-column grid using
-          the wider viewport (3-col portrait, 4-col landscape) so all
-          tiles are visible at once. */}
+          keep a comfortable width; tablet: 2×2 grid so the tablet
+          canvas is used and each tile is large enough for the
+          artwork to breathe (no crop). */}
       <div
         className={isTablet ? undefined : 'kyc-hscroll'}
         style={isTablet ? {
           display: 'grid',
-          gridTemplateColumns: screenSize === 'tablet-landscape' ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)',
-          gap: 14,
+          gridTemplateColumns: 'repeat(2, 1fr)',
+          gap: 16,
           margin: '18px 0 0',
         } : {
           display: 'flex', gap: 10,
@@ -446,6 +463,7 @@ export function HomeScreen({
         }}
       >
         <QuickTile
+          isTablet={isTablet}
           icon={<BarChart2 size={28} strokeWidth={1.8} />}
           titleA="PATTERNS"
           subtitle="What's working in your log"
@@ -454,6 +472,7 @@ export function HomeScreen({
           alt="Patterns — what's working in your log"
         />
         <QuickTile
+          isTablet={isTablet}
           icon={<Camera size={28} strokeWidth={1.8} />}
           titleA="FISH" titleB="ID"
           subtitle="Point, shoot, get the species"
@@ -462,6 +481,7 @@ export function HomeScreen({
           alt="Fish ID — point, shoot, get the species"
         />
         <QuickTile
+          isTablet={isTablet}
           icon={<ClipboardList size={28} strokeWidth={1.8} />}
           titleA="CHECK" titleB="REGULATIONS"
           subtitle="Rules, limits, and seasons"
@@ -470,6 +490,7 @@ export function HomeScreen({
           alt="Check regulations — rules, limits, and seasons"
         />
         <QuickTile
+          isTablet={isTablet}
           icon={<Sparkles size={28} strokeWidth={1.8} />}
           titleA="FISH ID" titleB="QUIZ"
           subtitle="Test your ID, limits, and seasons"

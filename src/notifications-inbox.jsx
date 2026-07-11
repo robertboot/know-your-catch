@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, Bell, Mail, Megaphone } from 'lucide-react';
 import { T } from './theme.js';
 import { getLastSession, subscribe } from './auth.js';
+import { useScreenSize } from './screen-size.js';
 import {
   listActiveAnnouncements, listMyLaunchEmails,
   loadDismissedIds, markDismissed, markManyDismissed,
@@ -116,8 +117,22 @@ export function useAnnouncementInbox() {
 /* Modal drawer — full-screen on phone, centered card on wider
    viewports. Renders on top via a fixed overlay + inner card. */
 export default function NotificationsDrawer({ open, onClose }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
   const { active, cleared, dismiss, dismissAll } = useAnnouncementInbox();
   if (!open) return null;
+
+  const drawerMaxWidth  = isTablet ? 620 : 640;
+  const headerPad       = isTablet ? '18px 22px' : '14px 16px';
+  const headerTitleSize = isTablet ? 19 : 15;
+  const bellSize        = isTablet ? 22 : 18;
+  const dismissAllPad   = isTablet ? '8px 14px' : '6px 10px';
+  const dismissAllSize  = isTablet ? 14 : 12;
+  const closeIcon       = isTablet ? 24 : 20;
+  const bodyPad         = isTablet ? 16 : 12;
+  const rowGap          = isTablet ? 10 : 8;
+  const clearedGap      = isTablet ? 8 : 6;
+  const emptySize       = isTablet ? 15 : 13;
 
   return (
     <div
@@ -125,28 +140,32 @@ export default function NotificationsDrawer({ open, onClose }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 500,
         background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-        padding: 0,
+        display: 'flex', alignItems: isTablet ? 'center' : 'flex-end',
+        justifyContent: 'center', padding: isTablet ? 24 : 0,
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
           background: T.card,
-          borderTop: `1px solid ${T.cardEdge}`,
-          borderTopLeftRadius: 14, borderTopRightRadius: 14,
-          width: '100%', maxWidth: 640,
-          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+          border: isTablet ? `1px solid ${T.cardEdge}` : undefined,
+          borderTop: isTablet ? undefined : `1px solid ${T.cardEdge}`,
+          borderRadius: isTablet ? 16 : undefined,
+          borderTopLeftRadius: isTablet ? 16 : 14,
+          borderTopRightRadius: isTablet ? 16 : 14,
+          width: '100%', maxWidth: drawerMaxWidth,
+          maxHeight: isTablet ? '80vh' : '80vh',
+          display: 'flex', flexDirection: 'column',
           boxSizing: 'border-box',
         }}
       >
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '14px 16px', borderBottom: `1px solid ${T.cardEdge}`,
+          padding: headerPad, borderBottom: `1px solid ${T.cardEdge}`,
           flexShrink: 0,
         }}>
-          <Bell size={18} color={T.brass} />
-          <div style={{ flex: 1, fontSize: 15, fontWeight: 800, color: T.ink }}>
+          <Bell size={bellSize} color={T.brass} />
+          <div style={{ flex: 1, fontSize: headerTitleSize, fontWeight: 800, color: T.ink }}>
             Notifications
           </div>
           {active.length > 0 && (
@@ -155,7 +174,7 @@ export default function NotificationsDrawer({ open, onClose }) {
               style={{
                 background: 'transparent', border: `1px solid ${T.cardEdge}`,
                 color: T.inkSoft, borderRadius: 6,
-                padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                padding: dismissAllPad, fontSize: dismissAllSize, fontWeight: 700, cursor: 'pointer',
               }}
             >
               Dismiss all
@@ -169,14 +188,14 @@ export default function NotificationsDrawer({ open, onClose }) {
               color: T.inkSoft, padding: 4, display: 'flex',
             }}
           >
-            <X size={20} />
+            <X size={closeIcon} />
           </button>
         </div>
 
-        <div style={{ padding: 12, overflowY: 'auto' }}>
+        <div style={{ padding: bodyPad, overflowY: 'auto' }}>
           {active.length === 0 && cleared.length === 0 && (
             <div style={{
-              textAlign: 'center', color: T.inkMute, fontSize: 13,
+              textAlign: 'center', color: T.inkMute, fontSize: emptySize,
               padding: '30px 20px', lineHeight: 1.5,
             }}>
               No new notifications — you'll see feature launches and regs updates here.
@@ -184,9 +203,9 @@ export default function NotificationsDrawer({ open, onClose }) {
           )}
 
           {active.length > 0 && (
-            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gap: rowGap, marginBottom: 12 }}>
               {active.map(item => (
-                <InboxRow key={item.id} item={item} onDismiss={() => dismiss(item.dismissKey)} />
+                <InboxRow key={item.id} item={item} onDismiss={() => dismiss(item.dismissKey)} isTablet={isTablet} />
               ))}
             </div>
           )}
@@ -194,15 +213,15 @@ export default function NotificationsDrawer({ open, onClose }) {
           {cleared.length > 0 && (
             <>
               <div style={{
-                fontSize: 10, fontWeight: 800, color: T.inkMute,
+                fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute,
                 letterSpacing: 1, textTransform: 'uppercase',
                 marginBottom: 6, padding: '0 4px',
               }}>
                 Cleared
               </div>
-              <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'grid', gap: clearedGap }}>
                 {cleared.map(item => (
-                  <InboxRow key={item.id} item={item} cleared />
+                  <InboxRow key={item.id} item={item} cleared isTablet={isTablet} />
                 ))}
               </div>
             </>
@@ -213,36 +232,37 @@ export default function NotificationsDrawer({ open, onClose }) {
   );
 }
 
-function InboxRow({ item, onDismiss, cleared }) {
+function InboxRow({ item, onDismiss, cleared, isTablet = false }) {
   const Icon = item.kind === 'launch' ? Mail : Megaphone;
   const stampDisplay = item.stamp
     ? new Date(item.stamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : '';
   return (
     <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 10,
-      padding: '10px 12px',
+      display: 'flex', alignItems: 'flex-start', gap: isTablet ? 14 : 10,
+      padding: isTablet ? '14px 16px' : '10px 12px',
       background: cleared ? 'transparent' : T.parchmentDeep,
       border: `1px solid ${cleared ? 'transparent' : T.cardEdge}`,
       borderRadius: 8,
       opacity: cleared ? 0.55 : 1,
       boxSizing: 'border-box',
     }}>
-      <Icon size={16} color={cleared ? T.inkMute : T.brass} style={{ marginTop: 2, flexShrink: 0 }} />
+      <Icon size={isTablet ? 20 : 16} color={cleared ? T.inkMute : T.brass} style={{ marginTop: 2, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 13, fontWeight: 700, color: T.ink,
+          fontSize: isTablet ? 16 : 13, fontWeight: 700, color: T.ink,
           wordBreak: 'break-word', overflowWrap: 'anywhere',
         }}>
           {item.title}
         </div>
         <div style={{
-          fontSize: 12, color: T.inkSoft, marginTop: 2, lineHeight: 1.4,
+          fontSize: isTablet ? 14 : 12, color: T.inkSoft, marginTop: isTablet ? 4 : 2,
+          lineHeight: 1.4,
           wordBreak: 'break-word', overflowWrap: 'anywhere',
         }}>
           {item.body}
         </div>
-        <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4 }}>
+        <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: isTablet ? 6 : 4 }}>
           {item.source}{stampDisplay ? ` · ${stampDisplay}` : ''}
         </div>
       </div>
@@ -252,10 +272,10 @@ function InboxRow({ item, onDismiss, cleared }) {
           aria-label="Dismiss"
           style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: T.inkSoft, padding: 4, display: 'flex', flexShrink: 0,
+            color: T.inkSoft, padding: isTablet ? 8 : 4, display: 'flex', flexShrink: 0,
           }}
         >
-          <X size={14} />
+          <X size={isTablet ? 18 : 14} />
         </button>
       )}
     </div>

@@ -66,8 +66,8 @@ export function typeScale(size = screenSize()) {
    hand-rolling media queries so column policy stays consistent. */
 export const COLS = {
   phone:              { home: 1, categories: 3, browse: 3, regsList: 1, logList: 1, pbsList: 1 },
-  tablet:             { home: 3, categories: 4, browse: 4, regsList: 1, logList: 1, pbsList: 2 },
-  'tablet-landscape': { home: 4, categories: 5, browse: 5, regsList: 2, logList: 2, pbsList: 2 },
+  tablet:             { home: 3, categories: 4, browse: 4, regsList: 1, logList: 2, pbsList: 2 },
+  'tablet-landscape': { home: 4, categories: 5, browse: 5, regsList: 2, logList: 3, pbsList: 3 },
 };
 export function cols(size = screenSize()) {
   return COLS[size] || COLS.phone;

@@ -434,6 +434,9 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
    REGULATIONS LIST + DETAIL
    ============================================================ */
 export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('type'); // 'type' | 'name' | 'status'
   const favSet = useMemo(() => new Set(state?.favorites || []), [state?.favorites]);
@@ -478,29 +481,33 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
     }}>{label}</button>
   );
 
+  const sectionHeaderSize = isTablet ? (isLandscape ? 14 : 13) : 10;
+  const sectionHeaderPad  = isTablet ? '18px 4px 8px' : '10px 4px 4px';
+  const rowGap = isTablet ? 10 : 6;
+
   return (
-    <div style={{ padding: '16px 16px 8px' }}>
-      <H1 size={22} style={{ marginBottom: 4 }}>Regulations</H1>
-      {jurisdiction && <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600, marginBottom: 12 }}>{jurisdiction.name}</div>}
-      <div style={{ position: 'relative', marginBottom: 10 }}>
-        <Search size={16} color={T.inkMute} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search species…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
+    <div style={{ padding: isTablet ? '22px 22px 12px' : '16px 16px 8px' }}>
+      <H1 size={isTablet ? (isLandscape ? 30 : 28) : 22} style={{ marginBottom: 4 }}>Regulations</H1>
+      {jurisdiction && <div style={{ fontSize: isTablet ? 16 : 13, color: T.brassDeep, fontWeight: 600, marginBottom: isTablet ? 16 : 12 }}>{jurisdiction.name}</div>}
+      <div style={{ position: 'relative', marginBottom: isTablet ? 14 : 10 }}>
+        <Search size={isTablet ? 20 : 16} color={T.inkMute} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search species…" style={{ ...inputStyle, paddingLeft: isTablet ? 40 : 32, fontSize: isTablet ? 16 : undefined, background: T.card }} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isTablet ? 8 : 6, marginBottom: isTablet ? 12 : 8 }}>
+        <span style={{ fontSize: isTablet ? 13 : 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
         {segBtn(sort, setSort, 'type', 'Type')}
         {segBtn(sort, setSort, 'name', 'A–Z')}
         {segBtn(sort, setSort, 'status', 'Status')}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: rowGap, marginTop: 6 }}>
         {favRows.length > 0 && (
           <>
-            <div style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Star size={12} fill={T.brass} color={T.brass} /> Your fish
+            <div style={{ fontSize: sectionHeaderSize, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: sectionHeaderPad, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Star size={isTablet ? 16 : 12} fill={T.brass} color={T.brass} /> Your fish
             </div>
             {favRows.map(({ s, reg, status }) => (
               <RegRow key={'fav-' + s.id} s={s} reg={reg} status={status} state={state}
-                      favorited={true} onToggleFav={() => toggleFav(s.id)} onPick={onPick} />
+                      favorited={true} onToggleFav={() => toggleFav(s.id)} onPick={onPick} isTablet={isTablet} />
             ))}
           </>
         )}
@@ -510,14 +517,14 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
             if (sort === 'type' && s.category !== lastCat) {
               lastCat = s.category;
               out.push(
-                <div key={'h-' + s.category} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                <div key={'h-' + s.category} style={{ fontSize: sectionHeaderSize, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: sectionHeaderPad }}>
                   {catName(s.category)}
                 </div>
               );
             }
             out.push((
               <RegRow key={s.id} s={s} reg={reg} status={status} state={state}
-                      favorited={false} onToggleFav={() => toggleFav(s.id)} onPick={onPick} />
+                      favorited={false} onToggleFav={() => toggleFav(s.id)} onPick={onPick} isTablet={isTablet} />
             ));
           }
           return out;
@@ -527,18 +534,24 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   );
 }
 
-function RegRow({ s, reg, status, state, favorited, onToggleFav, onPick }) {
+function RegRow({ s, reg, status, state, favorited, onToggleFav, onPick, isTablet = false }) {
+  const imgSize   = isTablet ? 60 : 38;
+  const nameSize  = isTablet ? 21 : 15;
+  const metaSize  = isTablet ? 15 : 11;
+  const cardPad   = isTablet ? 14 : 10;
+  const cardGap   = isTablet ? 14 : 10;
+  const starSize  = isTablet ? 26 : 18;
   return (
-    <Card onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 10 }}>
-      <SpeciesImage species={s} size={38} />
+    <Card onClick={() => onPick(s.id)} style={{ display: 'flex', gap: cardGap, alignItems: 'center', padding: cardPad }}>
+      <SpeciesImage species={s} size={imgSize} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-        <div style={{ fontSize: 11, color: T.inkMute }}>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: nameSize, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+        <div style={{ fontSize: metaSize, color: T.inkMute, marginTop: isTablet ? 4 : 2 }}>
           {reg ? `Min ${formatSize(reg.minSize, state.units)} · Bag ${reg.bagLimit ?? '—'}` : 'No data'}
         </div>
       </div>
-      <StatusPill status={status} size="small" />
-      <StarButton favorited={favorited} onToggle={onToggleFav} size={18} />
+      <StatusPill status={status} size={isTablet ? 'large' : 'small'} />
+      <StarButton favorited={favorited} onToggle={onToggleFav} size={starSize} />
     </Card>
   );
 }
@@ -789,6 +802,9 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
 }
 
 export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpecies, onAddPB }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const s = speciesById(id);
   if (!s) return <div style={{ padding: 20 }}>Not found.</div>;
   const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
@@ -796,34 +812,35 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
   const pb = state.pbs?.[id];
   return (
-    <div style={{ padding: '16px 16px' }}>
-      <Card style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }} onClick={onSpecies}>
-        <SpeciesImage species={s} size={56} />
+    <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
+      <Card style={{ marginBottom: isTablet ? 16 : 10, display: 'flex', alignItems: 'center', gap: isTablet ? 18 : 12, padding: isTablet ? 18 : undefined }} onClick={onSpecies}>
+        <SpeciesImage species={s} size={isTablet ? (isLandscape ? 120 : 96) : 56} />
         <div style={{ flex: 1 }}>
-          <H1 size={20}>{s.commonName}</H1>
-          <div style={{ fontStyle: 'italic', fontSize: 12, color: T.inkMute }}>{s.scientific}</div>
-          <div style={{ fontSize: 11, color: T.brass, marginTop: 4, fontWeight: 600 }}>View species details →</div>
+          <H1 size={isTablet ? (isLandscape ? 34 : 30) : 20}>{s.commonName}</H1>
+          <div style={{ fontStyle: 'italic', fontSize: isTablet ? 16 : 12, color: T.inkMute, marginTop: isTablet ? 4 : 0 }}>{s.scientific}</div>
+          <div style={{ fontSize: isTablet ? 14 : 11, color: T.brass, marginTop: isTablet ? 8 : 4, fontWeight: 600 }}>View species details →</div>
         </div>
       </Card>
       {onAddPB && (
         <button onClick={(e) => { e.stopPropagation(); onAddPB(); }} style={{
-          width: '100%', marginBottom: 12, background: T.brass, color: T.oceanDeep, border: 'none',
-          padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
-          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          width: '100%', marginBottom: isTablet ? 16 : 12, background: T.brass, color: T.oceanDeep, border: 'none',
+          padding: isTablet ? '14px 18px' : '10px 14px', borderRadius: 8,
+          fontSize: isTablet ? 16 : 13, fontWeight: 800, letterSpacing: 0.5,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
-          <Trophy size={14} /> {pb ? 'Edit Personal Best' : 'Add Personal Best'}
+          <Trophy size={isTablet ? 18 : 14} /> {pb ? 'Edit Personal Best' : 'Add Personal Best'}
         </button>
       )}
       {!jurisdiction ? (
-        <Card><div style={{ color: T.inkMute, fontSize: 13 }}>Select your fishing waters first.</div></Card>
+        <Card><div style={{ color: T.inkMute, fontSize: isTablet ? 15 : 13 }}>Select your fishing waters first.</div></Card>
       ) : !reg ? (
-        <Card><div style={{ color: T.inkMute, fontSize: 13 }}>No regulation data on file for this species in {jurisdiction.name}.</div></Card>
+        <Card><div style={{ color: T.inkMute, fontSize: isTablet ? 15 : 13 }}>No regulation data on file for this species in {jurisdiction.name}.</div></Card>
       ) : (
-        <Card>
-          <SectionLabel style={{ marginBottom: 8 }}>{jurisdiction.name}</SectionLabel>
+        <Card style={{ padding: isTablet ? 20 : undefined }}>
+          <SectionLabel style={{ marginBottom: isTablet ? 12 : 8, fontSize: isTablet ? 13 : undefined }}>{jurisdiction.name}</SectionLabel>
           {stale && (
-            <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: 10, borderRadius: 4, fontSize: 12, color: T.brassDeep, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AlertTriangle size={16} /> Data is more than 7 days old. Refresh when online.
+            <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: isTablet ? 14 : 10, borderRadius: 4, fontSize: isTablet ? 14 : 12, color: T.brassDeep, marginBottom: isTablet ? 16 : 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={isTablet ? 20 : 16} /> Data is more than 7 days old. Refresh when online.
             </div>
           )}
           <RegBlock reg={reg} units={state.units} jurisdiction={jurisdiction} fedColumn={showFedColumn ? fedReg : null} />
@@ -1075,6 +1092,9 @@ export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }
 }
 
 export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const s = speciesById(speciesId); const pb = state.pbs[speciesId];
   const [lightboxIdx, setLightboxIdx] = useState(null); // tapped index or null
   if (!s || !pb) return <div style={{ padding: 20 }}>No PB.</div>;
@@ -1118,7 +1138,7 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
       {photos.length > 0 && (
         photos.length === 1 ? (
           <Card onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-            <PhotoImg photo={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: 320, objectFit: 'cover' }} />
+            <PhotoImg photo={photos[0]} alt={s.commonName} style={{ width: '100%', display: 'block', maxHeight: isTablet ? (isLandscape ? 640 : 560) : 320, objectFit: 'contain', background: T.parchmentDeep }} />
           </Card>
         ) : (
           <div className="kyc-hscroll" style={{
@@ -1127,8 +1147,8 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
             scrollSnapType: 'x proximity',
           }}>
             {photos.map((p, i) => (
-              <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
-                <PhotoImg photo={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+              <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: isTablet ? '0 0 60%' : '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in', background: T.parchmentDeep }}>
+                <PhotoImg photo={p} alt={`${s.commonName} ${i + 1}`} style={{ width: '100%', height: isTablet ? (isLandscape ? 500 : 440) : 240, objectFit: 'contain', display: 'block' }} />
               </div>
             ))}
           </div>
@@ -1440,6 +1460,8 @@ function FeatureEmailPrefsCard() {
 }
 
 export function SettingsScreen({ state, jurisdiction, update, session, syncStatus, lastSyncedAt, onForceSync, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
   const setUnits = (u) => update({ units: u });
 
   const exportData = () => {
@@ -1496,8 +1518,22 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
   const nCatches = (state.catchLog || []).length;
   const nPBs = Object.keys(state.pbs || {}).length;
   return (
-    <div style={{ padding: '16px 16px' }}>
-      <H1 size={22} style={{ marginBottom: 14 }}>Settings</H1>
+    <div className={isTablet ? 'kyc-settings-tablet' : undefined} style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
+      {/* Tablet-only typographic bump. Selectors target the *outer*
+          div of every Card sibling underneath the Settings root and
+          the immediate label/value <div>s inside — those consistently
+          use inline fontSize that we override with !important. */}
+      {isTablet && (
+        <style>{`
+          .kyc-settings-tablet > div[style*="border-radius: 14px"] { padding: 18px 20px !important; margin-bottom: 12px !important; }
+          .kyc-settings-tablet > div[style*="border-radius: 14px"] > div[style*="font-size: 14px"] { font-size: 17px !important; }
+          .kyc-settings-tablet > div[style*="border-radius: 14px"] > div[style*="font-size: 13px"] { font-size: 15px !important; }
+          .kyc-settings-tablet > div[style*="border-radius: 14px"] > div[style*="font-size: 12px"] { font-size: 14px !important; }
+          .kyc-settings-tablet > div[style*="border-radius: 14px"] > div[style*="font-size: 11px"] { font-size: 13px !important; }
+          .kyc-settings-tablet > div[style*="border-radius: 14px"] div[data-kyc-section-label] { font-size: 13px !important; letter-spacing: 1.4px !important; }
+        `}</style>
+      )}
+      <H1 size={isTablet ? 30 : 22} style={{ marginBottom: isTablet ? 20 : 14 }}>Settings</H1>
       <AccountSection
         session={session}
         syncStatus={syncStatus}
@@ -1962,8 +1998,16 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
 }
 
 function CatchListView({ items, onView, pbCatchIds, state }) {
-  const { cols: gridCols } = useScreenSize();
+  const { size, cols: gridCols } = useScreenSize();
+  const isTablet = size !== 'phone';
   const listCols = gridCols.logList;
+  const thumbSize = isTablet ? 140 : 96;
+  const cardPad = isTablet ? 14 : 10;
+  const gridGap = isTablet ? 14 : 8;
+  const speciesFontSize = isTablet ? 20 : 15;
+  const metaFontSize = isTablet ? 14 : 11;
+  const placeholderSize = isTablet ? 124 : 84;
+  const placeholderIcon = isTablet ? 34 : 26;
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
   const isPB = (id) => pbCatchIds && pbCatchIds.has(id);
   if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
@@ -1994,7 +2038,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
     <div style={{
       display: 'grid',
       gridTemplateColumns: `repeat(${listCols}, minmax(0, 1fr))`,
-      gap: 8,
+      gap: gridGap,
     }}>
       {items.map(c => {
         const s = speciesById(c.speciesId);
@@ -2003,21 +2047,21 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
         const isQuick = c.status === 'quick';
         const speciesName = s ? s.commonName : (isQuick ? 'Unidentified catch' : (c.speciesId || 'Unknown'));
         return (
-          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, borderLeft: isQuick ? `3px solid ${T.warn}` : undefined, position: 'relative' }}>
+          <Card key={c.id} onClick={() => onView && onView(c.id)} style={{ padding: cardPad, display: 'flex', flexDirection: 'column', gap: isTablet ? 12 : 8, borderLeft: isQuick ? `3px solid ${T.warn}` : undefined, position: 'relative' }}>
             {/* Photo strip — full width, horizontal scroll for multi-photo
                 catches, single thumb for one, camera placeholder for zero. */}
             {cPhotos.length === 0 ? (
-              <div style={{ width: 84, height: 84, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' }}>
-                <Camera size={26} color={T.inkMute} />
+              <div style={{ width: placeholderSize, height: placeholderSize, background: T.parchmentDeep, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' }}>
+                <Camera size={placeholderIcon} color={T.inkMute} />
               </div>
             ) : (
               <div
                 className="kyc-hscroll"
                 onClick={stop}
                 style={{
-                  display: 'flex', gap: 6,
+                  display: 'flex', gap: isTablet ? 8 : 6,
                   overflowX: 'auto', overflowY: 'hidden',
-                  margin: '0 -10px', padding: '0 10px 4px',
+                  margin: `0 -${cardPad}px`, padding: `0 ${cardPad}px 4px`,
                   scrollSnapType: 'x proximity',
                 }}
               >
@@ -2028,7 +2072,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                     aria-label={`Enlarge ${speciesName} photo ${i + 1}`}
                     className="kyc-tappable"
                     style={{
-                      flex: '0 0 96px', width: 96, height: 96,
+                      flex: `0 0 ${thumbSize}px`, width: thumbSize, height: thumbSize,
                       padding: 0, border: `1px solid ${T.cardEdge}`, borderRadius: 6,
                       background: T.parchmentDeep, overflow: 'hidden', cursor: 'zoom-in',
                       scrollSnapAlign: 'start',
@@ -2043,7 +2087,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
             {/* Content row */}
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: T.ink }}>{speciesName}</span>
+                <span style={{ fontFamily: 'Georgia, serif', fontSize: speciesFontSize, fontWeight: 700, color: T.ink }}>{speciesName}</span>
                 {isQuick && (
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -2067,15 +2111,15 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>{when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
-              {c.lat != null && c.lon != null && <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°</div>}
-              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+              <div style={{ fontSize: metaFontSize, color: T.inkSoft, marginTop: isTablet ? 4 : 2 }}>{when.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+              {c.lat != null && c.lon != null && <div style={{ fontSize: metaFontSize, color: T.inkMute, marginTop: 2 }}>{c.lat.toFixed(4)}°, {c.lon.toFixed(4)}°</div>}
+              <div style={{ fontSize: metaFontSize, color: T.inkMute, marginTop: 2 }}>
                 {c.length ? `${c.length} in · ` : ''}
                 {c.sunAlt != null ? `Sun ${c.sunAlt.toFixed(0)}° ${compassDir(c.sunAz || 0)} · ` : ''}
                 {c.moonIllum != null ? `${c.moonName || 'Moon'} ${Math.round(c.moonIllum * 100)}%` : ''}
               </div>
               {c.weather && (
-                <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
+                <div style={{ fontSize: metaFontSize, color: T.inkSoft, marginTop: 2 }}>
                   {c.weather.tempF != null ? `${Math.round(c.weather.tempF)}°F · ` : ''}
                   {c.weather.windMph != null ? `Wind ${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph · ` : ''}
                   {c.weather.cloudPct != null ? `${Math.round(c.weather.cloudPct)}% cloud` : ''}
@@ -2116,6 +2160,8 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
 }
 
 function CatchMapView({ items, onView }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(null);
@@ -2164,10 +2210,18 @@ function CatchMapView({ items, onView }) {
   }, [items, onView]);
 
   const located = items.filter(c => c.lat != null && c.lon != null).length;
+  // On tablet, take over the available viewport: subtract the header,
+  // footer, safe-area insets, and a small buffer for the caption line
+  // + surrounding filter controls (~120px). On phone we keep the
+  // original 420px fixed height so the filter row + map both fit
+  // without scrolling weirdness.
+  const mapHeight = isTablet
+    ? 'calc(100vh - var(--kyc-header-height, 76px) - var(--kyc-footer-height, 80px) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px)'
+    : 420;
   return (
     <div>
-      <div ref={containerRef} style={{ height: 420, borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }} />
-      <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, textAlign: 'center' }}>
+      <div ref={containerRef} style={{ height: mapHeight, minHeight: 420, borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }} />
+      <div style={{ fontSize: isTablet ? 13 : 11, color: T.inkMute, marginTop: 6, textAlign: 'center' }}>
         {located} of {items.length} catch{items.length === 1 ? '' : 'es'} have GPS · pins are tappable
       </div>
     </div>
@@ -2175,6 +2229,9 @@ function CatchMapView({ items, onView }) {
 }
 
 export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const isLandscape = size === 'tablet-landscape';
   const c = (state.catchLog || []).find(x => x.id === id);
   const [confirming, setConfirming] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(null);
@@ -2255,26 +2312,57 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
     });
   };
   const cPhotos = catchPhotos(c);
+  // Tablet: keep the photo narrower than the content column so the
+  // wide viewport doesn't stretch the shot until it crops. Center it,
+  // use object-fit:contain so the whole fish stays visible.
+  const photoWrapStyle = isTablet ? {
+    maxWidth: isLandscape ? 620 : 560, margin: '0 auto 14px',
+  } : null;
+  const singlePhotoStyle = {
+    width: '100%',
+    maxHeight: isTablet ? (isLandscape ? 560 : 500) : 280,
+    objectFit: isTablet ? 'contain' : 'cover',
+    background: isTablet ? T.parchmentDeep : undefined,
+    borderRadius: 8, display: 'block',
+    marginBottom: isTablet ? 0 : 14,
+    cursor: 'zoom-in',
+  };
   return (
-    <div style={{ padding: '16px 16px 24px' }}>
+    <div style={{ padding: isTablet ? '22px 22px 32px' : '16px 16px 24px' }}>
       {cPhotos.length === 0
-        ? <div style={{ width: '100%', height: 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={36} color={T.inkMute} /></div>
+        ? <div style={{ width: '100%', height: isTablet ? 220 : 160, background: T.parchmentDeep, borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={isTablet ? 48 : 36} color={T.inkMute} /></div>
         : cPhotos.length === 1
-          ? <PhotoImg photo={cPhotos[0]} onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={{ width: '100%', maxHeight: 280, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 14, cursor: 'zoom-in' }} />
+          ? (isTablet
+              ? <div style={photoWrapStyle}>
+                  <PhotoImg photo={cPhotos[0]} onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={singlePhotoStyle} />
+                </div>
+              : <PhotoImg photo={cPhotos[0]} onClick={() => setLightboxIdx(0)} className="kyc-tappable" style={singlePhotoStyle} />)
           : <div className="kyc-hscroll" style={{
               display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
               margin: '0 -16px 14px', padding: '0 16px 4px',
               scrollSnapType: 'x proximity',
+              justifyContent: isTablet ? 'center' : undefined,
             }}>
               {cPhotos.map((p, i) => (
-                <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{ flex: '0 0 78%', borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start', border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in' }}>
-                  <PhotoImg photo={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+                <div key={i} onClick={() => setLightboxIdx(i)} className="kyc-tappable" style={{
+                  flex: isTablet ? `0 0 ${isLandscape ? 600 : 520}px` : '0 0 78%',
+                  maxWidth: isTablet ? '90%' : undefined,
+                  borderRadius: 8, overflow: 'hidden', scrollSnapAlign: 'start',
+                  border: `1px solid ${T.cardEdge}`, cursor: 'zoom-in',
+                  background: isTablet ? T.parchmentDeep : undefined,
+                }}>
+                  <PhotoImg photo={p} alt={`${s ? s.commonName : 'Catch'} ${i + 1}`} style={{
+                    width: '100%',
+                    height: isTablet ? (isLandscape ? 480 : 440) : 240,
+                    objectFit: isTablet ? 'contain' : 'cover',
+                    display: 'block',
+                  }} />
                 </div>
               ))}
             </div>}
 
-      <H1 size={22}>{s ? s.commonName : (c.speciesId || 'Unknown')}</H1>
-      {s && <div style={{ fontStyle: 'italic', fontSize: 13, color: T.inkSoft, marginBottom: 12 }}>{s.scientific}</div>}
+      <H1 size={isTablet ? (isLandscape ? 32 : 28) : 22}>{s ? s.commonName : (c.speciesId || 'Unknown')}</H1>
+      {s && <div style={{ fontStyle: 'italic', fontSize: isTablet ? 16 : 13, color: T.inkSoft, marginBottom: isTablet ? 16 : 12 }}>{s.scientific}</div>}
 
       {s && (
         isAlreadyPB ? (
