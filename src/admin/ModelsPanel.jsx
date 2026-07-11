@@ -22,6 +22,9 @@ import {
   importModelVersion, listModelVersions, promoteModelVersion,
   deleteModelVersion, getModelVersion,
 } from '../model-store.js';
+import {
+  listPendingBundles, downloadPendingBundle, markBundleImported,
+} from '../training-exports-store.js';
 import { LOOKALIKE_GROUP_SEEDS } from '../training-store.js';
 
 export default function ModelsPanel({ onOpenTestTool }) {
@@ -52,16 +55,58 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pending, setPending] = useState([]);
+  const [importing, setImporting] = useState(null); // storagePath being imported
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const r = await listModelVersions();
+    const [r, p] = await Promise.all([listModelVersions(), listPendingBundles()]);
     setLoading(false);
     if (!r.ok) { setError(r.error || 'load failed'); return; }
     setError('');
     setRows(r.rows);
+    if (p.ok) setPending(p.rows);
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
+
+  const importFromCloud = async (pendingRow) => {
+    setImporting(pendingRow.path);
+    setError('');
+    try {
+      const dl = await downloadPendingBundle(pendingRow.path);
+      if (!dl.ok) throw new Error(dl.error || 'download failed');
+      // Extract the bundle client-side (same path the drop-zone uses).
+      const { default: JSZip } = await import('jszip');
+      const zip = await JSZip.loadAsync(dl.blob);
+      let tfliteFile = null, labels = null, metrics = null;
+      for (const entryName of Object.keys(zip.files)) {
+        const entry = zip.files[entryName];
+        if (entry.dir) continue;
+        const base = entryName.split('/').pop();
+        if (base.endsWith('.tflite')) {
+          const blob = await entry.async('blob');
+          tfliteFile = new File([blob], base, { type: 'application/octet-stream' });
+        } else if (base === 'fish_id_labels.json') {
+          labels = JSON.parse(await entry.async('text'));
+        } else if (base === 'fish_id_metrics.json') {
+          metrics = JSON.parse(await entry.async('text'));
+        }
+      }
+      if (!tfliteFile || !labels || !metrics) throw new Error('bundle missing files');
+      const versionName = `v0.${rows.length + 1}-${new Date().toISOString().slice(0, 10)}`;
+      const r = await importModelVersion({
+        versionName, tfliteFile, labels, metrics,
+        notes: `Auto-imported from Colab · ${pendingRow.path}`,
+      });
+      if (!r.ok) throw new Error(r.error || 'import failed');
+      await markBundleImported(pendingRow.path);
+      refresh();
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setImporting(null);
+    }
+  };
 
   const promote = async (id) => {
     if (!window.confirm('Promote this model to production? The currently-production version (if any) will be demoted.')) return;
@@ -101,6 +146,43 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
         <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>
           {error}
         </div>
+      )}
+
+      {pending.length > 0 && (
+        <Card style={{ borderColor: T.brass }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Pending bundles (from Colab)</SectionLabel>
+          <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 10, lineHeight: 1.5 }}>
+            Colab-uploaded bundles that haven't been imported yet. Click Import to ingest and stage the version below — you can still promote / delete it after.
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {pending.map(pb => {
+              const when = pb.created_at ? new Date(pb.created_at).toLocaleString() : '—';
+              const sizeKb = pb.metadata?.size ? `${(pb.metadata.size / 1024).toFixed(0)} KB` : '';
+              const busy = importing === pb.path;
+              return (
+                <div key={pb.path} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 6,
+                  border: `1px solid ${T.cardEdge}`,
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: T.ink, fontWeight: 700 }}>{when}</div>
+                    <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>
+                      {pb.path}{sizeKb ? ` · ${sizeKb}` : ''}
+                    </div>
+                  </div>
+                  <PrimaryButton
+                    onClick={() => importFromCloud(pb)}
+                    disabled={busy || !!importing}
+                    style={{ padding: '6px 12px', fontSize: 11 }}
+                  >
+                    {busy ? 'Importing…' : 'Import'}
+                  </PrimaryButton>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
       {rows.length === 0 && !loading && (

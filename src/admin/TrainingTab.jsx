@@ -35,6 +35,10 @@ import {
   buildLookalikeGroups, classifyCoverage,
   planExport,
 } from '../training-store.js';
+import {
+  uploadExport, listExports, getExportSignedUrl, deleteExport,
+  modelBundleUploadUrl,
+} from '../training-exports-store.js';
 import { CATEGORIES } from '../data.js';
 import ModelsPanel from './ModelsPanel.jsx';
 import TestImagePanel from './TestImagePanel.jsx';
@@ -1045,24 +1049,34 @@ function ExportPanel() {
   const [planning, setPlanning] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(null); // { done, total, status }
-  const [downloadUrl, setDownloadUrl] = useState(null);
+  const [uploadedExportId, setUploadedExportId] = useState(null);
+  const [priorExports, setPriorExports] = useState([]);
+  const [copyState, setCopyState] = useState({}); // { [id]: 'copied' | 'error' }
 
   const runPlan = async () => {
     setPlanning(true);
-    setError(''); setPlan(null); setDownloadUrl(null);
+    setError(''); setPlan(null); setUploadedExportId(null);
     const r = await planExport();
     setPlanning(false);
     if (!r.ok) { setError(r.error || 'plan failed'); return; }
     setPlan(r);
   };
 
-  useEffect(() => { runPlan(); }, []); // Auto-plan on open.
+  const refreshPriorExports = async () => {
+    const r = await listExports();
+    if (r.ok) setPriorExports(r.rows);
+  };
+
+  useEffect(() => {
+    runPlan();
+    refreshPriorExports();
+  }, []); // Auto-plan on open.
 
   const runExport = async () => {
     if (!plan) return;
     setError('');
-    setProgress({ done: 0, total: plan.plan.length, status: 'starting' });
-    setDownloadUrl(null);
+    setProgress({ done: 0, total: plan.plan.length, status: 'Starting…' });
+    setUploadedExportId(null);
 
     try {
       // Lazy-load JSZip so the admin bundle doesn't eat it when not needed.
@@ -1110,19 +1124,57 @@ function ExportPanel() {
         compression: 'DEFLATE',
         compressionOptions: { level: 6 },
       });
-      const url = URL.createObjectURL(out);
-      setDownloadUrl(url);
-      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Ready to download.' });
+
+      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Uploading to cloud…' });
+      const up = await uploadExport({
+        blob: out,
+        speciesCount: plan.species.length,
+        imageCount:   plan.plan.length,
+        splitSeed:    plan.splitSeed,
+      });
+      if (!up.ok) throw new Error(up.error || 'upload failed');
+      setUploadedExportId(up.id);
+      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Done — export saved to cloud.' });
+      refreshPriorExports();
     } catch (e) {
       setError(e?.message || String(e));
       setProgress(null);
     }
   };
 
+  const copyColabCell = async (row) => {
+    try {
+      const url = await getExportSignedUrl(row.storage_path);
+      if (!url) throw new Error('signed URL failed');
+      // Also mint a signed upload URL so Colab can auto-upload the
+      // bundle back. Best-effort — if this fails the snippet still
+      // works, the bundle just has to be picked up manually.
+      const up = await modelBundleUploadUrl();
+      const snippet = buildColabSnippet({
+        exportUrl:   url,
+        bundleUrl:   up?.ok ? up.signedUrl : null,
+        bundleToken: up?.ok ? up.token     : null,
+      });
+      await navigator.clipboard.writeText(snippet);
+      setCopyState((s) => ({ ...s, [row.id]: 'copied' }));
+      setTimeout(() => setCopyState((s) => {
+        const n = { ...s }; delete n[row.id]; return n;
+      }), 2500);
+    } catch (e) {
+      setCopyState((s) => ({ ...s, [row.id]: 'error' }));
+    }
+  };
+
+  const delExport = async (row) => {
+    if (!window.confirm(`Delete ${new Date(row.exported_at).toLocaleString()} export from cloud? Cannot be undone.`)) return;
+    const r = await deleteExport(row.id, row.storage_path);
+    if (!r.ok) { setError(r.error || 'delete failed'); return; }
+    refreshPriorExports();
+  };
+
   const totalImages = plan?.plan.length || 0;
   const speciesCount = plan?.species.length || 0;
   const excludedCount = plan?.excluded.length || 0;
-  const zipName = `reelintel-training-${new Date().toISOString().slice(0, 10)}.zip`;
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -1152,12 +1204,12 @@ function ExportPanel() {
           </GhostButton>
           <PrimaryButton
             onClick={runExport}
-            disabled={!plan || totalImages === 0 || (progress && !downloadUrl && !error)}
+            disabled={!plan || totalImages === 0 || (progress && !uploadedExportId && !error)}
             style={{ flex: 1 }}
           >
-            {progress && !downloadUrl && !error ? 'Exporting…' :
-             downloadUrl ? 'Rebuild export'
-                        : `Build ZIP (${totalImages.toLocaleString()} images)`}
+            {progress && !uploadedExportId && !error ? 'Exporting…' :
+             uploadedExportId ? 'Rebuild export'
+                             : `Build + upload (${totalImages.toLocaleString()} images)`}
           </PrimaryButton>
         </div>
       </Card>
@@ -1210,22 +1262,69 @@ function ExportPanel() {
               transition: 'width 220ms ease',
             }} />
           </div>
-          {downloadUrl && (
-            <div style={{ marginTop: 12 }}>
-              <a href={downloadUrl} download={zipName} style={{
-                display: 'inline-block', background: T.brass, color: T.oceanDeep,
-                padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 800,
-                letterSpacing: 0.4, textDecoration: 'none',
-              }}>
-                Download {zipName}
-              </a>
-              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8 }}>
-                Upload this ZIP to Google Colab (see the Phase 4 notebook) to train the model.
-              </div>
+          {uploadedExportId && (
+            <div style={{ marginTop: 12, fontSize: 12, color: T.ink }}>
+              Uploaded to cloud. Find it in <strong>Prior exports</strong> below and click
+              <strong> Copy Colab cell</strong> to get a one-cell snippet you can paste into Colab.
             </div>
           )}
         </Card>
       )}
+
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <SectionLabel style={{ flex: 1 }}>Prior exports (cloud)</SectionLabel>
+          <GhostButton onClick={refreshPriorExports} style={{ padding: '6px 10px', fontSize: 11 }}>
+            Refresh
+          </GhostButton>
+        </div>
+        {priorExports.length === 0 && (
+          <div style={{ fontSize: 12, color: T.inkMute }}>No exports yet. Build one above.</div>
+        )}
+        {priorExports.length > 0 && (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {priorExports.map(row => {
+              const state = copyState[row.id];
+              const size = `${(row.size_bytes / 1024 / 1024).toFixed(1)} MB`;
+              const when = new Date(row.exported_at).toLocaleString();
+              const isNewest = priorExports[0]?.id === row.id;
+              return (
+                <div key={row.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 6,
+                  border: `1px solid ${isNewest ? T.brass : T.cardEdge}`,
+                  background: isNewest ? T.parchmentDeep : 'transparent',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: T.ink, fontWeight: isNewest ? 800 : 600 }}>
+                      {when} {isNewest && <span style={{ color: T.brass, marginLeft: 4 }}>latest</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                      {row.image_count.toLocaleString()} images · {row.species_count} species · {size}
+                    </div>
+                  </div>
+                  <GhostButton
+                    onClick={() => copyColabCell(row)}
+                    style={{
+                      padding: '6px 10px', fontSize: 11,
+                      color: state === 'copied' ? T.open : (state === 'error' ? T.closed : undefined),
+                      borderColor: state === 'copied' ? T.open : (state === 'error' ? T.closed : undefined),
+                    }}
+                  >
+                    {state === 'copied' ? '✓ Copied' : state === 'error' ? 'Failed' : 'Copy Colab cell'}
+                  </GhostButton>
+                  <GhostButton
+                    onClick={() => delExport(row)}
+                    style={{ padding: '6px 10px', fontSize: 11, color: T.closed, borderColor: T.closed }}
+                  >
+                    Delete
+                  </GhostButton>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
       {error && (
         <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>
@@ -1234,6 +1333,29 @@ function ExportPanel() {
       )}
     </div>
   );
+}
+
+/* Build the one-cell Colab snippet the user pastes. Signed URLs for
+   both the export download AND the bundle upload are baked in — the
+   Colab run then does the full round trip without any manual file
+   handling. */
+function buildColabSnippet({ exportUrl, bundleUrl, bundleToken }) {
+  const BRANCH = 'claude/upload-app-assets-NUxRr';
+  const bundleEnv = bundleUrl && bundleToken
+    ? `os.environ['REELINTEL_BUNDLE_UPLOAD'] = ${JSON.stringify(bundleUrl)}
+os.environ['REELINTEL_BUNDLE_UPLOAD_TOKEN'] = ${JSON.stringify(bundleToken)}
+`
+    : '';
+  return (
+`# ReelIntel — train v-next from cloud export.
+# Paste this cell into a fresh Colab notebook, run once.
+# Runtime → Change runtime type → T4 GPU or L4 GPU first.
+import os, urllib.request, runpy
+os.environ['REELINTEL_EXPORT_URL'] = ${JSON.stringify(exportUrl)}
+${bundleEnv}url = 'https://raw.githubusercontent.com/robertboot/know-your-catch/${BRANCH}/training/colab_run.py'
+urllib.request.urlretrieve(url, '/content/colab_run.py')
+runpy.run_path('/content/colab_run.py', run_name='__main__')
+`);
 }
 
 function LookalikeGroupRow({ members, counts, onUploadSpecies }) {
