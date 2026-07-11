@@ -20,6 +20,7 @@
    Crop tool is deferred per spec — export step (Phase 3) will use the
    full image when crop_bbox is null. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Image as ImageIcon } from 'lucide-react';
 import { T } from '../theme.js';
 import { SPECIES } from '../data.js';
 import {
@@ -51,6 +52,13 @@ const REJECT_REASONS = [
    diagnosis is one glance, not per-row detective work. Returns
    { kind, title, body } or null. Per-row inline errors still render
    regardless — this is a summary, not a replacement. */
+function formatBytes(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function classifyUploadErrors(errorRows) {
   if (!errorRows || errorRows.length === 0) return null;
   const messages = errorRows.map(r => (r.error || '').toLowerCase());
@@ -376,38 +384,11 @@ function ModeBtn({ active, onClick, children }) {
 }
 
 function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
-  const [preview, setPreview] = useState(null);
-  const [previewError, setPreviewError] = useState(false);
-  // FileReader → data: URL. Safari refuses to render some File
-  // objects through blob: URLs (HEIC + certain drag-sourced JPEGs
-  // hit "<img> load failed"). data: URLs are guaranteed to render
-  // for any format Safari can decode.
-  useEffect(() => {
-    let cancelled = false;
-    if (!row.file) return undefined;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (cancelled) return;
-      setPreview(reader.result);
-    };
-    reader.onerror = () => {
-      if (cancelled) return;
-      console.error('[training upload] FileReader failed', {
-        file: row.file?.name, size: row.file?.size, type: row.file?.type,
-        error: reader.error,
-      });
-      setPreviewError(true);
-    };
-    try {
-      reader.readAsDataURL(row.file);
-    } catch (e) {
-      console.error('[training upload] readAsDataURL threw', {
-        file: row.file?.name, size: row.file?.size, type: row.file?.type, error: e,
-      });
-      setPreviewError(true);
-    }
-    return () => { cancelled = true; reader.abort(); };
-  }, [row.file]);
+  // No preview thumbnail. Prior tries (blob URL + FileReader) both
+  // fell over at scale — Safari rejects blob-scheme URLs for many
+  // dropped Files, and running 62 FileReaders in parallel OOMs. The
+  // filename + size + type is enough for review; uploads never
+  // needed the preview to succeed.
 
   const statusColor =
     row.status === 'done'      ? T.open :
@@ -426,29 +407,18 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
       background: T.parchmentDeep, borderRadius: 8, border: `1px solid ${T.cardEdge}`,
     }}>
       <div style={{
-        width: 56, height: 56, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
+        width: 56, height: 56, flexShrink: 0, borderRadius: 6,
         background: T.card, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: `1px solid ${T.cardEdge}`,
       }}>
-        {preview && !previewError
-          ? <img
-              src={preview}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={(e) => {
-                console.error('[training upload] preview <img> load failed', {
-                  file: row.file?.name, size: row.file?.size, type: row.file?.type,
-                  srcHead: (e.currentTarget.src || '').slice(0, 64),
-                });
-                setPreviewError(true);
-              }}
-            />
-          : previewError
-            ? <span style={{ fontSize: 9, color: T.closed, textAlign: 'center', padding: 2 }}>preview<br/>failed</span>
-            : <span style={{ fontSize: 9, color: T.inkMute }}>…</span>}
+        <ImageIcon size={20} color={T.inkMute} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {row.file.name}
+        </div>
+        <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2 }}>
+          {row.file.type || 'unknown type'} · {formatBytes(row.file.size)}
         </div>
         {mode === 'per-image' && row.status === 'queued' && (
           <select
