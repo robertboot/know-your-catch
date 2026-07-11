@@ -13,6 +13,71 @@ import { SPECIES } from './data.js';
 
 const BUCKET = 'training-photos';
 
+/* Shared XHR wrappers so the signed-upload flow doesn't repeat the
+   raw XHR ceremony twice. Both resolve to a discriminated union that
+   the caller pattern-matches on. */
+function xhrBinary({ url, body, contentType, timeoutMs = 60_000 }) {
+  return new Promise((resolve) => {
+    let xhr;
+    try { xhr = new XMLHttpRequest(); }
+    catch (e) { resolve({ kind: 'ctor_threw', thrown: e }); return; }
+    xhr.open('PUT', url, true);
+    if (contentType) xhr.setRequestHeader('content-type', contentType);
+    xhr.onload = () => {
+      const responseHeaders = xhr.getAllResponseHeaders?.() || '';
+      const status = xhr.status;
+      if (status >= 200 && status < 300) {
+        resolve({ kind: 'ok', status, body: xhr.responseText || '', responseHeaders });
+      } else {
+        resolve({
+          kind: 'non_2xx', status, statusText: xhr.statusText,
+          body: xhr.responseText || '', responseHeaders,
+        });
+      }
+    };
+    xhr.onerror = () => resolve({
+      kind: 'network_error', status: xhr.status, statusText: xhr.statusText,
+      body: xhr.responseText || '',
+    });
+    xhr.ontimeout = () => resolve({ kind: 'timeout' });
+    xhr.timeout = timeoutMs;
+    try { xhr.send(body); }
+    catch (e) { resolve({ kind: 'send_threw', thrown: e }); }
+  });
+}
+
+function xhrJson({ method, url, headers = {}, body, timeoutMs = 30_000 }) {
+  return new Promise((resolve) => {
+    let xhr;
+    try { xhr = new XMLHttpRequest(); }
+    catch (e) { resolve({ kind: 'ctor_threw', thrown: e }); return; }
+    xhr.open(method, url, true);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.onload = () => {
+      const responseHeaders = xhr.getAllResponseHeaders?.() || '';
+      const status = xhr.status;
+      const text = xhr.responseText || '';
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch {}
+      if (status >= 200 && status < 300) {
+        resolve({ kind: 'ok', status, body: text, json, responseHeaders });
+      } else {
+        resolve({
+          kind: 'non_2xx', status, statusText: xhr.statusText,
+          body: text, json, responseHeaders,
+        });
+      }
+    };
+    xhr.onerror = () => resolve({
+      kind: 'network_error', status: xhr.status, statusText: xhr.statusText,
+    });
+    xhr.ontimeout = () => resolve({ kind: 'timeout' });
+    xhr.timeout = timeoutMs;
+    try { xhr.send(body); }
+    catch (e) { resolve({ kind: 'send_threw', thrown: e }); }
+  });
+}
+
 /* ============================================================
    Coverage thresholds (Phase 2)
    ============================================================
@@ -162,14 +227,6 @@ export async function uploadTrainingImage(file, speciesId) {
     file: file.name, size: file.size, type: file.type,
   });
 
-  // Direct-fetch upload — bypass supabase-js's storage client entirely.
-  // Prior symptom on Safari was a bare "Load failed / StorageUnknownError"
-  // with no HTTP status, which means storage-js's internal fetch was
-  // rejected at the network layer without a round-trip. Doing the fetch
-  // ourselves lets us see the actual response (status, headers, body)
-  // and eliminates any library-side ReadableStream / duplex-half quirks
-  // Safari trips over.
-  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${storagePath}`;
   const accessToken = sessNow?.access_token;
   if (!accessToken) {
     console.error('[training upload] no access_token on session', { authedEmail });
@@ -178,80 +235,80 @@ export async function uploadTrainingImage(file, speciesId) {
       error: 'no access token — sign out and back in', statusCode: null,
     };
   }
-  // XMLHttpRequest instead of fetch. On Safari, `fetch` to Supabase's
-  // Pro storage endpoint has been throwing bare "TypeError: Load
-  // failed" — no status, no body, request never lands. That's the
-  // classic WebKit HTTP/3 / duplex-half fetch bug. XHR uses a
-  // separate networking stack and typically negotiates HTTP/2
-  // cleanly, so we're routing around the fetch fault line.
-  const xhrResult = await new Promise((resolve) => {
-    let xhr;
-    try {
-      xhr = new XMLHttpRequest();
-    } catch (e) {
-      resolve({ kind: 'ctor_threw', thrown: e });
-      return;
-    }
-    xhr.open('POST', uploadUrl, true);
-    xhr.setRequestHeader('authorization', `Bearer ${accessToken}`);
-    xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-    xhr.setRequestHeader('content-type', file.type || 'image/jpeg');
-    xhr.setRequestHeader('cache-control', 'max-age=3600');
-    xhr.setRequestHeader('x-upsert', 'false');
-    xhr.onload = () => {
-      resolve({
-        kind: xhr.status >= 200 && xhr.status < 300 ? 'ok' : 'non_2xx',
-        status: xhr.status,
-        statusText: xhr.statusText,
-        body: xhr.responseText || '',
-        responseHeaders: xhr.getAllResponseHeaders?.() || '',
-      });
-    };
-    xhr.onerror = () => {
-      resolve({
-        kind: 'network_error',
-        status: xhr.status,
-        statusText: xhr.statusText,
-        body: xhr.responseText || '',
-      });
-    };
-    xhr.ontimeout = () => resolve({ kind: 'timeout' });
-    xhr.timeout = 60_000;
-    try {
-      xhr.send(file);
-    } catch (e) {
-      resolve({ kind: 'send_threw', thrown: e });
-    }
-  });
 
-  if (xhrResult.kind === 'ok') {
-    // fabricate { data, error } for the rest of the code
-    // eslint-disable-next-line no-unused-vars
-    const up = { data: { path: storagePath }, error: null };
-  } else if (xhrResult.kind === 'non_2xx') {
-    console.error('[training upload] xhr non-2xx', {
-      uploadUrl, status: xhrResult.status, statusText: xhrResult.statusText,
-      body: xhrResult.body.slice(0, 400),
-      responseHeaders: xhrResult.responseHeaders,
+  // Two-step signed-upload flow to route around Safari's ITP block on
+  // Cloudflare's __cf_bm cookie:
+  //   1) POST /storage/v1/object/upload/sign/{bucket}/{path} with auth
+  //      headers → returns { url, token } for a pre-signed upload.
+  //   2) PUT the file to that pre-signed URL with NO auth headers. The
+  //      pre-signed URL carries a token in the query string; the PUT
+  //      is treated as an anonymous drop, which sidesteps the cookie
+  //      check that Safari's ITP was breaking.
+  // Chrome does the direct POST fine; this path works there too.
+  const signUrl = `${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${storagePath}`;
+  const signResult = await xhrJson({
+    method: 'POST',
+    url: signUrl,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      apikey: SUPABASE_ANON_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
+  if (signResult.kind !== 'ok') {
+    console.error('[training upload] sign step failed', {
+      signUrl, ...signResult,
     });
     return {
       ok: false, stage: 'storage_upload',
-      error: xhrResult.body || xhrResult.statusText || 'upload failed',
-      statusCode: xhrResult.status,
+      error: signResult.body || signResult.statusText || `sign ${signResult.kind}`,
+      statusCode: signResult.status || null,
+    };
+  }
+  // Response body shape: { url: '/object/upload/sign/{bucket}/{path}?token=...' , token: '...' }
+  const signRelUrl = signResult.json?.url;
+  if (!signRelUrl) {
+    console.error('[training upload] sign step returned no url', { body: signResult.body });
+    return {
+      ok: false, stage: 'storage_upload',
+      error: 'signed upload URL missing from response',
+      statusCode: null,
+    };
+  }
+  const putUrl = signRelUrl.startsWith('http')
+    ? signRelUrl
+    : `${SUPABASE_URL}/storage/v1${signRelUrl}`;
+  console.log('[training upload] signed url ok, putting to', putUrl.slice(0, 120) + (putUrl.length > 120 ? '…' : ''));
+
+  const putResult = await xhrBinary({
+    url: putUrl,
+    body: file,
+    contentType: file.type || 'image/jpeg',
+  });
+  if (putResult.kind === 'ok') {
+    // fall through to DB insert
+  } else if (putResult.kind === 'non_2xx') {
+    console.error('[training upload] signed PUT non-2xx', {
+      putUrl, status: putResult.status, statusText: putResult.statusText,
+      body: (putResult.body || '').slice(0, 400),
+      responseHeaders: putResult.responseHeaders,
+    });
+    return {
+      ok: false, stage: 'storage_upload',
+      error: putResult.body || putResult.statusText || 'upload failed',
+      statusCode: putResult.status,
     };
   } else {
-    console.error('[training upload] xhr transport failed', {
-      uploadUrl, kind: xhrResult.kind,
-      status: xhrResult.status, statusText: xhrResult.statusText,
-      body: xhrResult.body,
-      thrown: xhrResult.thrown,
-      thrownMessage: xhrResult.thrown?.message,
-      thrownName: xhrResult.thrown?.name,
+    console.error('[training upload] signed PUT transport failed', {
+      putUrl, kind: putResult.kind,
+      status: putResult.status, statusText: putResult.statusText,
+      thrownMessage: putResult.thrown?.message, thrownName: putResult.thrown?.name,
     });
     return {
       ok: false, stage: 'storage_upload',
-      error: `xhr ${xhrResult.kind}${xhrResult.status ? ` (status ${xhrResult.status})` : ''}`,
-      statusCode: xhrResult.status || null,
+      error: `signed PUT ${putResult.kind}${putResult.status ? ` (status ${putResult.status})` : ''}`,
+      statusCode: putResult.status || null,
     };
   }
   // Shape the parity object for the DB-insert branch below.
