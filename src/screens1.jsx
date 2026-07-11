@@ -160,8 +160,8 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTa
   const bgFit            = 'cover';
   const bgPosition       = 'top';
   const bgBackground     = usingBg ? T.oceanDeep : T.card;
-  const titleFontSize    = isTablet ? 14 : 15;
-  const subtitleFontSize = isTablet ? 11 : 12;
+  const titleFontSize    = isTablet ? 17 : 15;
+  const subtitleFontSize = isTablet ? 13 : 12;
   const iconInset        = isTablet ? 12 : 14;
   const textInset        = isTablet ? 12 : 14;
   const textBottom       = isTablet ? 10 : 12;
