@@ -122,11 +122,13 @@ export function classifyCoverage(verified) {
 /* Upload one file to storage, then insert a training_images row.
    Storage path: {species_id}/{uuid}.jpg. UUID is generated locally
    so we can return the storage path before Supabase confirms.
-   Returns { ok, id, storagePath, error }. */
+   Returns { ok, id, storagePath, error, stage }.
+     stage: 'ensure_species' | 'storage_upload' | 'db_insert' — tells
+     the caller where the failure happened so it can classify + banner. */
 export async function uploadTrainingImage(file, speciesId) {
   const c = client();
-  if (!c) return { ok: false, error: 'not-configured' };
-  if (!file || !speciesId) return { ok: false, error: 'missing file or species' };
+  if (!c) return { ok: false, stage: 'client', error: 'not-configured' };
+  if (!file || !speciesId) return { ok: false, stage: 'client', error: 'missing file or species' };
   const sess = getLastSession();
   const email = sess?.user?.email || null;
 
@@ -135,7 +137,10 @@ export async function uploadTrainingImage(file, speciesId) {
   // insert AFTER we've already burned a storage write. Idempotent
   // upsert; no-op if the row is already there.
   const seed = await ensureSpeciesRow(speciesId);
-  if (!seed.ok) return { ok: false, error: seed.error };
+  if (!seed.ok) {
+    console.error('[training upload] ensureSpeciesRow failed', { speciesId, error: seed.error });
+    return { ok: false, stage: 'ensure_species', error: seed.error };
+  }
 
   const id = crypto.randomUUID();
   const ext = (file.name?.match(/\.([a-z0-9]+)$/i)?.[1] || 'jpg').toLowerCase();
@@ -145,7 +150,24 @@ export async function uploadTrainingImage(file, speciesId) {
     contentType: file.type || 'image/jpeg',
     upsert: false,
   });
-  if (up.error) return { ok: false, error: up.error.message };
+  if (up.error) {
+    // Preserve raw error so the caller can classify quota-exceeded vs
+    // RLS-denied vs anything else and show the right banner.
+    console.error('[training upload] storage.upload failed', {
+      bucket: BUCKET, storagePath, file: file.name, size: file.size, type: file.type,
+      error: up.error,
+      name: up.error?.name,
+      message: up.error?.message,
+      statusCode: up.error?.statusCode || up.error?.status,
+    });
+    return {
+      ok: false,
+      stage: 'storage_upload',
+      error: up.error?.message || String(up.error),
+      statusCode: up.error?.statusCode || up.error?.status || null,
+      rawError: up.error,
+    };
+  }
 
   const { data, error } = await c.from('training_images').insert({
     id,
@@ -156,9 +178,19 @@ export async function uploadTrainingImage(file, speciesId) {
     uploaded_by: email,
   }).select('id').single();
   if (error) {
+    console.error('[training upload] training_images.insert failed', {
+      storagePath, error,
+      code: error.code, message: error.message, details: error.details, hint: error.hint,
+    });
     // Rollback storage — no orphan bytes.
     await c.storage.from(BUCKET).remove([storagePath]).catch(() => {});
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      stage: 'db_insert',
+      error: error.message,
+      code: error.code || null,
+      rawError: error,
+    };
   }
   return { ok: true, id: data.id, storagePath };
 }

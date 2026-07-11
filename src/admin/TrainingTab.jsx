@@ -47,6 +47,58 @@ const REJECT_REASONS = [
   { key: 'other',     label: 'Other' },
 ];
 
+/* Bucket the failing upload rows into a single header banner so the
+   diagnosis is one glance, not per-row detective work. Returns
+   { kind, title, body } or null. Per-row inline errors still render
+   regardless — this is a summary, not a replacement. */
+function classifyUploadErrors(errorRows) {
+  if (!errorRows || errorRows.length === 0) return null;
+  const messages = errorRows.map(r => (r.error || '').toLowerCase());
+  const codes    = errorRows.map(r => (r.code  || '').toLowerCase());
+  const stati    = errorRows.map(r => r.statusCode).filter(Boolean);
+
+  const quotaHit =
+    stati.includes(413) ||
+    messages.some(m =>
+      m.includes('exceeded') || m.includes('quota') ||
+      m.includes('payload too large') ||
+      m.includes('storage limit') || m.includes('storage full') ||
+      m.includes('resource exhausted'));
+  if (quotaHit) {
+    return {
+      kind: 'quota',
+      title: `Storage full — ${errorRows.length} upload${errorRows.length === 1 ? '' : 's'} rejected.`,
+      body: 'The Supabase storage bucket has hit its size limit. Upgrade your Supabase plan, or delete rejected photos in Review to reclaim space, then retry.',
+    };
+  }
+
+  const rlsHit =
+    stati.includes(403) || stati.includes(401) ||
+    codes.includes('42501') || // pg permission denied
+    messages.some(m =>
+      m.includes('row-level security') || m.includes('row level security') ||
+      m.includes('rls') ||
+      m.includes('permission denied') || m.includes('not authorized') ||
+      m.includes('violates policy') || m.includes('new row violates'));
+  if (rlsHit) {
+    return {
+      kind: 'rls',
+      title: `Permission denied — ${errorRows.length} upload${errorRows.length === 1 ? '' : 's'} blocked.`,
+      body: 'Row-level security is rejecting the write. Check that you\'re signed in as the admin allowlist email and that the training-photos bucket + training_images RLS policies permit INSERT for your role.',
+    };
+  }
+
+  // Fallback: surface the unique error messages so nothing is opaque.
+  const unique = Array.from(new Set(errorRows.map(r => r.error).filter(Boolean))).slice(0, 3);
+  return {
+    kind: 'other',
+    title: `${errorRows.length} upload${errorRows.length === 1 ? '' : 's'} failed.`,
+    body: unique.length
+      ? `Errors: ${unique.join(' · ')}. Open the browser console for full details.`
+      : 'Open the browser console for full details.',
+  };
+}
+
 /* ============================================================
    Top-level TrainingTab
    ============================================================ */
@@ -160,6 +212,9 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
         ? { ...r,
             status: res.ok ? 'done' : 'error',
             error:  res.ok ? null    : res.error,
+            stage:      res.ok ? null : res.stage,
+            statusCode: res.ok ? null : (res.statusCode || null),
+            code:       res.ok ? null : (res.code       || null),
             path:   res.ok ? res.storagePath : null }
         : r));
     }
@@ -175,7 +230,13 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
 
   const readyCount = queue.filter(r => r.status === 'queued' && r.speciesId).length;
   const doneCount  = queue.filter(r => r.status === 'done').length;
-  const errorCount = queue.filter(r => r.status === 'error').length;
+  const errorRows  = queue.filter(r => r.status === 'error');
+  const errorCount = errorRows.length;
+
+  // Classify errors into a header banner category. First match wins;
+  // any unmatched errors still show inline on their row so nothing is
+  // silently swallowed.
+  const banner = classifyUploadErrors(errorRows);
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -219,6 +280,19 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
           onChange={onPick}
         />
       </Card>
+
+      {banner && (
+        <div role="alert" style={{
+          padding: '12px 14px', borderRadius: 8,
+          background: banner.kind === 'quota' ? T.warnBg : T.closedBg,
+          color: banner.kind === 'quota' ? T.brassDeep : T.closed,
+          border: `1.5px solid ${banner.kind === 'quota' ? T.warn : T.closed}`,
+          fontSize: 13, lineHeight: 1.5,
+        }}>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{banner.title}</div>
+          <div>{banner.body}</div>
+        </div>
+      )}
 
       {queue.length > 0 && (
         <Card>
@@ -319,7 +393,15 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
           <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{row.speciesId}</div>
         )}
         {row.error && (
-          <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{row.error}</div>
+          <div style={{ fontSize: 11, color: T.closed, marginTop: 4, wordBreak: 'break-word' }}>
+            {row.stage && (
+              <span style={{ fontWeight: 800, marginRight: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {row.stage.replace('_', ' ')}
+                {row.statusCode ? ` (${row.statusCode})` : ''}:
+              </span>
+            )}
+            {row.error}
+          </div>
         )}
       </div>
       <div style={{ fontSize: 11, color: statusColor, fontWeight: 700, whiteSpace: 'nowrap' }}>{statusLabel}</div>
