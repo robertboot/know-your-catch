@@ -3600,6 +3600,42 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
 
   return (
     <div style={{ padding: isTablet ? '22px 22px 32px' : '16px 16px 24px' }}>
+      {/* Slim persistent streak banner. Runs the whole width above the
+          question so the record-to-beat cue is always in view without
+          competing with the question card. Session streak on the left
+          (flame when active), best on the right in brass.
+          The inline scoreboard below still shows the running score. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12,
+        height: isTablet ? 40 : 34,
+        padding: isTablet ? '0 14px' : '0 12px',
+        marginBottom: isTablet ? 12 : 10,
+        background: T.parchmentDeep,
+        border: `1px solid ${T.cardEdge}`,
+        borderRadius: 8,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: isTablet ? 14 : 12, color: T.inkSoft, fontWeight: 700,
+        }}>
+          <span aria-hidden style={{
+            fontSize: isTablet ? 15 : 13,
+            opacity: streak > 0 ? 1 : 0.35,
+          }}>🔥</span>
+          <span style={{ color: streak > 0 ? T.ink : T.inkMute }}>
+            Streak {streak}
+          </span>
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: isTablet ? 13 : 11, fontWeight: 800,
+          color: T.brass, letterSpacing: 0.6, textTransform: 'uppercase',
+        }}>
+          <Trophy size={isTablet ? 14 : 12} strokeWidth={2} />
+          Best {bestStreak}
+        </div>
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4, gap: 8, flexWrap: 'wrap' }}>
         <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22}>Fish ID Quiz</H1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: isTablet ? 16 : 12, color: T.inkSoft }}>

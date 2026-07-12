@@ -832,12 +832,25 @@ export function IdentifyScreen({
   const mutedText = '#6f86a0';
   const chipText = '#cfe0f0';
 
+  // Parent must NOT be display:grid — the chip row uses negative
+  // horizontal margins (0 -16px) to punch through the screen padding
+  // for edge-to-edge scroll, and CSS Grid counts those negative
+  // margins as horizontal contribution, widening the container past
+  // the viewport → a whole-screen horizontal scrollbar. Flex column
+  // ignores per-item horizontal margins, so the same negative-margin
+  // trick works without leaking width.
+  const outerPadX = isTablet ? 22 : 16;
   return (
     <div style={{
       background: screenBg,
       minHeight: '100%',
       padding: isTablet ? '20px 22px 24px' : '14px 16px 20px',
-      display: 'grid', gap: isTablet ? 16 : 14,
+      display: 'flex', flexDirection: 'column',
+      gap: isTablet ? 16 : 14,
+      // Belt: prevent any child that accidentally overflows from
+      // triggering the outer scrollbar. Not a fix for the root cause
+      // — the grid→flex switch is — but a cheap guardrail.
+      maxWidth: '100%', boxSizing: 'border-box',
     }}>
       {/* 1) Search bar */}
       <div style={{
@@ -914,15 +927,21 @@ export function IdentifyScreen({
         </div>
       )}
 
-      {/* 2) Category chips — horizontal scroll, single row */}
+      {/* 2) Category chips — horizontal scroll, single row.
+          Negative margin matches the outer padding so the row sits
+          edge-to-edge without introducing a screen-level horizontal
+          scroll (the outer container is flex column — see comment
+          above the return). */}
       {!q.trim() && (
         <div
           className="kyc-hscroll"
           style={{
             display: 'flex', gap: 8,
             overflowX: 'auto', overflowY: 'hidden',
-            margin: '0 -16px', padding: '0 16px 4px',
+            marginLeft: -outerPadX, marginRight: -outerPadX,
+            padding: `0 ${outerPadX}px 4px`,
             scrollSnapType: 'x proximity',
+            maxWidth: `calc(100% + ${outerPadX * 2}px)`,
           }}
         >
           {categoriesWithSpecies.map(c => (
@@ -965,44 +984,108 @@ export function IdentifyScreen({
         </div>
       )}
 
-      {/* 3) Compact Identify-by-photo card with BETA badge */}
+      {/* 3) Dominant "CLICK to ID" hero tile with BG image slot.
+          Phone: full-container width, 220px tall.
+          iPad portrait: full-container width, 300px tall.
+          iPad landscape: full-container width, 340px tall.
+          BG image sits behind content with a dark scrim so title +
+          badge + subtitle stay legible against any photograph. Drop
+          asset at public/brand/click-to-id-bg.jpg — the fallback
+          gradient renders until it lands. */}
       {!q.trim() && (
         <button
           onClick={() => fileRef.current?.click()}
+          aria-label="Click to identify a fish by photo"
           style={{
+            position: 'relative',
             width: '100%', textAlign: 'left', cursor: 'pointer',
             background: identifyBg,
-            border: '1px solid rgba(94,205,242,0.35)', borderRadius: 14,
-            padding: 14,
-            display: 'flex', alignItems: 'center', gap: 12,
+            border: '1px solid rgba(94,205,242,0.35)', borderRadius: 18,
+            padding: 0,
+            height: isTablet ? (size === 'tablet-landscape' ? 340 : 300) : 220,
+            overflow: 'hidden',
+            boxShadow: '0 6px 22px rgba(0, 0, 0, 0.35)',
           }}
         >
+          {/* Background image (drop into public/brand/click-to-id-bg.jpg).
+              Fallback stays transparent so the gradient below shows
+              through when the asset isn't present. */}
+          <img
+            src={`${import.meta.env.BASE_URL}brand/click-to-id-bg.jpg`}
+            alt=""
+            aria-hidden
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: 'center',
+              display: 'block', userSelect: 'none', pointerEvents: 'none',
+            }}
+          />
+          {/* Fallback gradient — shown when the BG image is missing.
+              Sits underneath the scrim so the layering is stable
+              regardless of asset availability. */}
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(140deg, #0f2438 0%, #062330 55%, #041a2c 100%)',
+            zIndex: 0,
+          }} />
+          {/* Scrim — bottom-heavy so the copy at the bottom-left has
+              maximum contrast without dimming the whole scene. */}
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(180deg, rgba(4,22,44,0.15) 0%, rgba(4,22,44,0.35) 45%, rgba(4,22,44,0.85) 100%)',
+            zIndex: 1, pointerEvents: 'none',
+          }} />
+
+          {/* Content — absolute-positioned so it sits over the scrim. */}
           <div style={{
-            width: 46, height: 46, borderRadius: '50%',
-            background: accent, color: accentText,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
+            position: 'absolute', inset: 0, zIndex: 2,
+            padding: isTablet ? '22px 24px' : '18px 18px',
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
           }}>
-            <Camera size={22} strokeWidth={2.2} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: isTablet ? 17 : 15, fontWeight: 800, color: '#e5edf5' }}>
-                Identify by photo
-              </span>
+            {/* Top row: camera badge + BETA */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{
+                width: isTablet ? 56 : 48, height: isTablet ? 56 : 48, borderRadius: '50%',
+                background: accent, color: accentText,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 4px 14px rgba(94, 205, 242, 0.35)',
+              }}>
+                <Camera size={isTablet ? 30 : 26} strokeWidth={2.2} />
+              </div>
               <span style={{
-                background: 'rgba(251,191,36,0.16)', color: '#fbbf24',
-                fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em',
-                padding: '3px 6px', borderRadius: 5, textTransform: 'uppercase',
+                background: 'rgba(251,191,36,0.18)', color: '#fbbf24',
+                fontSize: isTablet ? 11 : 10, fontWeight: 800, letterSpacing: '0.08em',
+                padding: '5px 9px', borderRadius: 6, textTransform: 'uppercase',
+                border: '1px solid rgba(251, 191, 36, 0.35)',
+                whiteSpace: 'nowrap',
               }}>
                 Beta
               </span>
             </div>
-            <div style={{ fontSize: isTablet ? 13 : 12, color: secondaryText, marginTop: 3, lineHeight: 1.4 }}>
-              Take or pick a photo — always confirm the species
+
+            {/* Bottom block: title + subtitle */}
+            <div>
+              <div style={{
+                fontSize: isTablet ? (size === 'tablet-landscape' ? 44 : 40) : 32,
+                fontWeight: 900, letterSpacing: 0.2,
+                color: '#f7fbff', lineHeight: 1.02,
+                textShadow: '0 2px 10px rgba(0, 0, 0, 0.55)',
+              }}>
+                CLICK to ID
+              </div>
+              <div style={{
+                fontSize: isTablet ? 16 : 14, color: '#d8e4ee',
+                marginTop: 8, lineHeight: 1.35, fontWeight: 500,
+                textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)',
+                maxWidth: isTablet ? 520 : 300,
+              }}>
+                Take or pick a photo — always confirm the species
+              </div>
             </div>
           </div>
-          <ChevronRight size={20} color={accent} />
         </button>
       )}
 
