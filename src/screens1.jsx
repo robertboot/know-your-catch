@@ -1038,7 +1038,7 @@ export function IdentifyScreen({
           Phone: full-container width, 220px tall.
           iPad portrait: full-container width, 300px tall.
           iPad landscape: full-container width, 340px tall.
-          Source asset: public/brand/fish_scan_bg.png
+          Source asset: public/brand/fish_scan_bg.jpg
           (2129x739, aspect 2.88:1). object-position:right center
           keeps the fish + reticle in view at narrower phone crops.
           Fallback gradient renders if the asset is missing. */}
@@ -1060,7 +1060,7 @@ export function IdentifyScreen({
           {/* Background image — right-anchored so the fish + reticle
               stay visible when the card crops narrower on iPhone. */}
           <img
-            src={`${import.meta.env.BASE_URL}brand/fish_scan_bg.png`}
+            src={`${import.meta.env.BASE_URL}brand/fish_scan_bg.jpg`}
             alt=""
             aria-hidden
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
