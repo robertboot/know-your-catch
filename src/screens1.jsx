@@ -1091,13 +1091,6 @@ export function IdentifyScreen({
               display: 'block', userSelect: 'none', pointerEvents: 'none',
             }}
           />
-          {/* Fallback gradient — visible when the BG asset 404s.
-              Sits underneath the scrim so layering is stable. */}
-          <div aria-hidden style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(140deg, #0f2438 0%, #062330 55%, #041a2c 100%)',
-            zIndex: 0,
-          }} />
           {/* Scrim — LEFT-HEAVY so the copy on the left half stays
               readable while the fish on the right stays visually
               intact. Solid dark on the left → nearly transparent on
