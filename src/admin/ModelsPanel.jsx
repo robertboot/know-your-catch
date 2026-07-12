@@ -93,7 +93,11 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
         }
       }
       if (!tfliteFile || !labels || !metrics) throw new Error('bundle missing files');
-      const versionName = `v0.${rows.length + 1}-${new Date().toISOString().slice(0, 10)}`;
+      const defaultName = `Big Red ${rows.length + 1}.0`;
+      const versionName = (window.prompt(
+        'Name this model version:', defaultName,
+      ) || defaultName).trim();
+      if (!versionName) { setImporting(null); return; }
       const r = await importModelVersion({
         versionName, tfliteFile, labels, metrics,
         notes: `Auto-imported from Colab · ${pendingRow.path}`,
