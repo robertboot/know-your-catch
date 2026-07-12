@@ -12,24 +12,29 @@ import { getLastSession } from './auth.js';
 const BUCKET = 'training-exports';
 const MODEL_BUCKET = 'model-artifacts';
 
-/* Upload an export ZIP + insert a metadata row. Path scheme:
-     {yyyy-mm-dd}/{uuid}.zip
-   The date prefix makes the storage bucket browsable at a glance if
-   we ever look at it via the Supabase dashboard.
-   Returns { ok, id, storagePath, error }. */
-export async function uploadExport({ blob, speciesCount, imageCount, splitSeed, notes }) {
+/* Upload an export manifest (JSON) + insert a metadata row. Path scheme:
+     {yyyy-mm-dd}/{uuid}.json
+   The manifest lists every photo's path in Supabase Storage plus a
+   long-lived signed URL Colab can fetch it from directly. Total size
+   ~1MB tops even for tens of thousands of photos — no more giant blob
+   uploads, no more Safari-suspended-tab losses. */
+export async function uploadExport({ manifest, speciesCount, imageCount, splitSeed, notes }) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
-  if (!blob) return { ok: false, error: 'missing blob' };
+  if (!manifest) return { ok: false, error: 'missing manifest' };
 
   const sess = getLastSession();
   const email = sess?.user?.email || null;
   const id = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
-  const storagePath = `${today}/${id}.zip`;
+  const storagePath = `${today}/${id}.json`;
+
+  const blob = new Blob([JSON.stringify(manifest, null, 2)], {
+    type: 'application/json',
+  });
 
   const up = await c.storage.from(BUCKET).upload(storagePath, blob, {
-    contentType: 'application/zip',
+    contentType: 'application/json',
     upsert: false,
   });
   if (up.error) return { ok: false, error: up.error.message };
@@ -50,6 +55,31 @@ export async function uploadExport({ blob, speciesCount, imageCount, splitSeed, 
     return { ok: false, error: error.message };
   }
   return { ok: true, id, storagePath };
+}
+
+/* Batch-generate signed URLs for a list of storage paths. Wraps the
+   plural createSignedUrls so callers can hand in the full photo list
+   and get one URL per path back, in the same order. Handles chunking
+   because Supabase's endpoint has a hard limit of 1000 paths per
+   call. TTL defaults to 24h — plenty for a training run start-to-finish. */
+export async function trainingPhotoSignedUrls(paths, ttlSeconds = 86400) {
+  const c = client();
+  if (!c) return { ok: false, urls: [], error: 'not-configured' };
+  const CHUNK = 500;
+  const out = new Array(paths.length);
+  for (let i = 0; i < paths.length; i += CHUNK) {
+    const slice = paths.slice(i, i + CHUNK);
+    const { data, error } = await c.storage.from('training-photos')
+      .createSignedUrls(slice, ttlSeconds);
+    if (error) return { ok: false, urls: [], error: error.message };
+    // Supabase returns objects with { path, signedUrl, error } in the
+    // same order as the request. Splice into our result slot-by-slot.
+    for (let j = 0; j < slice.length; j++) {
+      const row = data?.[j];
+      out[i + j] = row?.signedUrl || null;
+    }
+  }
+  return { ok: true, urls: out };
 }
 
 /* Newest → oldest. */

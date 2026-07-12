@@ -37,7 +37,7 @@ import {
 } from '../training-store.js';
 import {
   uploadExport, listExports, getExportSignedUrl, deleteExport,
-  modelBundleUploadUrl,
+  modelBundleUploadUrl, trainingPhotoSignedUrls,
 } from '../training-exports-store.js';
 import { CATEGORIES } from '../data.js';
 import ModelsPanel from './ModelsPanel.jsx';
@@ -1079,12 +1079,35 @@ function ExportPanel() {
     setUploadedExportId(null);
 
     try {
-      // Lazy-load JSZip so the admin bundle doesn't eat it when not needed.
-      const { default: JSZip } = await import('jszip');
-      const zip = new JSZip();
+      // No more client-side ZIP build + giant blob upload. Instead, we
+      // mint signed URLs for every training photo (chunked, batched
+      // via the plural createSignedUrls endpoint) and roll the whole
+      // list into a small JSON manifest. Colab downloads the manifest,
+      // then pulls each photo in parallel directly from Supabase.
+      //
+      // Wins:
+      //   - Manifest is ~KB per photo, tops. Even 10k photos → ~2MB.
+      //   - No JSZip in the browser (used to hold every photo in RAM).
+      //   - Upload finishes in seconds. No more Safari-suspended-tab
+      //     losses overnight.
+      //   - Colab downloads in parallel (way faster than the previous
+      //     sequential-then-zip flow).
 
+      setProgress({ done: 0, total: plan.plan.length, status: 'Minting signed URLs…' });
+      const paths = plan.plan.map(p => p.storage_path);
+      const su = await trainingPhotoSignedUrls(paths, 86400); // 24h
+      if (!su.ok) throw new Error(su.error || 'signed URL batch failed');
+      if (su.urls.length !== paths.length) {
+        throw new Error(`URL count mismatch: got ${su.urls.length} of ${paths.length}`);
+      }
+      const missing = su.urls.filter(u => !u).length;
+      if (missing > 0) {
+        throw new Error(`${missing} photos returned no signed URL — some storage rows may be orphaned`);
+      }
+
+      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Building manifest…' });
       const manifest = {
-        version: 1,
+        version: 2, // v2 = signed-URL manifest (no bundled photo bytes)
         created_at: new Date().toISOString(),
         split_seed: plan.splitSeed,
         thresholds: {
@@ -1095,39 +1118,21 @@ function ExportPanel() {
         species: plan.species,
         excluded: plan.excluded,
         counts: plan.counts,
-        images: plan.plan.map(p => ({
+        // photos[] is what colab_run.py iterates. Every row is
+        // self-contained — Colab just downloads url → path.
+        photos: plan.plan.map((p, i) => ({
           path: `${p.split}/${p.species_id}/${p.filename}`,
           species_id: p.species_id,
           split: p.split,
           crop_bbox: p.crop_bbox || null,
+          storage_path: p.storage_path,
+          url: su.urls[i],
         })),
       };
-      zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-      // Sequential fetch + add — keeps memory pressure low on larger
-      // datasets. Every N images we let React tick to update progress.
-      for (let i = 0; i < plan.plan.length; i++) {
-        const p = plan.plan[i];
-        setProgress({ done: i, total: plan.plan.length, status: `Fetching ${p.filename}…` });
-        // Signed URL valid for the export session only.
-        const url = await signedUrl(p.storage_path, 60 * 60);
-        if (!url) throw new Error(`no signed url for ${p.storage_path}`);
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`fetch ${resp.status} for ${p.storage_path}`);
-        const blob = await resp.blob();
-        zip.file(`${p.split}/${p.species_id}/${p.filename}`, blob);
-      }
-
-      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Building ZIP…' });
-      const out = await zip.generateAsync({
-        type: 'blob',
-        compression: 'DEFLATE',
-        compressionOptions: { level: 6 },
-      });
-
-      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Uploading to cloud…' });
+      setProgress({ done: plan.plan.length, total: plan.plan.length, status: 'Uploading manifest…' });
       const up = await uploadExport({
-        blob: out,
+        manifest,
         speciesCount: plan.species.length,
         imageCount:   plan.plan.length,
         splitSeed:    plan.splitSeed,
