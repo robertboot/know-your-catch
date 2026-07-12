@@ -26,29 +26,8 @@ import {
    to load. On iOS the local file path baked into `p.src` at save
    time can go stale between installs — the thumb is always inline
    and never breaks. */
-function PhotoImg({ photo, alt, style, onClick, className }) {
-  const primary = photoDisplayUrl(photo);
-  const [src, setSrc] = React.useState(primary);
-  const fellBackRef = React.useRef(false);
-  // Reset when the photo changes (e.g. carousel scroll).
-  React.useEffect(() => { setSrc(primary); fellBackRef.current = false; }, [primary]);
-  const onError = () => {
-    if (fellBackRef.current) return;
-    fellBackRef.current = true;
-    const t = photoThumbUrl(photo);
-    if (t && t !== primary) setSrc(t);
-  };
-  return (
-    <img
-      src={src}
-      alt={alt || ''}
-      style={style}
-      onClick={onClick}
-      className={className}
-      onError={onError}
-    />
-  );
-}
+// PhotoImg is now shared — imported below from components.jsx so the
+// PB Spotlight and this screen use one resolver + one fallback path.
 
 /* Render a coordinate value as a tappable Apple Maps link. */
 function CoordsLink({ lat, lon }) {
@@ -65,6 +44,7 @@ function CoordsLink({ lat, lon }) {
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
+  PhotoImg,
   inputStyle,
 } from './components.jsx';
 import { AccountSection } from './auth-ui.jsx';

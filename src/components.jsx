@@ -6,6 +6,52 @@ import { speciesPhoto, shareReport, speciesById } from './helpers.js';
 import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl } from './photos-store.js';
 
 /* ============================================================
+   PHOTO IMG — shared img resolver with automatic thumb fallback
+   ============================================================
+   Primary src comes from photoDisplayUrl() — capacitor:// URL on
+   native, inline data on web. On <img> error we fall back to the
+   inline thumb (data URL, always safe), so a stale capacitor URL
+   / expired signed URL / cross-scheme mishap never renders as a
+   blank tile. Both Catch Detail, PB Detail, and the PB Spotlight
+   go through this so there's one resolver, one lifecycle. */
+export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
+  const primary = photoDisplayUrl(photo);
+  const [src, setSrc] = React.useState(primary);
+  const fellBackRef = React.useRef(false);
+  React.useEffect(() => {
+    if (debugTag && typeof console !== 'undefined') {
+      // Print the raw photo entry + resolved primary URL so we can
+      // catch shape drift between call sites (e.g. Spotlight vs
+      // Catch Detail resolving to different values).
+      // eslint-disable-next-line no-console
+      console.log(`[PhotoImg:${debugTag}]`, { photo, primary });
+    }
+    setSrc(primary);
+    fellBackRef.current = false;
+  }, [primary, debugTag, photo]);
+  const onError = () => {
+    if (fellBackRef.current) return;
+    fellBackRef.current = true;
+    const t = photoThumbUrl(photo);
+    if (debugTag && typeof console !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.warn(`[PhotoImg:${debugTag}] primary failed, falling back to thumb`, { primary, thumb: t });
+    }
+    if (t && t !== src) setSrc(t);
+  };
+  return (
+    <img
+      src={src}
+      alt={alt || ''}
+      style={style}
+      onClick={onClick}
+      className={className}
+      onError={onError}
+    />
+  );
+}
+
+/* ============================================================
    STATUS PILL — colorblind-safe via shape + color
    ============================================================ */
 export function StatusPill({ status, size = 'normal' }) {

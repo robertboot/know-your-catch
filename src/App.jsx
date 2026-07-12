@@ -271,6 +271,23 @@ export default function App() {
 
   const screen = stack[stack.length - 1];
 
+  // Track recently-viewed species. Whenever the top screen is a
+  // species detail, prepend that id to state.recentSpecies (dedup +
+  // cap at 8). Cheap and centralized — every route that opens
+  // species goes through push({ name: 'species', id }) so this catches
+  // all of them without touching each caller.
+  useEffect(() => {
+    if (screen?.name !== 'species' || !screen.id) return;
+    setState(prev => {
+      const list = Array.isArray(prev.recentSpecies) ? prev.recentSpecies : [];
+      const next = [screen.id, ...list.filter(x => x !== screen.id)].slice(0, 8);
+      if (JSON.stringify(next) === JSON.stringify(list)) return prev;
+      const merged = { ...prev, recentSpecies: next };
+      saveState(merged);
+      return merged;
+    });
+  }, [screen?.name, screen?.id]);
+
   // Scroll persistence across the stack. push()/reset() save the
   // current top's scroll position; a route-change effect resets to 0
   // for the new screen; pop() restores the saved position after the
@@ -517,9 +534,14 @@ export default function App() {
       break;
     case 'identify':
       body = <IdentifyScreen
+        state={state}
+        jurisdiction={jurisdiction}
         onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
+        onCategory={(catId) => push({ name: 'category', catId })}
         onSearch={() => push({ name: 'search' })}
+        onQuiz={() => push({ name: 'quiz' })}
+        onSpecies={(id) => push({ name: 'species', id })}
       />;
       break;
     case 'patterns':

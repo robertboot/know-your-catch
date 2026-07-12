@@ -26,6 +26,7 @@ import { savePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl } from './pho
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
+  PhotoImg,
   inputStyle,
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
@@ -710,52 +711,300 @@ export function HomeScreen({
 }
 
 /* ============================================================
-   IDENTIFY — photo-first
-   ============================================================ */
-export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
+   IDENTIFY — search-first, camera present but honest
+   ============================================================
+   Layout (top to bottom):
+     1) Search bar (live filter over SPECIES)
+     2) Category chips (horizontal scroll — replaces the old Browse card)
+     3) Compact "Identify by photo" card with a BETA badge
+     4) "Tell them apart" → Fish ID Quiz card
+     5) Your species (favorites) or Recently viewed (last 5)
+
+   Offline-first: search, category nav, quiz, and species status all
+   read from bundled data. No fetch anywhere on this screen. */
+export function IdentifyScreen({
+  state, jurisdiction,
+  onPhoto, onBrowse, onCategory, onSearch, onQuiz, onSpecies,
+}) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
-  const isLandscape = size === 'tablet-landscape';
   const fileRef = useRef(null);
+  const [q, setQ] = useState('');
 
-  // When user picks/captures a photo, read it as base64 and hand to onPhoto.
+  // When user picks/captures a photo, read it as base64 and hand to
+  // onPhoto. Same behaviour as the old hero — only the presentation
+  // changed. Native + web both use the file input; iOS renders a
+  // sheet with Take Photo / Choose from Library.
   const handleFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      onPhoto(reader.result); // data URL
-    };
+    reader.onload = () => onPhoto(reader.result);
     reader.readAsDataURL(file);
   };
 
-  return (
-    <div style={{ padding: isTablet ? '26px 22px' : '18px 16px' }}>
-      <H1 size={isTablet ? (isLandscape ? 32 : 30) : 24} style={{ marginBottom: 6 }}>Fish ID</H1>
-      <p style={{ fontSize: isTablet ? 16 : 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: isTablet ? 22 : 16 }}>
-        Take or upload a photo to identify your catch.
-      </p>
+  // Active species list — same filter Regs / Species screens use.
+  const activeSpecies = useMemo(
+    () => SPECIES.filter(s => s.active !== false),
+    []
+  );
+  const speciesCount = activeSpecies.length;
 
-      {/* Primary photo capture card */}
-      <button onClick={() => fileRef.current?.click()} style={{
-        width: '100%', background: T.oceanDeep, color: T.parchment,
-        border: `2px solid ${T.brass}`, borderRadius: 6,
-        padding: isTablet ? '40px 24px' : '28px 18px',
-        cursor: 'pointer', textAlign: 'center', marginBottom: isTablet ? 22 : 18,
-        boxShadow: '0 2px 0 rgba(124, 86, 24, 0.15)',
+  // Live search over common + scientific + alt names. Sorted by
+  // best-effort match rank: startsWith common → contains common →
+  // alt / scientific.
+  const searchResults = useMemo(() => {
+    const lower = q.trim().toLowerCase();
+    if (!lower) return [];
+    const rows = [];
+    for (const s of activeSpecies) {
+      const cn = s.commonName.toLowerCase();
+      const sci = s.scientific?.toLowerCase() || '';
+      const alt = (s.altNames || []).map(a => a.toLowerCase());
+      let rank = -1;
+      let matchedAlt = null;
+      if (cn.startsWith(lower)) rank = 0;
+      else if (cn.includes(lower)) rank = 1;
+      else if (alt.some(a => a.includes(lower))) {
+        rank = 2;
+        matchedAlt = (s.altNames || []).find(a => a.toLowerCase().includes(lower));
+      }
+      else if (sci.includes(lower)) rank = 3;
+      if (rank >= 0) rows.push({ s, rank, matchedAlt });
+    }
+    return rows.sort((a, b) => a.rank - b.rank || a.s.commonName.localeCompare(b.s.commonName)).slice(0, 12);
+  }, [q, activeSpecies]);
+
+  // Categories: filter by ones that have any active species so the
+  // chip row doesn't show empty categories after overlay updates.
+  const categoriesWithSpecies = useMemo(() => {
+    const has = new Set(activeSpecies.map(s => s.category));
+    return CATEGORIES.filter(c => has.has(c.id));
+  }, [activeSpecies]);
+
+  // "Your species" (favorites) if present; else last recently viewed.
+  const favIds = Array.isArray(state?.favorites) ? state.favorites : [];
+  const recentIds = Array.isArray(state?.recentSpecies) ? state.recentSpecies : [];
+  const showList = favIds.length > 0 ? favIds.slice(0, 5) : recentIds.slice(0, 5);
+  const showListKind = favIds.length > 0 ? 'favorites' : 'recent';
+
+  // Rotating example lookalike pair for the Quiz card subtitle. Read
+  // the first species whose lookalikes list has ≥2 entries so the
+  // subtitle names three real fish and rotates as SPECIES ships.
+  const quizExamplePair = useMemo(() => {
+    const anchor = activeSpecies.find(s => Array.isArray(s.lookalikes) && s.lookalikes.length >= 2);
+    if (!anchor) return 'Tell apart look-alike fish';
+    const [a, b] = anchor.lookalikes;
+    const spA = speciesById(a); const spB = speciesById(b);
+    if (!spA || !spB) return 'Tell apart look-alike fish';
+    // Short name — trim "Snapper" / "Grouper" suffix if all three share it.
+    const short = (n) => n.replace(/\s+(Snapper|Grouper|Mackerel|Tuna)$/i, '');
+    const suffixMatch = anchor.commonName.match(/\s+(Snapper|Grouper|Mackerel|Tuna)$/i);
+    const suffix = suffixMatch ? suffixMatch[1] : null;
+    if (suffix && spA.commonName.endsWith(suffix) && spB.commonName.endsWith(suffix)) {
+      return `${short(anchor.commonName)} vs. ${short(spA.commonName)} vs. ${short(spB.commonName)} ${suffix}`;
+    }
+    return `${anchor.commonName} vs. ${spA.commonName} vs. ${spB.commonName}`;
+  }, [activeSpecies]);
+
+  // Season status for a species in the current jurisdiction. Same
+  // logic as Regulations list, returns { key, label, bg, fg }.
+  const seasonForSpecies = (id) => {
+    const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
+    if (!reg) return { key: 'unknown', label: 'Check', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
+    const st = seasonState(reg.open).status;
+    if (st === 'open')     return { key: 'open',     label: 'Open',     bg: 'rgba(52,211,153,0.14)', fg: '#5ee0ac' };
+    if (st === 'closed')   return { key: 'closed',   label: 'Closed',   bg: 'rgba(248,113,113,0.14)', fg: '#f87171' };
+    if (st === 'upcoming') return { key: 'upcoming', label: 'Opens soon', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
+    return { key: 'unknown', label: 'Check', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
+  };
+
+  // Shared inline styles matching the spec's token palette. Kept
+  // inline to avoid a new CSS file — the tokens all resolve against
+  // the existing theme.js gradient / colors.
+  const screenBg = '#0a1624';
+  const cardBg = '#11233a';
+  const searchBg = '#12263d';
+  const identifyBg = '#0f2438';
+  const accent = '#5ecdf2';
+  const accentText = '#062330';
+  const secondaryText = '#8ea3ba';
+  const mutedText = '#6f86a0';
+  const chipText = '#cfe0f0';
+
+  return (
+    <div style={{
+      background: screenBg,
+      minHeight: '100%',
+      padding: isTablet ? '20px 22px 24px' : '14px 16px 20px',
+      display: 'grid', gap: isTablet ? 16 : 14,
+    }}>
+      {/* 1) Search bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: searchBg,
+        border: '1px solid rgba(94,205,242,0.28)', borderRadius: 12,
+        padding: '10px 12px',
       }}>
-        <div style={{
-          background: T.brass, color: T.oceanDeep,
-          width: isTablet ? 100 : 72, height: isTablet ? 100 : 72,
-          borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: isTablet ? '0 auto 20px' : '0 auto 14px',
-        }}>
-          <Camera size={isTablet ? 52 : 36} />
+        <Search size={isTablet ? 22 : 18} color={accent} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={`Search ${speciesCount} species…`}
+          style={{
+            flex: 1, minWidth: 0,
+            background: 'transparent', border: 'none', outline: 'none',
+            color: '#e5edf5', fontSize: isTablet ? 16 : 14,
+            padding: 0,
+          }}
+        />
+        {q && (
+          <button
+            onClick={() => setQ('')}
+            aria-label="Clear search"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: mutedText, padding: 4, display: 'flex',
+            }}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
+      {/* Live search results — only when there's a query. Tapping a
+          row opens species detail via onSpecies (which also records
+          it into state.recentSpecies via the App-level tracker). */}
+      {q.trim() && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {searchResults.length === 0 && (
+            <div style={{ fontSize: 13, color: mutedText, padding: '6px 4px' }}>
+              No matches for &ldquo;{q.trim()}&rdquo;. Try common name, scientific, or a regional name.
+            </div>
+          )}
+          {searchResults.map(({ s, matchedAlt }) => (
+            <button
+              key={s.id}
+              onClick={() => onSpecies?.(s.id)}
+              style={{
+                background: cardBg, border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, padding: 10,
+                display: 'flex', alignItems: 'center', gap: 12,
+                cursor: 'pointer', textAlign: 'left', width: '100%',
+              }}
+            >
+              <SpeciesImage species={s} size={38} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: '#e5edf5' }}>
+                  {s.commonName}
+                </div>
+                <div style={{ fontSize: 11, color: secondaryText, fontStyle: 'italic', marginTop: 2 }}>
+                  {s.scientific}
+                </div>
+                {matchedAlt && (
+                  <div style={{ fontSize: 11, color: '#b7935a', marginTop: 2 }}>
+                    also: {matchedAlt}
+                  </div>
+                )}
+              </div>
+              <ChevronRight size={18} color={accent} />
+            </button>
+          ))}
         </div>
-        <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 28 : 20, fontWeight: 600 }}>Photo identification</div>
-        <div style={{ fontSize: isTablet ? 15 : 12, color: '#B8C5CD', marginTop: isTablet ? 8 : 4 }}>Take a photo or pick from your library</div>
-      </button>
+      )}
+
+      {/* 2) Category chips — horizontal scroll, single row */}
+      {!q.trim() && (
+        <div
+          className="kyc-hscroll"
+          style={{
+            display: 'flex', gap: 8,
+            overflowX: 'auto', overflowY: 'hidden',
+            margin: '0 -16px', padding: '0 16px 4px',
+            scrollSnapType: 'x proximity',
+          }}
+        >
+          {categoriesWithSpecies.map(c => (
+            <button
+              key={c.id}
+              onClick={() => onCategory?.(c.id)}
+              style={{
+                flex: '0 0 auto',
+                background: searchBg,
+                border: '1px solid rgba(255,255,255,0.07)',
+                color: chipText,
+                fontSize: 12.5, fontWeight: 600,
+                padding: '8px 12px', borderRadius: 9,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+                scrollSnapAlign: 'start',
+              }}
+            >
+              {c.name}
+            </button>
+          ))}
+          {/* Overflow tail: full-list "Browse all" chip in case the
+              user prefers the categories index. */}
+          {onBrowse && (
+            <button
+              onClick={onBrowse}
+              style={{
+                flex: '0 0 auto',
+                background: 'transparent',
+                border: `1px solid ${accent}`,
+                color: accent,
+                fontSize: 12.5, fontWeight: 700,
+                padding: '8px 12px', borderRadius: 9,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+                scrollSnapAlign: 'start',
+              }}
+            >
+              Browse all →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 3) Compact Identify-by-photo card with BETA badge */}
+      {!q.trim() && (
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{
+            width: '100%', textAlign: 'left', cursor: 'pointer',
+            background: identifyBg,
+            border: '1px solid rgba(94,205,242,0.35)', borderRadius: 14,
+            padding: 14,
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}
+        >
+          <div style={{
+            width: 46, height: 46, borderRadius: '50%',
+            background: accent, color: accentText,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Camera size={22} strokeWidth={2.2} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: isTablet ? 17 : 15, fontWeight: 800, color: '#e5edf5' }}>
+                Identify by photo
+              </span>
+              <span style={{
+                background: 'rgba(251,191,36,0.16)', color: '#fbbf24',
+                fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em',
+                padding: '3px 6px', borderRadius: 5, textTransform: 'uppercase',
+              }}>
+                Beta
+              </span>
+            </div>
+            <div style={{ fontSize: isTablet ? 13 : 12, color: secondaryText, marginTop: 3, lineHeight: 1.4 }}>
+              Take or pick a photo — always confirm the species
+            </div>
+          </div>
+          <ChevronRight size={20} color={accent} />
+        </button>
+      )}
 
       <input
         ref={fileRef}
@@ -765,16 +1014,118 @@ export function IdentifyScreen({ onPhoto, onBrowse, onSearch }) {
         style={{ display: 'none' }}
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: isTablet ? '14px 0 20px' : '8px 0 14px', color: T.inkMute }}>
-        <div style={{ flex: 1, height: 1, background: T.cardEdge }} />
-        <SectionLabel style={{ fontSize: isTablet ? 13 : 11 }}>or identify manually</SectionLabel>
-        <div style={{ flex: 1, height: 1, background: T.cardEdge }} />
-      </div>
+      {/* 4) Tell them apart → Fish ID Quiz card */}
+      {!q.trim() && (
+        <div>
+          <div style={{
+            fontSize: 10.5, fontWeight: 600, color: mutedText,
+            letterSpacing: '0.13em', textTransform: 'uppercase',
+            padding: '0 2px 8px',
+          }}>
+            Tell them apart
+          </div>
+          <button
+            onClick={onQuiz}
+            style={{
+              width: '100%', textAlign: 'left', cursor: 'pointer',
+              background: cardBg,
+              border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14,
+              padding: 14,
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}
+          >
+            <div style={{
+              width: 44, height: 44, borderRadius: 10,
+              background: 'rgba(251,191,36,0.16)', color: '#fbbf24',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Sparkles size={22} strokeWidth={2} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: isTablet ? 17 : 15, fontWeight: 800, color: '#e5edf5' }}>
+                Fish ID Quiz
+              </div>
+              <div style={{
+                fontSize: isTablet ? 13 : 12, color: secondaryText, marginTop: 3, lineHeight: 1.4,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {quizExamplePair}
+              </div>
+            </div>
+            <span style={{
+              background: accent, color: accentText,
+              fontSize: 13, fontWeight: 800,
+              padding: '8px 14px', borderRadius: 8,
+              flexShrink: 0,
+            }}>
+              Start
+            </span>
+          </button>
+        </div>
+      )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: isTablet ? 14 : 10 }}>
-        <BigButton isTablet={isTablet} onClick={onBrowse} icon={<Layers size={isTablet ? 32 : 24} />} title="Browse by category" subtitle="Snapper, grouper, mackerel, jacks…" />
-        <BigButton isTablet={isTablet} onClick={onSearch} icon={<Search size={isTablet ? 32 : 24} />} title="Search by name" subtitle="Common names, scientific, regional" />
-      </div>
+      {/* 5) Your species (favorites) or Recently viewed */}
+      {!q.trim() && (
+        <div>
+          <div style={{
+            fontSize: 10.5, fontWeight: 600, color: mutedText,
+            letterSpacing: '0.13em', textTransform: 'uppercase',
+            padding: '0 2px 8px',
+          }}>
+            {showListKind === 'favorites' ? 'Your species' : 'Recently viewed'}
+          </div>
+          {showList.length === 0 ? (
+            <div style={{
+              background: cardBg, border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: 12, padding: 14, textAlign: 'center',
+              color: secondaryText, fontSize: 13, lineHeight: 1.55,
+            }}>
+              Search a species or tap a category above to build up your list.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {showList.map(id => {
+                const s = speciesById(id);
+                if (!s) return null;
+                const st = seasonForSpecies(id);
+                return (
+                  <button
+                    key={id}
+                    onClick={() => onSpecies?.(id)}
+                    style={{
+                      background: cardBg,
+                      border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12,
+                      padding: 10,
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      cursor: 'pointer', textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    <SpeciesImage species={s} size={38} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: '#e5edf5' }}>
+                        {s.commonName}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#7f95ad', fontStyle: 'italic', marginTop: 2 }}>
+                        {s.scientific}
+                      </div>
+                    </div>
+                    <span style={{
+                      background: st.bg, color: st.fg,
+                      fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+                      padding: '4px 8px', borderRadius: 6,
+                      textTransform: 'uppercase',
+                      flexShrink: 0,
+                    }}>
+                      {st.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1271,6 +1622,26 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
   const photoUrl = photo ? photoDisplayUrl(photo) : null;
   const anglerName = state.anglerName || '';
   const units = state.units;
+
+  // Runtime dump: raw pb.photos / pb.photo / resolved URL / typeof.
+  // This is the trace we need to see when the spotlight fails to show
+  // a photo — one line, per render, so we can diff against Catch
+  // Detail (which uses the same PhotoImg + same resolver now).
+  useEffect(() => {
+    if (typeof console === 'undefined') return;
+    // eslint-disable-next-line no-console
+    console.log('[PBSpotlight] resolve', {
+      pbId: currentId,
+      hasPhotosArray: Array.isArray(pb.photos),
+      photosLen: Array.isArray(pb.photos) ? pb.photos.length : null,
+      firstEntryType: photo ? typeof photo : 'null',
+      firstEntryShape: photo && typeof photo === 'object'
+        ? Object.keys(photo)
+        : (typeof photo === 'string' ? photo.slice(0, 24) + '…' : null),
+      legacyPhotoField: pb.photo ? (typeof pb.photo === 'string' ? pb.photo.slice(0, 24) + '…' : Object.keys(pb.photo)) : null,
+      resolvedUrl: photoUrl ? (photoUrl.slice ? photoUrl.slice(0, 80) + '…' : String(photoUrl).slice(0, 80)) : null,
+    });
+  }, [currentId, photo, photoUrl, pb]);
   const primary = pb.primaryMetric === 'weight'
     ? { val: formatWeight(pb.weight, units), label: 'Weight' }
     : { val: formatSize(pb.length, units), label: 'Length' };
@@ -1350,18 +1721,14 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
           overflow: 'hidden',
           flexShrink: 0,
         }}>
-          {photoUrl
-            ? <img
-                src={photoUrl}
-                alt=""
+          {photo
+            ? <PhotoImg
+                photo={photo}
+                debugTag="PBSpotlight"
                 style={{
                   width: '100%', height: '100%',
                   objectFit: 'cover', objectPosition: 'center',
                   display: 'block',
-                }}
-                onError={(e) => {
-                  console.warn('[PBSpotlight] photo failed to load', photoUrl?.slice(0, 60));
-                  e.currentTarget.style.display = 'none';
                 }}
               />
             : <Fish size={isTablet ? 72 : 56} color={T.inkMute} strokeWidth={1.3} />}
