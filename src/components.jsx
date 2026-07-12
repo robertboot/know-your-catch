@@ -999,14 +999,21 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
         onClick={onClose}
         aria-label="Close"
         style={{
-          position: 'absolute', top: 16, right: 16,
-          width: 40, height: 40, borderRadius: '50%',
-          background: 'rgba(3, 27, 51, 0.7)', border: `1px solid ${T.cardEdge}`,
+          position: 'absolute',
+          // Sit fully below the status bar / Dynamic Island. env()
+          // resolves to the safe-area inset on iOS + iPadOS WebViews
+          // and falls back to 16 on browsers that don't expose it.
+          top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+          right: 'calc(env(safe-area-inset-right, 0px) + 16px)',
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'rgba(3, 27, 51, 0.85)', border: `1px solid ${T.cardEdge}`,
           color: T.parchment, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+          zIndex: 2,
         }}
       >
-        <X size={22} />
+        <X size={24} />
       </button>
     </div>
   );

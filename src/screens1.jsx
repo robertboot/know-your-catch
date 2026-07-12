@@ -1340,18 +1340,30 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
       }}>
         <div style={{
           width: isTablet ? '45%' : '100%',
-          minHeight: isTablet ? 200 : 180,
+          // Explicit aspect-ratio gives the container a real height
+          // so the <img> height:100% resolves — the earlier layout
+          // set only min-height on the flex parent, which meant the
+          // img could collapse to 0 tall and the photo never showed.
+          aspectRatio: isTablet ? '4 / 3' : '4 / 3',
           background: T.parchmentDeep,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           overflow: 'hidden',
+          flexShrink: 0,
         }}>
           {photoUrl
-            ? <img src={photoUrl} alt="" style={{
-                width: '100%', height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                minHeight: isTablet ? 200 : 180,
-              }} />
+            ? <img
+                src={photoUrl}
+                alt=""
+                style={{
+                  width: '100%', height: '100%',
+                  objectFit: 'cover', objectPosition: 'center',
+                  display: 'block',
+                }}
+                onError={(e) => {
+                  console.warn('[PBSpotlight] photo failed to load', photoUrl?.slice(0, 60));
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
             : <Fish size={isTablet ? 72 : 56} color={T.inkMute} strokeWidth={1.3} />}
         </div>
         <div style={{

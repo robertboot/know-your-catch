@@ -1639,7 +1639,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
 
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Report or contact</SectionLabel>
-        <a href="mailto:corrections@reelintel.example?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <a href="mailto:robert@reelintel.ai?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Mail size={16} /> Email a regulation correction
         </a>
       </Card>
@@ -3489,6 +3489,10 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
   const isTablet = size !== 'phone';
   const isLandscape = size === 'tablet-landscape';
   const [seenAnchorIds] = useState(() => new Set());
+  // Ref on the Next-question button so we can scroll it to the top
+  // of the viewport when an answer lands. Prevents the browser from
+  // "jumping to top" after DOM changes on wrong-answer explanations.
+  const nextBtnRef = useRef(null);
   const [question, setQuestion] = useState(() => pickQuizQuestion(state, jurisdiction));
   const [selectedKey, setSelectedKey] = useState(null);
   // Decimal score to accommodate 0.5 partial credit. Split tracks how
@@ -3511,6 +3515,27 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
       seenAnchorIds.add(question.species.id);
     }
   }, [question, seenAnchorIds]);
+
+  // After an answer lands, scroll the Next-question button to the top
+  // of the viewport so the review + explanation sits directly below
+  // the CTA. Before this fix a wrong answer caused the browser to
+  // jump the scroll offset (from the DOM growing / focus change) and
+  // the angler landed at the top of the page instead of at the CTA.
+  useEffect(() => {
+    if (!selectedKey) return;
+    // Two rAF so React commit + browser layout both settle before we
+    // scroll — otherwise Safari clamps to a stale scroll target.
+    let raf1, raf2;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        nextBtnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+    return () => {
+      if (raf1) cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [selectedKey]);
 
   const next = () => {
     setSelectedKey(null);
@@ -3704,10 +3729,12 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
           faster path; for close/wrong picks this button IS the CTA
           (the toast dismisses to Learn instead). */}
       {selectedKey && (
-        <PrimaryButton onClick={next} style={{ marginTop: 14, marginBottom: 6 }}>
-          Next question
-          <ChevronRight size={16} style={{ display: 'inline', marginLeft: 6, verticalAlign: 'middle' }} />
-        </PrimaryButton>
+        <div ref={nextBtnRef} style={{ scrollMarginTop: 12 }}>
+          <PrimaryButton onClick={next} style={{ marginTop: 14, marginBottom: 6 }}>
+            Next question
+            <ChevronRight size={16} style={{ display: 'inline', marginLeft: 6, verticalAlign: 'middle' }} />
+          </PrimaryButton>
+        </div>
       )}
 
       {/* Result + species review */}

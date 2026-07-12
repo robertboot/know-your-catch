@@ -49,7 +49,7 @@ const A = {
 /* Placeholder URLs — swap once the store listings are live. */
 const APP_STORE_URL   = 'https://apps.apple.com/app/reelintel/';
 const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.reelintel.app';
-const SUPPORT_URL     = 'mailto:hello@reelintel.ai';
+const SUPPORT_URL     = 'mailto:robert@reelintel.ai';
 
 const P = {
   bg:        T.bgDeep,
