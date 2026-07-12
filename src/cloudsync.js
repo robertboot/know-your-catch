@@ -54,6 +54,11 @@ export const USER_STATE_KEYS = [
   'units',
   'anglerName',
   'notes',
+  // Jurisdiction is synced so the 3.5 reg-alert edge function has
+  // one clear jurisdiction per user to check regs against. Users
+  // who cross state lines can still override per device — the
+  // last device to set it wins on the next sync tick.
+  'jurisdiction',
   // 3.3 profile / segmentation fields
   'anglerIsCaptain',
   'anglerFisherType',

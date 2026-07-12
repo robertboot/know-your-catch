@@ -10,7 +10,7 @@
 
    The bell badge is the count of active + not-dismissed items. */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { X, Bell, Mail, Megaphone } from 'lucide-react';
+import { X, Bell, Mail, Megaphone, ShieldAlert } from 'lucide-react';
 import { T } from './theme.js';
 import { getLastSession, subscribe } from './auth.js';
 import { useScreenSize } from './screen-size.js';
@@ -18,6 +18,8 @@ import {
   listActiveAnnouncements, listMyLaunchEmails,
   loadDismissedIds, markDismissed, markManyDismissed,
 } from './announcements-store.js';
+import { listRegulationAlerts } from './regulation-alerts-store.js';
+import { speciesById, jurisdictionById } from './helpers.js';
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -36,17 +38,20 @@ export function useAnnouncementInbox() {
   const [session,      setSession]     = useState(getLastSession());
   const [announcements, setAnnouncements] = useState([]);
   const [launchEmails,  setLaunchEmails]  = useState([]);
+  const [regAlerts,     setRegAlerts]     = useState([]);
   const [dismissed,     setDismissedIds]  = useState(() => loadDismissedIds());
 
   useEffect(() => subscribe(setSession), []);
 
   const refresh = useCallback(async () => {
-    const [ann, mail] = await Promise.all([
+    const [ann, mail, reg] = await Promise.all([
       listActiveAnnouncements(session),
       session ? listMyLaunchEmails() : Promise.resolve({ ok: true, rows: [] }),
+      session ? listRegulationAlerts() : Promise.resolve({ ok: true, rows: [] }),
     ]);
     if (ann.ok)  setAnnouncements(ann.rows);
     if (mail.ok) setLaunchEmails(mail.rows);
+    if (reg.ok)  setRegAlerts(reg.rows);
   }, [session]);
 
   useEffect(() => {
@@ -64,7 +69,7 @@ export function useAnnouncementInbox() {
   // may have dismissed a row before the drawer opened.
   useEffect(() => {
     setDismissedIds(loadDismissedIds());
-  }, [announcements, launchEmails]);
+  }, [announcements, launchEmails, regAlerts]);
 
   const items = useMemo(() => {
     const out = [];
@@ -90,8 +95,23 @@ export function useAnnouncementInbox() {
         source: 'ReelIntel launch',
       });
     }
+    for (const a of regAlerts) {
+      const sp = speciesById(a.species_id);
+      const jur = jurisdictionById(a.jurisdiction);
+      const spName = sp?.commonName || a.species_id;
+      const jurName = jur?.name || a.jurisdiction;
+      out.push({
+        id: `reg:${a.id}`,
+        dismissKey: `reg:${a.id}`,
+        kind: 'reg_alert',
+        title: `Regulation update — ${spName}`,
+        body: `${jurName}: ${a.summary}`,
+        stamp: a.created_at,
+        source: 'Regulation change',
+      });
+    }
     return out.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
-  }, [announcements, launchEmails]);
+  }, [announcements, launchEmails, regAlerts]);
 
   const active   = items.filter(i => !dismissed.has(i.dismissKey));
   const cleared  = items.filter(i =>  dismissed.has(i.dismissKey));
@@ -233,7 +253,10 @@ export default function NotificationsDrawer({ open, onClose }) {
 }
 
 function InboxRow({ item, onDismiss, cleared, isTablet = false }) {
-  const Icon = item.kind === 'launch' ? Mail : Megaphone;
+  const Icon =
+    item.kind === 'launch'    ? Mail
+  : item.kind === 'reg_alert' ? ShieldAlert
+  :                             Megaphone;
   const stampDisplay = item.stamp
     ? new Date(item.stamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : '';

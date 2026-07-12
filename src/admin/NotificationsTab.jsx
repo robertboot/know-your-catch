@@ -17,6 +17,9 @@ import {
   listAllAnnouncements, createAnnouncement, updateAnnouncement,
   deleteAnnouncement,
 } from '../announcements-store.js';
+import {
+  refreshRegulationSnapshot, runRegulationAlertScan,
+} from '../regulation-alerts-store.js';
 
 const FISH_ID_DEFAULT_SUBJECT = 'Fish ID is live in ReelIntel';
 const FISH_ID_DEFAULT_BODY = `<p>Hey angler,</p>
@@ -25,15 +28,17 @@ const FISH_ID_DEFAULT_BODY = `<p>Hey angler,</p>
 <p>Tight lines,<br>The ReelIntel team</p>`;
 
 export default function NotificationsTab() {
-  const [sub, setSub] = useState('launch'); // 'launch' | 'announcements'
+  const [sub, setSub] = useState('launch'); // 'launch' | 'announcements' | 'reg_alerts'
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}` }}>
         <SubTab id="launch"        cur={sub} onClick={setSub} label="Launch emails" />
         <SubTab id="announcements" cur={sub} onClick={setSub} label="In-app banners" />
+        <SubTab id="reg_alerts"    cur={sub} onClick={setSub} label="Reg alerts" />
       </div>
       {sub === 'launch'        && <LaunchEmailsPanel />}
       {sub === 'announcements' && <AnnouncementsPanel />}
+      {sub === 'reg_alerts'    && <RegAlertsPanel />}
     </div>
   );
 }
@@ -501,4 +506,115 @@ function fromLocalInput(v) {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+/* ============================================================
+   Regulation change alerts (3.5)
+   ============================================================
+   Two admin actions:
+     1. Refresh snapshot — pushes the bundled REGULATIONS from this
+        client build into public.regulation_snapshot. Must run after
+        every data.js update or the scan can't detect real changes.
+     2. Run alert check (test) — invokes the scan-regulation-alerts
+        edge function with test_only=true. Emails go to the admin's
+        own inbox and regulation_alerts_sent is NOT updated so the
+        dry-run doesn't poison future scans.
+   A "run for real now" affordance is intentionally NOT exposed to
+   avoid accidental mass-send; pg_cron fires the real run daily. */
+function RegAlertsPanel() {
+  const [snapStatus, setSnapStatus] = useState('idle'); // 'idle' | 'refreshing' | 'ok' | 'err'
+  const [snapResult, setSnapResult] = useState(null);
+  const [scanStatus, setScanStatus] = useState('idle');
+  const [scanResult, setScanResult] = useState(null);
+  const [err, setErr] = useState('');
+
+  const doRefresh = async () => {
+    setSnapStatus('refreshing'); setErr(''); setSnapResult(null);
+    const r = await refreshRegulationSnapshot();
+    if (!r.ok) { setSnapStatus('err'); setErr(r.error || 'refresh failed'); return; }
+    setSnapStatus('ok'); setSnapResult(r);
+  };
+
+  const doTestScan = async () => {
+    setScanStatus('running'); setErr(''); setScanResult(null);
+    const r = await runRegulationAlertScan({ testOnly: true });
+    if (!r.ok) { setScanStatus('err'); setErr(r.error || 'scan failed'); return; }
+    setScanStatus('ok'); setScanResult(r);
+  };
+
+  return (
+    <>
+      <Card>
+        <SectionLabel style={{ marginBottom: 6 }}>Refresh snapshot</SectionLabel>
+        <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10, lineHeight: 1.5 }}>
+          Pushes the bundled REGULATIONS from this build into
+          <code style={{ color: T.ink, marginLeft: 4, marginRight: 4 }}>regulation_snapshot</code>.
+          Run this after every data.js update — otherwise the daily scan
+          will compare last-week's snapshot against itself and never
+          detect a real change.
+        </div>
+        <PrimaryButton
+          onClick={doRefresh}
+          disabled={snapStatus === 'refreshing'}
+          style={{ width: 'auto', padding: '10px 16px', fontSize: 12 }}
+        >
+          {snapStatus === 'refreshing' ? 'Refreshing…' : 'Refresh regulation snapshot'}
+        </PrimaryButton>
+        {snapResult && (
+          <div style={{ marginTop: 10, fontSize: 12, color: T.open }}>
+            ✓ Wrote {snapResult.rows} (species × jurisdiction) rows.
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <SectionLabel style={{ marginBottom: 6 }}>Run alert check now (test)</SectionLabel>
+        <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10, lineHeight: 1.5 }}>
+          Invokes the <code style={{ color: T.ink }}>scan-regulation-alerts</code> edge
+          function with <code style={{ color: T.ink }}>test_only=true</code>. Any emails go
+          to <strong>your admin inbox only</strong>. The
+          <code style={{ color: T.ink, marginLeft: 4, marginRight: 4 }}>regulation_alerts_sent</code>
+          cache is NOT written — the test can be run repeatedly without
+          suppressing tomorrow's real run.
+        </div>
+        <GhostButton
+          onClick={doTestScan}
+          disabled={scanStatus === 'running'}
+          style={{ padding: '10px 14px', fontSize: 12 }}
+        >
+          {scanStatus === 'running' ? 'Running…' : 'Run alert check now (test)'}
+        </GhostButton>
+        {scanResult && (
+          <div style={{
+            marginTop: 10, padding: 10, borderRadius: 6,
+            background: 'rgba(52, 209, 123, 0.14)', border: `1px solid ${T.open}`,
+            fontSize: 12, color: T.open,
+          }}>
+            ✓ Users checked: {scanResult.usersChecked} · Alerts detected: {scanResult.alertsInserted} · Emails sent: {scanResult.emailsSent} · Emails failed: {scanResult.emailsFailed}
+          </div>
+        )}
+      </Card>
+
+      <Card style={{ borderColor: T.cardEdge }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Scheduling</SectionLabel>
+        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5 }}>
+          The real scan runs daily via pg_cron at <strong>12:00 UTC</strong>
+          {' '}(~7am Central / 6am Mountain). Job name:
+          {' '}<code style={{ color: T.ink }}>reelintel_reg_alerts_daily</code>.
+          Managed by migration
+          {' '}<code style={{ color: T.ink }}>regulation_alerts_cron</code>.
+          {' '}Every user whose starred species has a diff since the last
+          snapshot gets an email and an in-app alert. Duplicates are
+          suppressed via
+          {' '}<code style={{ color: T.ink }}>regulation_alerts_sent</code>.
+        </div>
+      </Card>
+
+      {err && (
+        <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>
+          {err}
+        </div>
+      )}
+    </>
+  );
 }
