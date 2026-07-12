@@ -1063,7 +1063,27 @@ export function IdentifyScreen({
             src={`${import.meta.env.BASE_URL}brand/fish_scan_bg.jpg`}
             alt=""
             aria-hidden
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            onLoad={() => {
+              if (typeof console !== 'undefined') {
+                // eslint-disable-next-line no-console
+                console.log('[hero] tuna bg loaded');
+              }
+            }}
+            onError={(e) => {
+              // Log the failing URL so we can tell iOS-bundle-path
+              // problems from Vercel-cache problems from just-missing-
+              // asset problems.
+              if (typeof console !== 'undefined') {
+                // eslint-disable-next-line no-console
+                console.warn('[hero] tuna bg failed to load', {
+                  src: e.currentTarget?.src,
+                  baseUrl: import.meta.env.BASE_URL,
+                });
+              }
+              // Hide the broken img so the fallback gradient shows
+              // through cleanly instead of a broken glyph.
+              e.currentTarget.style.display = 'none';
+            }}
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
