@@ -1396,6 +1396,130 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
    this card lets the user turn those launch emails off. Re-opt-in
    surface can be added when we have more than one feature to
    subscribe to. */
+/* ============================================================
+   ANGLER PROFILE (3.3) — segmentation only, DOES NOT change regs
+   ============================================================
+   Four optional fields collected either in onboarding (skippable)
+   or in Settings. Values are stored on state.angler* keys, sync via
+   the user_state channel (USER_STATE_KEYS in cloudsync.js), and are
+   never read by the regulations pipeline. If fisherType === 'commercial'
+   we surface a "we currently cover recreational rules" caveat so a
+   commercial angler doesn't rely on the wrong limits. */
+export const PROFILE_FIELDS = [
+  {
+    key: 'anglerIsCaptain', label: 'Licensed captain?',
+    options: [
+      { value: true,  label: 'Yes' },
+      { value: false, label: 'No'  },
+    ],
+  },
+  {
+    key: 'anglerFisherType', label: 'How do you fish?',
+    options: [
+      { value: 'recreational', label: 'Recreational' },
+      { value: 'charter',      label: 'Charter or for-hire' },
+      { value: 'commercial',   label: 'Commercial' },
+    ],
+  },
+  {
+    key: 'anglerExperience', label: 'Experience level',
+    options: [
+      { value: 'beginner',     label: 'Beginner' },
+      { value: 'intermediate', label: 'Intermediate' },
+      { value: 'experienced',  label: 'Experienced' },
+      { value: 'pro',          label: 'Pro' },
+    ],
+  },
+  {
+    key: 'anglerTripFreq', label: 'How often do you fish?',
+    options: [
+      { value: 'few_year',     label: 'A few times a year' },
+      { value: 'monthly',      label: 'Monthly' },
+      { value: 'weekly',       label: 'Weekly' },
+      { value: 'several_week', label: 'Several times a week' },
+    ],
+  },
+];
+
+/* True when every profile field has a value on state — used by the
+   Home "Finish setup" nudge (3.4) to decide whether to prompt. */
+export function profileFieldsComplete(state) {
+  if (!state) return false;
+  for (const f of PROFILE_FIELDS) {
+    if (state[f.key] === undefined || state[f.key] === null) return false;
+  }
+  return true;
+}
+
+function FishingProfileCard({ state, update, isTablet }) {
+  const commercial = state?.anglerFisherType === 'commercial';
+  const setField = (key, value) => {
+    update({ [key]: value, anglerProfileCompletedAt: profileFieldsComplete({ ...state, [key]: value }) ? new Date().toISOString() : null });
+  };
+  return (
+    <Card style={{ marginBottom: 10 }}>
+      <SectionLabel style={{ marginBottom: 8 }}>Fishing profile</SectionLabel>
+      <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.45, marginBottom: 10 }}>
+        Optional — helps us tune the app. Does not change which regulations you see.
+      </div>
+      {PROFILE_FIELDS.map((f) => (
+        <ProfilePickerRow
+          key={f.key}
+          label={f.label}
+          value={state?.[f.key]}
+          options={f.options}
+          onChange={(v) => setField(f.key, v)}
+          isTablet={isTablet}
+        />
+      ))}
+      {commercial && (
+        <div style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 6,
+          background: T.warnBg, color: T.brassDeep,
+          border: `1px solid ${T.warn}`, fontSize: isTablet ? 13 : 12, lineHeight: 1.5,
+        }}>
+          <strong>Heads up:</strong> ReelIntel currently covers recreational
+          fishing regulations. Commercial limits, permits, and reporting are
+          governed separately — always defer to NOAA HMS / your state
+          licensing authority for commercial rules.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ProfilePickerRow({ label, value, options, onChange, isTablet }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: isTablet ? 13 : 12, color: T.ink, fontWeight: 700, marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <button
+              key={String(o.value)}
+              onClick={() => onChange(active ? null : o.value)}
+              style={{
+                background: active ? T.brass : 'transparent',
+                color: active ? T.oceanDeep : T.inkSoft,
+                border: `1px solid ${active ? T.brass : T.cardEdge}`,
+                padding: isTablet ? '7px 12px' : '6px 10px',
+                borderRadius: 999,
+                fontSize: isTablet ? 12.5 : 11.5, fontWeight: 700,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function FeatureEmailPrefsCard() {
   const [loading, setLoading]     = useState(true);
   const [optedOut, setOptedOut]   = useState(false);
@@ -1562,6 +1686,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
           <GhostButton onClick={onEditAccount} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Edit</GhostButton>
         </div>
       </Card>
+      <FishingProfileCard state={state} update={update} isTablet={isTablet} />
       {session?.user?.id && <FeatureEmailPrefsCard />}
       {/* Admin console entry — web-only, admin allowlist only. When
           __KYC_ADMIN__ is false (ios:build) the whole Card constant-
