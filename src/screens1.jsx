@@ -984,18 +984,20 @@ export function IdentifyScreen({
         </div>
       )}
 
-      {/* 3) Dominant "CLICK to ID" hero tile with BG image slot.
+      {/* 3) Dominant "Click to SCAN" hero tile with underwater tuna
+          BG image anchored right, text anchored left over a
+          left-heavy dark scrim.
           Phone: full-container width, 220px tall.
           iPad portrait: full-container width, 300px tall.
           iPad landscape: full-container width, 340px tall.
-          BG image sits behind content with a dark scrim so title +
-          badge + subtitle stay legible against any photograph. Drop
-          asset at public/brand/click-to-id-bg.jpg — the fallback
-          gradient renders until it lands. */}
+          Source asset: public/brand/click-to-scan-bg.png
+          (2129x739, aspect 2.88:1). object-position:right center
+          keeps the fish + reticle in view at narrower phone crops.
+          Fallback gradient renders if the asset is missing. */}
       {!q.trim() && (
         <button
           onClick={() => fileRef.current?.click()}
-          aria-label="Click to identify a fish by photo"
+          aria-label="Click to scan a fish by photo"
           style={{
             position: 'relative',
             width: '100%', textAlign: 'left', cursor: 'pointer',
@@ -1007,80 +1009,76 @@ export function IdentifyScreen({
             boxShadow: '0 6px 22px rgba(0, 0, 0, 0.35)',
           }}
         >
-          {/* Background image (drop into public/brand/click-to-id-bg.jpg).
-              Fallback stays transparent so the gradient below shows
-              through when the asset isn't present. */}
+          {/* Background image — right-anchored so the fish + reticle
+              stay visible when the card crops narrower on iPhone. */}
           <img
-            src={`${import.meta.env.BASE_URL}brand/click-to-id-bg.jpg`}
+            src={`${import.meta.env.BASE_URL}brand/click-to-scan-bg.png`}
             alt=""
             aria-hidden
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
-              objectFit: 'cover', objectPosition: 'center',
+              objectFit: 'cover', objectPosition: 'right center',
               display: 'block', userSelect: 'none', pointerEvents: 'none',
             }}
           />
-          {/* Fallback gradient — shown when the BG image is missing.
-              Sits underneath the scrim so the layering is stable
-              regardless of asset availability. */}
+          {/* Fallback gradient — visible when the BG asset 404s.
+              Sits underneath the scrim so layering is stable. */}
           <div aria-hidden style={{
             position: 'absolute', inset: 0,
             background: 'linear-gradient(140deg, #0f2438 0%, #062330 55%, #041a2c 100%)',
             zIndex: 0,
           }} />
-          {/* Scrim — bottom-heavy so the copy at the bottom-left has
-              maximum contrast without dimming the whole scene. */}
+          {/* Scrim — LEFT-HEAVY so the copy on the left half stays
+              readable while the fish on the right stays visually
+              intact. Solid dark on the left → nearly transparent on
+              the right. */}
           <div aria-hidden style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(180deg, rgba(4,22,44,0.15) 0%, rgba(4,22,44,0.35) 45%, rgba(4,22,44,0.85) 100%)',
+            background: 'linear-gradient(90deg, rgba(6,20,36,0.85) 0%, rgba(6,20,36,0.65) 35%, rgba(6,20,36,0.30) 60%, rgba(6,20,36,0.15) 100%)',
             zIndex: 1, pointerEvents: 'none',
           }} />
 
-          {/* Content — absolute-positioned so it sits over the scrim. */}
+          {/* Content — anchored left over the darkened side. */}
           <div style={{
             position: 'absolute', inset: 0, zIndex: 2,
-            padding: isTablet ? '22px 24px' : '18px 18px',
+            padding: isTablet ? '22px 26px' : '18px 18px',
             display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            alignItems: 'flex-start',
           }}>
-            {/* Top row: camera badge + BETA */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{
-                width: isTablet ? 56 : 48, height: isTablet ? 56 : 48, borderRadius: '50%',
-                background: accent, color: accentText,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-                boxShadow: '0 4px 14px rgba(94, 205, 242, 0.35)',
-              }}>
-                <Camera size={isTablet ? 30 : 26} strokeWidth={2.2} />
-              </div>
-              <span style={{
-                background: 'rgba(251,191,36,0.18)', color: '#fbbf24',
-                fontSize: isTablet ? 11 : 10, fontWeight: 800, letterSpacing: '0.08em',
-                padding: '5px 9px', borderRadius: 6, textTransform: 'uppercase',
-                border: '1px solid rgba(251, 191, 36, 0.35)',
-                whiteSpace: 'nowrap',
-              }}>
-                Beta
-              </span>
-            </div>
+            {/* Top: BETA badge on the left (no more camera circle —
+                the fish image carries the visual weight). */}
+            <span style={{
+              background: 'rgba(251,191,36,0.18)', color: '#fbbf24',
+              fontSize: isTablet ? 11 : 10, fontWeight: 800, letterSpacing: '0.08em',
+              padding: '5px 9px', borderRadius: 6, textTransform: 'uppercase',
+              border: '1px solid rgba(251, 191, 36, 0.35)',
+              whiteSpace: 'nowrap',
+            }}>
+              Beta
+            </span>
 
-            {/* Bottom block: title + subtitle */}
-            <div>
+            {/* Bottom block: title + subtitle, left-anchored and
+                width-capped so the copy never spills onto the fish. */}
+            <div style={{
+              // Cap so long copy wraps in the left half. On narrow
+              // phones (<360px CSS) drop to ~55% of container width so
+              // the fish still peeks through the right edge.
+              maxWidth: isTablet ? (size === 'tablet-landscape' ? 560 : 460) : 220,
+            }}>
               <div style={{
-                fontSize: isTablet ? (size === 'tablet-landscape' ? 44 : 40) : 32,
+                fontSize: isTablet ? (size === 'tablet-landscape' ? 44 : 40) : 30,
                 fontWeight: 900, letterSpacing: 0.2,
                 color: '#f7fbff', lineHeight: 1.02,
                 textShadow: '0 2px 10px rgba(0, 0, 0, 0.55)',
               }}>
-                CLICK to ID
+                Click to SCAN
               </div>
               <div style={{
-                fontSize: isTablet ? 16 : 14, color: '#d8e4ee',
+                fontSize: isTablet ? 16 : 13, color: '#d8e4ee',
                 marginTop: 8, lineHeight: 1.35, fontWeight: 500,
                 textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)',
-                maxWidth: isTablet ? 520 : 300,
               }}>
                 Take or pick a photo — always confirm the species
               </div>
