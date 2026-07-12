@@ -26,7 +26,7 @@ import { client } from './supabase-client.js';
 
 const DEBOUNCE_MS = 500;
 const _debounceTimers = new Map();  // key -> timeoutId
-let   _pendingRecords = { catches: new Set(), pbs: new Set() };
+let   _pendingRecords = { catches: new Set(), pbs: new Set(), user_state: new Set() };
 
 let   _status = 'idle';
 const _listeners = new Set();
@@ -34,8 +34,43 @@ let   _lastSyncedAt = null;
 
 // Track what we last successfully pushed so a subsequent state
 // change can detect "did this row actually change?". Serialized JSON
-// per record keyed by id / speciesId.
-const _lastPushed = { catches: new Map(), pbs: new Map() };
+// per record keyed by id / speciesId / 'self' (single-row user_state).
+const _lastPushed = { catches: new Map(), pbs: new Map(), user_state: new Map() };
+
+/* Keys inside the top-level app state that ride in the user_state
+   jsonb blob. If it isn't here, it stays device-local. The list is
+   the source of truth for what "syncable client state" means —
+   catchLog + pbs have their own tables; everything below is scalar
+   user preference / segmentation data. Deliberate exclusions:
+     - onboarding* flags (per-device UX; a new device should see
+       onboarding fresh)
+     - jurisdiction (per-device — user may be fishing federal waters
+       on one device and state waters on another)
+     - syncMeta / anything set by cloudsync itself
+     - anglerEmail (comes from the auth session, not user_state) */
+export const USER_STATE_KEYS = [
+  'favorites',
+  'recentSpecies',
+  'units',
+  'anglerName',
+  'notes',
+  // 3.3 profile / segmentation fields
+  'anglerIsCaptain',
+  'anglerFisherType',
+  'anglerExperience',
+  'anglerTripFreq',
+  'anglerProfileCompletedAt',
+];
+
+function pickUserState(state) {
+  const out = {};
+  for (const k of USER_STATE_KEYS) {
+    if (state && Object.prototype.hasOwnProperty.call(state, k) && state[k] !== undefined) {
+      out[k] = state[k];
+    }
+  }
+  return out;
+}
 
 function setStatus(s) {
   _status = s;
@@ -105,12 +140,14 @@ export async function pullAll(userId) {
   if (!c || !userId) return null;
   setStatus('syncing');
   try {
-    const [catchesRes, pbsRes] = await Promise.all([
+    const [catchesRes, pbsRes, userStateRes] = await Promise.all([
       c.from('catches').select('*').eq('user_id', userId),
       c.from('pbs').select('*').eq('user_id', userId),
+      c.from('user_state').select('*').eq('user_id', userId).maybeSingle(),
     ]);
     if (catchesRes.error) throw catchesRes.error;
     if (pbsRes.error)     throw pbsRes.error;
+    if (userStateRes.error) throw userStateRes.error;
 
     // Filter out soft-deleted rows and rebuild the app-shape objects.
     const catches = (catchesRes.data || [])
@@ -121,17 +158,28 @@ export async function pullAll(userId) {
       if (r.deleted_at) continue;
       pbs[r.species_id] = r.data;
     }
+    // user_state is a single-row soft-deletable jsonb blob. Absent
+    // (null) or soft-deleted → no server state; a signed-out device
+    // that just signed in will hit the merge path in App.jsx.
+    const userStateRow = userStateRes.data && !userStateRes.data.deleted_at
+      ? userStateRes.data
+      : null;
+    const userState = userStateRow ? (userStateRow.data || {}) : null;
 
     // Prime the "last pushed" cache so subsequent local edits diff
     // against what's known-on-server rather than treating a pulled
     // row as a fresh change to push back up.
     _lastPushed.catches.clear();
     _lastPushed.pbs.clear();
+    _lastPushed.user_state.clear();
     for (const r of (catchesRes.data || [])) _lastPushed.catches.set(r.id, JSON.stringify(catchToRow(rowToCatch(r), userId)));
     for (const r of (pbsRes.data     || [])) _lastPushed.pbs.set(r.species_id, JSON.stringify(r.data));
+    if (userStateRow) _lastPushed.user_state.set('self', JSON.stringify(userState));
 
     setStatus('synced');
-    return { catches, pbs };
+    // Return userStateExists so the caller knows whether to run the
+    // "first sign-in on a device with existing local data" merge.
+    return { catches, pbs, userState, userStateExists: !!userStateRow };
   } catch (e) {
     console.warn('[cloudsync] pull failed', e?.message || e);
     setStatus('offline');
@@ -139,11 +187,48 @@ export async function pullAll(userId) {
   }
 }
 
+/* Non-destructive first-sign-in merge policy.
+   - For every USER_STATE_KEY, server wins when the server has a
+     non-empty value for that key. Otherwise the local device value
+     is kept (and will be uploaded on the next syncChanges call).
+   - Empty arrays / empty strings / null / undefined on the server
+     count as "not set" so we don't wipe a device that has been
+     collecting favorites while signed-out.
+   Documented behaviour: subsequent signed-in devices see the union
+   without a duplicate wipe. */
+export function mergeUserState(localState, serverState) {
+  if (!serverState) return localState;
+  const isEmpty = (v) => {
+    if (v == null) return true;
+    if (Array.isArray(v)) return v.length === 0;
+    if (typeof v === 'string') return v.trim() === '';
+    if (typeof v === 'object') return Object.keys(v).length === 0;
+    return false;
+  };
+  const merged = { ...localState };
+  for (const k of USER_STATE_KEYS) {
+    const serverHas = Object.prototype.hasOwnProperty.call(serverState, k) && !isEmpty(serverState[k]);
+    if (serverHas) merged[k] = serverState[k];
+    // else: keep local (or undefined, which callers treat as "not set")
+  }
+  return merged;
+}
+
 /* ------------------------------------------------------------------
    Push: diff prev vs next state and enqueue upserts for changed rows.
    Debounced per record so rapid-fire edits (typing notes, adjusting
    metrics) collapse into a single write.
    ------------------------------------------------------------------ */
+function tableFor(kind) {
+  return kind === 'catches' ? 'catches'
+       : kind === 'pbs'     ? 'pbs'
+       : 'user_state';
+}
+function conflictColsFor(kind) {
+  return kind === 'catches'    ? 'id'
+       : kind === 'pbs'        ? 'user_id,species_id'
+       : /* user_state */         'user_id';
+}
 function scheduleUpsert(kind, key, payloadFn) {
   const timerKey = `${kind}:${key}`;
   clearTimeout(_debounceTimers.get(timerKey));
@@ -155,14 +240,17 @@ function scheduleUpsert(kind, key, payloadFn) {
       const payload = payloadFn();
       if (!payload) { _pendingRecords[kind].delete(key); return; }
       setStatus('syncing');
-      const table = kind === 'catches' ? 'catches' : 'pbs';
-      const conflictCols = kind === 'catches' ? 'id' : 'user_id,species_id';
+      const table = tableFor(kind);
+      const conflictCols = conflictColsFor(kind);
       const { error } = await c.from(table).upsert(payload, { onConflict: conflictCols });
       _pendingRecords[kind].delete(key);
       if (error) throw error;
-      if (kind === 'catches') _lastPushed.catches.set(key, JSON.stringify(payload));
-      else                    _lastPushed.pbs.set(key, JSON.stringify(payload.data));
-      if (_pendingRecords.catches.size === 0 && _pendingRecords.pbs.size === 0) {
+      if (kind === 'catches')         _lastPushed.catches.set(key, JSON.stringify(payload));
+      else if (kind === 'pbs')        _lastPushed.pbs.set(key, JSON.stringify(payload.data));
+      else /* user_state */           _lastPushed.user_state.set('self', JSON.stringify(payload.data));
+      if (_pendingRecords.catches.size === 0 &&
+          _pendingRecords.pbs.size === 0 &&
+          _pendingRecords.user_state.size === 0) {
         setStatus('synced');
       }
     } catch (e) {
@@ -229,6 +317,20 @@ export function syncChanges(prev, next, userId) {
       scheduleSoftDelete('pbs', sid, { user_id: userId, species_id: sid, data: {} });
     }
   }
+
+  // user_state: single row per user, jsonb blob. Diff on the picked
+  // subset of keys — everything else is device-local so a change to
+  // (e.g.) syncMeta doesn't schedule a needless write.
+  const prevUS = JSON.stringify(pickUserState(prev));
+  const nextUSObj = pickUserState(next);
+  const nextUS = JSON.stringify(nextUSObj);
+  if (prevUS !== nextUS && _lastPushed.user_state.get('self') !== nextUS) {
+    scheduleUpsert('user_state', 'self', () => ({
+      user_id: userId,
+      data: nextUSObj,
+      deleted_at: null,
+    }));
+  }
 }
 
 /** Reset the pushed-cache and re-upsert everything. Used by Settings
@@ -237,6 +339,7 @@ export function syncChanges(prev, next, userId) {
 export async function forceSync(state, userId) {
   _lastPushed.catches.clear();
   _lastPushed.pbs.clear();
+  _lastPushed.user_state.clear();
   const empty = { catchLog: [], pbs: {} };
   syncChanges(empty, state, userId);
 }

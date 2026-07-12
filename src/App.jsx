@@ -21,6 +21,7 @@ import {
   getStatus as getSyncStatus,
   getLastSyncedAt as getCloudLastSynced,
   forceSync as cloudForceSync,
+  mergeUserState as cloudMergeUserState,
 } from './cloudsync.js';
 import { SyncPill } from './auth-ui.jsx';
 import { jurisdictionById, isStale } from './helpers.js';
@@ -171,7 +172,13 @@ export default function App() {
         // set locally, adopt it so downstream views (share reports,
         // profile card) render nicely.
         const anglerEmail = (prev.anglerEmail || '').trim() || session.user?.email || '';
-        const next = { ...prev, catchLog, pbs, anglerEmail };
+        // user_state: non-destructive merge — see cloudsync.mergeUserState.
+        // Local wins for keys the server has never seen (a device that
+        // was signed-out and populated favorites / units / notes
+        // uploads those on the next syncChanges call). Server wins
+        // when it has a non-empty value.
+        const merged = cloudMergeUserState(prev, snap.userState);
+        const next = { ...prev, ...merged, catchLog, pbs, anglerEmail };
         saveState(next);
         return next;
       });
