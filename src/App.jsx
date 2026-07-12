@@ -68,6 +68,7 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
   const [keepFor, setKeepFor] = useState(null);
   const [hashRoute, setHashRoute] = useState(currentHashRoute);
   // Bump on every species-store notify so components that read SPECIES
@@ -834,8 +835,35 @@ export default function App() {
           </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 12, flexShrink: 0 }}>
-          {session && !isHome && (
-            <SyncPill status={syncStatus} onClick={() => push({ name: 'settings' })} />
+          {/* Sync pill: signed-in users get the real status. Signed-out
+              users get an honest "Not signed in" affordance that
+              opens the sign-in modal. Shown on non-home routes; on
+              Home the same feature lives on the header sign-in chip
+              below. */}
+          {!isHome && (
+            <SyncPill
+              status={session ? syncStatus : 'signed_out'}
+              onClick={() => session ? push({ name: 'settings' }) : setShowSignInModal(true)}
+            />
+          )}
+          {/* Home header: sign-in chip when signed-out so a new user
+              can move from local-only to synced without hunting for
+              it in Settings. Signed-in users don't see it — their
+              synced state is implicit + the SyncPill covers status
+              on other screens. */}
+          {isHome && !session && (
+            <button
+              onClick={() => setShowSignInModal(true)}
+              style={{
+                background: 'transparent', color: T.brass,
+                border: `1px solid ${T.brass}`,
+                padding: '5px 10px', borderRadius: 999,
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Sign in
+            </button>
           )}
           {isHome && (
             <button
@@ -1024,6 +1052,80 @@ export default function App() {
         open={showNotifications}
         onClose={() => setShowNotifications(false)}
       />
+
+      {/* User-triggered sign in / sign up from Home header + SyncPill.
+          Onboarding also opens SignInModal earlier (via the
+          onboarding chain around line 350), but that flow is a
+          modal-in-modal path with different wrapper chrome. */}
+      {showSignInModal && !session && (
+        <div
+          onClick={() => setShowSignInModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 500,
+            background: 'rgba(3, 27, 51, 0.78)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 400,
+              background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
+              padding: '24px 22px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: T.ink }}>Sign in</div>
+              <button
+                onClick={() => setShowSignInModal(false)}
+                style={{ background: 'transparent', border: 'none', color: T.inkMute, fontSize: 12, cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: '0 0 14px' }}>
+              Keeps your catches, PBs, and starred species backed up and synced across your devices. Sign out anytime — your local log stays.
+            </p>
+            <SignInModal
+              initialEmail={state.anglerEmail || ''}
+              initialMode="signin"
+              onClose={() => setShowSignInModal(false)}
+              onSignIn={async ({ email, password }) => {
+                const res = await signInWithPassword({ email, password });
+                if (res?.ok) { update({ anglerEmail: email }); setShowSignInModal(false); }
+                return res;
+              }}
+              onSignUp={async ({ email, password }) => {
+                const res = await signUp({ email, password });
+                if (res?.ok) { update({ anglerEmail: email }); setShowSignInModal(false); }
+                return res;
+              }}
+              onResetPassword={async ({ email }) => {
+                const res = await resetPassword({ email });
+                if (res?.ok) update({ anglerEmail: email });
+                return res;
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Sign in with Apple — DELIBERATELY NOT WIRED.
+          To enable in a future pass:
+            1. iOS entitlement: com.apple.developer.applesignin in
+               ios/App/App/App.entitlements.
+            2. App Store Connect: enable "Sign In with Apple" on the
+               com.reelintel.app bundle identifier.
+            3. Supabase Auth → Providers → Apple: enable with Team ID +
+               Services ID + Key.
+            4. Add @capacitor-community/apple-sign-in as a dep and
+               call SignInWithApple.authorize({...}) → then
+               supabase.auth.signInWithIdToken({ provider: 'apple',
+               token, nonce }).
+          The plugin was previously installed and unwired — it stayed
+          idle in the bundle and emitted AuthorizationError 1000 when
+          native code tried to reach its handler. Removed from
+          package.json to eliminate the auto-attempt. */}
     </div>
     </ScreenSizeContext.Provider>
   );

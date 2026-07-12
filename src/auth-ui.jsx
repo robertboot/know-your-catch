@@ -86,19 +86,32 @@ export function AccountSection({ session: sessionFromProp, syncStatus, lastSynce
 }
 
 /** Small pill indicating sync status. Shown in the header on non-
-    home routes when signed in. */
+    home routes. Signed-in users get real 'syncing / offline / synced'
+    status; signed-out users get an honest 'Not signed in' affordance
+    that opens the sign-in modal on tap. Never imply cloud backup
+    that isn't actually happening. */
 export function SyncPill({ status, onClick }) {
-  const isSyncing = status === 'syncing';
-  const isOffline = status === 'offline';
-  const label   = isSyncing ? '↻ Syncing' : isOffline ? '⚠ Offline' : '☁ Synced';
-  const color   = isOffline ? T.warn : isSyncing ? T.brass : T.inkMute;
-  const border  = isOffline ? T.warn : isSyncing ? T.brass : T.cardEdge;
+  const isSignedOut = status === 'signed_out';
+  const isSyncing   = status === 'syncing';
+  const isOffline   = status === 'offline';
+  const label = isSignedOut
+    ? 'Not signed in'
+    : isSyncing ? '↻ Syncing'
+    : isOffline ? '⚠ Offline'
+    : '☁ Synced';
+  const color   = isSignedOut ? T.brass : isOffline ? T.warn  : isSyncing ? T.brass : T.inkMute;
+  const border  = isSignedOut ? T.brass : isOffline ? T.warn  : isSyncing ? T.brass : T.cardEdge;
   return (
-    <button onClick={onClick} aria-label={`Sync status: ${label}`} style={{
-      background: 'transparent', border: `1px solid ${border}`,
-      color, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-      padding: '3px 8px', borderRadius: 999, cursor: onClick ? 'pointer' : 'default',
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-    }}>{label}</button>
+    <button
+      onClick={onClick}
+      aria-label={isSignedOut ? 'Sign in to back up + sync' : `Sync status: ${label}`}
+      title={isSignedOut ? 'Saved on this device only. Tap to sign in.' : undefined}
+      style={{
+        background: 'transparent', border: `1px solid ${border}`,
+        color, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+        padding: '3px 8px', borderRadius: 999, cursor: onClick ? 'pointer' : 'default',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+      }}
+    >{label}</button>
   );
 }
