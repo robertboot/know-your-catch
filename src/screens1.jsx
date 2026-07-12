@@ -320,6 +320,7 @@ export function HomeScreen({
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
   onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
   onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast,
+  finishSetupVisible, onFinishSetup, onDismissFinishSetup,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   const isLandscape = screenSize === 'tablet-landscape';
@@ -366,6 +367,53 @@ export function HomeScreen({
           <div style={{ fontSize: 13, color: T.ink }}>
             <strong>Regulations data is more than 7 days old.</strong> Connect to internet when possible to refresh.
           </div>
+        </Card>
+      )}
+
+      {finishSetupVisible && (
+        <Card style={{
+          background: T.parchmentDeep, borderColor: T.brass,
+          marginTop: 12, display: 'flex', gap: 12, alignItems: 'center',
+          borderRadius: 12, padding: 12,
+        }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: '50%',
+            background: T.brass, color: T.oceanDeep,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Sparkles size={18} strokeWidth={2.2} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.ink }}>
+              Finish setting up
+            </div>
+            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2, lineHeight: 1.4 }}>
+              {!jurisdiction ? 'Pick your fishing waters to see regulations.'
+                             : 'Tell us a bit about how you fish (optional).'}
+            </div>
+          </div>
+          <button
+            onClick={onFinishSetup}
+            style={{
+              background: T.brass, color: T.oceanDeep, border: 'none',
+              padding: '7px 12px', borderRadius: 6,
+              fontSize: 12, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            Finish
+          </button>
+          <button
+            onClick={onDismissFinishSetup}
+            aria-label="Dismiss setup nudge"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: T.inkMute, padding: 4, display: 'flex', flexShrink: 0,
+            }}
+          >
+            <X size={16} />
+          </button>
         </Card>
       )}
 

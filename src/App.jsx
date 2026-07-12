@@ -29,7 +29,9 @@ import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
   FavoritePickerModal, AccountSetupModal, IdentificationConfirmCard,
   SignInModal,
+  WelcomeIntroModal, FishingProfileSetupModal,
 } from './components.jsx';
+import { PROFILE_FIELDS, profileFieldsComplete } from './screens2.jsx';
 import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
   PhotoAnalyzingScreen, PhotoResultScreen, WeatherForecastScreen,
@@ -69,6 +71,11 @@ export default function App() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
+  // Home "Finish setup" nudge is dismissible per-session — a user
+  // who tapped X on it doesn't get pestered until next launch.
+  const [finishSetupDismissed, setFinishSetupDismissed] = useState(false);
   const [keepFor, setKeepFor] = useState(null);
   const [hashRoute, setHashRoute] = useState(currentHashRoute);
   // Bump on every species-store notify so components that read SPECIES
@@ -101,10 +108,16 @@ export default function App() {
     // disclaimer be available to view, not re-accepted. The link in
     // Settings covers ongoing access. Once ANY accepted-version value
     // is on file we skip.
-    if (!s.disclaimerAcceptedVersion) setShowDisclaimer(true);
+    // Onboarding chain: intro → disclaimer → jurisdiction → account
+    // → favorites → profile. Each step is gated on the flag set by
+    // the previous step so an existing user who already accepted
+    // the disclaimer never sees intro or disclaimer again.
+    if (!s.onboardingIntroSeen && !s.disclaimerAcceptedVersion) setShowIntro(true);
+    else if (!s.disclaimerAcceptedVersion) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
     else if (!s.onboardingAccountComplete) setShowAccount(true);
     else if (!s.onboardingFavoritesComplete) setShowFavorites(true);
+    else if (!s.onboardingProfileDone) setShowProfileSetup(true);
 
     // Background: migrate any legacy data-URL photos to the new
     // photos-store shape. On native (iOS) this writes each photo's
@@ -506,9 +519,25 @@ export default function App() {
     push({ name: 'photo_analyzing', imageDataUrl: dataUrl, fromCapture: true });
   };
 
+  // Legacy-user "Finish setup" nudge. Fires when the required step
+  // (jurisdiction) is missing or the optional profile is incomplete
+  // AND the user hasn't explicitly dismissed the chip this session.
+  // The step it opens is the FIRST missing one.
+  const missingSetup = (
+    !state.jurisdiction ||
+    !profileFieldsComplete(state)
+  );
+  const startFinishSetup = () => {
+    if (!state.jurisdiction) setShowJur(true);
+    else if (!profileFieldsComplete(state)) setShowProfileSetup(true);
+  };
+
   const homeProps = {
     state, jurisdiction, stale, screenSize: size,
     onChangeJurisdiction: () => setShowJur(true),
+    finishSetupVisible: missingSetup && !finishSetupDismissed && !!state.disclaimerAcceptedVersion,
+    onFinishSetup: startFinishSetup,
+    onDismissFinishSetup: () => setFinishSetupDismissed(true),
     onIdentify:   () => push({ name: 'identify' }),
     onUploadPhoto:(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl }),
     onBrowse:     () => push({ name: 'categories' }),
@@ -974,6 +1003,20 @@ export default function App() {
         <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
       </div>
 
+      {showIntro && (
+        <WelcomeIntroModal
+          onContinue={() => {
+            update({ onboardingIntroSeen: true });
+            setShowIntro(false);
+            if (!state.disclaimerAcceptedVersion) setShowDisclaimer(true);
+            else if (!state.jurisdiction) setShowJur(true);
+            else if (!state.onboardingAccountComplete) setShowAccount(true);
+            else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+            else if (!state.onboardingProfileDone) setShowProfileSetup(true);
+          }}
+        />
+      )}
+
       {showDisclaimer && (
         <DisclaimerModal
           readOnly={disclaimerReadOnly}
@@ -984,6 +1027,7 @@ export default function App() {
             if (!state.jurisdiction) setShowJur(true);
             else if (!state.onboardingAccountComplete) setShowAccount(true);
             else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+            else if (!state.onboardingProfileDone) setShowProfileSetup(true);
           }}
         />
       )}
@@ -1023,10 +1067,12 @@ export default function App() {
           onDone={(picked) => {
             update({ favorites: picked, onboardingFavoritesComplete: true });
             setShowFavorites(false);
+            if (!state.onboardingProfileDone) setShowProfileSetup(true);
           }}
           onSkip={() => {
             update({ onboardingFavoritesComplete: true });
             setShowFavorites(false);
+            if (!state.onboardingProfileDone) setShowProfileSetup(true);
           }}
         />
       )}
@@ -1044,6 +1090,33 @@ export default function App() {
             If your trip crosses the line, rules in effect depend on where the fish was caught — not where you're heading.
           </p>
         </InfoModal>
+      )}
+
+      {showProfileSetup && (
+        <FishingProfileSetupModal
+          initial={{
+            anglerIsCaptain:   state.anglerIsCaptain,
+            anglerFisherType:  state.anglerFisherType,
+            anglerExperience:  state.anglerExperience,
+            anglerTripFreq:    state.anglerTripFreq,
+          }}
+          fields={PROFILE_FIELDS}
+          hasCommercialCaveat
+          onDone={(values) => {
+            update({
+              ...values,
+              onboardingProfileDone: true,
+              anglerProfileCompletedAt: new Date().toISOString(),
+            });
+            setShowProfileSetup(false);
+          }}
+          onSkip={() => {
+            // Skipped counts as "done" so we don't nag them next launch.
+            // They can still fill in fields later in Settings.
+            update({ onboardingProfileDone: true });
+            setShowProfileSetup(false);
+          }}
+        />
       )}
 
       {keepFor && <KeepConfirmModal species={keepFor} onClose={() => setKeepFor(null)} />}

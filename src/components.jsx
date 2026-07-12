@@ -206,6 +206,137 @@ export const modalStyle = {
    MODALS
    ============================================================ */
 
+/* WelcomeIntroModal — 3.4 onboarding step 1.
+   Fires on first launch BEFORE the disclaimer. States the pitch
+   (identify + regs + logbook), the offline promise, the Fish ID
+   BETA caveat, and previews what setup will ask for. Single card
+   with a Continue button — moves the user into the existing
+   disclaimer → jurisdiction → account → favorites chain. */
+export function WelcomeIntroModal({ onContinue }) {
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalStyle, maxWidth: 440 }}>
+        <div style={{ textAlign: 'center', marginBottom: 14 }}>
+          <Anchor size={30} color={T.brass} style={{ margin: '0 auto 8px', display: 'block' }} />
+          <H1 size={24}>Welcome to ReelIntel</H1>
+          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 13, marginTop: 6, letterSpacing: 0.3 }}>
+            Identify it. Know the rules. Stay legal.
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ fontSize: 18, lineHeight: 1 }}>📡</div>
+            <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>
+              <strong>Works with no signal.</strong> Everything you need offshore — species ID,
+              regulations, your logbook, the quiz — runs on your device. No bars? No problem.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ fontSize: 18, lineHeight: 1 }}>🎯</div>
+            <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>
+              <strong>Fish ID is in beta.</strong> Snap a photo and we'll offer a best guess —
+              but always confirm the species yourself before you keep or release. Legal decisions
+              are yours.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ fontSize: 18, lineHeight: 1 }}>🗺️</div>
+            <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>
+              <strong>Next: pick your waters.</strong> Every regulation you see is tied to the
+              jurisdiction you fish. You can change it anytime.
+            </div>
+          </div>
+        </div>
+
+        <PrimaryButton onClick={onContinue}>Let's set it up →</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
+/* FishingProfileSetupModal — 3.4 onboarding step 7.
+   Fires after the favorites picker. Presents the four PROFILE_FIELDS
+   (see screens2 PROFILE_FIELDS) as tap-to-select chip rows. Fully
+   skippable — profile fields are purely for segmentation and never
+   affect regulations. Passes the picked answers back so App.jsx can
+   patch state in one update() call. */
+export function FishingProfileSetupModal({
+  initial = {},
+  fields,
+  onDone,
+  onSkip,
+  hasCommercialCaveat = false,
+}) {
+  const [values, setValues] = useState(initial);
+  const setField = (key, value) => setValues(v => ({ ...v, [key]: value }));
+  const chosen = fields.filter(f => values[f.key] !== undefined && values[f.key] !== null).length;
+  const commercial = values.anglerFisherType === 'commercial';
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalStyle, maxWidth: 440 }}>
+        <H1 size={22} style={{ marginBottom: 4 }}>Tell us about your fishing</H1>
+        <p style={{ fontSize: 12.5, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
+          Helps us tune the app to how you fish. All optional. <strong>Does not change which
+          regulations you see.</strong>
+        </p>
+        {fields.map(f => (
+          <div key={f.key} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 700, marginBottom: 6 }}>{f.label}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {f.options.map(o => {
+                const active = values[f.key] === o.value;
+                return (
+                  <button
+                    key={String(o.value)}
+                    onClick={() => setField(f.key, active ? null : o.value)}
+                    style={{
+                      background: active ? T.brass : 'transparent',
+                      color: active ? T.oceanDeep : T.inkSoft,
+                      border: `1px solid ${active ? T.brass : T.cardEdge}`,
+                      padding: '6px 10px', borderRadius: 999,
+                      fontSize: 11.5, fontWeight: 700,
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {hasCommercialCaveat && commercial && (
+          <div style={{
+            marginTop: 8, marginBottom: 12, padding: '10px 12px', borderRadius: 6,
+            background: T.warnBg, color: T.brassDeep,
+            border: `1px solid ${T.warn}`, fontSize: 12, lineHeight: 1.5,
+          }}>
+            <strong>Heads up:</strong> ReelIntel currently covers recreational regulations.
+            Commercial limits, permits, and reporting are governed separately — defer to
+            NOAA HMS / your state licensing authority for commercial rules.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={onSkip}
+            style={{
+              flex: 1, background: 'transparent', color: T.inkSoft,
+              border: `1px solid ${T.cardEdge}`, padding: '12px 14px', borderRadius: 8,
+              fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Skip for now
+          </button>
+          <PrimaryButton onClick={() => onDone(values)} disabled={chosen === 0} style={{ flex: 1 }}>
+            {chosen === 0 ? 'Pick one to save' : 'Save profile'}
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* DisclaimerModal — onboarding accept OR view-only.
    Onboarding pass onAccept only; Settings pass readOnly + onClose. */
 export function DisclaimerModal({ onAccept, readOnly = false, onClose }) {
