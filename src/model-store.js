@@ -89,24 +89,66 @@ export async function getProductionModel() {
 }
 
 /* Promote a version to production. Enforces at most one production
-   row via the partial unique index on the table — the demote step
-   happens in the same transaction.
+   row via the partial unique index on the table.
+
+   Two-step (demote-then-promote) with an explicit rollback on the
+   promote leg so we never end up with ZERO production rows if the
+   second UPDATE fails after the first succeeded. The demote+promote
+   are still two round-trips (not one Postgres RPC), but the rollback
+   makes the failure mode consistent instead of silently broken.
+
    Also publishes the promoted model to the models-published public
-   bucket so the mobile app can fetch it at runtime. Publish failures
-   are surfaced but the DB promote is left committed — a stale public
-   manifest is a strictly better state than an inconsistent DB. */
+   bucket the mobile app reads. Publish failures are surfaced as
+   { ok:true, publishWarning } so the caller can render a distinct
+   warning banner — a stale public bucket is a broken app on device
+   even though the DB looks fine. */
 export async function promoteModelVersion(id) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
-  // Demote current prod (if any) then promote target. Two round-trips
-  // is fine since the partial unique index prevents inconsistent
-  // interleavings from another admin.
+
+  // Capture the previous production row's id BEFORE we demote it, so
+  // if the promote leg fails we can restore instead of leaving zero
+  // prod rows behind.
+  const { data: prevProd, error: prevErr } = await c.from('model_versions')
+    .select('id').eq('is_production', true).maybeSingle();
+  if (prevErr) return { ok: false, error: `prev prod lookup: ${prevErr.message}` };
+  const previousProdId = prevProd?.id || null;
+
+  // If the caller is trying to re-promote the current prod, short-
+  // circuit — nothing to do at the DB layer, but still publish so
+  // the public bucket reflects the current row's bytes.
+  if (previousProdId && previousProdId === id) {
+    const pub = await publishPromotedModel();
+    if (!pub.ok) return { ok: true, publishWarning: pub.error };
+    return { ok: true };
+  }
+
   const { error: demoteErr } = await c.from('model_versions')
     .update({ is_production: false }).eq('is_production', true);
-  if (demoteErr) return { ok: false, error: demoteErr.message };
+  if (demoteErr) return { ok: false, error: `demote: ${demoteErr.message}` };
+
   const { error: promoteErr } = await c.from('model_versions')
     .update({ is_production: true }).eq('id', id);
-  if (promoteErr) return { ok: false, error: promoteErr.message };
+  if (promoteErr) {
+    // Rollback: re-promote the previous production row so we don't
+    // leave the table with zero prod rows. Best-effort — surface the
+    // rollback outcome in the returned error message either way.
+    let rolledBack = false;
+    if (previousProdId) {
+      const { error: rbErr } = await c.from('model_versions')
+        .update({ is_production: true }).eq('id', previousProdId);
+      rolledBack = !rbErr;
+    }
+    return {
+      ok: false,
+      error: `promote: ${promoteErr.message}. ` + (previousProdId
+        ? (rolledBack
+            ? 'Previous production row restored.'
+            : 'ROLLBACK FAILED — no production row is set. Manually promote via SQL.')
+        : 'No previous production row existed; state is now "no prod" (as before this attempt).'),
+    };
+  }
+
   // Publish to the public bucket the mobile app reads.
   const pub = await publishPromotedModel();
   if (!pub.ok) return { ok: true, publishWarning: pub.error };

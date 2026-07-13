@@ -735,7 +735,6 @@ function ReviewPanel() {
               <option value="pending">Pending</option>
               <option value="verified">Verified</option>
               <option value="rejected">Rejected</option>
-              <option value="corrected">Corrected</option>
               <option value="all">All</option>
             </select>
           </div>
@@ -892,6 +891,9 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = f
     return () => { alive = false; };
   }, [row.storage_path]);
 
+  // 'corrected' kept in the palette as a defensive fallback for any
+  // legacy rows still tagged that way; new corrections land as
+  // 'verified' with original_species_id set (see correctSpecies).
   const statusColor =
     row.status === 'verified'  ? T.open :
     row.status === 'rejected'  ? T.closed :
@@ -903,6 +905,15 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = f
   // approving/correcting. Cheap lookup against the bundled SPECIES.
   const sp = showSpecies ? SPECIES.find(s => s.id === row.species_id) : null;
   const speciesLabel = sp?.commonName || row.species_id;
+
+  // Show the pre-correction species inline so a verified-via-Correct
+  // row still surfaces its audit trail visually.
+  const origSp = row.original_species_id
+    ? SPECIES.find(s => s.id === row.original_species_id)
+    : null;
+  const origLabel = row.original_species_id
+    ? (origSp?.commonName || row.original_species_id)
+    : null;
 
   return (
     <div
@@ -941,6 +952,15 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = f
           style={{ width: 14, height: 14, accentColor: T.brass }}
         />
       </div>
+      {origLabel && (
+        <div style={{
+          padding: '0 8px 6px', fontSize: 10, color: T.inkMute,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          fontStyle: 'italic',
+        }}>
+          was originally: {origLabel}
+        </div>
+      )}
     </div>
   );
 }

@@ -512,7 +512,14 @@ export async function reject(ids, reason) {
 /* Correct a batch: move to a different species_id, preserve the
    original in original_species_id so we can audit later. Both the
    destination and the source are FK targets; seed either if they
-   only exist in the bundled data seed. */
+   only exist in the bundled data seed.
+
+   Writes status='verified' (not the historical 'corrected'). A
+   human reviewer saying "this is species X" is a verified label
+   regardless of whether they clicked Approve or Correct — and
+   planExport() only pulls status='verified', so writing 'corrected'
+   silently stranded every corrected photo from every training run
+   and every Coverage count. */
 export async function correctSpecies(ids, newSpeciesId, currentSpeciesId) {
   const destSeed = await ensureSpeciesRow(newSpeciesId);
   if (!destSeed.ok) return { ok: false, error: destSeed.error };
@@ -521,7 +528,7 @@ export async function correctSpecies(ids, newSpeciesId, currentSpeciesId) {
     if (!srcSeed.ok) return { ok: false, error: srcSeed.error };
   }
   return _reviewUpdate(ids, {
-    status: 'corrected',
+    status: 'verified',
     species_id: newSpeciesId,
     original_species_id: currentSpeciesId,
     rejection_reason: null,

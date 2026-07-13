@@ -55,6 +55,15 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Separate from `error` on purpose. A publish warning is not a
+  // hard error — the DB promote succeeded, is_production is set,
+  // the admin sees the row highlighted as production. But the
+  // public bucket the mobile app polls still has the old .tflite,
+  // which means the device won't see the promoted version until
+  // Republish succeeds. This state persists across refresh() so
+  // the admin can't clear it by re-loading — only a successful
+  // Republish (or another Promote) drains it.
+  const [publishWarning, setPublishWarning] = useState('');
   const [pending, setPending] = useState([]);
   const [importing, setImporting] = useState(null); // storagePath being imported
 
@@ -114,8 +123,21 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
 
   const promote = async (id) => {
     if (!window.confirm('Promote this model to production? The currently-production version (if any) will be demoted.')) return;
+    setError('');
+    setPublishWarning('');
     const r = await promoteModelVersion(id);
     if (!r.ok) { setError(r.error || 'promote failed'); return; }
+    // DB promote succeeded. The publish step (copy .tflite + manifest
+    // into the public bucket the mobile app polls) may have failed —
+    // if so surface it as a distinct warning so the admin knows the
+    // mobile app is still on the OLD model. Refreshing the list won't
+    // clear this — only a successful Republish will.
+    if (r.publishWarning) {
+      setPublishWarning(
+        `Promoted, but publish to the mobile bucket failed: ${r.publishWarning}. ` +
+        `Click Republish above to retry — until then, mobile apps are still on the previous model.`
+      );
+    }
     refresh();
   };
 
@@ -123,6 +145,7 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
     setError('');
     const r = await publishPromotedModel();
     if (!r.ok) { setError(r.error || 'republish failed'); return; }
+    setPublishWarning('');
     alert('Model republished to public bucket. Mobile app will pick it up on next launch or Check for updates.');
   };
 
@@ -156,6 +179,17 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
       {error && (
         <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>
           {error}
+        </div>
+      )}
+
+      {publishWarning && (
+        <div role="alert" style={{
+          padding: 10, borderRadius: 8, fontSize: 12,
+          background: 'rgba(255,200,87,0.14)', color: T.warn,
+          border: `1px solid ${T.warn}`,
+          lineHeight: 1.5,
+        }}>
+          <strong>Publish incomplete</strong> — {publishWarning}
         </div>
       )}
 
