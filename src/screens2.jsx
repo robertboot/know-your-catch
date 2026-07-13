@@ -4075,7 +4075,13 @@ function QuizResultPopup({ tier, streak, bestStreak, newBest, isTablet, onNext, 
       onClick={onLearn}
       style={{
         position: 'fixed', inset: 0, zIndex: 900,
-        background: 'rgba(0, 0, 0, 0.55)',
+        // Heavier scrim so the page content behind the popup goes
+        // firmly to the background rather than competing with the
+        // result text. Blur backs it up for iOS Safari where opacity
+        // alone still lets edges bleed through busy photos.
+        background: 'rgba(4, 14, 26, 0.82)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 20,
       }}
@@ -4083,13 +4089,18 @@ function QuizResultPopup({ tier, streak, bestStreak, newBest, isTablet, onNext, 
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: bg,
+          // Solid opaque card so the emoji + label + streak line
+          // never compete with the darkened page behind. The tier
+          // color survives as the border + the emoji / label /
+          // button treatments — the card itself doesn't need to
+          // be tinted to communicate the tier.
+          background: T.card,
           border: `2px solid ${color}`,
           borderRadius: 16,
           padding: isTablet ? '28px 32px' : '20px 22px',
           maxWidth: 420, width: '100%',
           textAlign: 'center',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+          boxShadow: `0 18px 48px rgba(0,0,0,0.6), 0 0 0 6px ${bg}`,
         }}
       >
         <div style={{ fontSize: isTablet ? 60 : 44, lineHeight: 1, marginBottom: 6 }}>
