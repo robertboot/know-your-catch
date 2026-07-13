@@ -260,9 +260,21 @@ async function loadRuntimeAndModel(modelBytes) {
   // COOP/COEP headers we don't ship). enableXnnpackDelegate: false →
   // avoids the Safari-crash bug in the alpha.10 XNNPACK delegate.
   try {
+    // Sanity-check the flatbuffer: every valid .tflite file has ASCII
+    // "TFL3" at byte offset 4. If it doesn't, the bytes are garbage
+    // and no amount of runtime tuning will parse them.
+    const view = new Uint8Array(modelBytes);
+    const firstHex = Array.from(view.slice(0, 16))
+      .map(b => b.toString(16).padStart(2, '0')).join(' ');
+    const magic = String.fromCharCode(view[4], view[5], view[6], view[7]);
+    _log('LOG', `model bytes first16=[${firstHex}] magic@4=${JSON.stringify(magic)}`);
+    if (magic !== 'TFL3') {
+      _log('ERR', `flatbuffer magic mismatch — expected "TFL3", got ${JSON.stringify(magic)} — model is corrupt or wrong format`);
+    }
+
     _log('LOG', `loadTFLiteModel: bytes=${modelBytes.byteLength}`);
     const m = await window.tflite.loadTFLiteModel(
-      new Uint8Array(modelBytes),
+      view,
       { numThreads: 1, enableXnnpackDelegate: false },
     );
     _log('LOG', 'loadTFLiteModel ok');
@@ -360,9 +372,24 @@ async function _doInit() {
 }
 
 /* Force a re-check now — used by a "Check for updates" button in
-   Settings. Clears the in-flight promise so initModel() re-fetches. */
+   Settings. Wipes the cached bytes + manifest so we always re-download
+   and re-verify, guarding against the case where cached bytes have
+   been corrupted (e.g. an interrupted first-launch write, or a
+   base64 round-trip issue on the platform Filesystem). */
 export async function forceRefreshModel() {
   _readyPromise = null;
   _model = null;
+  try {
+    if (NATIVE) {
+      try { await Filesystem.deleteFile({ path: CACHED_MODEL,    directory: Directory.Data }); } catch {}
+      try { await Filesystem.deleteFile({ path: CACHED_MANIFEST, directory: Directory.Data }); } catch {}
+    } else {
+      try { localStorage.removeItem(LS_MODEL_KEY); }    catch {}
+      try { localStorage.removeItem(LS_MANIFEST_KEY); } catch {}
+    }
+    _log('LOG', 'forceRefreshModel: cleared cached model + manifest');
+  } catch (e) {
+    _log('ERR', `forceRefreshModel: cache clear failed: ${e && (e.message || e)}`);
+  }
   return initModel();
 }
