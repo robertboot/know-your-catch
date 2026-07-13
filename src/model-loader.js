@@ -234,12 +234,47 @@ async function loadRuntimeAndModel(modelBytes) {
   // Capacitor's URL scheme handler is serving for .wasm. If content-
   // type is not application/wasm we already know why streaming fails.
   try {
-    const probeUrl = `${wasmBase}tflite_web_api_cc_simd.wasm`;
+    const probeUrl = `${wasmBase}tflite_web_api_cc.wasm`;
     const r = await fetch(probeUrl);
     const buf = await r.arrayBuffer();
-    _log('LOG', `wasm probe: ${r.status} ct=${r.headers.get('content-type')} bytes=${buf.byteLength}`);
+    _log('LOG', `wasm probe (no cred): ${r.status} ct=${r.headers.get('content-type')} bytes=${buf.byteLength}`);
   } catch (e) {
-    _log('ERR', `wasm probe threw: ${e && (e.message || e)}`);
+    _log('ERR', `wasm probe (no cred) threw: ${e && (e.message || e)}`);
+  }
+  // Also probe WITH credentials: 'same-origin' — that's what Emscripten
+  // uses. If this fails while the plain probe above succeeds, Capacitor's
+  // custom scheme handler has trouble with the credentials option and
+  // we know why the runtime fetch bombs out silently.
+  try {
+    const probeUrl = `${wasmBase}tflite_web_api_cc.wasm`;
+    const r = await fetch(probeUrl, { credentials: 'same-origin' });
+    _log('LOG', `wasm probe (same-origin): ${r.status} ct=${r.headers.get('content-type')}`);
+  } catch (e) {
+    _log('ERR', `wasm probe (same-origin) threw: ${e && (e.message || e)}`);
+  }
+
+  // Patch fetch to strip the credentials option for .wasm URLs — if
+  // Capacitor's scheme handler chokes on it, that's the Emscripten
+  // fetch failure keeping us from ever reaching WebAssembly.instantiate.
+  if (typeof window !== 'undefined' && window.fetch && !window.fetch.__kycWasmSafe) {
+    const origFetch = window.fetch.bind(window);
+    const wrapped = function(url, opts) {
+      try {
+        const u = typeof url === 'string' ? url : (url && url.url) || '';
+        if (u.endsWith('.wasm')) {
+          _log('LOG', `fetch intercept .wasm (dropping opts): ${u}`);
+          return origFetch(url);
+        }
+      } catch {}
+      return origFetch(url, opts);
+    };
+    wrapped.__kycWasmSafe = true;
+    try {
+      window.fetch = wrapped;
+      _log('LOG', `fetch wrapper installed=${window.fetch === wrapped}`);
+    } catch (e) {
+      _log('ERR', `fetch wrapper install failed: ${e && (e.message || e)}`);
+    }
   }
 
   // Capacitor's iOS URL scheme handler serves .wasm as
