@@ -110,3 +110,65 @@ export async function deleteBrandAsset(key) {
   await refreshBrandAssets();
   return { ok: true };
 }
+
+/* iOS App Icon staging — NOT runtime-swappable.
+
+   The home-screen icon on iOS is baked into the .app bundle by
+   capacitor-assets at build time from resources/icon.png. This
+   admin flow puts the 1024x1024 PNG in the brand-assets bucket at
+   a fixed key so scripts/ios-ship.sh can curl it in as
+   resources/icon.png before the icon-set regeneration runs. On the
+   phone the icon only changes after that build ships through
+   TestFlight/App Store and the user updates the app. */
+const IOS_ICON_BUCKET = 'brand-assets';
+const IOS_ICON_KEY    = 'ios-app-icon.png';
+
+/** Public URL for the staged icon — the same URL ios-ship.sh curls. */
+export function iosAppIconPublicUrl() {
+  const c = client();
+  if (!c) return null;
+  const { data } = c.storage.from(IOS_ICON_BUCKET).getPublicUrl(IOS_ICON_KEY);
+  return data?.publicUrl || null;
+}
+
+/** Admin upload. Overwrites any prior staged icon. Bucket RLS
+    enforces the admin-write allowlist. */
+export async function uploadIosAppIcon(file) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const { error } = await c.storage
+    .from(IOS_ICON_BUCKET)
+    .upload(IOS_ICON_KEY, file, {
+      contentType: 'image/png',
+      cacheControl: 'no-store',
+      upsert: true,
+    });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Admin delete. Next iOS build falls back to tracked resources/icon.png. */
+export async function deleteIosAppIcon() {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const { error } = await c.storage.from(IOS_ICON_BUCKET).remove([IOS_ICON_KEY]);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Returns { exists, updated_at? } for the currently staged icon. */
+export async function getIosAppIconMeta() {
+  const c = client();
+  if (!c) return { exists: false };
+  try {
+    const { data, error } = await c.storage
+      .from(IOS_ICON_BUCKET)
+      .list('', { search: IOS_ICON_KEY, limit: 20 });
+    if (error) return { exists: false };
+    const row = (data || []).find(r => r.name === IOS_ICON_KEY);
+    if (!row) return { exists: false };
+    return { exists: true, updated_at: row.updated_at || row.created_at || null };
+  } catch {
+    return { exists: false };
+  }
+}

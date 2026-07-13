@@ -43,6 +43,22 @@ fi
 echo "→ Re-syncing web bundle"
 npm run ios:sync >/dev/null
 
+# Pull the staged app icon from the admin console (if any). The
+# admin uploads a 1024x1024 PNG to the brand-assets bucket at a
+# fixed key; we overwrite resources/icon.png with that source so
+# the capacitor-assets step regenerates the icon set from it.
+# Silent fallback to the tracked resources/icon.png if nothing's
+# staged. Runs ONLY here (not on regular vite build / dev server).
+STAGED_ICON_URL="https://hfptpsmdfemduhkueyoz.supabase.co/storage/v1/object/public/brand-assets/ios-app-icon.png"
+echo "→ Checking for staged app icon"
+if curl -fsSL -o resources/icon.png.new "$STAGED_ICON_URL" 2>/dev/null; then
+  mv resources/icon.png.new resources/icon.png
+  echo "  staged icon fetched from admin console"
+else
+  rm -f resources/icon.png.new
+  echo "  no staged icon; using tracked resources/icon.png"
+fi
+
 # Re-generate the AppIcon + splash from resources/*.png so a stale
 # Assets.xcassets can't ship a wrong / default gray icon. The generator
 # is idempotent — safe to run every time.

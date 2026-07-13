@@ -26,6 +26,7 @@ import TrainingTab from './TrainingTab.jsx';
 import NotificationsTab from './NotificationsTab.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
+  iosAppIconPublicUrl, uploadIosAppIcon, deleteIosAppIcon, getIosAppIconMeta,
 } from '../brand-store.js';
 import {
   getCategories, refreshCategories,
@@ -990,13 +991,160 @@ function BrandingTab() {
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <div style={{ fontSize: 12, color: T.inkSoft, padding: '4px 4px 8px', lineHeight: 1.5 }}>
-        Runtime-swappable brand images. Uploads land in the <code>brand-assets</code> bucket
+        Runtime-swappable brand images (logos, hero) go into the <code>brand-assets</code> bucket
         and override the bundled defaults on the next app boot for all installs.
-        For iOS native icon + launch storyboard changes, see <code>resources/</code> and rerun
-        <code>npm run ios:assets</code> — those require a rebuild + TestFlight resubmit.
+        <br /><br />
+        <strong style={{ color: T.ink }}>The iOS App Icon is different.</strong> It's baked
+        into the .app bundle at build time and can't be swapped over-the-air.
+        Uploading a new icon here <em>stages</em> it for the next iOS build
+        that Robert ships to TestFlight/App Store. Existing installs won't
+        see the change until Apple approves the build (typically 24-48 hours)
+        and users download the update.
       </div>
       {BRAND_ASSETS.map(a => <BrandAssetRow key={a.key} asset={a} />)}
+      <IosAppIconCard />
     </div>
+  );
+}
+
+function IosAppIconCard() {
+  const [busy, setBusy]           = useState(false);
+  const [error, setError]         = useState('');
+  const [saved, setSaved]         = useState(false);
+  const [meta, setMeta]           = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const fileRef = useRef(null);
+
+  const refreshMeta = async () => {
+    const m = await getIosAppIconMeta();
+    setMeta(m);
+    if (m?.exists) {
+      const url = iosAppIconPublicUrl();
+      // Cache-bust so a fresh upload shows immediately.
+      setPreviewUrl(url ? `${url}?t=${Date.now()}` : null);
+    } else {
+      setPreviewUrl(null);
+    }
+  };
+
+  useEffect(() => { refreshMeta(); }, []);
+
+  const onFile = async (file) => {
+    if (!file) return;
+    setError(''); setSaved(false);
+
+    if (file.type !== 'image/png') {
+      setError('Must be a PNG file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(`File is ${(file.size / (1024 * 1024)).toFixed(1)} MB — must be under 5 MB.`);
+      return;
+    }
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload  = () => { URL.revokeObjectURL(objectUrl); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); };
+      img.src = objectUrl;
+    });
+    if (!dims) { setError('Could not read the image.'); return; }
+    if (dims.w !== 1024 || dims.h !== 1024) {
+      setError(`Must be exactly 1024×1024 (this file is ${dims.w}×${dims.h}).`);
+      return;
+    }
+
+    setBusy(true);
+    const r = await uploadIosAppIcon(file);
+    setBusy(false);
+    if (!r.ok) { setError(r.error || 'Upload failed'); return; }
+    setSaved(true);
+    await refreshMeta();
+  };
+
+  const clear = async () => {
+    if (!window.confirm('Clear the staged icon? The next iOS build will fall back to the tracked resources/icon.png.')) return;
+    setBusy(true); setError(''); setSaved(false);
+    const r = await deleteIosAppIcon();
+    setBusy(false);
+    if (!r.ok) { setError(r.error || 'Delete failed'); return; }
+    await refreshMeta();
+  };
+
+  // iOS home-screen mask is roughly 22.37% of the icon side. On our
+  // 100px preview that's ~22px, giving a fair approximation of what
+  // the phone will render.
+  const previewRadius = 22;
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{
+          width: 100, height: 100, flexShrink: 0,
+          background: T.parchmentDeep, borderRadius: previewRadius,
+          overflow: 'hidden', border: `1px solid ${T.cardEdge}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {previewUrl
+            ? <img src={previewUrl} alt="Staged app icon"
+                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            : <span style={{ fontSize: 10, color: T.inkMute, textAlign: 'center', padding: 6 }}>
+                No staged icon
+              </span>}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>iOS App Icon</div>
+            {meta?.exists
+              ? <span style={{ fontSize: 10, color: T.brass, fontWeight: 700 }}>STAGED</span>
+              : <span style={{ fontSize: 10, color: T.inkMute }}>tracked default</span>}
+          </div>
+          <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 4, lineHeight: 1.45 }}>
+            Required: <strong>1024×1024 PNG</strong>, no transparency, no rounded
+            corners (Apple applies the mask). Keep the glyph well clear of the edges.
+          </div>
+          <div style={{
+            fontSize: 11, color: T.inkSoft, marginTop: 8, lineHeight: 1.45,
+            background: T.parchmentDeep, padding: '8px 10px', borderRadius: 6,
+            border: `1px solid ${T.cardEdge}`,
+          }}>
+            Uploading here prepares the icon for the <strong>next iOS build</strong>.
+            It doesn't change the icon on phones that already have the app installed
+            until Robert ships a new TestFlight/App Store build and Apple approves it.
+            Turn-around: usually 24-48 hours.
+          </div>
+          {meta?.exists && meta.updated_at && (
+            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6 }}>
+              Staged {new Date(meta.updated_at).toLocaleString()}
+            </div>
+          )}
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <input
+              ref={fileRef} type="file" accept="image/png"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0]; if (f) onFile(f);
+                e.target.value = '';
+              }}
+            />
+            <GhostButton onClick={() => fileRef.current?.click()} disabled={busy} style={{ padding: '6px 12px', fontSize: 12 }}>
+              {busy ? 'Uploading…' : (meta?.exists ? 'Replace staged icon' : 'Upload icon')}
+            </GhostButton>
+            {meta?.exists && (
+              <GhostButton onClick={clear} disabled={busy} style={{ padding: '6px 12px', fontSize: 12 }}>
+                Clear staged icon
+              </GhostButton>
+            )}
+          </div>
+          {error && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: T.closed }}>{error}</div>}
+          {saved && !error && (
+            <div style={{ marginTop: 8, fontSize: 12, color: T.open, fontWeight: 700 }}>
+              Icon staged for next build.
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
