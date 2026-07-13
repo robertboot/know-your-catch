@@ -39,6 +39,7 @@ let _model = null;                // loaded tflite runtime model
 let _manifest = null;             // cached manifest object
 let _readyPromise = null;         // resolves to _model (or null)
 let _status = 'idle';             // 'idle' | 'loading' | 'ready' | 'error' | 'no-network'
+let _lastError = null;            // human-readable string surfaced in Settings
 
 /* Subscribers for Settings UI. Notified on status changes. */
 const _subs = new Set();
@@ -48,6 +49,7 @@ export function subscribeModel(cb) { _subs.add(cb); return () => _subs.delete(cb
 export function getModelStatus() { return _status; }
 export function getModelInfo()   { return _manifest; }
 export function getReadyModel()  { return _readyPromise; }
+export function getModelError()  { return _lastError; }
 
 /* Read the cached manifest from disk (or localStorage on web). Returns
    null if nothing cached. */
@@ -141,12 +143,21 @@ async function fetchRemoteManifest() {
 
 async function fetchRemoteModel() {
   const url = PUBLIC_MODEL_URL();
-  if (!url) return null;
+  if (!url) {
+    console.error('[model-loader] fetchRemoteModel: no SUPABASE_URL configured');
+    return null;
+  }
   try {
     const resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) return null;
-    return await resp.arrayBuffer();
-  } catch {
+    if (!resp.ok) {
+      console.error('[model-loader] fetchRemoteModel: HTTP', resp.status, resp.statusText, 'from', url);
+      return null;
+    }
+    const buf = await resp.arrayBuffer();
+    console.log('[model-loader] fetchRemoteModel: ok,', buf.byteLength, 'bytes');
+    return buf;
+  } catch (e) {
+    console.error('[model-loader] fetchRemoteModel: network error', e);
     return null;
   }
 }
@@ -163,24 +174,44 @@ async function loadRuntimeAndModel(modelBytes) {
   if (typeof window !== 'undefined' && !window.tflite) {
     await new Promise((resolve, reject) => {
       const base = `${(import.meta.env.BASE_URL || '/')}models/tflite/`;
+      console.log('[model-loader] loading tflite runtime script from base=', base, 'documentBaseURI=', document.baseURI);
       const s = document.createElement('script');
       s.src = `${base}tf-tflite.min.js`;
       s.onload = () => {
-        if (!window.tflite) return reject(new Error('tflite global not set'));
-        window.tflite.setWasmPath(base);
+        if (!window.tflite) {
+          console.error('[model-loader] script loaded but window.tflite is undefined — build likely stripped the runtime');
+          return reject(new Error('tflite global not set after script load'));
+        }
+        console.log('[model-loader] window.tflite set; calling setWasmPath(', base, ')');
+        try {
+          window.tflite.setWasmPath(base);
+        } catch (e) {
+          console.error('[model-loader] setWasmPath threw', e);
+          return reject(e);
+        }
         resolve();
       };
-      s.onerror = () => reject(new Error('failed to load tfjs-tflite runtime'));
+      s.onerror = (ev) => {
+        console.error('[model-loader] tf-tflite.min.js failed to load; src was', s.src, ev);
+        reject(new Error(`failed to load tfjs-tflite runtime from ${s.src}`));
+      };
       document.head.appendChild(s);
     });
   }
   // numThreads: 1 → single-threaded WASM (SharedArrayBuffer requires
   // COOP/COEP headers we don't ship). enableXnnpackDelegate: false →
   // avoids the Safari-crash bug in the alpha.10 XNNPACK delegate.
-  return await window.tflite.loadTFLiteModel(
-    new Uint8Array(modelBytes),
-    { numThreads: 1, enableXnnpackDelegate: false },
-  );
+  try {
+    const m = await window.tflite.loadTFLiteModel(
+      new Uint8Array(modelBytes),
+      { numThreads: 1, enableXnnpackDelegate: false },
+    );
+    console.log('[model-loader] loadTFLiteModel ok');
+    return m;
+  } catch (e) {
+    console.error('[model-loader] loadTFLiteModel threw:', e && (e.stack || e.message || e));
+    throw e;
+  }
 }
 
 /* Main entry point — called from App.jsx on boot. Idempotent: repeat
@@ -192,13 +223,27 @@ export function initModel() {
 }
 
 async function _doInit() {
-  _status = 'loading'; _emit();
+  _status = 'loading';
+  _lastError = null;
+  _emit();
 
   // 1. Read whatever we have cached.
   const cachedManifest = await readCachedManifest();
 
   // 2. Try the network for the latest manifest.
   const remoteManifest = await fetchRemoteManifest();
+
+  // Log which manifest we're basing the decision on.
+  if (!cachedManifest && !remoteManifest) {
+    console.error('[model-loader] manifest: BOTH failed — no cache and no network');
+  } else if (remoteManifest && cachedManifest) {
+    console.log('[model-loader] manifest: cache=', cachedManifest.version_name,
+                'remote=', remoteManifest.version_name);
+  } else if (remoteManifest) {
+    console.log('[model-loader] manifest: remote only,', remoteManifest.version_name);
+  } else {
+    console.log('[model-loader] manifest: cache only,', cachedManifest.version_name);
+  }
 
   // 3. Decide which manifest wins.
   const needsDownload =
@@ -222,10 +267,14 @@ async function _doInit() {
   //    fall back to cached bytes.
   if (!modelBytes) {
     modelBytes = await readCachedModelBytes();
+    if (modelBytes) {
+      console.log('[model-loader] using cached model bytes,', modelBytes.byteLength, 'bytes');
+    }
   }
 
   // 5. If we STILL have nothing, this is a first launch offline.
   if (!modelBytes || !effectiveManifest) {
+    console.error('[model-loader] no model available — offline first launch or bucket unreachable');
     _status = 'no-network'; _emit();
     return null;
   }
@@ -235,10 +284,13 @@ async function _doInit() {
     _model = await loadRuntimeAndModel(modelBytes);
     _manifest = effectiveManifest;
     _status = 'ready';
+    _lastError = null;
     _emit();
     return _model;
   } catch (e) {
-    console.error('[model-loader] runtime load failed:', e);
+    const msg = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
+    console.error('[model-loader] runtime load failed:', msg);
+    _lastError = msg;
     _status = 'error';
     _emit();
     return null;

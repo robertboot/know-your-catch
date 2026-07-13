@@ -1780,11 +1780,13 @@ function FishIdModelCard() {
 
   const [status, setStatus] = React.useState('loading');
   const [info, setInfo] = React.useState(null);
+  const [errMsg, setErrMsg] = React.useState(null);
   React.useEffect(() => {
     (async () => {
-      const { getModelStatus, getModelInfo } = await import('./model-loader.js');
+      const { getModelStatus, getModelInfo, getModelError } = await import('./model-loader.js');
       setStatus(getModelStatus());
       setInfo(getModelInfo());
+      setErrMsg(getModelError());
     })();
   }, [tick]);
 
@@ -1819,6 +1821,16 @@ function FishIdModelCard() {
           {status === 'no-network' && (
             <div style={{ fontSize: 11, color: T.inkMute, marginTop: 3 }}>
               Open the app once online to download the current model.
+            </div>
+          )}
+          {status === 'error' && errMsg && (
+            <div style={{
+              fontSize: 11, color: T.warn || '#c66',
+              marginTop: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              maxWidth: 260,
+            }}>
+              {errMsg}
             </div>
           )}
         </div>
