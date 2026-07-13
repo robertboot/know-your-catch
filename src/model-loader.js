@@ -273,12 +273,30 @@ async function loadRuntimeAndModel(modelBytes) {
     }
 
     _log('LOG', `loadTFLiteModel: bytes=${modelBytes.byteLength}`);
-    const m = await window.tflite.loadTFLiteModel(
-      view,
-      { numThreads: 1, enableXnnpackDelegate: false },
-    );
-    _log('LOG', 'loadTFLiteModel ok');
-    return m;
+    // Retry ladder — alpha.10 has narrow options acceptance. Try
+    // progressively simpler configs so the log tells us which combo
+    // the runtime accepts on this device.
+    const attempts = [
+      { label: 'numThreads:1',       opts: { numThreads: 1 } },
+      { label: 'no options',         opts: undefined },
+      { label: 'numThreads:1,noXnn', opts: { numThreads: 1, enableXnnpackDelegate: false } },
+    ];
+    let lastErr = null;
+    for (const a of attempts) {
+      try {
+        _log('LOG', `attempt: ${a.label}`);
+        const m = a.opts
+          ? await window.tflite.loadTFLiteModel(view, a.opts)
+          : await window.tflite.loadTFLiteModel(view);
+        _log('LOG', `loadTFLiteModel ok via ${a.label}`);
+        return m;
+      } catch (e) {
+        lastErr = e;
+        const msg = e && (e.stack || e.message) ? String(e.stack || e.message) : String(e);
+        _log('ERR', `attempt ${a.label} failed: ${msg}`);
+      }
+    }
+    throw lastErr;
   } catch (e) {
     const msg = e && (e.stack || e.message) ? String(e.stack || e.message) : String(e);
     _log('ERR', `loadTFLiteModel threw: ${msg}`);
