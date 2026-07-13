@@ -51,6 +51,8 @@ import { AccountSection } from './auth-ui.jsx';
 import { getMyPreferences, optOutOfFeatureEmails } from './preferences-store.js';
 import { useScreenSize } from './screen-size.js';
 import { getLocation, getPhoto, isNative } from './native.js';
+import { SpeciesPickerModal, SpeciesSuggestModal } from './admin/pickers.jsx';
+import { newClientSpeciesId, submitSuggestion } from './species-suggestions-store.js';
 import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -2752,6 +2754,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [aiBadgeConfidence, setAiBadgeConfidence] = useState(
     aiConfidence != null && preselectSpeciesId ? aiConfidence : null
   );
+  // Enhanced species picker modal + "Suggest a species" modal state.
+  // Both live in ./admin/pickers.jsx.
+  const [speciesPickerOpen, setSpeciesPickerOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestInitial, setSuggestInitial] = useState('');
+  const [suggestError, setSuggestError] = useState('');
+  const { size: screenSize } = useScreenSize();
+  const isTablet = screenSize !== 'phone';
   // Seed photos from the catch we're editing, or from an identification
   // photo handed in via prefilledPhoto (Identify → Log this catch flow).
   const [photos, setPhotos] = useState(() => {
@@ -3076,7 +3086,35 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     onDone();
   };
 
-  const speciesSorted = useMemo(() => SPECIES.slice().sort((a, b) => a.commonName.localeCompare(b.commonName)), []);
+  // Species list for the picker — bundled active species merged with
+  // any user-added custom species (those still awaiting review OR
+  // already merged/approved but pre-sync). Approved ones will drop
+  // out on the next species-store refresh since the merger removes
+  // them from customSpecies at that point.
+  const customUsable = useMemo(() => {
+    return (state.customSpecies || [])
+      .filter(cs => cs && cs.id && (cs.status === 'pending' || cs.status === 'approved' || cs.status === 'merged'))
+      .map(cs => ({
+        id: cs.id,
+        commonName: cs.commonName,
+        scientific: cs.scientific || '',
+        altNames: cs.altNames || [],
+        category: 'custom',
+        active: true,
+        custom: true,
+      }));
+  }, [state.customSpecies]);
+  const speciesSorted = useMemo(() => {
+    const merged = [...SPECIES, ...customUsable];
+    return merged.slice().sort((a, b) => a.commonName.localeCompare(b.commonName));
+  }, [customUsable]);
+
+  // Resolves a species id against both bundled SPECIES and the local
+  // customSpecies list so the current selection renders correctly
+  // even when the user just added it via the Suggest flow.
+  const resolveSpecies = (id) => (
+    speciesById(id) || customUsable.find(s => s.id === id) || null
+  );
 
   // Legality banner — derived from the current REGULATIONS entry for
   // this species + jurisdiction. Runs entirely off the bundled dataset
@@ -3213,23 +3251,47 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Species</SectionLabel>
         {speciesId && (() => {
-          const s = speciesById(speciesId);
+          const s = resolveSpecies(speciesId);
           if (!s) return null;
           return (
             <div style={{ marginBottom: 10, fontFamily: 'Georgia, serif' }}>
               <div style={{ fontSize: 18, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
                 {s.commonName}
+                {s.custom && (
+                  <span style={{
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontSize: 10, letterSpacing: 1, textTransform: 'uppercase',
+                    color: '#5ecdf2', fontWeight: 800, marginLeft: 8,
+                    verticalAlign: 'middle',
+                  }}>
+                    Custom
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: 13, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
-                {s.scientific}
-              </div>
+              {s.scientific && (
+                <div style={{ fontSize: 13, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
+                  {s.scientific}
+                </div>
+              )}
             </div>
           );
         })()}
-        <select value={speciesId} onChange={e => { setSpeciesId(e.target.value); setAiBadgeConfidence(null); }} style={{ ...inputStyle, padding: '10px 12px' }}>
-          <option value="">— pick a species —</option>
-          {speciesSorted.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
-        </select>
+        <button
+          type="button"
+          onClick={() => setSpeciesPickerOpen(true)}
+          style={{
+            ...inputStyle, padding: '10px 12px', textAlign: 'left',
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+          }}
+        >
+          <Search size={14} color={T.brass} />
+          <span style={{ flex: 1, color: speciesId ? T.ink : T.inkMute }}>
+            {speciesId
+              ? (resolveSpecies(speciesId)?.commonName || 'Change species…')
+              : 'Search or pick a species…'}
+          </span>
+          <ChevronRight size={14} color={T.inkSoft} />
+        </button>
 
         {/* Legality banner — reads the bundled REGULATIONS table for
             this species + jurisdiction. Airplane-mode safe. Green
@@ -3434,6 +3496,82 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             setPickerOpen(false);
           }}
         />
+      )}
+
+      {speciesPickerOpen && (
+        <SpeciesPickerModal
+          speciesOptions={speciesSorted}
+          currentSpeciesId={speciesId}
+          isTablet={isTablet}
+          onCancel={() => setSpeciesPickerOpen(false)}
+          onPick={(id) => {
+            setSpeciesId(id);
+            setAiBadgeConfidence(null);
+            setSpeciesPickerOpen(false);
+          }}
+          onRequestSuggest={(searchText) => {
+            const capReached = (state.customSpecies || []).filter(cs => cs.status !== 'rejected').length >= 25;
+            if (capReached) {
+              setSuggestError("You've already suggested 25 species. Wait for those to be reviewed before adding more.");
+              return;
+            }
+            setSuggestInitial(searchText);
+            setSuggestError('');
+            setSpeciesPickerOpen(false);
+            setSuggestOpen(true);
+          }}
+          title="Pick species"
+        />
+      )}
+
+      {suggestOpen && (
+        <SpeciesSuggestModal
+          initialCommonName={suggestInitial}
+          hasPhotoAvailable={photos.length > 0}
+          onCancel={() => setSuggestOpen(false)}
+          onSubmit={({ commonName, scientificName, altNames, notes: suggNotes, includePhoto }) => {
+            const clientId = newClientSpeciesId();
+            const now = new Date().toISOString();
+            const entry = {
+              id: clientId,
+              commonName,
+              scientific: scientificName || '',
+              altNames: altNames ? altNames.split(',').map(s => s.trim()).filter(Boolean) : [],
+              notes: suggNotes || '',
+              submittedAt: now,
+              status: 'pending',
+            };
+            const next = [...(state.customSpecies || []), entry];
+            update({ customSpecies: next });
+            setSpeciesId(clientId);
+            setAiBadgeConfidence(null);
+            setSuggestOpen(false);
+            // Best-effort cloud submit — offline is fine, sync tries
+            // again on next boot from the local customSpecies entry.
+            const photoPath = (includePhoto && photos[0])
+              ? (typeof photos[0] === 'object' ? photos[0].storagePath : null)
+              : null;
+            submitSuggestion({
+              clientSpeciesId: clientId,
+              commonName,
+              scientificName,
+              altNames,
+              notes: suggNotes,
+              photoStoragePath: photoPath,
+            }).catch(() => {});
+          }}
+        />
+      )}
+
+      {suggestError && (
+        <div role="alert" onClick={() => setSuggestError('')} style={{
+          position: 'fixed', bottom: 80, left: 16, right: 16, zIndex: 600,
+          background: T.card, border: `1px solid #c66`, color: T.ink,
+          borderRadius: 10, padding: 12, fontSize: 13, cursor: 'pointer',
+          boxShadow: '0 6px 22px rgba(0,0,0,0.4)',
+        }}>
+          {suggestError} <span style={{ color: T.inkMute, fontSize: 11 }}>(tap to dismiss)</span>
+        </div>
       )}
     </div>
   );

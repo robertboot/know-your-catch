@@ -26,6 +26,7 @@ import {
 import { SyncPill } from './auth-ui.jsx';
 import { jurisdictionById, isStale, dataUrlToFile } from './helpers.js';
 import { saveModelFeedback } from './training-store.js';
+import { reconcileSuggestions } from './species-suggestions-store.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
   FavoritePickerModal, AccountSetupModal, IdentificationConfirmCard,
@@ -197,6 +198,37 @@ export default function App() {
         saveState(next);
         return next;
       });
+      // Post-pull: reconcile custom-species suggestions with server
+      // statuses. Admin-approved suggestions get their real species
+      // id stamped into state.customSpecies AND every catchLog row
+      // previously logged against the custom_XXX id is remapped to
+      // the real species. Best-effort.
+      try {
+        // Sample the freshly-merged state via a no-op setState so we
+        // reconcile against POST-pull data, not the useEffect closure.
+        let curCustom = [];
+        let curCatchLog = [];
+        setState(prev => {
+          curCustom = prev.customSpecies || [];
+          curCatchLog = prev.catchLog || [];
+          return prev;
+        });
+        const recon = await reconcileSuggestions({
+          customSpecies: curCustom,
+          catchLog: curCatchLog,
+        });
+        if (alive && recon.changed) {
+          setState(prev => {
+            const next = {
+              ...prev,
+              customSpecies: recon.customSpecies,
+              catchLog: recon.catchLog,
+            };
+            saveState(next);
+            return next;
+          });
+        }
+      } catch {}
     })();
     return () => { alive = false; };
   }, [session]);

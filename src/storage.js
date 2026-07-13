@@ -32,6 +32,15 @@ export const defaultState = {
   // Highest consecutive-correct run in the Fish ID quiz, ever. Beat
   // this to set a new best. Session streak is transient.
   quizBestStreak: 0,
+  // Custom species suggested by the user via the Log-a-Catch flow.
+  // Each entry: { id: 'custom_XXXX', commonName, scientific, altNames[],
+  //   notes, submittedAt, status: 'pending'|'approved'|'rejected'|'merged',
+  //   approvedSpeciesId?, rejectionReason? }.
+  // Immediately usable for logging catches; catches keep the custom_
+  // id until sync brings back approved_species_id and the client
+  // remaps them.
+  // Capped at 25 to keep localStorage sane and stop suggestion spam.
+  customSpecies: [],
 };
 
 export function loadState() {
@@ -46,6 +55,7 @@ export function loadState() {
       notes: parsed.notes || {},
       catchLog: Array.isArray(parsed.catchLog) ? parsed.catchLog : [],
       favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+      customSpecies: Array.isArray(parsed.customSpecies) ? parsed.customSpecies : [],
       research: { ...defaultState.research, ...(parsed.research || {}) },
       syncMeta: parsed.syncMeta || defaultState.syncMeta,
     };

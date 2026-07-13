@@ -471,6 +471,37 @@ export function buildCatchReport({ anglerName, species, c, units }) {
   return lines.join('\n');
 }
 
+/* Species search ranker — extracted so IdentifyScreen and the
+   SpeciesPickerModal behave the same when a user types.
+   Rank order: startsWith(commonName) > contains(commonName) >
+   contains(altNames) > contains(scientific). Returns an array of
+   { s, rank, matchedAlt } sorted by rank then alphabetical.
+   Empty query returns [] — callers should render their full list
+   themselves in that case. */
+export function rankSpeciesSearch(query, list) {
+  const lower = (query || '').trim().toLowerCase();
+  if (!lower) return [];
+  const rows = [];
+  for (const s of list) {
+    const cn  = (s.commonName || '').toLowerCase();
+    const sci = (s.scientific || '').toLowerCase();
+    const alt = (s.altNames || []).map(a => a.toLowerCase());
+    let rank = -1;
+    let matchedAlt = null;
+    if      (cn.startsWith(lower)) rank = 0;
+    else if (cn.includes(lower))   rank = 1;
+    else if (alt.some(a => a.includes(lower))) {
+      rank = 2;
+      matchedAlt = (s.altNames || []).find(a => a.toLowerCase().includes(lower));
+    }
+    else if (sci.includes(lower))  rank = 3;
+    if (rank >= 0) rows.push({ s, rank, matchedAlt });
+  }
+  return rows.sort((a, b) =>
+    a.rank - b.rank || (a.s.commonName || '').localeCompare(b.s.commonName || '')
+  );
+}
+
 export async function dataUrlToFile(dataUrl, name) {
   try {
     const res = await fetch(dataUrl);

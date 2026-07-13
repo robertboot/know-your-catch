@@ -33,6 +33,10 @@ import {
   upsertCategory, deactivateCategory, reassignSpecies, seedFromBundled,
   subscribe as subscribeCategoriesStore,
 } from '../categories-store.js';
+import {
+  listSuggestions, approveSuggestion, rejectSuggestion, mergeSuggestion,
+} from '../species-suggestions-store.js';
+import { SpeciesPickerModal } from './pickers.jsx';
 import { speciesPhoto } from '../helpers.js';
 import { uploadImage } from './upload.js';
 import {
@@ -325,6 +329,20 @@ function SpeciesTab({ detailView, setDetailView }) {
   // 'active' | 'deactivated' | 'all' — default 'active' since most
   // review passes only care about live species.
   const [statusFilter, setStatusFilter] = useState('active');
+  // Species tab now has two sub-panels: the existing species list and
+  // the new suggestion queue where user-submitted custom species land.
+  const [panel, setPanel] = useState('list');
+  if (panel === 'suggestions') {
+    return (
+      <>
+        <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 12 }}>
+          <SpeciesSubTabBtn active={false}                          onClick={() => setPanel('list')}>Species</SpeciesSubTabBtn>
+          <SpeciesSubTabBtn active={true}                           onClick={() => setPanel('suggestions')}>Suggestions</SpeciesSubTabBtn>
+        </div>
+        <SpeciesSuggestionsPanel />
+      </>
+    );
+  }
 
   const sorted = useMemo(() =>
     [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName)),
@@ -360,6 +378,10 @@ function SpeciesTab({ detailView, setDetailView }) {
 
   return (
     <>
+      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 12 }}>
+        <SpeciesSubTabBtn active={true}  onClick={() => setPanel('list')}>Species</SpeciesSubTabBtn>
+        <SpeciesSubTabBtn active={false} onClick={() => setPanel('suggestions')}>Suggestions</SpeciesSubTabBtn>
+      </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         <StatusChip
           active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}
@@ -431,6 +453,263 @@ function SpeciesTab({ detailView, setDetailView }) {
         )}
       </div>
     </>
+  );
+}
+
+/* Sub-tab pill for the Species top-level tab (Species / Suggestions).
+   Mirrors the pattern TrainingTab uses so the visual language stays
+   consistent across the admin. */
+function SpeciesSubTabBtn({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      background: 'transparent', border: 'none', padding: '10px 14px',
+      color: active ? T.brass : T.inkMute,
+      fontWeight: 700, fontSize: 13, cursor: 'pointer',
+      borderBottom: `2px solid ${active ? T.brass : 'transparent'}`,
+      marginBottom: -1,
+    }}>{children}</button>
+  );
+}
+
+function SpeciesSuggestionsPanel() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [rejectPickerFor, setRejectPickerFor] = useState(null);
+  const [mergePickerFor,  setMergePickerFor]  = useState(null);
+  const [approveEditFor,  setApproveEditFor]  = useState(null);
+
+  const refresh = React.useCallback(async () => {
+    setLoading(true);
+    const r = await listSuggestions({ status: statusFilter === 'all' ? null : statusFilter });
+    setLoading(false);
+    if (!r.ok) { setError(r.error || 'load failed'); return; }
+    setError(''); setRows(r.rows);
+  }, [statusFilter]);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const doReject = async (id, reason) => {
+    setRejectPickerFor(null);
+    const r = await rejectSuggestion(id, reason);
+    if (!r.ok) return setError(r.error || 'reject failed');
+    refresh();
+  };
+  const doMerge = async (id, existingId) => {
+    setMergePickerFor(null);
+    const r = await mergeSuggestion(id, existingId);
+    if (!r.ok) return setError(r.error || 'merge failed');
+    refresh();
+  };
+  const doApprove = async (row, patch) => {
+    setApproveEditFor(null);
+    const r = await approveSuggestion(row.id, patch);
+    if (!r.ok) return setError(r.error || 'approve failed');
+    refresh();
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        {['pending', 'approved', 'rejected', 'merged', 'all'].map(k => (
+          <button key={k} onClick={() => setStatusFilter(k)} style={{
+            background: statusFilter === k ? T.brass : 'transparent',
+            color: statusFilter === k ? T.oceanDeep : T.brass,
+            border: `1.5px solid ${T.brass}`,
+            padding: '5px 12px', borderRadius: 999,
+            fontSize: 11, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer',
+          }}>
+            {k === 'all' ? 'All' : k.charAt(0).toUpperCase() + k.slice(1)}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <GhostButton onClick={refresh} disabled={loading} style={{ padding: '6px 12px', fontSize: 12 }}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </GhostButton>
+      </div>
+
+      {error && (
+        <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12, marginBottom: 10 }}>
+          {error}
+        </div>
+      )}
+
+      {rows.length === 0 && !loading && (
+        <Card style={{ fontSize: 13, color: T.inkMute, textAlign: 'center', padding: 24 }}>
+          No {statusFilter === 'all' ? '' : statusFilter} suggestions.
+        </Card>
+      )}
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        {rows.map(row => (
+          <Card key={row.id}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, flex: 1 }}>
+                {row.common_name}
+              </div>
+              <span style={{
+                fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 800,
+                color: (row.status === 'approved' || row.status === 'merged') ? T.open
+                     : row.status === 'rejected' ? T.closed
+                     : T.brass,
+              }}>{row.status}</span>
+            </div>
+            {row.scientific_name && (
+              <div style={{ fontSize: 12, color: T.inkSoft, fontStyle: 'italic' }}>{row.scientific_name}</div>
+            )}
+            {row.alt_names && (
+              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4 }}>alt: {row.alt_names}</div>
+            )}
+            {row.notes && (
+              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4 }}>notes: {row.notes}</div>
+            )}
+            <div style={{ fontSize: 10, color: T.inkMute, marginTop: 6 }}>
+              submitted {row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '—'}
+              {' · '}client id <code>{row.client_species_id || '—'}</code>
+              {row.approved_species_id && <> · → <code>{row.approved_species_id}</code></>}
+              {row.rejection_reason && <> · reason: {row.rejection_reason}</>}
+            </div>
+            {row.status === 'pending' && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                <GhostButton
+                  onClick={() => setApproveEditFor(row)}
+                  style={{ padding: '6px 12px', fontSize: 12, color: T.open, borderColor: T.open }}
+                >
+                  Approve
+                </GhostButton>
+                <GhostButton
+                  onClick={() => setRejectPickerFor(row)}
+                  style={{ padding: '6px 12px', fontSize: 12, color: T.closed, borderColor: T.closed }}
+                >
+                  Reject
+                </GhostButton>
+                <GhostButton
+                  onClick={() => setMergePickerFor(row)}
+                  style={{ padding: '6px 12px', fontSize: 12 }}
+                >
+                  Merge into existing
+                </GhostButton>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      {approveEditFor && (
+        <ApproveSuggestionModal
+          suggestion={approveEditFor}
+          onCancel={() => setApproveEditFor(null)}
+          onConfirm={(patch) => doApprove(approveEditFor, patch)}
+        />
+      )}
+
+      {rejectPickerFor && (
+        <RejectSuggestionModal
+          suggestion={rejectPickerFor}
+          onCancel={() => setRejectPickerFor(null)}
+          onPick={(reason) => doReject(rejectPickerFor.id, reason)}
+        />
+      )}
+
+      {mergePickerFor && (
+        <SpeciesPickerModal
+          speciesOptions={SPECIES.filter(s => s.active !== false)}
+          onCancel={() => setMergePickerFor(null)}
+          onPick={(existingId) => doMerge(mergePickerFor.id, existingId)}
+          title={`Merge “${mergePickerFor.common_name}” into…`}
+          isTablet
+        />
+      )}
+    </>
+  );
+}
+
+function ApproveSuggestionModal({ suggestion, onCancel, onConfirm }) {
+  const [commonName, setCommonName] = useState(suggestion.common_name || '');
+  const [scientific, setScientific] = useState(suggestion.scientific_name || '');
+  const [altNames,   setAltNames]   = useState(suggestion.alt_names || '');
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`,
+        borderRadius: 12, padding: 18, maxWidth: 460, width: '100%',
+      }}>
+        <H1 size={18} style={{ marginBottom: 12 }}>Approve suggestion</H1>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>Common name</div>
+            <input type="text" value={commonName} onChange={e => setCommonName(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>Scientific name</div>
+            <input type="text" value={scientific} onChange={e => setScientific(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>Alt names (comma-separated)</div>
+            <input type="text" value={altNames} onChange={e => setAltNames(e.target.value)} style={inputStyle} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+            <GhostButton onClick={onCancel}>Cancel</GhostButton>
+            <PrimaryButton
+              onClick={() => onConfirm({ commonName, scientificName: scientific, altNames })}
+              style={{ padding: '8px 14px' }}
+              disabled={!commonName.trim()}
+            >
+              Approve &amp; add species
+            </PrimaryButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RejectSuggestionModal({ suggestion, onCancel, onPick }) {
+  const REASONS = [
+    { key: 'not_a_fish',           label: 'Not a fish' },
+    { key: 'duplicate_of_existing', label: 'Duplicate of existing species' },
+    { key: 'not_in_scope',         label: "Not in scope for this app" },
+    { key: 'spam',                 label: 'Spam / abuse' },
+    { key: 'other',                label: 'Other' },
+  ];
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`,
+        borderRadius: 12, padding: 18, maxWidth: 460, width: '100%',
+      }}>
+        <H1 size={18} style={{ marginBottom: 6 }}>Reject “{suggestion.common_name}”</H1>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12 }}>
+          The reason is surfaced to the submitting user on their next sync.
+        </div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {REASONS.map(r => (
+            <button
+              key={r.key} type="button"
+              onClick={() => onPick(r.key)}
+              style={{
+                background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+                color: T.ink, padding: '10px 12px', borderRadius: 8,
+                fontSize: 13, textAlign: 'left', cursor: 'pointer',
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ marginTop: 14, textAlign: 'right' }}>
+          <GhostButton onClick={onCancel}>Cancel</GhostButton>
+        </div>
+      </div>
+    </div>
   );
 }
 

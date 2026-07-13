@@ -65,6 +65,11 @@ export const USER_STATE_KEYS = [
   'anglerExperience',
   'anglerTripFreq',
   'anglerProfileCompletedAt',
+  // Client-side custom species entries (custom_XXXX ids). Synced so a
+  // user's suggestions follow them across devices. Approval statuses
+  // are pulled back by refreshCustomSpeciesStatus (in App.jsx boot),
+  // which reads from public.species_suggestions.
+  'customSpecies',
 ];
 
 function pickUserState(state) {
