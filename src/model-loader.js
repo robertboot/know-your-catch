@@ -256,6 +256,28 @@ async function loadRuntimeAndModel(modelBytes) {
     }
   }
 
+  // Force the runtime to pick the BASELINE (non-SIMD, non-threaded)
+  // WASM variant. The client capability-tests SIMD by trying to
+  // instantiate a tiny (~30-byte) test module; iOS Safari passes the
+  // basic SIMD test but is missing some SIMD ops the full tflite SIMD
+  // WASM uses, so Module init silently fails and _malloc ends up
+  // undefined. Rejecting instantiate for calls under 200 bytes fails
+  // the tiny capability checks without affecting real WASM loads
+  // (the actual runtime WASM is 3.6 MB).
+  if (typeof WebAssembly !== 'undefined' && !WebAssembly._kycBaselineForced) {
+    const origInstantiate = WebAssembly.instantiate;
+    WebAssembly.instantiate = function(input, importObj) {
+      const bytes = input && (input.byteLength ?? input.buffer?.byteLength);
+      if (typeof bytes === 'number' && bytes > 0 && bytes < 200) {
+        _log('LOG', `blocked capability-check instantiate (${bytes} bytes) to force baseline WASM`);
+        return Promise.reject(new Error('capability check blocked'));
+      }
+      return origInstantiate.call(this, input, importObj);
+    };
+    WebAssembly._kycBaselineForced = true;
+    _log('LOG', 'patched WebAssembly.instantiate to reject tiny capability probes');
+  }
+
   // numThreads: 1 → single-threaded WASM (SharedArrayBuffer requires
   // COOP/COEP headers we don't ship). enableXnnpackDelegate: false →
   // avoids the Safari-crash bug in the alpha.10 XNNPACK delegate.
@@ -273,30 +295,9 @@ async function loadRuntimeAndModel(modelBytes) {
     }
 
     _log('LOG', `loadTFLiteModel: bytes=${modelBytes.byteLength}`);
-    // Retry ladder — alpha.10 has narrow options acceptance. Try
-    // progressively simpler configs so the log tells us which combo
-    // the runtime accepts on this device.
-    const attempts = [
-      { label: 'numThreads:1',       opts: { numThreads: 1 } },
-      { label: 'no options',         opts: undefined },
-      { label: 'numThreads:1,noXnn', opts: { numThreads: 1, enableXnnpackDelegate: false } },
-    ];
-    let lastErr = null;
-    for (const a of attempts) {
-      try {
-        _log('LOG', `attempt: ${a.label}`);
-        const m = a.opts
-          ? await window.tflite.loadTFLiteModel(view, a.opts)
-          : await window.tflite.loadTFLiteModel(view);
-        _log('LOG', `loadTFLiteModel ok via ${a.label}`);
-        return m;
-      } catch (e) {
-        lastErr = e;
-        const msg = e && (e.stack || e.message) ? String(e.stack || e.message) : String(e);
-        _log('ERR', `attempt ${a.label} failed: ${msg}`);
-      }
-    }
-    throw lastErr;
+    const m = await window.tflite.loadTFLiteModel(view, { numThreads: 1 });
+    _log('LOG', 'loadTFLiteModel ok');
+    return m;
   } catch (e) {
     const msg = e && (e.stack || e.message) ? String(e.stack || e.message) : String(e);
     _log('ERR', `loadTFLiteModel threw: ${msg}`);
