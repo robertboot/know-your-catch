@@ -35,6 +35,7 @@ import {
   buildLookalikeGroups, classifyCoverage,
   planExport,
   countMyPendingOwnerUploads, verifyAllMyOwnerUploads,
+  restoreTrainingRows,
 } from '../training-store.js';
 import {
   uploadExport, listExports, getExportSignedUrl, deleteExport,
@@ -482,6 +483,10 @@ function ReviewPanel() {
   // shows the current gap and disappears when there's nothing left.
   const [myPendingCount, setMyPendingCount] = useState(0);
   const [verifyingBacklog, setVerifyingBacklog] = useState(false);
+  // Undo stack — last 5 bulk actions, in-memory only. Each entry has
+  // enough info to reverse the mutation via a targeted UPDATE.
+  const [undoStack, setUndoStack] = useState([]);
+  const [undoing, setUndoing]     = useState(false);
 
   const speciesOptions = useMemo(
     () => [...SPECIES].filter(s => s.active !== false)
@@ -556,17 +561,95 @@ function ReviewPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, cursor, selected, correctPickerOpen, rejectPickerOpen]);
 
+  // --- Safety rails around every bulk mutation ---
+  //
+  // A hard confirm before touching more than CONFIRM_THRESHOLD rows —
+  // paid this bill once with a 1,343-photo mass-reject and never want
+  // to again. The count + destination are in the prompt so a bleary
+  // fat-finger has to type through the intent.
+  //
+  // Every bulk action pushes a snapshot of the affected rows' prior
+  // status/species_id/rejection_reason onto undoStack (capped at 5),
+  // so the header's "Undo last" button can walk them back with one
+  // targeted UPDATE per unique target state.
+  //
+  // Console gets a [review-bulk] breadcrumb per mutation — forensic
+  // trail if this ever misfires again.
+  const CONFIRM_THRESHOLD = 20;
+  const now = () => new Date().toISOString();
+
+  const confirmBulk = (count, label) => {
+    if (count <= CONFIRM_THRESHOLD) return true;
+    return window.confirm(
+      `${label}\n\nThis will change ${count} training photos. ` +
+      `Cancel to reconsider — this is exactly the size of accident that ` +
+      `has bitten us before.`
+    );
+  };
+
+  const snapshotFor = (ids) => ids
+    .map(id => rows.find(r => r.id === id))
+    .filter(Boolean)
+    .map(r => ({
+      id: r.id,
+      status: r.status,
+      species_id: r.species_id,
+      rejection_reason: r.rejection_reason || null,
+    }));
+
+  const pushUndo = (label, snapshots) => {
+    if (!snapshots || snapshots.length === 0) return;
+    setUndoStack(s => [{ label, at: now(), snapshots }, ...s].slice(0, 5));
+  };
+
   const doApprove = async (ids) => {
+    if (ids.length === 0) return;
+    if (!confirmBulk(ids.length, `Approve ${ids.length} photos as verified?`)) return;
+    const snaps = snapshotFor(ids);
+    console.log('[review-bulk]', now(), 'approve', {
+      count: ids.length,
+      idsSample: ids.slice(0, 5),
+      priorStatusSample: snaps.slice(0, 5).map(s => s.status),
+    });
+    pushUndo(`Approve ${ids.length}`, snaps);
     const r = await approve(ids);
     if (!r.ok) return setError(r.error || 'approve failed');
     refresh();
   };
   const doReject = async (ids, reason) => {
+    // Guard: caller MUST provide a reason. Dismissing the picker
+    // returns undefined here — abort silently rather than treat the
+    // absence as "just use the last one".
+    if (!reason) {
+      console.log('[review-bulk]', now(), 'reject aborted — no reason provided');
+      return;
+    }
+    if (ids.length === 0) return;
+    if (!confirmBulk(ids.length, `Reject ${ids.length} photos as "${reason}"?`)) return;
+    const snaps = snapshotFor(ids);
+    console.log('[review-bulk]', now(), 'reject', {
+      count: ids.length, reason,
+      idsSample: ids.slice(0, 5),
+      priorStatusSample: snaps.slice(0, 5).map(s => s.status),
+    });
+    pushUndo(`Reject ${ids.length} as "${reason}"`, snaps);
     const r = await reject(ids, reason);
     if (!r.ok) return setError(r.error || 'reject failed');
     refresh();
   };
   const doCorrect = async (ids, newSpeciesId) => {
+    if (!newSpeciesId) {
+      console.log('[review-bulk]', now(), 'correct aborted — no species picked');
+      return;
+    }
+    if (ids.length === 0) return;
+    if (!confirmBulk(ids.length, `Correct ${ids.length} photos to species "${newSpeciesId}"?`)) return;
+    const snaps = snapshotFor(ids);
+    console.log('[review-bulk]', now(), 'correct', {
+      count: ids.length, newSpeciesId,
+      priorSpeciesSample: snaps.slice(0, 5).map(s => s.species_id),
+    });
+    pushUndo(`Correct ${ids.length} → ${newSpeciesId}`, snaps);
     // In All-species mode each row can belong to a different species,
     // so we can't hand correctSpecies a single currentSpeciesId. Group
     // the ids by their row's own species_id and call once per group.
@@ -588,6 +671,23 @@ function ReviewPanel() {
     }
     const r = await correctSpecies(ids, newSpeciesId, speciesId);
     if (!r.ok) return setError(r.error || 'correct failed');
+    refresh();
+  };
+
+  const undoLast = async () => {
+    if (undoStack.length === 0 || undoing) return;
+    const [top, ...rest] = undoStack;
+    if (!window.confirm(`Undo "${top.label}"?\n\nRestores ${top.snapshots.length} photos to their prior state.`)) return;
+    setUndoing(true);
+    console.log('[review-bulk]', now(), 'undo', {
+      label: top.label,
+      count: top.snapshots.length,
+      wasAt: top.at,
+    });
+    const r = await restoreTrainingRows(top.snapshots);
+    setUndoing(false);
+    if (!r.ok) { setError(r.error || 'undo failed'); return; }
+    setUndoStack(rest);
     refresh();
   };
 
@@ -642,6 +742,16 @@ function ReviewPanel() {
           <GhostButton onClick={refresh} disabled={loading} style={{ padding: '10px 14px' }}>
             {loading ? 'Loading…' : 'Refresh'}
           </GhostButton>
+          {undoStack.length > 0 && (
+            <GhostButton
+              onClick={undoLast}
+              disabled={undoing}
+              style={{ padding: '10px 14px', color: T.brass, borderColor: T.brass }}
+              title={`Undo: ${undoStack[0].label}`}
+            >
+              {undoing ? 'Undoing…' : `Undo last (${undoStack.length})`}
+            </GhostButton>
+          )}
         </div>
 
         {/* Backlog cleanup — visible whenever the admin has legacy
@@ -739,11 +849,23 @@ function ReviewPanel() {
 
       {rejectPickerOpen && (
         <ReasonPickerModal
+          count={focusedIds.length}
           onPick={(reason) => {
             setRejectPickerOpen(false);
+            // Defense in depth: never treat a falsy reason as valid.
+            // ReasonPickerModal cannot produce one, but a future
+            // refactor that adds a keyboard-focused "default" button
+            // would ship silently through here otherwise.
+            if (!reason) {
+              console.log('[review-bulk]', new Date().toISOString(), 'reject picker returned no reason — aborting');
+              return;
+            }
             doReject(focusedIds, reason);
           }}
-          onCancel={() => setRejectPickerOpen(false)}
+          onCancel={() => {
+            console.log('[review-bulk]', new Date().toISOString(), 'reject picker cancelled — no rows modified');
+            setRejectPickerOpen(false);
+          }}
         />
       )}
 
@@ -826,16 +948,36 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = f
 /* ============================================================
    Modals
    ============================================================ */
-function ReasonPickerModal({ onPick, onCancel }) {
+function ReasonPickerModal({ onPick, onCancel, count = 0 }) {
+  const title = count > 1
+    ? `Reject ${count} photos — pick a reason`
+    : 'Reject — pick a reason';
   return (
-    <ModalShell onCancel={onCancel} title="Reject — pick a reason">
+    <ModalShell onCancel={onCancel} title={title}>
+      <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 10, lineHeight: 1.5 }}>
+        Fresh reason required each time — no default is remembered.
+        Click Cancel to abort with no rows modified.
+      </div>
       <div style={{ display: 'grid', gap: 6 }}>
         {REJECT_REASONS.map(r => (
-          <button key={r.key} onClick={() => onPick(r.key)} style={{
-            background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
-            color: T.ink, padding: '10px 12px', borderRadius: 8,
-            fontSize: 13, textAlign: 'left', cursor: 'pointer',
-          }}>{r.label}</button>
+          <button
+            key={r.key}
+            type="button"
+            // type="button" so Enter on any other focused element
+            // (e.g., the bulk-action bar underneath the modal) cannot
+            // implicit-submit into a reason. Buttons only fire on
+            // explicit pointer click / Space/Enter WHILE focused —
+            // which requires the user to have deliberately tabbed to
+            // this control.
+            onClick={() => onPick(r.key)}
+            style={{
+              background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+              color: T.ink, padding: '10px 12px', borderRadius: 8,
+              fontSize: 13, textAlign: 'left', cursor: 'pointer',
+            }}
+          >
+            {r.label}
+          </button>
         ))}
       </div>
     </ModalShell>

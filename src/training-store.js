@@ -439,6 +439,47 @@ export async function countMyPendingOwnerUploads() {
   return { ok: true, count: count || 0, email };
 }
 
+/* Batch-restore prior state for a set of rows. Used exclusively by
+   the Review panel's undo stack — takes snapshots taken BEFORE a
+   bulk mutation and replays them to reverse the action. Groups rows
+   by target patch so we do one UPDATE per unique state instead of
+   one per row. Restoring to 'pending' also nulls reviewed_by /
+   reviewed_at because those stamps stop making sense when the row
+   is un-reviewed. */
+export async function restoreTrainingRows(snapshots) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured', count: 0 };
+  if (!Array.isArray(snapshots) || snapshots.length === 0) {
+    return { ok: true, count: 0 };
+  }
+  const groups = new Map();
+  for (const r of snapshots) {
+    if (!r?.id) continue;
+    const key = `${r.status}|${r.species_id || ''}|${r.rejection_reason || ''}`;
+    if (!groups.has(key)) {
+      const patch = {
+        status: r.status,
+        species_id: r.species_id,
+        rejection_reason: r.rejection_reason || null,
+      };
+      if (r.status === 'pending') {
+        patch.reviewed_by = null;
+        patch.reviewed_at = null;
+      }
+      groups.set(key, { patch, ids: [] });
+    }
+    groups.get(key).ids.push(r.id);
+  }
+  let total = 0;
+  for (const { patch, ids } of groups.values()) {
+    const { data, error } = await c.from('training_images')
+      .update(patch).in('id', ids).select('id');
+    if (error) return { ok: false, error: error.message, count: total };
+    total += (data || []).length;
+  }
+  return { ok: true, count: total };
+}
+
 /* One-shot bulk verify — flips every pending owner_upload row
    uploaded by the current admin to verified in a single UPDATE.
    Companion to countMyPendingOwnerUploads; safe to call repeatedly
