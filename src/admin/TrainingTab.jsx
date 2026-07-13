@@ -1311,9 +1311,9 @@ function ExportPanel() {
                   <GhostButton
                     onClick={() => copyColabCell(row)}
                     style={{
-                      padding: '6px 10px', fontSize: 11,
-                      color: state === 'copied' ? T.open : (state === 'error' ? T.closed : undefined),
-                      borderColor: state === 'copied' ? T.open : (state === 'error' ? T.closed : undefined),
+                      padding: '6px 10px', fontSize: 11, fontWeight: 800,
+                      color: state === 'copied' ? T.open : (state === 'error' ? T.closed : T.brass),
+                      borderColor: state === 'copied' ? T.open : (state === 'error' ? T.closed : T.brass),
                     }}
                   >
                     {state === 'copied' ? '✓ Copied' : state === 'error' ? 'Failed' : 'Copy Colab cell'}
