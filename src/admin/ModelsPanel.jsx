@@ -172,20 +172,23 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
               const busy = importing === pb.path;
               return (
                 <div key={pb.path} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 10px', borderRadius: 6,
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                  padding: '10px 12px', borderRadius: 8,
                   border: `1px solid ${T.cardEdge}`,
                 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, color: T.ink, fontWeight: 700 }}>{when}</div>
-                    <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: T.ink, fontWeight: 800 }}>{when}</div>
+                    <div style={{
+                      fontSize: 10, color: T.inkMute, fontFamily: 'monospace',
+                      marginTop: 3, overflowWrap: 'anywhere',
+                    }}>
                       {pb.path}{sizeKb ? ` · ${sizeKb}` : ''}
                     </div>
                   </div>
                   <PrimaryButton
                     onClick={() => importFromCloud(pb)}
                     disabled={busy || !!importing}
-                    style={{ padding: '6px 12px', fontSize: 11 }}
+                    style={{ padding: '10px 14px', fontSize: 13, width: '100%' }}
                   >
                     {busy ? 'Importing…' : 'Import'}
                   </PrimaryButton>
