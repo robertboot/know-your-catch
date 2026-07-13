@@ -36,7 +36,9 @@ import {
   planExport,
   countMyPendingOwnerUploads, verifyAllMyOwnerUploads,
   restoreTrainingRows,
+  saveCropRecover,
 } from '../training-store.js';
+import { CropStep } from '../components.jsx';
 import {
   uploadExport, listExports, getExportSignedUrl, deleteExport,
   modelBundleUploadUrl, trainingPhotoSignedUrls,
@@ -483,6 +485,10 @@ function ReviewPanel() {
   // shows the current gap and disappears when there's nothing left.
   const [myPendingCount, setMyPendingCount] = useState(0);
   const [verifyingBacklog, setVerifyingBacklog] = useState(false);
+  // Crop-to-recover state — the row currently being cropped + its
+  // resolved image URL (signed) for the CropStep component.
+  const [cropRow, setCropRow] = useState(null);
+  const [cropUrl, setCropUrl] = useState(null);
   // Undo stack — last 5 bulk actions, in-memory only. Each entry has
   // enough info to reverse the mutation via a targeted UPDATE.
   const [undoStack, setUndoStack] = useState([]);
@@ -674,6 +680,29 @@ function ReviewPanel() {
     refresh();
   };
 
+  const openCrop = async (row) => {
+    // The Review panel already has a signed-URL helper via ReviewTile's
+    // own useEffect; here we resolve one for the modal separately so
+    // the URL is fresh at open time.
+    setCropRow(row);
+    const u = await signedUrl(row.storage_path);
+    setCropUrl(u);
+  };
+
+  const closeCrop = () => { setCropRow(null); setCropUrl(null); };
+
+  const applyCropSave = async ({ bbox }) => {
+    if (!cropRow) return;
+    const r = await saveCropRecover(cropRow.id, bbox);
+    if (!r.ok) { setError(r.error || 'crop save failed'); return; }
+    console.log('[review-bulk]', new Date().toISOString(), 'crop-recover', {
+      id: cropRow.id, bbox,
+      priorStatus: cropRow.status, priorReason: cropRow.rejection_reason,
+    });
+    closeCrop();
+    refresh();
+  };
+
   const undoLast = async () => {
     if (undoStack.length === 0 || undoing) return;
     const [top, ...rest] = undoStack;
@@ -833,6 +862,7 @@ function ReviewPanel() {
                 focused={i === cursor && selected.size === 0}
                 onClick={(e) => { setCursor(i); if (e.shiftKey || e.metaKey || e.ctrlKey) toggleSelect(r.id); }}
                 onToggle={() => toggleSelect(r.id)}
+                onCrop={() => openCrop(r)}
               />
             ))}
           </div>
@@ -879,11 +909,22 @@ function ReviewPanel() {
           onCancel={() => setCorrectPickerOpen(false)}
         />
       )}
+
+      {cropRow && cropUrl && (
+        <CropStep
+          imageSrc={cropUrl}
+          onCancel={closeCrop}
+          onConfirm={applyCropSave}
+          title={`Crop to recover — ${cropRow.species_id}`}
+          primaryLabel="Save crop &amp; verify"
+          cancelLabel="Cancel"
+        />
+      )}
     </div>
   );
 }
 
-function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = false }) {
+function ReviewTile({ row, selected, focused, onClick, onToggle, onCrop, showSpecies = false }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     let alive = true;
@@ -925,8 +966,37 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, showSpecies = f
         position: 'relative',
       }}
     >
-      <div style={{ width: '100%', aspectRatio: '1 / 1', background: T.parchmentDeep }}>
+      <div style={{ width: '100%', aspectRatio: '1 / 1', background: T.parchmentDeep, position: 'relative' }}>
         {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+        {onCrop && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCrop(); }}
+            aria-label="Crop this photo to recover it"
+            title="Crop to recover"
+            style={{
+              position: 'absolute', top: 6, right: 6,
+              background: 'rgba(6,20,36,0.75)', border: `1px solid ${T.brass}`,
+              color: T.brass, borderRadius: 6,
+              padding: '4px 8px', fontSize: 10, fontWeight: 800,
+              cursor: 'pointer', letterSpacing: 0.4,
+            }}
+          >
+            CROP
+          </button>
+        )}
+        {row.crop_bbox && (
+          <div aria-hidden style={{
+            position: 'absolute',
+            left:   `${(row.crop_bbox.x || 0) * 100}%`,
+            top:    `${(row.crop_bbox.y || 0) * 100}%`,
+            width:  `${(row.crop_bbox.w || 0) * 100}%`,
+            height: `${(row.crop_bbox.h || 0) * 100}%`,
+            border: `1.5px solid ${T.brass}`,
+            boxShadow: '0 0 0 2px rgba(0,0,0,0.4)',
+            pointerEvents: 'none',
+          }} />
+        )}
       </div>
       {showSpecies && (
         <div style={{

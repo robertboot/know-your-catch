@@ -87,6 +87,33 @@ def _fetch(p):
     if dest.exists() and dest.stat().st_size > 0:
         return "cached"
     try:
+        crop = p.get("crop_bbox") or None
+        if crop:
+            # Fetch to a scratch path, apply the normalized crop, save
+            # the cropped result at dest. The training script reads
+            # whatever's on disk under train/{species}/ — cropping is
+            # transparent to it.
+            import tempfile
+            from PIL import Image
+            scratch = Path(tempfile.mkdtemp()) / dest.name
+            urlretrieve(p["url"], str(scratch))
+            with Image.open(scratch) as im:
+                w, h = im.size
+                x = max(0, int(round(float(crop.get("x", 0)) * w)))
+                y = max(0, int(round(float(crop.get("y", 0)) * h)))
+                cw = max(1, int(round(float(crop.get("w", 1)) * w)))
+                ch = max(1, int(round(float(crop.get("h", 1)) * h)))
+                cw = min(cw, w - x); ch = min(ch, h - y)
+                cropped = im.crop((x, y, x + cw, y + ch))
+                # Convert to RGB in case source is RGBA — train_fish_id
+                # expects standard image tensors and JPEG doesn't
+                # support alpha.
+                if cropped.mode != "RGB":
+                    cropped = cropped.convert("RGB")
+                cropped.save(dest, format="JPEG", quality=92)
+            try: scratch.unlink()
+            except Exception: pass
+            return "cropped"
         urlretrieve(p["url"], str(dest))
         return "ok"
     except Exception as e:
@@ -94,13 +121,14 @@ def _fetch(p):
 
 print(f"[colab_run] Downloading {len(photos)} photos in parallel...")
 start = time.time()
-ok = 0; failed = 0; cached = 0
+ok = 0; failed = 0; cached = 0; cropped = 0
 FAIL_LOG = []
 with ThreadPoolExecutor(max_workers=16) as pool:
     futures = {pool.submit(_fetch, p): p for p in photos}
     for i, fut in enumerate(as_completed(futures), 1):
         res = fut.result()
         if res == "ok": ok += 1
+        elif res == "cropped": cropped += 1
         elif res == "cached": cached += 1
         else:
             failed += 1
@@ -110,7 +138,7 @@ with ThreadPoolExecutor(max_workers=16) as pool:
             rate = i / elapsed if elapsed else 0
             print(f"  {i}/{len(photos)}  ({rate:.0f}/s, elapsed {elapsed:.0f}s)")
 
-print(f"[colab_run] Downloads done. ok={ok} cached={cached} failed={failed}")
+print(f"[colab_run] Downloads done. ok={ok} cropped={cropped} cached={cached} failed={failed}")
 if failed:
     print(f"[colab_run] First few failures:")
     for path, err in FAIL_LOG[:5]:

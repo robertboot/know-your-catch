@@ -439,6 +439,40 @@ export async function countMyPendingOwnerUploads() {
   return { ok: true, count: count || 0, email };
 }
 
+/* Crop-to-recover — writes a normalized bbox into the row and
+   promotes it to verified. Used from the Review panel's per-tile
+   Crop action to reclaim a photo that was rejected as "multiple"
+   or "blurry background" by isolating the target fish. Storage
+   bytes stay the original — the training pipeline applies the
+   crop when downloading photos into the Colab workspace, so we
+   don't need to re-upload cropped bytes. Companion change in
+   training/colab_run.py reads manifest.photos[].crop_bbox and
+   crops during _fetch. */
+export async function saveCropRecover(id, bbox) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  if (!id || !bbox) return { ok: false, error: 'missing id or bbox' };
+  // Clamp to [0,1] and enforce a minimum size so a stray tap can't
+  // save a zero-area crop.
+  const clamp = (n) => Math.max(0, Math.min(1, Number(n) || 0));
+  const cx = clamp(bbox.x), cy = clamp(bbox.y);
+  const cw = Math.max(0.02, Math.min(1 - cx, Number(bbox.w) || 0));
+  const ch = Math.max(0.02, Math.min(1 - cy, Number(bbox.h) || 0));
+  const sess = getLastSession();
+  const email = sess?.user?.email || null;
+  const { error } = await c.from('training_images')
+    .update({
+      crop_bbox: { x: cx, y: cy, w: cw, h: ch },
+      status: 'verified',
+      rejection_reason: null,
+      reviewed_by: email,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /* Batch-restore prior state for a set of rows. Used exclusively by
    the Review panel's undo stack — takes snapshots taken BEFORE a
    bulk mutation and replays them to reverse the action. Groups rows
