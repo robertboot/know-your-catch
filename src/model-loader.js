@@ -201,6 +201,7 @@ async function loadRuntimeAndModel(modelBytes) {
       _log('LOG', `runtime script: relBase=${relBase} wasmBase=${wasmBase} baseURI=${document.baseURI}`);
       const s = document.createElement('script');
       s.src = `${relBase}tf-tflite.min.js`;
+      s.setAttribute('data-kyc-tflite', '1');
       s.onload = () => {
         if (!window.tflite) {
           _log('ERR', 'script loaded but window.tflite undefined — runtime missing from bundle');
@@ -263,19 +264,36 @@ async function loadRuntimeAndModel(modelBytes) {
   // WASM uses, so Module init silently fails and _malloc ends up
   // undefined. Rejecting instantiate for calls under 200 bytes fails
   // the tiny capability checks without affecting real WASM loads
-  // (the actual runtime WASM is 3.6 MB).
-  if (typeof WebAssembly !== 'undefined' && !WebAssembly._kycBaselineForced) {
-    const origInstantiate = WebAssembly.instantiate;
-    WebAssembly.instantiate = function(input, importObj) {
-      const bytes = input && (input.byteLength ?? input.buffer?.byteLength);
-      if (typeof bytes === 'number' && bytes > 0 && bytes < 200) {
-        _log('LOG', `blocked capability-check instantiate (${bytes} bytes) to force baseline WASM`);
-        return Promise.reject(new Error('capability check blocked'));
+  // (the actual runtime WASM is 3.6 MB). WKWebView marks some Web
+  // globals non-writable so we use defineProperty and log verification
+  // to prove the patch took.
+  if (typeof WebAssembly !== 'undefined') {
+    const cur = WebAssembly.instantiate;
+    if (cur && cur.__kycPatched) {
+      _log('LOG', 'WebAssembly.instantiate patch already installed (persisted from prior init)');
+    } else {
+      const orig = cur;
+      const patched = function(input, importObj) {
+        const bytes = input && (input.byteLength ?? (input.buffer && input.buffer.byteLength));
+        if (typeof bytes === 'number' && bytes > 0 && bytes < 200) {
+          _log('LOG', `blocked capability-check instantiate (${bytes} bytes)`);
+          return Promise.reject(new Error('capability check blocked'));
+        }
+        _log('LOG', `passthrough instantiate (${bytes ?? '?'} bytes)`);
+        return orig.call(this, input, importObj);
+      };
+      patched.__kycPatched = true;
+      let ok = false;
+      try {
+        Object.defineProperty(WebAssembly, 'instantiate', {
+          value: patched, configurable: true, writable: true,
+        });
+        ok = WebAssembly.instantiate === patched;
+      } catch (e) {
+        _log('ERR', `defineProperty failed: ${e && (e.message || e)}`);
       }
-      return origInstantiate.call(this, input, importObj);
-    };
-    WebAssembly._kycBaselineForced = true;
-    _log('LOG', 'patched WebAssembly.instantiate to reject tiny capability probes');
+      _log(ok ? 'LOG' : 'ERR', `WebAssembly.instantiate patch installed=${ok}`);
+    }
   }
 
   // numThreads: 1 → single-threaded WASM (SharedArrayBuffer requires
@@ -391,10 +409,12 @@ async function _doInit() {
 }
 
 /* Force a re-check now — used by a "Check for updates" button in
-   Settings. Wipes the cached bytes + manifest so we always re-download
-   and re-verify, guarding against the case where cached bytes have
-   been corrupted (e.g. an interrupted first-launch write, or a
-   base64 round-trip issue on the platform Filesystem). */
+   Settings. Wipes the cached bytes + manifest AND tears down the
+   loaded tflite runtime so the next init re-loads it fresh. Without
+   the runtime reset, EmscriptenModuleLoader's singleton keeps a
+   variant choice from the first init (which may have been made
+   before our WebAssembly.instantiate patch existed), and no amount
+   of re-calling loadTFLiteModel changes that. */
 export async function forceRefreshModel() {
   _readyPromise = null;
   _model = null;
@@ -409,6 +429,18 @@ export async function forceRefreshModel() {
     _log('LOG', 'forceRefreshModel: cleared cached model + manifest');
   } catch (e) {
     _log('ERR', `forceRefreshModel: cache clear failed: ${e && (e.message || e)}`);
+  }
+  // Tear down the tflite runtime so the next _doInit reloads the
+  // script and re-runs capability detection with our patch in place.
+  if (typeof window !== 'undefined') {
+    try {
+      delete window.tflite;
+      const olds = document.querySelectorAll('script[data-kyc-tflite="1"]');
+      for (const s of olds) s.parentNode && s.parentNode.removeChild(s);
+      _log('LOG', `forceRefreshModel: removed tflite runtime (${olds.length} script tag(s))`);
+    } catch (e) {
+      _log('ERR', `forceRefreshModel: runtime teardown failed: ${e && (e.message || e)}`);
+    }
   }
   return initModel();
 }
