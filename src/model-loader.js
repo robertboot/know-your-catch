@@ -218,13 +218,42 @@ async function loadRuntimeAndModel(modelBytes) {
     });
   }
 
+  // Pick the WASM base URL. Preference order:
+  //   1. CDN over HTTPS (https://reelintel.ai/models/tflite/) — same
+  //      files that ship in the bundle are also deployed on Vercel,
+  //      so on iOS this sidesteps the capacitor:// scheme entirely
+  //      (Emscripten does a normal HTTPS fetch and its URL cobbling
+  //      can't produce the malformed capacitor://./… we saw before).
+  //   2. Local Capacitor bundle (wasmBase computed above) — fallback
+  //      for offline first-launch or CDN outage.
+  // www is canonical — bare reelintel.ai 308-redirects to www, and a
+  // 308 on a HEAD would waste a hop before Emscripten's followup fetch.
+  const CDN_BASE = 'https://www.reelintel.ai/models/tflite/';
+  let effectiveBase = wasmBase;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    const r = await fetch(`${CDN_BASE}tflite_web_api_cc.wasm`, {
+      method: 'HEAD', signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (r.ok) {
+      effectiveBase = CDN_BASE;
+      _log('LOG', `wasm base: using CDN (HEAD ${r.status})`);
+    } else {
+      _log('LOG', `wasm base: CDN HEAD ${r.status}, falling back to local`);
+    }
+  } catch (e) {
+    _log('LOG', `wasm base: CDN unreachable (${e && (e.message || e)}), falling back to local`);
+  }
+
   // Always (re)set wasm path — idempotent. On a retry after the first
   // init, the script block above is skipped because window.tflite is
   // already set, so setting the path here guarantees the current
-  // wasmBase is in effect regardless of prior state.
+  // effectiveBase is in effect regardless of prior state.
   try {
-    window.tflite.setWasmPath(wasmBase);
-    _log('LOG', `setWasmPath(${wasmBase}) ok`);
+    window.tflite.setWasmPath(effectiveBase);
+    _log('LOG', `setWasmPath(${effectiveBase}) ok`);
   } catch (e) {
     _log('ERR', `setWasmPath threw: ${e && (e.message || e)}`);
     throw e;
