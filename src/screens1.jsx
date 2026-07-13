@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Fish, Search, ChevronRight, AlertTriangle, Plus, Pencil, BookOpen,
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
-  RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check,
+  RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
 } from 'lucide-react';
@@ -31,6 +31,7 @@ import {
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
 import AnnouncementBanner from './AnnouncementBanner.jsx';
+import { SpeciesPickerModal } from './admin/pickers.jsx';
 
 /* ============================================================
    SPLASH
@@ -1435,6 +1436,36 @@ export function PhotoAnalyzingScreen({ imageDataUrl, jurisdictionId, onResult })
 /* ============================================================
    PHOTO — result
    ============================================================ */
+/* Fits a piece of text on ONE line by shrinking font-size in 4px
+   steps until scrollWidth stops overflowing offsetWidth. Starts at
+   maxSize, floors at minSize. Runs synchronously in a layout effect
+   so the user never sees a mid-shrink flash. */
+function AutoFitText({ text, maxSize, minSize, style }) {
+  const ref = React.useRef(null);
+  const [fontSize, setFontSize] = React.useState(maxSize);
+  React.useLayoutEffect(() => {
+    if (!ref.current) return;
+    let size = maxSize;
+    ref.current.style.fontSize = size + 'px';
+    while (size > minSize && ref.current.scrollWidth > ref.current.offsetWidth) {
+      size -= 4;
+      ref.current.style.fontSize = size + 'px';
+    }
+    setFontSize(size);
+  }, [text, maxSize, minSize]);
+  return (
+    <div ref={ref} style={{
+      ...style,
+      fontSize,
+      width: '100%',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+    }}>
+      {text}
+    </div>
+  );
+}
+
 /* Circular confidence dial. Filled ring representing pct (0-100)
    with the number centered. SVG so it stays crisp on retina and
    scales without pixelation. */
@@ -1575,11 +1606,17 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
   );
 }
 
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onRetake, onManual }) {
+export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onSaveWithoutFeedback, onRetake, onManual }) {
   const { confidence, candidates } = result || {};
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const [modal, setModal] = useState(null);
+  // Explicit feedback state — 'unset' at first render; when the user
+  // taps "Yes, correct" it flips to 'confirmed' and Save & Continue
+  // stops re-firing the confirmation. Wrong-ID immediately routes
+  // via the picker so we don't need a 'flagged' terminal state here.
+  const [feedbackState, setFeedbackState] = useState('unset');
+  const [showPicker, setShowPicker] = useState(false);
   const lookalikesRef = useRef(null);
 
   // No confident pick at all — keep the couldn't-identify fallback.
@@ -1658,54 +1695,141 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           background: 'linear-gradient(to top, rgba(6,20,36,0.94) 15%, rgba(6,20,36,0.55) 60%, transparent 100%)',
           pointerEvents: 'none',
         }} />
+        {/* Content stacked one column: pill → name (auto-fit one line)
+            → scientific → dial + horizontal CONFIDENCE label. */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           padding: isTablet ? '22px 22px' : '18px 16px',
-          display: 'flex', alignItems: 'flex-end', gap: 14,
         }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: pillTier.bg, color: pillTier.ink,
-              padding: '5px 10px', borderRadius: 999,
-              fontSize: 11, fontWeight: 800, letterSpacing: '0.15em',
-              marginBottom: 10,
-            }}>
-              <Check size={12} strokeWidth={3} />
-              {pillTier.label}
-            </div>
-            <div style={{
-              fontFamily: 'Georgia, serif', fontStyle: 'italic',
-              fontSize: nameSize, lineHeight: 0.95,
-              color: '#ffffff', fontWeight: 400,
-              wordBreak: 'break-word', letterSpacing: '-0.01em',
-            }}>
-              {topSpecies?.commonName || top.speciesId}
-            </div>
-            {topSpecies?.scientific && (
-              <div style={{
-                fontStyle: 'italic', fontSize: sciSize,
-                color: '#8ea3ba', marginTop: 4,
-              }}>
-                {topSpecies.scientific}
-              </div>
-            )}
-          </div>
           <div style={{
-            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
-            paddingBottom: 4,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: pillTier.bg, color: pillTier.ink,
+            padding: '5px 10px', borderRadius: 999,
+            fontSize: 11, fontWeight: 800, letterSpacing: '0.15em',
+            marginBottom: 10,
+          }}>
+            <Check size={12} strokeWidth={3} />
+            {pillTier.label}
+          </div>
+          <AutoFitText
+            text={topSpecies?.commonName || top.speciesId}
+            maxSize={nameSize}
+            minSize={36}
+            style={{
+              fontFamily: 'Georgia, serif', fontStyle: 'italic',
+              lineHeight: 0.95,
+              color: '#ffffff', fontWeight: 400,
+              letterSpacing: '-0.01em',
+            }}
+          />
+          {topSpecies?.scientific && (
+            <div style={{
+              fontStyle: 'italic', fontSize: sciSize,
+              color: '#8ea3ba', marginTop: 4,
+            }}>
+              {topSpecies.scientific}
+            </div>
+          )}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            marginTop: 12,
           }}>
             <ConfidenceRing pct={scorePct} size={ringSize} />
             <div style={{
-              fontSize: 10, fontWeight: 800, letterSpacing: '0.15em',
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.15em',
               color: '#ffffff',
-              writingMode: 'vertical-rl', transform: 'rotate(180deg)',
             }}>
               CONFIDENCE
             </div>
           </div>
         </div>
       </div>
+
+      {/* EXPLICIT TRAINING FEEDBACK STRIP — gentle offering, not a
+          form. Users get a visible, understandable way to help train
+          the model without navigating anywhere. Silent implicit
+          confirmation on Save & Continue is preserved as a fallback
+          for users who ignore this strip. */}
+      {feedbackState === 'unset' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: '#11233a', border: `1px solid ${T.brass}`,
+          borderRadius: 10, padding: '8px 12px',
+          minHeight: 44, marginBottom: 14,
+        }}>
+          <div style={{
+            flex: 1, minWidth: 0,
+            fontSize: 12, color: '#8ea3ba', fontWeight: 600,
+          }}>
+            Was this right?
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFeedbackState('confirmed');
+              // Fire the model_confirmation feedback WITHOUT navigating.
+              // Save & Continue below stays available and, because
+              // feedbackState is now 'confirmed', it uses the "already
+              // confirmed" path that skips the double-fire.
+              if (onConfirmFeedbackOnly) {
+                onConfirmFeedbackOnly(top.speciesId);
+              }
+            }}
+            style={{
+              flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'transparent', border: `1px solid ${T.brass}`,
+              color: T.brass, borderRadius: 8,
+              padding: '6px 12px', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Check size={14} strokeWidth={3} />
+            Yes, correct
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPicker(true)}
+            style={{
+              flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'transparent', border: `1px solid ${T.warn}`,
+              color: T.warn, borderRadius: 8,
+              padding: '6px 12px', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Flag size={14} strokeWidth={2.5} />
+            Report wrong ID
+          </button>
+        </div>
+      )}
+
+      {feedbackState === 'confirmed' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(94,224,172,0.14)', border: `1px solid ${T.open}`,
+          borderRadius: 10, padding: '10px 12px',
+          minHeight: 44, marginBottom: 14,
+          animation: 'kycFeedbackIn 220ms ease-out',
+        }}>
+          <div style={{
+            flexShrink: 0,
+            width: 22, height: 22, borderRadius: 999,
+            background: T.open,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Check size={14} color="#062330" strokeWidth={3} />
+          </div>
+          <div style={{
+            flex: 1, minWidth: 0,
+            fontSize: 13, color: T.open, fontWeight: 700,
+          }}>
+            Thanks — added to training data
+          </div>
+        </div>
+      )}
+      <style>{`@keyframes kycFeedbackIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }`}</style>
 
       {/* WHY THIS MATCH FITS — species-authored ID cues */}
       {keyIds.length > 0 && (
@@ -1786,20 +1910,47 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         </div>
       )}
 
-      {/* STICKY BOTTOM ACTION BAR — sits above the tab bar */}
+      {/* STICKY BOTTOM ACTION BAR — sits above the tab bar. The
+          `bottom` offset combines the safe area (home indicator on
+          iPhones) with the tab bar content height (~72px covers both
+          phone and tablet without overlap). */}
       <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 60, zIndex: 20,
-        padding: `12px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)`,
+        position: 'fixed', left: 0, right: 0,
+        bottom: `calc(env(safe-area-inset-bottom, 0px) + ${isTablet ? 76 : 60}px)`,
+        zIndex: 20,
+        padding: '12px 14px',
         background: 'rgba(4,22,42,0.96)',
         backdropFilter: 'blur(6px)',
         borderTop: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', gap: 10,
       }}>
         <PrimaryButton
-          onClick={() => onConfirmSave && onConfirmSave(top.speciesId)}
-          style={{ flex: 2, minHeight: 52, fontSize: 16, fontWeight: 800 }}
+          onClick={() => {
+            // Feedback already banked from the strip's "Yes, correct":
+            // just navigate. Otherwise fire the implicit confirmation
+            // AND navigate — the pre-existing default behavior.
+            if (feedbackState === 'confirmed' && onSaveWithoutFeedback) {
+              onSaveWithoutFeedback(top.speciesId);
+            } else if (onConfirmSave) {
+              onConfirmSave(top.speciesId);
+            }
+          }}
+          style={{
+            flex: 2, minHeight: 52, fontSize: 16, fontWeight: 800,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: 2,
+          }}
         >
-          Save &amp; Continue
+          <span>{feedbackState === 'confirmed' ? 'Save' : 'Save & Continue'}</span>
+          {feedbackState === 'confirmed' && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, opacity: 0.7,
+              letterSpacing: '0.05em',
+            }}>
+              already confirmed
+            </span>
+          )}
         </PrimaryButton>
         <GhostButton
           onClick={scrollToLookalikesOrPicker}
@@ -1808,6 +1959,23 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           Compare
         </GhostButton>
       </div>
+
+      {/* Species picker opened from the strip's "Report wrong ID" —
+          picking a species fires model_correction (via onCorrectSave)
+          which the parent wires to navigate to catch entry preselected
+          to the correction. */}
+      {showPicker && (
+        <SpeciesPickerModal
+          speciesOptions={SPECIES.filter(s => s.active !== false && s.id !== top.speciesId)}
+          currentSpeciesId={top.speciesId}
+          onCancel={() => setShowPicker(false)}
+          onPick={(newSpeciesId) => {
+            setShowPicker(false);
+            onCorrectSave && onCorrectSave(newSpeciesId, top.speciesId);
+          }}
+          title="What species is it?"
+        />
+      )}
 
       {modal?.lookalikeId && (
         <CompareLookalikesModal

@@ -668,10 +668,10 @@ export default function App() {
         imageDataUrl={screen.imageDataUrl}
         onPickSpecies={(id) => push({ name: 'species', id })}
         onConfirmSave={(topPickSpeciesId) => {
-          // Fire the training-feedback upload without blocking the
-          // user — offline or network hiccups shouldn't gate saving
-          // the catch. Same effect as the old Confirm button, but
-          // the user's mental model is "save it" not "verify me".
+          // Save & Continue tapped when the feedback strip is unset
+          // — implicit model_confirmation fire + navigate. Fire is
+          // fire-and-forget so offline / network hiccups don't gate
+          // saving the catch.
           dataUrlToFile(screen.imageDataUrl, 'confirmation.jpg').then((file) => {
             if (file) saveModelFeedback({
               file, speciesId: topPickSpeciesId,
@@ -679,6 +679,22 @@ export default function App() {
               source: 'model_confirmation',
             }).catch(() => {});
           });
+          push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.imageDataUrl });
+        }}
+        onConfirmFeedbackOnly={(topPickSpeciesId) => {
+          // Feedback strip's "Yes, correct" — fire model_confirmation
+          // but don't navigate; the user stays on the result screen.
+          dataUrlToFile(screen.imageDataUrl, 'confirmation.jpg').then((file) => {
+            if (file) saveModelFeedback({
+              file, speciesId: topPickSpeciesId,
+              originalSpeciesId: topPickSpeciesId,
+              source: 'model_confirmation',
+            }).catch(() => {});
+          });
+        }}
+        onSaveWithoutFeedback={(topPickSpeciesId) => {
+          // Save tapped after the strip already banked the confirmation
+          // — just navigate; skip the double-fire.
           push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.imageDataUrl });
         }}
         onCorrectSave={(correctSpeciesId, originalSpeciesId) => {
@@ -1245,9 +1261,10 @@ function TabBtn({ label, active, onClick, icon, size = 'phone' }) {
       padding: '4px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column',
       alignItems: 'center', gap, fontSize: labelSize, fontWeight: active ? 700 : 600,
       letterSpacing: 0.2,
+      minWidth: 0,
     }}>
       <span style={{ color }}>{scaledIcon}</span>
-      {label}
+      <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
     </button>
   );
 }
