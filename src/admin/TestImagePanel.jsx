@@ -16,8 +16,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { T } from '../theme.js';
 import { SPECIES } from '../data.js';
 import {
-  Card, PrimaryButton, GhostButton, SectionLabel,
+  Card, PrimaryButton, GhostButton, SectionLabel, CropStep,
 } from '../components.jsx';
+import { dataUrlToFile } from '../helpers.js';
 import { getProductionModel, modelSignedUrl } from '../model-store.js';
 import { saveModelFeedback } from '../training-store.js';
 import { SpeciesPickerModal } from './pickers.jsx';
@@ -86,6 +87,10 @@ export default function TestImagePanel() {
   const [inferring, setInferring]       = useState(false);
   const [error, setError]               = useState('');
   const [testImage, setTestImage]       = useState(null); // { url, file }
+  const [cropOpen, setCropOpen]         = useState(false);
+  // Preserves the pre-crop image so admin can "Reset crop" if they
+  // want to try a different framing without re-picking from disk.
+  const [originalImage, setOriginalImage] = useState(null); // { url, file }
   const [predictions, setPredictions]   = useState(null);
   const [pickerOpen, setPickerOpen]     = useState(false);
   const [saving, setSaving]             = useState(false);
@@ -161,14 +166,40 @@ export default function TestImagePanel() {
   const handleFile = (file) => {
     if (!file) return;
     if (testImage?.url) URL.revokeObjectURL(testImage.url);
-    setTestImage({ url: URL.createObjectURL(file), file });
+    if (originalImage?.url && originalImage.url !== testImage?.url) URL.revokeObjectURL(originalImage.url);
+    const url = URL.createObjectURL(file);
+    setTestImage({ url, file });
+    setOriginalImage({ url, file });
     setPredictions(null);
     setError('');
   };
 
   const clearTest = () => {
     if (testImage?.url) URL.revokeObjectURL(testImage.url);
+    if (originalImage?.url && originalImage.url !== testImage?.url) URL.revokeObjectURL(originalImage.url);
     setTestImage(null);
+    setOriginalImage(null);
+    setPredictions(null);
+    setError('');
+  };
+
+  const resetToOriginal = () => {
+    if (!originalImage) return;
+    if (testImage?.url && testImage.url !== originalImage.url) URL.revokeObjectURL(testImage.url);
+    setTestImage(originalImage);
+    setPredictions(null);
+    setError('');
+  };
+
+  const applyCrop = async ({ dataUrl }) => {
+    setCropOpen(false);
+    if (!dataUrl) return;
+    // Convert data URL → File so saveFeedback + the existing run()
+    // path can consume it the same way as a picker-uploaded file.
+    const file = await dataUrlToFile(dataUrl, 'crop.jpg');
+    if (!file) { setError('Crop conversion failed.'); return; }
+    if (testImage?.url && testImage.url !== originalImage?.url) URL.revokeObjectURL(testImage.url);
+    setTestImage({ url: URL.createObjectURL(file), file });
     setPredictions(null);
     setError('');
   };
@@ -382,6 +413,22 @@ export default function TestImagePanel() {
                   <PrimaryButton onClick={run} disabled={inferring} style={{ width: '100%' }}>
                     {inferring ? 'Running…' : 'Run identification'}
                   </PrimaryButton>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <GhostButton
+                      onClick={() => setCropOpen(true)}
+                      style={{ flex: 1, padding: '8px 12px', fontSize: 12 }}
+                    >
+                      Crop
+                    </GhostButton>
+                    {originalImage && testImage && originalImage.url !== testImage.url && (
+                      <GhostButton
+                        onClick={resetToOriginal}
+                        style={{ flex: 1, padding: '8px 12px', fontSize: 12 }}
+                      >
+                        Reset crop
+                      </GhostButton>
+                    )}
+                  </div>
                   <canvas ref={canvasRef} style={{ display: 'none' }} />
                   {predictions && (
                     <div style={{ marginTop: 14 }}>
@@ -450,6 +497,17 @@ export default function TestImagePanel() {
           onPick={correctTo}
           onCancel={() => setPickerOpen(false)}
           title="Pick the true species"
+        />
+      )}
+
+      {cropOpen && testImage && (
+        <CropStep
+          imageSrc={originalImage?.url || testImage.url}
+          onCancel={() => setCropOpen(false)}
+          onConfirm={applyCrop}
+          title="Crop to the fish before running"
+          primaryLabel="Use this crop"
+          cancelLabel="Cancel"
         />
       )}
     </div>
