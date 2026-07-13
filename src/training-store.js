@@ -556,28 +556,41 @@ export async function deleteTrainingImage(id, storagePath) {
 
 /* Fast per-species / status counts + last upload timestamp for the
    review + coverage dashboards. Client-side aggregate over the raw
-   rows — one round-trip. Returns:
+   rows — paginated in 1000-row chunks because Supabase's REST
+   endpoint caps a single response at ~1000 rows regardless of what
+   the client's .limit() says. Without pagination, a table with 6683
+   rows returns only the first 1000 and Coverage undercounts every
+   species that clusters later in id order. Returns:
      { [speciesId]: { pending, verified, rejected, corrected, total, lastUploadedAt } } */
 export async function countsBySpecies() {
   const c = client();
   if (!c) return { ok: false, counts: {}, error: 'not-configured' };
-  const { data, error } = await c
-    .from('training_images')
-    .select('species_id, status, uploaded_at')
-    .limit(50000);
-  if (error) return { ok: false, counts: {}, error: error.message };
+
+  const PAGE = 1000;
   const counts = {};
-  for (const r of data || []) {
-    const sid = r.species_id;
-    const b = (counts[sid] ||= {
-      pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0,
-      lastUploadedAt: null,
-    });
-    b[r.status] += 1;
-    b.total += 1;
-    if (!b.lastUploadedAt || r.uploaded_at > b.lastUploadedAt) {
-      b.lastUploadedAt = r.uploaded_at;
+  let from = 0;
+  while (true) {
+    const { data, error } = await c
+      .from('training_images')
+      .select('species_id, status, uploaded_at')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, counts: {}, error: error.message };
+    if (!data || data.length === 0) break;
+    for (const r of data) {
+      const sid = r.species_id;
+      const b = (counts[sid] ||= {
+        pending: 0, verified: 0, rejected: 0, corrected: 0, total: 0,
+        lastUploadedAt: null,
+      });
+      if (b[r.status] !== undefined) b[r.status] += 1;
+      b.total += 1;
+      if (!b.lastUploadedAt || r.uploaded_at > b.lastUploadedAt) {
+        b.lastUploadedAt = r.uploaded_at;
+      }
     }
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
   return { ok: true, counts };
 }
