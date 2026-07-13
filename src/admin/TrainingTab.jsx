@@ -1283,6 +1283,31 @@ function ExportPanel() {
             Refresh
           </GhostButton>
         </div>
+
+        <details style={{
+          background: T.parchmentDeep, borderRadius: 8, padding: '10px 12px',
+          border: `1px solid ${T.cardEdge}`, fontSize: 12, color: T.inkSoft,
+          marginBottom: 10,
+        }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: T.brass, letterSpacing: 0.3 }}>
+            How to run the Colab cell →
+          </summary>
+          <div style={{ marginTop: 10, lineHeight: 1.6 }}>
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              <li>Click <strong>Copy Colab cell</strong> below on the newest export.</li>
+              <li>Open a new tab: <code>colab.research.google.com</code> → <strong>File → New notebook</strong>.</li>
+              <li><strong>CRITICAL:</strong> Runtime → <strong>Change runtime type</strong> → pick <strong>L4 GPU</strong> (or T4 if L4 unavailable) → Save. Wait for the green "Connected" indicator top-right.</li>
+              <li>Verify GPU: type <code>!nvidia-smi</code> in a cell → Run. Should show an NVIDIA card. Skip this and you'll land on CPU — training takes hours instead of ~30 min.</li>
+              <li>New code cell → paste (⌘V) → click ▶ (or Shift+Enter).</li>
+              <li>Walk away 30-60 min. It downloads all photos, trains, INT8-quantizes, uploads the bundle back automatically.</li>
+              <li>When it finishes: come back here → <strong>Models</strong> tab → <strong>Pending bundles</strong> → click <strong>Import</strong> → name it (default is Big Red N.0, override with e.g. <em>Big Red 1.1</em>) → click <strong>Promote</strong>.</li>
+              <li>Phone: Settings → Fish ID model → <strong>Check for updates</strong> → new version loads.</li>
+            </ol>
+            <div style={{ marginTop: 10, padding: '8px 10px', background: T.warnBg, borderRadius: 6, color: T.warn, fontSize: 11 }}>
+              <strong>Colab tips:</strong> plug the Mac in, keep the tab focused, don't lock the screen. If you upgrade to Colab Pro ($10/mo) GPU availability is much better and you won't get idle-disconnected.
+            </div>
+          </div>
+        </details>
         {priorExports.length === 0 && (
           <div style={{ fontSize: 12, color: T.inkMute }}>No exports yet. Build one above.</div>
         )}
