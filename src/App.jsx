@@ -32,6 +32,7 @@ import {
   FavoritePickerModal, AccountSetupModal, IdentificationConfirmCard,
   SignInModal,
   WelcomeIntroModal, FishingProfileSetupModal,
+  CropStep,
 } from './components.jsx';
 import { PROFILE_FIELDS, profileFieldsComplete } from './screens2.jsx';
 import {
@@ -549,7 +550,7 @@ export default function App() {
       if (source === 'camera') push({ name: 'catch_entry' });
       return;
     }
-    push({ name: 'photo_analyzing', imageDataUrl: dataUrl, fromCapture: true });
+    push({ name: 'photo_crop', imageDataUrl: dataUrl, fromCapture: true });
   };
 
   // Legacy-user "Finish setup" nudge. Fires when the required step
@@ -572,7 +573,7 @@ export default function App() {
     onFinishSetup: startFinishSetup,
     onDismissFinishSetup: () => setFinishSetupDismissed(true),
     onIdentify:   () => push({ name: 'identify' }),
-    onUploadPhoto:(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl }),
+    onUploadPhoto:(dataUrl) => push({ name: 'photo_crop', imageDataUrl: dataUrl }),
     onBrowse:     () => push({ name: 'categories' }),
     onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
@@ -606,7 +607,7 @@ export default function App() {
       body = <IdentifyScreen
         state={state}
         jurisdiction={jurisdiction}
-        onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
+        onPhoto={(dataUrl) => push({ name: 'photo_crop', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
         onCategory={(catId) => push({ name: 'category', catId })}
         onSearch={() => push({ name: 'search' })}
@@ -618,6 +619,39 @@ export default function App() {
       body = <PatternsScreen
         state={state}
         onPickSpecies={(id) => push({ name: 'species', id })}
+      />;
+      break;
+    case 'photo_crop':
+      body = <CropStep
+        imageSrc={screen.imageDataUrl}
+        onCancel={() => {
+          // "Retake" — throw away this photo, back to the flow the user
+          // came from. From the capture flow, drop the crop screen and
+          // let the tab/home state resurface. From the Identify tab
+          // upload, do the same.
+          setStack(st => st.filter(s => s.name !== 'photo_crop'));
+        }}
+        onSkip={() => {
+          // Pass the original through unchanged — same result the app
+          // produced before the crop step existed.
+          setStack(st => [...st.slice(0, -1), {
+            name: 'photo_analyzing',
+            imageDataUrl: screen.imageDataUrl,
+            fromCapture: screen.fromCapture,
+          }]);
+        }}
+        onConfirm={({ dataUrl, bbox }) => {
+          // Persist BOTH: the original for the logbook + the crop for
+          // inference. The catch record picks these up via prefilledPhoto
+          // (original) + photoCrop (cropped) when we route to catch_entry.
+          setStack(st => [...st.slice(0, -1), {
+            name: 'photo_analyzing',
+            imageDataUrl: dataUrl,
+            originalDataUrl: screen.imageDataUrl,
+            cropBbox: bbox,
+            fromCapture: screen.fromCapture,
+          }]);
+        }}
       />;
       break;
     case 'photo_analyzing':
@@ -641,10 +675,16 @@ export default function App() {
               : result?.confidence === 'medium' ? 0.55
               : result?.confidence === 'low'    ? 0.30
               : null;
+            // originalDataUrl (if any) is the full-res photo the user
+            // captured before the crop step; imageDataUrl is what was
+            // fed to the model (potentially cropped). The logbook wants
+            // the original for display, so prefilledPhoto uses it when
+            // available.
+            const originalForLog = screen.originalDataUrl || screen.imageDataUrl;
             if (!aiIdentifiedSpeciesId) {
               setStack(st => [...st.slice(0, -1), {
                 name: 'catch_entry',
-                prefilledPhoto: screen.imageDataUrl,
+                prefilledPhoto: originalForLog,
                 aiConfidence,
                 aiIdentifiedSpeciesId: null,
                 aiWasConfirmed: false,
@@ -654,13 +694,19 @@ export default function App() {
             setStack(st => [...st.slice(0, -1), {
               name: 'identify_confirm',
               imageDataUrl: screen.imageDataUrl,
+              originalDataUrl: screen.originalDataUrl,
               aiIdentifiedSpeciesId,
               aiConfidence,
             }]);
             return;
           }
           // Legacy Fish-ID-tab flow: results screen with candidates.
-          setStack(st => [...st.slice(0, -1), { name: 'photo_result', imageDataUrl: screen.imageDataUrl, result }]);
+          setStack(st => [...st.slice(0, -1), {
+            name: 'photo_result',
+            imageDataUrl: screen.imageDataUrl,
+            originalDataUrl: screen.originalDataUrl,
+            result,
+          }]);
         }}
       />;
       break;
@@ -673,7 +719,7 @@ export default function App() {
           setStack(st => [...st.slice(0, -1), {
             name: 'catch_entry',
             preselectSpeciesId: screen.aiIdentifiedSpeciesId,
-            prefilledPhoto: screen.imageDataUrl,
+            prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl,
             aiIdentifiedSpeciesId: screen.aiIdentifiedSpeciesId,
             aiConfidence: screen.aiConfidence,
             aiWasConfirmed: true,
@@ -686,7 +732,7 @@ export default function App() {
           // measure the model's real-world accuracy later.
           setStack(st => [...st.slice(0, -1), {
             name: 'catch_entry',
-            prefilledPhoto: screen.imageDataUrl,
+            prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl,
             aiIdentifiedSpeciesId: screen.aiIdentifiedSpeciesId,
             aiConfidence: screen.aiConfidence,
             aiWasConfirmed: false,
@@ -711,7 +757,7 @@ export default function App() {
               source: 'model_confirmation',
             }).catch(() => {});
           });
-          push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.imageDataUrl });
+          push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl });
         }}
         onConfirmFeedbackOnly={(topPickSpeciesId) => {
           // Feedback strip's "Yes, correct" — fire model_confirmation
@@ -727,7 +773,7 @@ export default function App() {
         onSaveWithoutFeedback={(topPickSpeciesId) => {
           // Save tapped after the strip already banked the confirmation
           // — just navigate; skip the double-fire.
-          push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.imageDataUrl });
+          push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl });
         }}
         onCorrectSave={(correctSpeciesId, originalSpeciesId) => {
           dataUrlToFile(screen.imageDataUrl, 'correction.jpg').then((file) => {
@@ -737,9 +783,9 @@ export default function App() {
               source: 'model_correction',
             }).catch(() => {});
           });
-          push({ name: 'catch_entry', preselectSpeciesId: correctSpeciesId, prefilledPhoto: screen.imageDataUrl });
+          push({ name: 'catch_entry', preselectSpeciesId: correctSpeciesId, prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl });
         }}
-        onRetake={() => setStack(st => st.filter(s => s.name !== 'photo_analyzing' && s.name !== 'photo_result'))}
+        onRetake={() => setStack(st => st.filter(s => s.name !== 'photo_crop' && s.name !== 'photo_analyzing' && s.name !== 'photo_result'))}
         onManual={() => reset([{ name: 'home' }, { name: 'identify' }, { name: 'categories' }])}
       />;
       break;
@@ -858,7 +904,7 @@ export default function App() {
     'species';
 
   const speciesActive = ['species_list', 'species', 'categories', 'category', 'search'].includes(screen.name);
-  const identifyActive = ['identify', 'photo_analyzing', 'photo_result'].includes(screen.name);
+  const identifyActive = ['identify', 'photo_crop', 'photo_analyzing', 'photo_result'].includes(screen.name);
 
   const chrome = chromeHeights(size);
   const type = typeScale(size);

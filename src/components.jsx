@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles, Crop, RotateCcw } from 'lucide-react';
 import { T } from './theme.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
@@ -1435,5 +1435,337 @@ export function BigButton({ icon, title, subtitle, onClick, accent = T.brass, is
         <div style={{ fontSize: isTablet ? 15 : 12, color: T.inkMute, marginTop: isTablet ? 4 : 2 }}>{subtitle}</div>
       </div>
     </button>
+  );
+}
+
+/* CropStep — pan/zoom the image under a fixed-size crop frame, then
+   export the framed region as a 512x512 JPEG.
+
+   Model: fixed centered square crop rectangle; image translates +
+   scales beneath it. One-finger pan, two-finger pinch zoom. Simpler
+   than draggable handles and matches how modern camera-roll crop UIs
+   work — the user zooms/pans until the fish sits inside the frame.
+
+   Zoom is capped at 0.5x - 4x from the initial fit scale.
+
+   Props:
+     - imageSrc:      data URL or blob URL
+     - onConfirm({ dataUrl, bbox }) — bbox is {x,y,w,h} normalized 0..1
+       against the original image, so downstream code can re-apply the
+       crop from the full-res source (e.g., training pipeline) instead
+       of relying on the exported bytes.
+     - onCancel()     — bail out entirely (e.g., "retake photo")
+     - onSkip()       — pass the original through unchanged; optional
+     - title:         header text
+     - primaryLabel:  primary CTA label ("Use this crop" default)
+
+   No network calls; airplane-mode safe. */
+export function CropStep({
+  imageSrc,
+  onConfirm,
+  onCancel,
+  onSkip,
+  title = 'Crop to the fish',
+  primaryLabel = 'Use this crop',
+  skipLabel = 'Skip crop',
+  cancelLabel = 'Retake',
+}) {
+  const containerRef = React.useRef(null);
+  const imgRef = React.useRef(null);
+  const [natural, setNatural] = React.useState(null);   // { w, h }
+  const [container, setContainer] = React.useState({ w: 0, h: 0 });
+  const [zoom, setZoom] = React.useState(1);            // user-controlled multiplier on top of fit
+  const [pan, setPan] = React.useState({ x: 0, y: 0 }); // translation in container px
+  const [busy, setBusy] = React.useState(false);
+
+  // Active pointer map keyed by pointerId → most recent {x,y}.
+  const pointersRef = React.useRef(new Map());
+  // Baseline distance/midpoint for pinch — set on second pointer down.
+  const pinchRef = React.useRef(null);
+
+  // Measure container on mount + resize.
+  React.useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setContainer({ w: r.width, h: r.height });
+    };
+    update();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Load natural image dimensions.
+  React.useEffect(() => {
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+    };
+    img.onerror = () => { if (!cancelled) setNatural(null); };
+    img.src = imageSrc;
+    return () => { cancelled = true; };
+  }, [imageSrc]);
+
+  // Fit scale so the image maxes-out inside the container at zoom=1.
+  const fitScale = React.useMemo(() => {
+    if (!natural || !container.w || !container.h) return 1;
+    return Math.min(container.w / natural.w, container.h / natural.h);
+  }, [natural, container]);
+  const totalScale = fitScale * zoom;
+
+  // Crop frame — centered square at 80% of the smaller container edge.
+  const cropSize = React.useMemo(() => {
+    const min = Math.min(container.w, container.h);
+    return Math.max(120, Math.round(min * 0.8));
+  }, [container]);
+  const cropX = (container.w - cropSize) / 2;
+  const cropY = (container.h - cropSize) / 2;
+
+  // Compute the source rectangle in original-image coords the crop
+  // covers, clamped to the image bounds.
+  const computeSourceRect = React.useCallback(() => {
+    if (!natural || totalScale === 0) return null;
+    const dispW = natural.w * totalScale;
+    const dispH = natural.h * totalScale;
+    const imgTLx = (container.w - dispW) / 2 + pan.x;
+    const imgTLy = (container.h - dispH) / 2 + pan.y;
+    let sx = (cropX - imgTLx) / totalScale;
+    let sy = (cropY - imgTLy) / totalScale;
+    let sw = cropSize / totalScale;
+    let sh = cropSize / totalScale;
+    // Clamp so we never sample outside the source.
+    sx = Math.max(0, Math.min(natural.w - 1, sx));
+    sy = Math.max(0, Math.min(natural.h - 1, sy));
+    sw = Math.max(1, Math.min(natural.w - sx, sw));
+    sh = Math.max(1, Math.min(natural.h - sy, sh));
+    return { sx, sy, sw, sh };
+  }, [natural, totalScale, container, pan, cropX, cropY, cropSize]);
+
+  const onPointerDown = (e) => {
+    if (!containerRef.current) return;
+    containerRef.current.setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size === 2) {
+      const pts = Array.from(pointersRef.current.values());
+      const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+      pinchRef.current = {
+        dist: Math.hypot(dx, dy),
+        mid:  { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 },
+        zoom, pan,
+      };
+    }
+  };
+  const onPointerMove = (e) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    const prev = pointersRef.current.get(e.pointerId);
+    const cur = { x: e.clientX, y: e.clientY };
+    pointersRef.current.set(e.pointerId, cur);
+
+    if (pointersRef.current.size === 1) {
+      const dx = cur.x - prev.x, dy = cur.y - prev.y;
+      setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+      return;
+    }
+    if (pointersRef.current.size === 2 && pinchRef.current) {
+      const pts = Array.from(pointersRef.current.values());
+      const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+      const distNow = Math.hypot(dx, dy);
+      const midNow  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const base = pinchRef.current;
+      const rawZoom = base.zoom * (distNow / (base.dist || 1));
+      const nextZoom = Math.max(0.5, Math.min(4, rawZoom));
+      // Pan follows the midpoint delta so the pinch stays anchored.
+      const nextPan = {
+        x: base.pan.x + (midNow.x - base.mid.x),
+        y: base.pan.y + (midNow.y - base.mid.y),
+      };
+      setZoom(nextZoom);
+      setPan(nextPan);
+    }
+  };
+  const onPointerUp = (e) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    try { containerRef.current?.releasePointerCapture?.(e.pointerId); } catch {}
+  };
+
+  const commit = async () => {
+    if (busy || !natural) return;
+    const src = computeSourceRect();
+    if (!src) return;
+    setBusy(true);
+    try {
+      const canvas = document.createElement('canvas');
+      const OUT = 512;
+      canvas.width = OUT;
+      canvas.height = OUT;
+      const ctx = canvas.getContext('2d');
+      // Load fresh image element (imgRef may be a display copy).
+      const src2 = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = imageSrc;
+      });
+      ctx.drawImage(src2, src.sx, src.sy, src.sw, src.sh, 0, 0, OUT, OUT);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const bbox = {
+        x: src.sx / natural.w,
+        y: src.sy / natural.h,
+        w: src.sw / natural.w,
+        h: src.sh / natural.h,
+      };
+      onConfirm({ dataUrl, bbox });
+    } catch {
+      // Fall through to skip on failure — don't strand the user.
+      onSkip && onSkip();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetTransform = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 400,
+      background: '#000',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{
+        padding: `calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px`,
+        color: '#fff', fontSize: 14, fontWeight: 700,
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: 'rgba(0,0,0,0.55)',
+      }}>
+        <Crop size={16} color="#5ecdf2" />
+        <div style={{ flex: 1 }}>{title}</div>
+        <button
+          onClick={resetTransform}
+          aria-label="Reset zoom and pan"
+          style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.25)',
+            color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11,
+            fontWeight: 700, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <RotateCcw size={12} /> Reset
+        </button>
+      </div>
+
+      <div
+        ref={containerRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{
+          flex: 1, position: 'relative', overflow: 'hidden',
+          touchAction: 'none', userSelect: 'none',
+          background: '#000',
+        }}
+      >
+        {natural && (
+          <img
+            ref={imgRef}
+            src={imageSrc}
+            alt=""
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: '50%', top: '50%',
+              width: natural.w * fitScale,
+              height: natural.h * fitScale,
+              transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: 'center center',
+              pointerEvents: 'none',
+              maxWidth: 'none',
+            }}
+          />
+        )}
+
+        {/* Scrim outside the crop rectangle. Four rects around the
+            centered crop square darken the rest of the image so the
+            framed area reads clearly. */}
+        {container.w > 0 && (
+          <>
+            <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: cropY, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 0, top: cropY + cropSize, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 0, top: cropY, width: cropX, height: cropSize, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: cropX + cropSize, top: cropY, right: 0, height: cropSize, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            {/* Crop frame border + rule-of-thirds grid. */}
+            <div style={{
+              position: 'absolute', left: cropX, top: cropY,
+              width: cropSize, height: cropSize,
+              border: '2px solid #ffffff',
+              boxSizing: 'border-box',
+              pointerEvents: 'none',
+            }}>
+              <div style={{ position: 'absolute', left: '33.33%', top: 0, bottom: 0, borderLeft: '1px solid rgba(255,255,255,0.35)' }} />
+              <div style={{ position: 'absolute', left: '66.66%', top: 0, bottom: 0, borderLeft: '1px solid rgba(255,255,255,0.35)' }} />
+              <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, borderTop: '1px solid rgba(255,255,255,0.35)' }} />
+              <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, borderTop: '1px solid rgba(255,255,255,0.35)' }} />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{
+        padding: `12px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)`,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex', gap: 8,
+      }}>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              flex: 1, minHeight: 48,
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.35)',
+              color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            {cancelLabel}
+          </button>
+        )}
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            style={{
+              flex: 1, minHeight: 48,
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.35)',
+              color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            {skipLabel}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={commit}
+          disabled={busy || !natural}
+          style={{
+            flex: 2, minHeight: 48,
+            background: busy || !natural ? '#3a5064' : '#5ecdf2',
+            color: '#062330', border: 'none', borderRadius: 8,
+            fontWeight: 800, fontSize: 15, cursor: busy || !natural ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {busy ? 'Cropping…' : primaryLabel}
+        </button>
+      </div>
+    </div>
   );
 }
