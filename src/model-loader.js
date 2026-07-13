@@ -41,6 +41,20 @@ let _readyPromise = null;         // resolves to _model (or null)
 let _status = 'idle';             // 'idle' | 'loading' | 'ready' | 'error' | 'no-network'
 let _lastError = null;            // human-readable string surfaced in Settings
 
+/* In-memory diagnostic ring buffer. Every [model-loader] line goes
+   here in addition to console so the Fish-ID card can display them
+   without needing Xcode / Web Inspector access. */
+const _logBuf = [];
+const _LOG_MAX = 40;
+function _log(level, msg) {
+  const line = `[${new Date().toISOString().slice(11, 19)}] ${level} ${msg}`;
+  _logBuf.push(line);
+  if (_logBuf.length > _LOG_MAX) _logBuf.shift();
+  if (level === 'ERR') console.error('[model-loader]', msg);
+  else                 console.log ('[model-loader]', msg);
+  _emit();
+}
+
 /* Subscribers for Settings UI. Notified on status changes. */
 const _subs = new Set();
 function _emit() { for (const cb of _subs) { try { cb(); } catch {} } }
@@ -50,6 +64,7 @@ export function getModelStatus() { return _status; }
 export function getModelInfo()   { return _manifest; }
 export function getReadyModel()  { return _readyPromise; }
 export function getModelError()  { return _lastError; }
+export function getModelLog()    { return _logBuf.slice(); }
 
 /* Read the cached manifest from disk (or localStorage on web). Returns
    null if nothing cached. */
@@ -144,20 +159,20 @@ async function fetchRemoteManifest() {
 async function fetchRemoteModel() {
   const url = PUBLIC_MODEL_URL();
   if (!url) {
-    console.error('[model-loader] fetchRemoteModel: no SUPABASE_URL configured');
+    _log('ERR', 'fetchRemoteModel: no SUPABASE_URL configured');
     return null;
   }
   try {
     const resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) {
-      console.error('[model-loader] fetchRemoteModel: HTTP', resp.status, resp.statusText, 'from', url);
+      _log('ERR', `fetchRemoteModel: HTTP ${resp.status} ${resp.statusText} from ${url}`);
       return null;
     }
     const buf = await resp.arrayBuffer();
-    console.log('[model-loader] fetchRemoteModel: ok,', buf.byteLength, 'bytes');
+    _log('LOG', `fetchRemoteModel: ok, ${buf.byteLength} bytes`);
     return buf;
   } catch (e) {
-    console.error('[model-loader] fetchRemoteModel: network error', e);
+    _log('ERR', `fetchRemoteModel: network error ${e && (e.message || e)}`);
     return null;
   }
 }
@@ -174,25 +189,25 @@ async function loadRuntimeAndModel(modelBytes) {
   if (typeof window !== 'undefined' && !window.tflite) {
     await new Promise((resolve, reject) => {
       const base = `${(import.meta.env.BASE_URL || '/')}models/tflite/`;
-      console.log('[model-loader] loading tflite runtime script from base=', base, 'documentBaseURI=', document.baseURI);
+      _log('LOG', `runtime script: base=${base} baseURI=${document.baseURI}`);
       const s = document.createElement('script');
       s.src = `${base}tf-tflite.min.js`;
       s.onload = () => {
         if (!window.tflite) {
-          console.error('[model-loader] script loaded but window.tflite is undefined — build likely stripped the runtime');
+          _log('ERR', 'script loaded but window.tflite undefined — runtime missing from bundle');
           return reject(new Error('tflite global not set after script load'));
         }
-        console.log('[model-loader] window.tflite set; calling setWasmPath(', base, ')');
+        _log('LOG', `window.tflite set; setWasmPath(${base})`);
         try {
           window.tflite.setWasmPath(base);
         } catch (e) {
-          console.error('[model-loader] setWasmPath threw', e);
+          _log('ERR', `setWasmPath threw: ${e && (e.message || e)}`);
           return reject(e);
         }
         resolve();
       };
-      s.onerror = (ev) => {
-        console.error('[model-loader] tf-tflite.min.js failed to load; src was', s.src, ev);
+      s.onerror = () => {
+        _log('ERR', `tf-tflite.min.js failed to load; src=${s.src}`);
         reject(new Error(`failed to load tfjs-tflite runtime from ${s.src}`));
       };
       document.head.appendChild(s);
@@ -202,14 +217,16 @@ async function loadRuntimeAndModel(modelBytes) {
   // COOP/COEP headers we don't ship). enableXnnpackDelegate: false →
   // avoids the Safari-crash bug in the alpha.10 XNNPACK delegate.
   try {
+    _log('LOG', `loadTFLiteModel: bytes=${modelBytes.byteLength}`);
     const m = await window.tflite.loadTFLiteModel(
       new Uint8Array(modelBytes),
       { numThreads: 1, enableXnnpackDelegate: false },
     );
-    console.log('[model-loader] loadTFLiteModel ok');
+    _log('LOG', 'loadTFLiteModel ok');
     return m;
   } catch (e) {
-    console.error('[model-loader] loadTFLiteModel threw:', e && (e.stack || e.message || e));
+    const msg = e && (e.stack || e.message) ? String(e.stack || e.message) : String(e);
+    _log('ERR', `loadTFLiteModel threw: ${msg}`);
     throw e;
   }
 }
@@ -225,6 +242,8 @@ export function initModel() {
 async function _doInit() {
   _status = 'loading';
   _lastError = null;
+  _logBuf.length = 0;
+  _log('LOG', `_doInit start; native=${NATIVE} baseURI=${typeof document !== 'undefined' ? document.baseURI : 'n/a'}`);
   _emit();
 
   // 1. Read whatever we have cached.
@@ -235,14 +254,13 @@ async function _doInit() {
 
   // Log which manifest we're basing the decision on.
   if (!cachedManifest && !remoteManifest) {
-    console.error('[model-loader] manifest: BOTH failed — no cache and no network');
+    _log('ERR', 'manifest: BOTH failed — no cache and no network');
   } else if (remoteManifest && cachedManifest) {
-    console.log('[model-loader] manifest: cache=', cachedManifest.version_name,
-                'remote=', remoteManifest.version_name);
+    _log('LOG', `manifest: cache=${cachedManifest.version_name} remote=${remoteManifest.version_name}`);
   } else if (remoteManifest) {
-    console.log('[model-loader] manifest: remote only,', remoteManifest.version_name);
+    _log('LOG', `manifest: remote only, ${remoteManifest.version_name}`);
   } else {
-    console.log('[model-loader] manifest: cache only,', cachedManifest.version_name);
+    _log('LOG', `manifest: cache only, ${cachedManifest.version_name}`);
   }
 
   // 3. Decide which manifest wins.
@@ -268,13 +286,13 @@ async function _doInit() {
   if (!modelBytes) {
     modelBytes = await readCachedModelBytes();
     if (modelBytes) {
-      console.log('[model-loader] using cached model bytes,', modelBytes.byteLength, 'bytes');
+      _log('LOG', `using cached model bytes, ${modelBytes.byteLength} bytes`);
     }
   }
 
   // 5. If we STILL have nothing, this is a first launch offline.
   if (!modelBytes || !effectiveManifest) {
-    console.error('[model-loader] no model available — offline first launch or bucket unreachable');
+    _log('ERR', 'no model available — offline first launch or bucket unreachable');
     _status = 'no-network'; _emit();
     return null;
   }
@@ -285,11 +303,12 @@ async function _doInit() {
     _manifest = effectiveManifest;
     _status = 'ready';
     _lastError = null;
+    _log('LOG', `ready: ${effectiveManifest.version_name}`);
     _emit();
     return _model;
   } catch (e) {
     const msg = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
-    console.error('[model-loader] runtime load failed:', msg);
+    _log('ERR', `runtime load failed: ${msg}`);
     _lastError = msg;
     _status = 'error';
     _emit();

@@ -1781,12 +1781,15 @@ function FishIdModelCard() {
   const [status, setStatus] = React.useState('loading');
   const [info, setInfo] = React.useState(null);
   const [errMsg, setErrMsg] = React.useState(null);
+  const [logLines, setLogLines] = React.useState([]);
+  const [showLog, setShowLog] = React.useState(false);
   React.useEffect(() => {
     (async () => {
-      const { getModelStatus, getModelInfo, getModelError } = await import('./model-loader.js');
+      const { getModelStatus, getModelInfo, getModelError, getModelLog } = await import('./model-loader.js');
       setStatus(getModelStatus());
       setInfo(getModelInfo());
       setErrMsg(getModelError());
+      setLogLines(getModelLog());
     })();
   }, [tick]);
 
@@ -1838,6 +1841,36 @@ function FishIdModelCard() {
           {checking ? 'Checking…' : 'Check for updates'}
         </GhostButton>
       </div>
+
+      {/* Diagnostic log — collapsed by default. Users can pop it open
+          and screenshot when reporting model-load issues. */}
+      {logLines.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={() => setShowLog(v => !v)}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: T.inkMute, fontSize: 11, padding: 0,
+              textDecoration: 'underline',
+            }}
+          >
+            {showLog ? 'Hide details' : `Show details (${logLines.length})`}
+          </button>
+          {showLog && (
+            <pre style={{
+              marginTop: 6, padding: 8, background: '#0a1420', color: '#c9d5e1',
+              border: `1px solid ${T.cardEdge}`, borderRadius: 6,
+              fontSize: 10, lineHeight: 1.4,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              maxHeight: 260, overflow: 'auto',
+            }}>
+              {logLines.join('\n')}
+            </pre>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
