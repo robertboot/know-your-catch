@@ -253,17 +253,33 @@ async function loadRuntimeAndModel(modelBytes) {
     _log('ERR', `wasm probe (same-origin) threw: ${e && (e.message || e)}`);
   }
 
-  // Patch fetch to strip the credentials option for .wasm URLs — if
-  // Capacitor's scheme handler chokes on it, that's the Emscripten
-  // fetch failure keeping us from ever reaching WebAssembly.instantiate.
+  // Wrap fetch for .wasm URLs to (a) strip the credentials option
+  // (Capacitor's scheme handler may reject it) and (b) fix a malformed
+  // URL Emscripten sometimes generates when resolving a relative WASM
+  // path against document.baseURI="capacitor://localhost" — it comes
+  // out as `capacitor://./models/tflite/…` with "." as the host. That
+  // URL 404s at the scheme handler; normalizing it back to
+  // `capacitor://localhost/…` makes the fetch succeed.
   if (typeof window !== 'undefined' && window.fetch && !window.fetch.__kycWasmSafe) {
     const origFetch = window.fetch.bind(window);
+    const fixWasmUrl = (u) => {
+      if (typeof u !== 'string') return u;
+      // Broken forms we've seen from Emscripten's URL cobbling:
+      //   capacitor://./models/tflite/…
+      //   capacitor:///models/tflite/…
+      const fixed = u
+        .replace(/^capacitor:\/\/\.\//, 'capacitor://localhost/')
+        .replace(/^capacitor:\/\/\//,   'capacitor://localhost/');
+      return fixed;
+    };
     const wrapped = function(url, opts) {
       try {
         const u = typeof url === 'string' ? url : (url && url.url) || '';
         if (u.endsWith('.wasm')) {
-          _log('LOG', `fetch intercept .wasm (dropping opts): ${u}`);
-          return origFetch(url);
+          const fixed = fixWasmUrl(u);
+          if (fixed !== u) _log('LOG', `fetch rewrite .wasm: ${u} → ${fixed}`);
+          _log('LOG', `fetch intercept .wasm (dropping opts): ${fixed}`);
+          return origFetch(fixed);
         }
       } catch {}
       return origFetch(url, opts);
