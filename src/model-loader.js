@@ -186,24 +186,27 @@ async function loadRuntimeAndModel(modelBytes) {
   const tf = await import('@tensorflow/tfjs');
   if (typeof window !== 'undefined') window.tf = tf;
 
+  // Fully-qualify the WASM base URL rather than rely on relative
+  // resolution — Capacitor's baseURI is `capacitor://localhost` with
+  // no trailing slash which trips some Emscripten relative-URL paths.
+  // window.location.origin gives us the exact scheme+host the URL
+  // scheme handler expects.
+  const relBase = `${(import.meta.env.BASE_URL || '/')}models/tflite/`;
+  const wasmBase = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? `${window.location.origin}${relBase.startsWith('/') ? relBase : '/' + relBase.replace(/^\.\//, '')}`
+    : relBase;
+
   if (typeof window !== 'undefined' && !window.tflite) {
     await new Promise((resolve, reject) => {
-      const base = `${(import.meta.env.BASE_URL || '/')}models/tflite/`;
-      _log('LOG', `runtime script: base=${base} baseURI=${document.baseURI}`);
+      _log('LOG', `runtime script: relBase=${relBase} wasmBase=${wasmBase} baseURI=${document.baseURI}`);
       const s = document.createElement('script');
-      s.src = `${base}tf-tflite.min.js`;
+      s.src = `${relBase}tf-tflite.min.js`;
       s.onload = () => {
         if (!window.tflite) {
           _log('ERR', 'script loaded but window.tflite undefined — runtime missing from bundle');
           return reject(new Error('tflite global not set after script load'));
         }
-        _log('LOG', `window.tflite set; setWasmPath(${base})`);
-        try {
-          window.tflite.setWasmPath(base);
-        } catch (e) {
-          _log('ERR', `setWasmPath threw: ${e && (e.message || e)}`);
-          return reject(e);
-        }
+        _log('LOG', 'window.tflite set');
         resolve();
       };
       s.onerror = () => {
@@ -213,6 +216,46 @@ async function loadRuntimeAndModel(modelBytes) {
       document.head.appendChild(s);
     });
   }
+
+  // Always (re)set wasm path — idempotent. On a retry after the first
+  // init, the script block above is skipped because window.tflite is
+  // already set, so setting the path here guarantees the current
+  // wasmBase is in effect regardless of prior state.
+  try {
+    window.tflite.setWasmPath(wasmBase);
+    _log('LOG', `setWasmPath(${wasmBase}) ok`);
+  } catch (e) {
+    _log('ERR', `setWasmPath threw: ${e && (e.message || e)}`);
+    throw e;
+  }
+
+  // Probe the WASM file directly so the log shows exactly what
+  // Capacitor's URL scheme handler is serving for .wasm. If content-
+  // type is not application/wasm we already know why streaming fails.
+  try {
+    const probeUrl = `${wasmBase}tflite_web_api_cc_simd.wasm`;
+    const r = await fetch(probeUrl);
+    const buf = await r.arrayBuffer();
+    _log('LOG', `wasm probe: ${r.status} ct=${r.headers.get('content-type')} bytes=${buf.byteLength}`);
+  } catch (e) {
+    _log('ERR', `wasm probe threw: ${e && (e.message || e)}`);
+  }
+
+  // Capacitor's iOS URL scheme handler serves .wasm as
+  // application/octet-stream. Safari's WebAssembly.instantiateStreaming
+  // requires application/wasm strictly and throws a bare "Load failed"
+  // TypeError otherwise. Nulling the streaming path forces Emscripten
+  // down the arrayBuffer + WebAssembly.instantiate fallback, which
+  // doesn't care about MIME type.
+  if (typeof WebAssembly !== 'undefined' && typeof WebAssembly.instantiateStreaming === 'function') {
+    try {
+      WebAssembly.instantiateStreaming = undefined;
+      _log('LOG', 'disabled WebAssembly.instantiateStreaming for MIME-safe load');
+    } catch {
+      _log('ERR', 'could not null WebAssembly.instantiateStreaming');
+    }
+  }
+
   // numThreads: 1 → single-threaded WASM (SharedArrayBuffer requires
   // COOP/COEP headers we don't ship). enableXnnpackDelegate: false →
   // avoids the Safari-crash bug in the alpha.10 XNNPACK delegate.
