@@ -314,13 +314,22 @@ export async function uploadTrainingImage(file, speciesId) {
   // Shape the parity object for the DB-insert branch below.
   const up = { data: { path: storagePath }, error: null };
 
+  // Owner-uploaded photos land as VERIFIED. Rationale: the admin
+  // (owner) is also the reviewer, so an upload from the admin console
+  // IS the review — leaving these at 'pending' just parks them in a
+  // queue that never gets processed and silently starves Coverage /
+  // export. Model-feedback rows (model_confirmation / model_correction)
+  // already land verified via saveModelFeedback below.
+  const nowIso = new Date().toISOString();
   const { data, error } = await c.from('training_images').insert({
     id,
     species_id: speciesId,
     storage_path: storagePath,
     source: 'owner_upload',
-    status: 'pending',
+    status: 'verified',
     uploaded_by: email,
+    reviewed_by: email,
+    reviewed_at: nowIso,
   }).select('id').single();
   if (error) {
     console.error('[training upload] training_images.insert failed', {
@@ -410,6 +419,48 @@ export async function listTrainingImages({ speciesId = null, status = null, limi
 /* Approve a batch of ids. Sets status='verified', stamps reviewer. */
 export async function approve(ids) {
   return _reviewUpdate(ids, { status: 'verified', rejection_reason: null });
+}
+
+/* Backlog cleanup — count of the current admin's own pending
+   owner_upload rows so the Review-panel button can show a live
+   number. Filters on uploaded_by = current session email so a
+   second admin's backlog isn't touched. */
+export async function countMyPendingOwnerUploads() {
+  const c = client();
+  if (!c) return { ok: false, count: 0, error: 'not-configured' };
+  const email = getLastSession()?.user?.email || null;
+  if (!email) return { ok: false, count: 0, error: 'no session' };
+  const { count, error } = await c.from('training_images')
+    .select('id', { count: 'exact', head: true })
+    .eq('source', 'owner_upload')
+    .eq('status', 'pending')
+    .eq('uploaded_by', email);
+  if (error) return { ok: false, count: 0, error: error.message };
+  return { ok: true, count: count || 0, email };
+}
+
+/* One-shot bulk verify — flips every pending owner_upload row
+   uploaded by the current admin to verified in a single UPDATE.
+   Companion to countMyPendingOwnerUploads; safe to call repeatedly
+   (idempotent on second call because there's nothing left to flip). */
+export async function verifyAllMyOwnerUploads() {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured', count: 0 };
+  const email = getLastSession()?.user?.email || null;
+  if (!email) return { ok: false, error: 'no session', count: 0 };
+  const nowIso = new Date().toISOString();
+  const { data, error } = await c.from('training_images')
+    .update({
+      status: 'verified',
+      reviewed_by: email,
+      reviewed_at: nowIso,
+    })
+    .eq('source', 'owner_upload')
+    .eq('status', 'pending')
+    .eq('uploaded_by', email)
+    .select('id');
+  if (error) return { ok: false, error: error.message, count: 0 };
+  return { ok: true, count: (data || []).length };
 }
 
 /* Reject a batch with a reason. */
