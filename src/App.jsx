@@ -24,7 +24,8 @@ import {
   mergeUserState as cloudMergeUserState,
 } from './cloudsync.js';
 import { SyncPill } from './auth-ui.jsx';
-import { jurisdictionById, isStale } from './helpers.js';
+import { jurisdictionById, isStale, dataUrlToFile } from './helpers.js';
+import { saveModelFeedback } from './training-store.js';
 import {
   DisclaimerModal, JurisdictionPickerModal, InfoModal, KeepConfirmModal,
   FavoritePickerModal, AccountSetupModal, IdentificationConfirmCard,
@@ -666,7 +667,30 @@ export default function App() {
         result={screen.result}
         imageDataUrl={screen.imageDataUrl}
         onPickSpecies={(id) => push({ name: 'species', id })}
-        onLogCatch={(id) => push({ name: 'catch_entry', preselectSpeciesId: id, prefilledPhoto: screen.imageDataUrl })}
+        onConfirmSave={(topPickSpeciesId) => {
+          // Fire the training-feedback upload without blocking the
+          // user — offline or network hiccups shouldn't gate saving
+          // the catch. Same effect as the old Confirm button, but
+          // the user's mental model is "save it" not "verify me".
+          dataUrlToFile(screen.imageDataUrl, 'confirmation.jpg').then((file) => {
+            if (file) saveModelFeedback({
+              file, speciesId: topPickSpeciesId,
+              originalSpeciesId: topPickSpeciesId,
+              source: 'model_confirmation',
+            }).catch(() => {});
+          });
+          push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.imageDataUrl });
+        }}
+        onCorrectSave={(correctSpeciesId, originalSpeciesId) => {
+          dataUrlToFile(screen.imageDataUrl, 'correction.jpg').then((file) => {
+            if (file) saveModelFeedback({
+              file, speciesId: correctSpeciesId,
+              originalSpeciesId,
+              source: 'model_correction',
+            }).catch(() => {});
+          });
+          push({ name: 'catch_entry', preselectSpeciesId: correctSpeciesId, prefilledPhoto: screen.imageDataUrl });
+        }}
         onRetake={() => setStack(st => st.filter(s => s.name !== 'photo_analyzing' && s.name !== 'photo_result'))}
         onManual={() => reset([{ name: 'home' }, { name: 'identify' }, { name: 'categories' }])}
       />;

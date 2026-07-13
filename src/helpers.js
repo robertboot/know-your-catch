@@ -471,7 +471,7 @@ export function buildCatchReport({ anglerName, species, c, units }) {
   return lines.join('\n');
 }
 
-async function _dataUrlToFile(dataUrl, name) {
+export async function dataUrlToFile(dataUrl, name) {
   try {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
@@ -493,7 +493,7 @@ export async function shareReport({ title, text, photoDataUrls = [], fileName = 
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
       if (urls.length && navigator.canShare) {
-        const files = (await Promise.all(urls.map((u, i) => _dataUrlToFile(u, `${fileName}-${i + 1}.jpg`))))
+        const files = (await Promise.all(urls.map((u, i) => dataUrlToFile(u, `${fileName}-${i + 1}.jpg`))))
           .filter(Boolean);
         if (files.length && navigator.canShare({ files, text, title })) {
           await navigator.share({ files, text, title });

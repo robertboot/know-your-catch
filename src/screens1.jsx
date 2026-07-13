@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Fish, Search, ChevronRight, AlertTriangle, Plus, Pencil, BookOpen,
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
-  RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft,
+  RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
 } from 'lucide-react';
@@ -1435,18 +1435,169 @@ export function PhotoAnalyzingScreen({ imageDataUrl, jurisdictionId, onResult })
 /* ============================================================
    PHOTO — result
    ============================================================ */
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onLogCatch, onRetake, onManual }) {
-  const { confidence, candidates } = result || {};
+/* Circular confidence dial. Filled ring representing pct (0-100)
+   with the number centered. SVG so it stays crisp on retina and
+   scales without pixelation. */
+function ConfidenceRing({ pct, size = 60 }) {
+  const stroke = Math.max(4, Math.round(size / 12));
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const dashOffset = circ * (1 - clamped / 100);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }} aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={r}
+        stroke="rgba(255,255,255,0.15)" strokeWidth={stroke} fill="none" />
+      <circle cx={size / 2} cy={size / 2} r={r}
+        stroke="#5ecdf2" strokeWidth={stroke} fill="none"
+        strokeLinecap="round"
+        strokeDasharray={circ} strokeDashoffset={dashOffset}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+        fontSize={Math.round(size * 0.30)} fontWeight="800" fill="#ffffff">
+        {clamped}%
+      </text>
+    </svg>
+  );
+}
 
-  if (!candidates || candidates.length === 0 || confidence === 'low') {
+/* Side-by-side modal opened from a Compare row. Shows the user's
+   photo against the lookalike's reference plus each species' top
+   ID cues so the angler can eyeball the difference. */
+function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTablet, onClose, onPickLookalike, onNoneMatch }) {
+  if (!lookalikeSpecies) return null;
+  const topCues   = (topSpecies?.keyIds || []).slice(0, 3);
+  const otherCues = (lookalikeSpecies?.keyIds || []).slice(0, 3);
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3,27,51,0.85)', backdropFilter: 'blur(4px)',
+      display: 'flex',
+      alignItems: isTablet ? 'center' : 'flex-end',
+      justifyContent: 'center',
+      padding: isTablet ? 24 : 0,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: '#0f2438', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: isTablet ? 16 : 0,
+        borderTopLeftRadius: 14, borderTopRightRadius: 14,
+        width: '100%', maxWidth: isTablet ? 720 : '100%',
+        maxHeight: isTablet ? '85vh' : '92vh',
+        display: 'flex', flexDirection: 'column',
+        boxSizing: 'border-box',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+          flexShrink: 0,
+        }}>
+          <SectionLabel style={{ color: '#5ecdf2', flex: 1 }}>SIDE-BY-SIDE COMPARE</SectionLabel>
+          <button onClick={onClose} aria-label="Close comparison" style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: T.inkSoft, padding: 4, display: 'flex',
+          }}>
+            <X size={22} />
+          </button>
+        </div>
+
+        <div style={{ padding: 14, overflowY: 'auto', flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <div>
+              <div style={{
+                width: '100%', aspectRatio: '1 / 1', overflow: 'hidden',
+                borderRadius: 10, border: '1.5px solid #5ecdf2', background: '#0a1420',
+              }}>
+                <img src={userPhoto} alt="Your catch" style={{
+                  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                }} />
+              </div>
+              <div style={{ fontSize: 10, color: '#5ecdf2', fontWeight: 800, letterSpacing: '0.15em', marginTop: 6 }}>
+                MODEL SAYS
+              </div>
+              <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 18, color: T.ink, marginTop: 2 }}>
+                {topSpecies?.commonName || '—'}
+              </div>
+            </div>
+            <div>
+              <div style={{
+                width: '100%', aspectRatio: '1 / 1', overflow: 'hidden',
+                borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.12)', background: '#0a1420',
+              }}>
+                <SpeciesImage species={lookalikeSpecies} size={400}
+                  style={{ width: '100%', height: '100%', borderRadius: 0 }} />
+              </div>
+              <div style={{ fontSize: 10, color: T.inkMute, fontWeight: 800, letterSpacing: '0.15em', marginTop: 6 }}>
+                LOOKALIKE
+              </div>
+              <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 18, color: T.ink, marginTop: 2 }}>
+                {lookalikeSpecies.commonName}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <SectionLabel style={{ color: '#5ecdf2', marginBottom: 6 }}>Marks of {topSpecies?.commonName || 'match'}</SectionLabel>
+              <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 12, lineHeight: 1.5 }}>
+                {topCues.map((c, i) => <li key={i}>{c}</li>)}
+                {topCues.length === 0 && <li style={{ color: T.inkMute }}>No cues on file.</li>}
+              </ul>
+            </div>
+            <div>
+              <SectionLabel style={{ color: T.inkMute, marginBottom: 6 }}>Marks of {lookalikeSpecies.commonName}</SectionLabel>
+              <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 12, lineHeight: 1.5 }}>
+                {otherCues.map((c, i) => <li key={i}>{c}</li>)}
+                {otherCues.length === 0 && <li style={{ color: T.inkMute }}>No cues on file.</li>}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          padding: `12px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)`,
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', flexDirection: 'column', gap: 8,
+          flexShrink: 0,
+        }}>
+          <PrimaryButton onClick={onPickLookalike} style={{ width: '100%', minHeight: 52, fontSize: 15, fontWeight: 800 }}>
+            Actually, this is the {lookalikeSpecies.commonName}
+          </PrimaryButton>
+          <button type="button" onClick={onNoneMatch} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: T.inkMute, fontSize: 12, fontWeight: 700, padding: '8px 4px',
+            textAlign: 'center',
+          }}>
+            None of these — pick a different species
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onRetake, onManual }) {
+  const { confidence, candidates } = result || {};
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+  const [modal, setModal] = useState(null);
+  const lookalikesRef = useRef(null);
+
+  // No confident pick at all — keep the couldn't-identify fallback.
+  // The redesign is for the result-with-top-pick flow; this branch is
+  // the "you should try again or pick manually" branch and doesn't
+  // benefit from the Save & Continue pattern.
+  if (!candidates || candidates.length === 0) {
     return (
       <div style={{ padding: '18px 16px' }}>
-        <img src={imageDataUrl} alt="Your catch" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 6, marginBottom: 14, border: `2px solid ${T.cardEdge}` }} />
-        <Card style={{ background: T.warnBg, borderColor: T.warn, marginBottom: 14 }}>
+        <img src={imageDataUrl} alt="Your catch" style={{
+          width: '100%', maxHeight: 220, objectFit: 'cover',
+          borderRadius: 6, marginBottom: 14, border: `2px solid ${T.cardEdge}`,
+        }} />
+        <Card style={{ background: 'rgba(198,102,102,0.12)', borderColor: '#c66', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <AlertTriangle size={22} color={T.warn} />
+            <AlertTriangle size={22} color="#c66" />
             <div>
-              <div style={{ fontWeight: 700, color: T.brassDeep, fontSize: 14 }}>Couldn't identify confidently</div>
+              <div style={{ fontWeight: 700, color: T.ink, fontSize: 14 }}>Couldn't identify confidently</div>
               <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
                 The image was too uncertain to commit to a species. Try a clearer photo, or identify manually.
               </div>
@@ -1454,102 +1605,228 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onLogCa
           </div>
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <PrimaryButton onClick={onRetake}><RotateCcw size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Try another photo</PrimaryButton>
+          <PrimaryButton onClick={onRetake}>
+            <RotateCcw size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+            Try another photo
+          </PrimaryButton>
           <GhostButton onClick={onManual} style={{ width: '100%' }}>Identify manually instead</GhostButton>
         </div>
       </div>
     );
   }
 
-  // HIGH confidence — confirmed result for top candidate
-  if (confidence === 'high') {
-    const top = candidates[0];
-    const s = speciesById(top.speciesId);
-    return (
-      <div style={{ padding: '14px 14px' }}>
-        <div style={{ position: 'relative', borderRadius: 6, overflow: 'hidden', marginBottom: 12, border: `2px solid ${T.brass}` }}>
-          <img src={imageDataUrl} alt="Your catch" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', display: 'block' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 14px 12px', background: 'linear-gradient(to top, rgba(8,38,53,0.92), transparent)', color: T.parchment }}>
-            <SectionLabel style={{ color: T.brass }}>Confirmed</SectionLabel>
-            <H1 size={22} style={{ color: T.parchment, marginTop: 2 }}>{s?.commonName || top.speciesId}</H1>
-            <div style={{ fontStyle: 'italic', fontSize: 12, color: '#B8C5CD' }}>{s?.scientific}</div>
+  const top = candidates[0];
+  const topSpecies = speciesById(top.speciesId);
+  const scorePct = Math.round((top.score || 0) * 100);
+  const pillTier =
+    top.score >= 0.85 ? { label: 'CONFIRMED MATCH', bg: '#5ecdf2', ink: '#062330' }
+  : top.score >= 0.60 ? { label: 'LIKELY MATCH',    bg: '#5ecdf2', ink: '#062330' }
+  :                     { label: 'LOW CONFIDENCE',  bg: '#8ea3ba', ink: '#062330' };
+
+  const keyIds = (topSpecies?.keyIds || []).slice(0, 3);
+  const lookalikeIds = (topSpecies?.lookalikes || []).slice(0, 3);
+  const lookalikes = lookalikeIds.map(id => speciesById(id)).filter(Boolean);
+
+  const scrollToLookalikesOrPicker = () => {
+    if (lookalikes.length === 0) { onManual(); return; }
+    if (lookalikesRef.current?.scrollIntoView) {
+      lookalikesRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const heroAspect = isTablet ? '4 / 3' : '3 / 4';
+  const nameSize   = isTablet ? 72 : 56;
+  const sciSize    = isTablet ? 22 : 18;
+  const ringSize   = isTablet ? 72 : 60;
+
+  return (
+    <div style={{ padding: '14px 14px 140px', position: 'relative' }}>
+      {/* HERO PHOTO — user's photo full-bleed with overlaid identity */}
+      <div style={{
+        position: 'relative', overflow: 'hidden',
+        borderRadius: 14, border: '1.5px solid #5ecdf2',
+        marginBottom: 14, aspectRatio: heroAspect, background: '#0a1420',
+        boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
+      }}>
+        <img src={imageDataUrl} alt="Your catch" style={{
+          position: 'absolute', inset: 0,
+          width: '100%', height: '100%', objectFit: 'cover',
+          display: 'block',
+        }} />
+        <div aria-hidden style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: '48%',
+          background: 'linear-gradient(to top, rgba(6,20,36,0.94) 15%, rgba(6,20,36,0.55) 60%, transparent 100%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          padding: isTablet ? '22px 22px' : '18px 16px',
+          display: 'flex', alignItems: 'flex-end', gap: 14,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: pillTier.bg, color: pillTier.ink,
+              padding: '5px 10px', borderRadius: 999,
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.15em',
+              marginBottom: 10,
+            }}>
+              <Check size={12} strokeWidth={3} />
+              {pillTier.label}
+            </div>
+            <div style={{
+              fontFamily: 'Georgia, serif', fontStyle: 'italic',
+              fontSize: nameSize, lineHeight: 0.95,
+              color: '#ffffff', fontWeight: 400,
+              wordBreak: 'break-word', letterSpacing: '-0.01em',
+            }}>
+              {topSpecies?.commonName || top.speciesId}
+            </div>
+            {topSpecies?.scientific && (
+              <div style={{
+                fontStyle: 'italic', fontSize: sciSize,
+                color: '#8ea3ba', marginTop: 4,
+              }}>
+                {topSpecies.scientific}
+              </div>
+            )}
+          </div>
+          <div style={{
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
+            paddingBottom: 4,
+          }}>
+            <ConfidenceRing pct={scorePct} size={ringSize} />
+            <div style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: '0.15em',
+              color: '#ffffff',
+              writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+            }}>
+              CONFIDENCE
+            </div>
           </div>
         </div>
-
-        <Card style={{ marginBottom: 12 }}>
-          <SectionLabel style={{ marginBottom: 8 }}>What we saw</SectionLabel>
-          <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 14, lineHeight: 1.55 }}>
-            {top.evidence.map((e, i) => <li key={i}>{e}</li>)}
-          </ul>
-        </Card>
-
-        {s?.lookalikes?.length > 0 && (
-          <Card style={{ marginBottom: 12, background: T.parchmentDeep, borderColor: T.brass }}>
-            <SectionLabel style={{ marginBottom: 6 }}>Confirm with your eyes</SectionLabel>
-            <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 10 }}>
-              Even a confident match can be wrong on lookalikes. Glance at these — does one fit better?
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {s.lookalikes.map(otherId => {
-                const o = speciesById(otherId);
-                if (!o) return null;
-                return (
-                  <button key={otherId} onClick={() => onPickSpecies(otherId)} style={{
-                    background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, padding: '8px 10px',
-                    borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%', textAlign: 'left',
-                  }}>
-                    <SpeciesImage species={o} size={32} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: T.ink }}>It's a {o.commonName}</div>
-                      <div style={{ fontSize: 11, color: T.inkMute }}>Tap to switch</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {onLogCatch && (
-            <PrimaryButton onClick={() => onLogCatch(top.speciesId)}>Log this catch</PrimaryButton>
-          )}
-          <GhostButton onClick={() => onPickSpecies(top.speciesId)} style={{ width: '100%' }}>See full details & regulations</GhostButton>
-          <GhostButton onClick={onRetake} style={{ width: '100%' }}><RotateCcw size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Try another photo</GhostButton>
-        </div>
       </div>
-    );
-  }
 
-  // MEDIUM confidence — narrowed-to-N disambiguation
-  return (
-    <div style={{ padding: '14px 14px' }}>
-      <img src={imageDataUrl} alt="Your catch" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 6, marginBottom: 12, border: `2px solid ${T.cardEdge}` }} />
-      <SectionLabel style={{ marginBottom: 4 }}>Not confident enough to confirm</SectionLabel>
-      <H1 size={22} style={{ marginBottom: 4 }}>Narrowed to {candidates.length}</H1>
-      <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
-        Pick the one that matches your fish. Tap a card to see full details and the discriminating features.
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-        {candidates.map(c => {
-          const s = speciesById(c.speciesId);
-          if (!s) return null;
-          return (
-            <Card key={c.speciesId} onClick={() => onPickSpecies(c.speciesId)} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <SpeciesImage species={s} size={50} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                {c.evidence?.length > 0 && (
-                  <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 4, lineHeight: 1.35 }}>{c.evidence.join(' · ')}</div>
-                )}
+      {/* WHY THIS MATCH FITS — species-authored ID cues */}
+      {keyIds.length > 0 && (
+        <div style={{
+          position: 'relative', overflow: 'hidden',
+          background: '#11233a', border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 14, padding: 14, marginBottom: 14,
+        }}>
+          <SectionLabel style={{ color: '#5ecdf2', marginBottom: 10 }}>WHY THIS MATCH FITS</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative', zIndex: 1 }}>
+            {keyIds.map((cue, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{
+                  flexShrink: 0,
+                  width: 22, height: 22, borderRadius: 999,
+                  background: 'rgba(94,205,242,0.18)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginTop: 1,
+                }}>
+                  <Check size={13} color="#5ecdf2" strokeWidth={3} />
+                </div>
+                <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.4, flex: 1 }}>{cue}</div>
               </div>
-              <ChevronRight size={18} color={T.brass} />
-            </Card>
-          );
-        })}
+            ))}
+          </div>
+          <ShieldCheck aria-hidden size={110} color="#5ecdf2" style={{
+            position: 'absolute', top: -18, right: -18,
+            opacity: 0.15, pointerEvents: 'none', zIndex: 0,
+          }} />
+        </div>
+      )}
+
+      {/* COMPARE LOOKALIKES */}
+      {lookalikes.length > 0 && (
+        <div ref={lookalikesRef} style={{
+          background: '#11233a', border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 14, padding: 14, marginBottom: 14,
+        }}>
+          <SectionLabel style={{ color: '#5ecdf2', marginBottom: 8 }}>COMPARE LOOKALIKES</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {lookalikes.map((s, i) => {
+              const distinguisher = (s.keyIds?.[0] || '').trim();
+              return (
+                <div key={s.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 0',
+                  borderBottom: i < lookalikes.length - 1
+                    ? '1px dashed rgba(255,255,255,0.06)' : 'none',
+                }}>
+                  <SpeciesImage species={s} size={42} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{s.commonName}</div>
+                    {distinguisher && (
+                      <div style={{
+                        fontSize: 12, color: T.inkSoft, marginTop: 2,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {distinguisher}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setModal({ lookalikeId: s.id })}
+                    style={{
+                      flexShrink: 0,
+                      background: 'transparent', border: '1px solid #5ecdf2',
+                      color: '#5ecdf2', borderRadius: 8,
+                      padding: '6px 12px', fontSize: 12, fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Compare
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* STICKY BOTTOM ACTION BAR — sits above the tab bar */}
+      <div style={{
+        position: 'fixed', left: 0, right: 0, bottom: 60, zIndex: 20,
+        padding: `12px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)`,
+        background: 'rgba(4,22,42,0.96)',
+        backdropFilter: 'blur(6px)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', gap: 10,
+      }}>
+        <PrimaryButton
+          onClick={() => onConfirmSave && onConfirmSave(top.speciesId)}
+          style={{ flex: 2, minHeight: 52, fontSize: 16, fontWeight: 800 }}
+        >
+          Save &amp; Continue
+        </PrimaryButton>
+        <GhostButton
+          onClick={scrollToLookalikesOrPicker}
+          style={{ flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800 }}
+        >
+          Compare
+        </GhostButton>
       </div>
-      <GhostButton onClick={onRetake} style={{ width: '100%', marginBottom: 8 }}><RotateCcw size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />Try another photo</GhostButton>
-      <GhostButton onClick={onManual} style={{ width: '100%' }}>It's none of these — identify manually</GhostButton>
+
+      {modal?.lookalikeId && (
+        <CompareLookalikesModal
+          topSpecies={topSpecies}
+          lookalikeSpecies={speciesById(modal.lookalikeId)}
+          userPhoto={imageDataUrl}
+          isTablet={isTablet}
+          onClose={() => setModal(null)}
+          onPickLookalike={() => {
+            const chosen = modal.lookalikeId;
+            setModal(null);
+            onCorrectSave && onCorrectSave(chosen, top.speciesId);
+          }}
+          onNoneMatch={() => {
+            setModal(null);
+            onManual();
+          }}
+        />
+      )}
     </div>
   );
 }
