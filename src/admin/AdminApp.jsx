@@ -36,6 +36,7 @@ import {
 import {
   listSuggestions, approveSuggestion, rejectSuggestion, mergeSuggestion,
 } from '../species-suggestions-store.js';
+import { researchSpecies } from '../species-research-store.js';
 import { SpeciesPickerModal } from './pickers.jsx';
 import { speciesPhoto } from '../helpers.js';
 import { uploadImage } from './upload.js';
@@ -775,7 +776,14 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
   const [cue1, setCue1] = useState('');
   const [cue2, setCue2] = useState('');
   const [cue3, setCue3] = useState('');
+  const [cue4, setCue4] = useState('');
+  const [cue5, setCue5] = useState('');
+  const [altNamesText, setAltNamesText] = useState('');
+  const [habitat, setHabitat] = useState('');
+  const [lookalikes, setLookalikes] = useState([]); // string[] ids
+  const [sourceNote, setSourceNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [researching, setResearching] = useState(false);
   const [error, setError] = useState('');
 
   const activeCategories = getCategories();
@@ -788,6 +796,45 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
   const idCollision = derivedId && existingIds.has(derivedId);
   const missingRequired = !commonName.trim() || !scientific.trim() || !category;
 
+  const doResearch = async () => {
+    if (researching || !commonName.trim()) return;
+    setError('');
+    // If the admin has already filled anything except the two name
+    // fields, ask before overwriting.
+    const anyFilled = !!(
+      category || cue1.trim() || cue2.trim() || cue3.trim() || cue4.trim() || cue5.trim() ||
+      altNamesText.trim() || habitat.trim() || lookalikes.length > 0
+    );
+    if (anyFilled && !window.confirm(
+      'Some fields have values already. Overwrite with AI suggestions? (Common name + scientific stay as you typed them.)'
+    )) return;
+
+    setResearching(true);
+    const r = await researchSpecies({
+      commonName: commonName.trim(),
+      scientificName: scientific.trim(),
+    });
+    setResearching(false);
+    if (!r.ok) { setError(r.error || 'research failed'); return; }
+    const d = r.data || {};
+    if (d.scientific && !scientific.trim()) setScientific(d.scientific);
+    if (d.category) setCategory(d.category);
+    setAltNamesText((d.altNames || []).join(', '));
+    setHabitat(d.habitat || '');
+    setLookalikes(Array.isArray(d.lookalikes) ? d.lookalikes.slice(0, 6) : []);
+    setSourceNote(d.sourceNote || '');
+    const cues = Array.isArray(d.keyIds) ? d.keyIds : [];
+    setCue1(cues[0] || '');
+    setCue2(cues[1] || '');
+    setCue3(cues[2] || '');
+    setCue4(cues[3] || '');
+    setCue5(cues[4] || '');
+  };
+
+  const removeLookalike = (id) => {
+    setLookalikes(prev => prev.filter(x => x !== id));
+  };
+
   const save = async () => {
     setError('');
     if (missingRequired) {
@@ -796,8 +843,11 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
     }
     if (idCollision) return; // guard also enforced by disabled state
     setBusy(true);
-    const keyIds = [cue1, cue2, cue3]
+    const keyIds = [cue1, cue2, cue3, cue4, cue5]
       .map(c => (c || '').trim())
+      .filter(Boolean);
+    const altNames = altNamesText.split(',')
+      .map(s => s.trim())
       .filter(Boolean);
     const payload = {
       id: derivedId,
@@ -805,9 +855,9 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
       scientific: scientific.trim(),
       category,
       active: true,
-      altNames: [],
-      lookalikes: [],
-      habitat: '',
+      altNames,
+      lookalikes: lookalikes.filter(id => existingIds.has(id)),
+      habitat: habitat.trim(),
       keyIds,
       image: null,
     };
@@ -870,6 +920,43 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
             />
           </div>
 
+          {/* AI research trigger — pre-populates category, habitat,
+              keyIds, altNames, lookalikes. Populated fields remain
+              fully editable; nothing auto-saves until the admin taps
+              Add species. */}
+          <div>
+            <button
+              type="button"
+              onClick={doResearch}
+              disabled={researching || !commonName.trim()}
+              style={{
+                width: '100%', padding: '10px 14px',
+                background: 'transparent',
+                border: `1.5px solid ${researching || !commonName.trim() ? T.inkMute : '#5ecdf2'}`,
+                color: researching || !commonName.trim() ? T.inkMute : '#5ecdf2',
+                borderRadius: 8, fontWeight: 800, fontSize: 13,
+                cursor: researching || !commonName.trim() ? 'not-allowed' : 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              {researching
+                ? <>Researching {commonName || 'species'}…</>
+                : <>✨ Research with AI</>}
+            </button>
+          </div>
+
+          {sourceNote && (
+            <div style={{
+              padding: '8px 10px', borderRadius: 8,
+              background: 'rgba(94,205,242,0.08)',
+              border: `1px solid rgba(94,205,242,0.35)`,
+              fontSize: 11, color: T.inkSoft, lineHeight: 1.5,
+            }}>
+              <strong style={{ color: '#5ecdf2', letterSpacing: 0.5 }}>AI-SUGGESTED.</strong>
+              {' '}Review each field before saving. {sourceNote}
+            </div>
+          )}
+
           <div>
             <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
               Category <span style={{ color: T.warn }}>*</span>
@@ -888,26 +975,71 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
 
           <div>
             <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
-              Key ID cues <span style={{ color: T.inkMute, fontWeight: 400 }}>(optional — up to 3)</span>
+              Alt / regional names <span style={{ color: T.inkMute, fontWeight: 400 }}>(comma-separated, optional)</span>
+            </div>
+            <input
+              type="text" value={altNamesText}
+              onChange={e => setAltNamesText(e.target.value)}
+              placeholder="e.g. painted mackerel, kingfish, spotted mackerel"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+              Habitat <span style={{ color: T.inkMute, fontWeight: 400 }}>(optional)</span>
+            </div>
+            <textarea
+              value={habitat}
+              onChange={e => setHabitat(e.target.value)}
+              rows={3}
+              placeholder="Depth range, structure preference, migration notes…"
+              style={{ ...inputStyle, resize: 'vertical', minHeight: 60, fontFamily: 'inherit' }}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+              Key ID cues <span style={{ color: T.inkMute, fontWeight: 400 }}>(optional — up to 5)</span>
             </div>
             <div style={{ display: 'grid', gap: 6 }}>
-              <input
-                type="text" value={cue1} onChange={e => setCue1(e.target.value)}
-                placeholder="1. Distinctive yellow stripe along body"
-                style={inputStyle}
-              />
-              <input
-                type="text" value={cue2} onChange={e => setCue2(e.target.value)}
-                placeholder="2. Second distinguishing feature"
-                style={inputStyle}
-              />
-              <input
-                type="text" value={cue3} onChange={e => setCue3(e.target.value)}
-                placeholder="3. Third distinguishing feature"
-                style={inputStyle}
-              />
+              <input type="text" value={cue1} onChange={e => setCue1(e.target.value)} placeholder="1. Distinctive yellow stripe along body" style={inputStyle} />
+              <input type="text" value={cue2} onChange={e => setCue2(e.target.value)} placeholder="2. Second distinguishing feature" style={inputStyle} />
+              <input type="text" value={cue3} onChange={e => setCue3(e.target.value)} placeholder="3. Third distinguishing feature" style={inputStyle} />
+              <input type="text" value={cue4} onChange={e => setCue4(e.target.value)} placeholder="4. Fourth (optional)" style={inputStyle} />
+              <input type="text" value={cue5} onChange={e => setCue5(e.target.value)} placeholder="5. Fifth (optional)" style={inputStyle} />
             </div>
           </div>
+
+          {lookalikes.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+                Lookalikes <span style={{ color: T.inkMute, fontWeight: 400 }}>(tap to remove)</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {lookalikes.map(id => {
+                  const sp = SPECIES.find(s => s.id === id);
+                  const label = sp?.commonName || id;
+                  return (
+                    <button
+                      key={id} type="button"
+                      onClick={() => removeLookalike(id)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: T.parchmentDeep, color: T.ink,
+                        border: `1px solid ${T.cardEdge}`, borderRadius: 999,
+                        padding: '5px 10px', fontSize: 12, cursor: 'pointer',
+                      }}
+                      title="Click to remove"
+                    >
+                      {label}
+                      <span style={{ color: T.inkMute, fontSize: 14, lineHeight: 1 }}>×</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div role="alert" style={{ fontSize: 12, color: T.closed }}>{error}</div>
