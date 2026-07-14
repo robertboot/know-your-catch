@@ -1,29 +1,29 @@
--- Admin dashboard read access for the research-dataset tables
--- (anglers, catches, catch_photos). Mirrors the pattern used by
--- regulations / species / species_suggestions: a single
--- allowlisted email gets SELECT bypass on the RLS-locked tables.
+-- Admin dashboard read access for the cloudsync tables
+-- (catches, pbs, user_state). Mirrors the pattern used by
+-- regulations / species / species_suggestions: a single allowlisted
+-- email gets SELECT bypass on the RLS-locked tables.
 --
 -- Run once against the production Supabase project. The dashboard's
 -- "Users" panel is gated behind this — without it the HEAD counts
--- come back as 0 for the admin because the tables are RLS-owned
--- per-row and the admin's uuid never matches other anglers'.
+-- come back as 0 for the admin because the tables are own-row
+-- RLS-locked (each user only sees their own catches / pbs / state).
 --
 -- SAFETY: read-only. No insert / update / delete policy is added.
--- Moderation still happens through the service role via edge
--- functions, not the anon key logged into the admin site.
-
-drop policy if exists anglers_admin_read on public.anglers;
-create policy anglers_admin_read on public.anglers
-  for select
-  using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
+-- Everything else — moderation, user-state edits — stays gated on
+-- the row-owner's session, exactly as before.
 
 drop policy if exists catches_admin_read on public.catches;
 create policy catches_admin_read on public.catches
   for select
   using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
 
-drop policy if exists photos_admin_read on public.catch_photos;
-create policy photos_admin_read on public.catch_photos
+drop policy if exists pbs_admin_read on public.pbs;
+create policy pbs_admin_read on public.pbs
+  for select
+  using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
+
+drop policy if exists user_state_admin_read on public.user_state;
+create policy user_state_admin_read on public.user_state
   for select
   using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
 

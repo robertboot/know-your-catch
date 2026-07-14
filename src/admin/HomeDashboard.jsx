@@ -356,34 +356,57 @@ async function fetchUsers() {
   const sevenDaysAgo  = new Date(Date.now() -  7 * 86400_000).toISOString();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
 
-  // All queries are HEAD counts. If admin RLS bypass isn't in place
-  // yet (supabase/admin-read-anglers-schema.sql not applied), these
-  // return 0 with no error — we flag `gated: true` when the numbers
-  // look implausible (zero anglers but at least one existing row we
-  // can see from the current session).
-  const [angTotal, ang7, ang30, catTotal, cat7, cat30] = await Promise.all([
-    c.from('anglers').select('id', { count: 'exact', head: true }).then(r => r.count ?? 0),
-    c.from('anglers').select('id', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo).then(r => r.count ?? 0),
-    c.from('anglers').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo).then(r => r.count ?? 0),
-    c.from('catches').select('id', { count: 'exact', head: true }).then(r => r.count ?? 0),
-    c.from('catches').select('id', { count: 'exact', head: true }).gte('inserted_at', sevenDaysAgo).then(r => r.count ?? 0),
-    c.from('catches').select('id', { count: 'exact', head: true }).gte('inserted_at', thirtyDaysAgo).then(r => r.count ?? 0),
+  // Real cloudsync tables (see src/cloudsync.js): catches / pbs /
+  // user_state — each keyed by user_id and RLS-locked to own-row
+  // reads. This dashboard is gated behind the admin_read policies in
+  // supabase/admin-read-anglers-schema.sql; without them these
+  // HEAD counts come back as 0 (or as ONLY the admin's own rows).
+  //
+  // Users total: one user_state row per signed-in user (the mobile
+  //   app creates it on first sync). Better proxy than "distinct
+  //   user_id in catches" because it also counts signed-in users
+  //   who haven't logged a catch yet.
+  // Catches total + recent windows: HEAD counts against the
+  //   date_iso column (the catch event time).
+  const [userTotal, catTotal, cat7, cat30, catPhotoRows] = await Promise.all([
+    c.from('user_state').select('user_id', { count: 'exact', head: true }).then(r => r.count ?? 0),
+    c.from('catches').select('id', { count: 'exact', head: true }).is('deleted_at', null).then(r => r.count ?? 0),
+    c.from('catches').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('date_iso', sevenDaysAgo).then(r => r.count ?? 0),
+    c.from('catches').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('date_iso', thirtyDaysAgo).then(r => r.count ?? 0),
+    // photos is a jsonb array embedded IN the catches row (not a
+    // separate table). PostgREST doesn't expose a JSON-length filter
+    // that plays well with HEAD counts, so we pull the id + photos
+    // columns and count non-empty locally. Cheap: photos column is
+    // ~small array of URL strings per row.
+    c.from('catches')
+      .select('id, photos')
+      .is('deleted_at', null)
+      .limit(5000)
+      .then(r => (r.data || []).filter(row =>
+        Array.isArray(row.photos) && row.photos.length > 0).length),
   ]);
 
-  // Photo opt-in rate — how many catches have a paired photo row.
-  const catPhotoTotal = await c.from('catch_photos')
-    .select('id', { count: 'exact', head: true })
-    .then(r => r.count ?? 0);
+  // Recent signups — user_state doesn't have a created_at column
+  // (it's a rolling jsonb blob keyed by user_id). "Active in last N
+  // days" is a better proxy anyway: count of distinct users who
+  // logged a catch in that window.
+  const [users7Data, users30Data] = await Promise.all([
+    c.from('catches').select('user_id').is('deleted_at', null).gte('date_iso', sevenDaysAgo),
+    c.from('catches').select('user_id').is('deleted_at', null).gte('date_iso', thirtyDaysAgo),
+  ]);
+  const users7  = new Set((users7Data.data  || []).map(r => r.user_id)).size;
+  const users30 = new Set((users30Data.data || []).map(r => r.user_id)).size;
 
-  // Simple gate heuristic: totals are 0 across the board. Almost
-  // certainly RLS is blocking the read (the admin's OWN rows would
-  // still surface if only the researcher policy were missing).
-  const gated = angTotal === 0 && catTotal === 0;
+  // Simple gate heuristic: total is 0 across the board. Almost
+  // certainly RLS is blocking the read (an admin's OWN rows would
+  // still surface if the policies were fine but the tables empty,
+  // and that's covered because we count admin's own rows too).
+  const gated = userTotal === 0 && catTotal === 0;
 
   return {
     gated,
-    anglers: { total: angTotal, last7: ang7,  last30: ang30 },
-    catches: { total: catTotal, last7: cat7,  last30: cat30, withPhoto: catPhotoTotal },
+    users:   { total: userTotal, active7: users7,   active30: users30 },
+    catches: { total: catTotal,  last7:   cat7,     last30:   cat30, withPhoto: catPhotoRows },
   };
 }
 
@@ -890,14 +913,14 @@ function CategoriesPanel({ data, err, loading, onGoTab }) {
 function UsersPanel({ data, err, loading }) {
   return (
     <Section title="Users"
-             subtitle="Angler signups + catch logs. Gated on the admin-read RLS migration.">
+             subtitle="Signups + catch logs. Gated on the admin-read RLS migration.">
       {err && <ErrorLine err={err} />}
       {loading && !data && <LoadingLine />}
       {data && data.gated && (
         <Card style={{ padding: 12 }}>
           <div style={{ fontSize: 12, color: T.warn, fontWeight: 700 }}>
-            Zero rows returned — the admin RLS bypass on <code>anglers</code>/<code>catches</code>
-            isn't in place yet.
+            Zero rows returned — the admin RLS bypass on <code>catches</code> / <code>pbs</code> /
+            <code> user_state</code> isn't in place yet.
           </div>
           <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 6 }}>
             Run <code>supabase/admin-read-anglers-schema.sql</code> in the Supabase SQL editor,
@@ -911,13 +934,14 @@ function UsersPanel({ data, err, loading }) {
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: 8,
         }}>
-          <Tile label="Anglers total"       value={data.anglers.total} tone="ok" />
-          <Tile label="Anglers · last 7 days"  value={data.anglers.last7}  tone={data.anglers.last7 > 0 ? 'ok' : 'neutral'} />
-          <Tile label="Anglers · last 30 days" value={data.anglers.last30} tone={data.anglers.last30 > 0 ? 'ok' : 'neutral'} />
-          <Tile label="Catches total"       value={data.catches.total} tone="ok" />
-          <Tile label="Catches · last 7 days"  value={data.catches.last7}  tone={data.catches.last7 > 0 ? 'ok' : 'neutral'} />
-          <Tile label="Catches · last 30 days" value={data.catches.last30} tone={data.catches.last30 > 0 ? 'ok' : 'neutral'} />
-          <Tile label="Catches with photo"     value={data.catches.withPhoto}
+          <Tile label="Users total"              value={data.users.total}    tone="ok" />
+          <Tile label="Active users · last 7 days"  value={data.users.active7}  tone={data.users.active7 > 0 ? 'ok' : 'neutral'}
+                hint="Distinct anglers who logged a catch" />
+          <Tile label="Active users · last 30 days" value={data.users.active30} tone={data.users.active30 > 0 ? 'ok' : 'neutral'} />
+          <Tile label="Catches total"             value={data.catches.total}  tone="ok" />
+          <Tile label="Catches · last 7 days"     value={data.catches.last7}  tone={data.catches.last7 > 0 ? 'ok' : 'neutral'} />
+          <Tile label="Catches · last 30 days"    value={data.catches.last30} tone={data.catches.last30 > 0 ? 'ok' : 'neutral'} />
+          <Tile label="Catches with photo"        value={data.catches.withPhoto}
                 hint={data.catches.total > 0
                   ? `${Math.round(100 * data.catches.withPhoto / data.catches.total)}% photo rate`
                   : 'no catches yet'}
