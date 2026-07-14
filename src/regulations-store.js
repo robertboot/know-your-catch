@@ -301,6 +301,144 @@ export async function adminCountStalable({ jurisdictionId = null, olderThanDays 
   return { ok: true, count: count || 0 };
 }
 
+/* ------------------------------------------------------------------
+   Admin bulk actions
+   ------------------------------------------------------------------ */
+
+/** Bulk mark rows stale by primary key ids. Returns { ok, count }.
+    Silent no-op on empty list. */
+export async function adminBulkMarkStale(ids) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured', count: 0 };
+  if (!Array.isArray(ids) || ids.length === 0) return { ok: true, count: 0 };
+  const { data, error } = await c.from('regulations')
+    .update({ status: 'stale' })
+    .in('id', ids)
+    .select('id');
+  if (error) return { ok: false, error: error.message, count: 0 };
+  await fetchRegulations();
+  return { ok: true, count: (data || []).length };
+}
+
+/** Bulk delete DRAFT rows by ids. Verified rows are refused —
+    deleting a verified row requires the per-row Delete action so
+    a bulk mistake can't wipe out compliance-approved data. Returns
+    { ok, count, skipped } where skipped is the count of ids that
+    were verified/stale/disputed and thus skipped. */
+export async function adminBulkDeleteDrafts(ids) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured', count: 0, skipped: 0 };
+  if (!Array.isArray(ids) || ids.length === 0) return { ok: true, count: 0, skipped: 0 };
+  // Load and split so we can report the skip count honestly.
+  const { data: existing, error: loadErr } = await c.from('regulations')
+    .select('id, status').in('id', ids);
+  if (loadErr) return { ok: false, error: loadErr.message, count: 0, skipped: 0 };
+  const draftIds = (existing || []).filter(r => r.status === 'draft').map(r => r.id);
+  const skipped  = (existing || []).length - draftIds.length;
+  if (draftIds.length === 0) {
+    return { ok: true, count: 0, skipped };
+  }
+  const { error } = await c.from('regulations').delete().in('id', draftIds);
+  if (error) return { ok: false, error: error.message, count: 0, skipped };
+  await fetchRegulations();
+  return { ok: true, count: draftIds.length, skipped };
+}
+
+/** Cascade AI drafts for ONE species across many jurisdictions.
+    Serial with a 500ms gap so we don't hammer the LLM. Each result
+    is upserted as status='draft' (unless the row is already verified,
+    in which case status is preserved and the AI draft overwrites
+    only the numeric/text fields — but source is retained so the
+    admin can compare against their prior verified state).
+
+    onProgress({ index, total, jurisdiction, phase }) fires:
+      phase='start' before each per-jurisdiction call
+      phase='ok'    after a successful upsert
+      phase='fail'  after a failure (result.error carries the reason)
+
+    Caller passes a cancelToken = { cancelled: false } which the
+    cascade checks between jurisdictions so Cancel-after-current
+    works. Returns { ok, succeeded: string[], failed: [{jurisdictionId, error}] }. */
+export async function runRegsCascade({ species, jurisdictions, onProgress, cancelToken }) {
+  const succeeded = [];
+  const failed = [];
+  const total = jurisdictions.length;
+  for (let i = 0; i < total; i++) {
+    if (cancelToken?.cancelled) break;
+    const jur = jurisdictions[i];
+    try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'start' }); } catch {}
+    const draft = await draftWithAI({ species, jurisdiction: jur });
+    if (!draft.ok) {
+      failed.push({ jurisdictionId: jur.id, error: draft.error || 'draft failed' });
+      try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'fail', error: draft.error }); } catch {}
+    } else {
+      // Fetch any existing row so we don't clobber a verified status
+      // — but the AI's numbers still land as an updated draft so admin
+      // can compare before re-verifying.
+      const c = client();
+      let existingStatus = 'draft';
+      let existingSourceUrl = '';
+      try {
+        const { data: cur } = await c.from('regulations')
+          .select('status, source_url')
+          .eq('species_id', species.id)
+          .eq('jurisdiction_id', jur.id)
+          .maybeSingle();
+        if (cur) { existingStatus = cur.status; existingSourceUrl = cur.source_url || ''; }
+      } catch {}
+      const payload = {
+        species_id: species.id,
+        jurisdiction_id: jur.id,
+        season_text: draft.draft.seasonText,
+        min_size_in: draft.draft.minSizeIn,
+        max_size_in: draft.draft.maxSizeIn,
+        bag_limit:   draft.draft.bagLimit,
+        boat_limit:  draft.draft.boatLimit,
+        notes:       draft.draft.notes,
+        source_note: draft.draft.sourceNote,
+        // Preserve verified status if the row is already verified —
+        // cascade shouldn't silently unverify existing compliance
+        // work. Otherwise land as draft.
+        status:      existingStatus === 'verified' ? 'verified' : 'draft',
+        drafted_by:  'ai',
+        source_url:  existingSourceUrl || '',
+      };
+      const up = await adminUpsertRegulation(payload);
+      if (!up.ok) {
+        failed.push({ jurisdictionId: jur.id, error: up.error });
+        try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'fail', error: up.error }); } catch {}
+      } else {
+        succeeded.push(jur.id);
+        try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'ok' }); } catch {}
+      }
+    }
+    // 500ms gap between jurisdictions — enough to spread rate-limit
+    // hits and give the cancel checker a chance without dragging
+    // out the cascade meaningfully (6 juris × 10s > any 500ms noise).
+    if (i < total - 1) await new Promise(res => setTimeout(res, 500));
+  }
+  return {
+    ok: failed.length === 0,
+    succeeded,
+    failed,
+    cancelled: !!cancelToken?.cancelled,
+  };
+}
+
+/* Admin preference — auto-draft regs on species Save. Kept in
+   localStorage since the admin console runs in a single browser
+   typically; if cross-device sync is ever needed this can move to
+   user_state via USER_STATE_KEYS. */
+const AUTO_DRAFT_KEY = 'kyc_admin_auto_draft_regs_v1';
+export function getAutoDraftRegsPref() {
+  try { return localStorage.getItem(AUTO_DRAFT_KEY) === '1'; }
+  catch { return false; }
+}
+export function setAutoDraftRegsPref(v) {
+  try { localStorage.setItem(AUTO_DRAFT_KEY, v ? '1' : '0'); }
+  catch {}
+}
+
 /** Admin-only: call the research-regulations edge function for one
     (species, jurisdiction) pair. Returns the raw draft — caller
     decides whether to upsert it. */

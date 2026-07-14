@@ -42,6 +42,8 @@ import {
   adminVerifyRegulation, adminUnverifyRegulation, draftWithAI,
   regulationAge, regulationAgePhrase,
   adminMarkAllStale, adminCountStalable,
+  adminBulkMarkStale, adminBulkDeleteDrafts, runRegsCascade,
+  getAutoDraftRegsPref, setAutoDraftRegsPref,
 } from '../regulations-store.js';
 import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
@@ -802,6 +804,11 @@ function SpeciesForm({ initial, onDone, onCancel }) {
   const [error, setError]             = useState('');
   const [researching, setResearching] = useState(false);
   const [sourceNote, setSourceNote]   = useState('');
+  // Cascade state — set after a successful upsert to trigger the
+  // "Draft regs for this species across every jurisdiction?" flow.
+  const [cascadePrompt, setCascadePrompt] = useState(null);   // species-shape object
+  const [cascadeRunner, setCascadeRunner] = useState(null);   // { species, cancelToken }
+  const [cascadeToast, setCascadeToast]   = useState('');
 
   const isNew = !initial;
 
@@ -922,8 +929,59 @@ function SpeciesForm({ initial, onDone, onCancel }) {
     const { ok, error } = await upsertSpecies(payload);
     setSaving(false);
     if (!ok) { setError(error || 'Save failed.'); return; }
-    onDone();
+    // Species is saved. Now offer the regs cascade — unless the admin
+    // has previously opted for auto-draft, in which case fire it
+    // silently in the background and let the corner toast surface it.
+    const speciesShape = {
+      id: payload.id, commonName: payload.commonName,
+      scientific: payload.scientific, altNames: payload.altNames,
+    };
+    if (getAutoDraftRegsPref()) {
+      startCascade(speciesShape, { silent: true, onFinished: onDone });
+      return;
+    }
+    setCascadePrompt(speciesShape);
   };
+
+  const startCascade = (species, { silent = false, onFinished = null } = {}) => {
+    const cancelToken = { cancelled: false };
+    setCascadeRunner({ species, cancelToken, silent, progress: null, done: false, result: null });
+    // Kick off the cascade. Progress writes back through setCascadeRunner
+    // via the closure; the modal reads current progress via the state.
+    (async () => {
+      let latest = { species, cancelToken, silent, progress: null, done: false, result: null };
+      const result = await runRegsCascade({
+        species,
+        jurisdictions: JURISDICTIONS,
+        onProgress: (p) => {
+          latest = { ...latest, progress: p };
+          setCascadeRunner(latest);
+        },
+        cancelToken,
+      });
+      latest = { ...latest, done: true, result };
+      setCascadeRunner(latest);
+      // Silent path: no modal — just a corner toast and close.
+      if (silent) {
+        const okCount = result.succeeded.length;
+        const failCount = result.failed.length;
+        setCascadeToast(
+          failCount > 0
+            ? `Drafted ${okCount}/${okCount + failCount} regs for ${species.commonName}. ${failCount} failed — check Regulations tab.`
+            : `Drafted ${okCount} regs for ${species.commonName}. Verify each in the Regulations tab.`
+        );
+        setCascadeRunner(null);
+        if (onFinished) onFinished();
+      }
+    })();
+  };
+
+  // Auto-dismiss toast.
+  React.useEffect(() => {
+    if (!cascadeToast) return;
+    const t = setTimeout(() => setCascadeToast(''), 6000);
+    return () => clearTimeout(t);
+  }, [cascadeToast]);
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -1071,6 +1129,202 @@ function SpeciesForm({ initial, onDone, onCancel }) {
         <PrimaryButton onClick={save} disabled={saving} style={{ flex: 1 }}>
           {saving ? 'Saving…' : (isNew ? 'Create species' : 'Save changes')}
         </PrimaryButton>
+      </div>
+
+      {cascadePrompt && !cascadeRunner && (
+        <RegsCascadePromptModal
+          species={cascadePrompt}
+          onCancel={() => { setCascadePrompt(null); onDone(); }}
+          onSkip={() => { setCascadePrompt(null); onDone(); }}
+          onConfirm={({ dontAskAgain }) => {
+            if (dontAskAgain) setAutoDraftRegsPref(true);
+            setCascadePrompt(null);
+            startCascade(cascadePrompt, {
+              silent: false,
+              onFinished: null,
+            });
+          }}
+        />
+      )}
+
+      {cascadeRunner && !cascadeRunner.silent && (
+        <RegsCascadeProgressModal
+          runner={cascadeRunner}
+          onCancel={() => {
+            cascadeRunner.cancelToken.cancelled = true;
+          }}
+          onClose={() => {
+            setCascadeRunner(null);
+            onDone();
+          }}
+          onRetryFailed={(failedJurisdictions) => {
+            const cancelToken = { cancelled: false };
+            const runner = {
+              species: cascadeRunner.species,
+              cancelToken, silent: false, progress: null, done: false, result: null,
+            };
+            setCascadeRunner(runner);
+            (async () => {
+              const r = await runRegsCascade({
+                species: cascadeRunner.species,
+                jurisdictions: failedJurisdictions,
+                onProgress: (p) => setCascadeRunner({ ...runner, progress: p }),
+                cancelToken,
+              });
+              setCascadeRunner({ ...runner, done: true, result: r });
+            })();
+          }}
+        />
+      )}
+
+      {cascadeToast && (
+        <div role="status" onClick={() => setCascadeToast('')} style={{
+          position: 'fixed', bottom: 20, right: 20, zIndex: 600,
+          background: T.card, border: `1px solid ${T.brass}`,
+          borderRadius: 10, padding: '12px 14px', maxWidth: 380,
+          color: T.ink, fontSize: 13, lineHeight: 1.5,
+          cursor: 'pointer', boxShadow: '0 6px 22px rgba(0,0,0,0.4)',
+        }}>
+          {cascadeToast} <span style={{ color: T.inkMute, fontSize: 11 }}>(tap to dismiss)</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Ask-once modal — appears after a species Save and offers to draft
+   regs across every jurisdiction. Also has a "Don't ask again"
+   checkbox that flips the localStorage pref to skip this in the
+   future. Compliance: nothing gets auto-verified regardless. */
+function RegsCascadePromptModal({ species, onCancel, onSkip, onConfirm }) {
+  const [dontAskAgain, setDontAskAgain] = useState(false);
+  const perDraftCost = 0.02;
+  const perDraftSec = 10;
+  const totalCost = (perDraftCost * JURISDICTIONS.length).toFixed(2);
+  const totalMin  = Math.round((perDraftSec * JURISDICTIONS.length) / 60);
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3,27,51,0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`,
+        borderRadius: 12, padding: 18, maxWidth: 480, width: '100%',
+      }}>
+        <H1 size={17} style={{ marginBottom: 4 }}>Draft regulations for {species.commonName}?</H1>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
+          Run AI Research against each active jurisdiction. Every draft
+          lands as a DRAFT — never visible to mobile users until you
+          verify with a source URL in the Regulations tab.
+        </div>
+        <ul style={{ margin: '0 0 14px', paddingLeft: 20, fontSize: 12, color: T.ink, lineHeight: 1.7 }}>
+          {JURISDICTIONS.map(j => (
+            <li key={j.id}>{j.name} <span style={{ color: T.inkMute }}>· {j.agency}</span></li>
+          ))}
+        </ul>
+        <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 12, padding: '6px 10px', background: T.parchmentDeep, borderRadius: 6 }}>
+          Est. cost: ~${totalCost} · Est. time: ~{totalMin} min
+        </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: T.ink, cursor: 'pointer', marginBottom: 14 }}>
+          <input type="checkbox" checked={dontAskAgain} onChange={e => setDontAskAgain(e.target.checked)} style={{ accentColor: T.brass }} />
+          Don't ask again — auto-draft regs on every species Save
+        </label>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            type="button" onClick={onSkip}
+            style={{
+              background: 'transparent', border: 'none', color: T.inkMute,
+              fontSize: 12, cursor: 'pointer', padding: '8px 12px',
+            }}
+          >
+            Skip — I'll draft later
+          </button>
+          <GhostButton onClick={onCancel}>Cancel</GhostButton>
+          <PrimaryButton onClick={() => onConfirm({ dontAskAgain })} style={{ padding: '8px 16px' }}>
+            Draft now
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RegsCascadeProgressModal({ runner, onCancel, onClose, onRetryFailed }) {
+  const { species, progress, done, result, cancelToken } = runner;
+  const total = progress?.total || JURISDICTIONS.length;
+  const doneCount = progress ? progress.index + (progress.phase === 'ok' || progress.phase === 'fail' ? 1 : 0) : 0;
+  const pct = Math.min(100, Math.round((doneCount / Math.max(1, total)) * 100));
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3,27,51,0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`,
+        borderRadius: 12, padding: 18, maxWidth: 480, width: '100%',
+      }}>
+        <H1 size={17} style={{ marginBottom: 8 }}>
+          {done ? 'Cascade complete' : `Drafting regs for ${species.commonName}…`}
+        </H1>
+        <div style={{
+          height: 8, background: T.parchmentDeep, borderRadius: 4, overflow: 'hidden',
+          border: `1px solid ${T.cardEdge}`, marginBottom: 8,
+        }}>
+          <div style={{
+            width: `${pct}%`, height: '100%',
+            background: done ? (result?.failed.length ? T.warn : T.open) : T.brass,
+            transition: 'width 200ms',
+          }} />
+        </div>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
+          {done
+            ? `${result?.succeeded.length || 0} succeeded · ${result?.failed.length || 0} failed${result?.cancelled ? ' · cancelled' : ''}`
+            : progress
+              ? `${doneCount}/${total} — ${progress.jurisdiction?.name || '…'}${cancelToken.cancelled ? ' (cancelling after this one)' : ''}`
+              : 'Starting…'}
+        </div>
+        {done && result?.failed.length > 0 && (
+          <div style={{
+            padding: '8px 10px', background: 'rgba(255,200,87,0.10)',
+            border: `1px solid ${T.warn}`, borderRadius: 6,
+            fontSize: 11, color: T.warn, marginBottom: 12, lineHeight: 1.5,
+          }}>
+            <strong>Failed jurisdictions:</strong>
+            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+              {result.failed.map(f => (
+                <li key={f.jurisdictionId}>{f.jurisdictionId}: {f.error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          {!done && (
+            <GhostButton
+              onClick={onCancel}
+              disabled={cancelToken.cancelled}
+              style={{ padding: '8px 14px', fontSize: 12 }}
+            >
+              {cancelToken.cancelled ? 'Cancelling…' : 'Cancel after this one'}
+            </GhostButton>
+          )}
+          {done && result?.failed.length > 0 && (
+            <GhostButton
+              onClick={() => {
+                const failedIds = new Set(result.failed.map(f => f.jurisdictionId));
+                const failedJurisdictions = JURISDICTIONS.filter(j => failedIds.has(j.id));
+                onRetryFailed(failedJurisdictions);
+              }}
+              style={{ padding: '8px 14px', fontSize: 12, color: T.warn, borderColor: T.warn }}
+            >
+              Retry {result.failed.length} failed
+            </GhostButton>
+          )}
+          {done && (
+            <PrimaryButton onClick={onClose} style={{ padding: '8px 16px' }}>Done</PrimaryButton>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1749,6 +2003,13 @@ function RegulationsTab() {
   // label. Recomputed on refresh via adminCountStalable.
   const [stalableCount, setStalableCount] = useState(0);
   const [markingStale, setMarkingStale] = useState(false);
+  // Bulk selection — Set of row ids (Supabase primary keys). Selection
+  // scoped to the current jurisdiction because that's what's rendered;
+  // switching jurisdictions clears via the effect below.
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkCascadeRunner, setBulkCascadeRunner] = useState(null);
+  useEffect(() => { setSelectedIds(new Set()); }, [jurId]);
 
   const jur = JURISDICTIONS.find(j => j.id === jurId);
   const activeSpecies = useMemo(
@@ -1776,6 +2037,95 @@ function RegulationsTab() {
     for (const r of rows) m.set(r.species_id, r);
     return m;
   }, [rows]);
+
+  const toggleSelect = (rowId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId); else next.add(rowId);
+      return next;
+    });
+  };
+  const selectAllInView = () => {
+    setSelectedIds(new Set(rows.map(r => r.id)));
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const doBulkMarkStale = async () => {
+    const count = selectedIds.size;
+    if (!count) return;
+    const conf = window.prompt(
+      `Mark ${count} regulation${count === 1 ? '' : 's'} as STALE?\n` +
+      `They'll drop from mobile users' view until re-verified. Type MARK STALE to confirm.`, ''
+    );
+    if (conf !== 'MARK STALE') return;
+    setBulkBusy(true);
+    const r = await adminBulkMarkStale(Array.from(selectedIds));
+    setBulkBusy(false);
+    if (!r.ok) { setError(r.error || 'bulk mark failed'); return; }
+    clearSelection();
+    refresh();
+  };
+
+  const doBulkDeleteDrafts = async () => {
+    const count = selectedIds.size;
+    if (!count) return;
+    const conf = window.prompt(
+      `Delete DRAFT rows among the ${count} selected? Verified/stale/disputed rows will be skipped ` +
+      `(delete verified via the per-row action, not bulk). Type DELETE DRAFTS to confirm.`, ''
+    );
+    if (conf !== 'DELETE DRAFTS') return;
+    setBulkBusy(true);
+    const r = await adminBulkDeleteDrafts(Array.from(selectedIds));
+    setBulkBusy(false);
+    if (!r.ok) { setError(r.error || 'bulk delete failed'); return; }
+    setError(''); clearSelection(); refresh();
+    if (r.skipped > 0) setError(`Deleted ${r.count} drafts; skipped ${r.skipped} non-draft row(s).`);
+  };
+
+  const doBulkDraftAI = async () => {
+    const count = selectedIds.size;
+    if (!count) return;
+    const conf = window.prompt(
+      `Draft AI regulations for ${count} selected species in ${jur.name}?\n` +
+      `Est. ~$${(0.02 * count).toFixed(2)}, ~${Math.max(1, Math.round(count * 10 / 60))} min. ` +
+      `Type UPDATE to confirm.`, ''
+    );
+    if (conf !== 'UPDATE') return;
+    const species = Array.from(selectedIds).map(id => {
+      const row = rows.find(r => r.id === id);
+      return row ? activeSpecies.find(s => s.id === row.species_id) : null;
+    }).filter(Boolean);
+    if (species.length === 0) return;
+    // Cascade one-by-one: for each selected species, draft against the
+    // CURRENT jurisdiction only (unlike the species-Save cascade which
+    // fans out across all jurisdictions). Same runner shape so the
+    // progress modal renders identically.
+    const cancelToken = { cancelled: false };
+    const runner = { species: { commonName: `${species.length} species` }, cancelToken, silent: false, progress: null, done: false, result: null };
+    setBulkCascadeRunner(runner);
+    (async () => {
+      const failed = [];
+      const succeeded = [];
+      for (let i = 0; i < species.length; i++) {
+        if (cancelToken.cancelled) break;
+        const sp = species[i];
+        setBulkCascadeRunner({ ...runner, progress: { index: i, total: species.length, jurisdiction: { name: sp.commonName }, phase: 'start' } });
+        const r = await runRegsCascade({
+          species: sp,
+          jurisdictions: [jur],
+          onProgress: () => {},
+          cancelToken,
+        });
+        if (r.failed.length > 0) failed.push({ jurisdictionId: sp.id, error: r.failed[0].error });
+        else succeeded.push(sp.id);
+        if (i < species.length - 1) await new Promise(res => setTimeout(res, 500));
+      }
+      setBulkCascadeRunner({
+        ...runner, done: true,
+        result: { succeeded, failed, cancelled: cancelToken.cancelled },
+      });
+    })();
+  };
 
   const doMarkAllStale = async () => {
     if (stalableCount === 0) return;
@@ -1878,7 +2228,23 @@ function RegulationsTab() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: 6 }}>
+      {/* Select-all header — visible only when at least one row exists
+          in the current jurisdiction, so a fresh-empty view doesn't
+          show an orphan checkbox. */}
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px', fontSize: 11, color: T.inkMute }}>
+          <input
+            type="checkbox"
+            aria-label="Select all rows in view"
+            checked={selectedIds.size > 0 && selectedIds.size === rows.length}
+            onChange={(e) => e.target.checked ? selectAllInView() : clearSelection()}
+            style={{ accentColor: T.brass, width: 14, height: 14 }}
+          />
+          Select all in view ({rows.length})
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 6, paddingBottom: selectedIds.size > 0 ? 80 : 0 }}>
         {(() => {
           // Sort by species (default) or by age (oldest verified first;
           // no-regulation and drafts sink to the bottom of the age
@@ -1924,9 +2290,23 @@ function RegulationsTab() {
                          : age.tier === 'aging' ? T.brass
                          :                        T.warn;
           const ageLine = row ? regulationAgePhrase(row) : null;
+          const canSelect = !!row; // no row → nothing to bulk-act on
+          const isSelected = row ? selectedIds.has(row.id) : false;
           return (
-            <Card key={sp.id} style={{ padding: 10 }}>
+            <Card key={sp.id} style={{
+              padding: 10,
+              border: isSelected ? `2px solid ${T.brass}` : undefined,
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {canSelect && (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${sp.commonName}`}
+                    checked={isSelected}
+                    onChange={() => toggleSelect(row.id)}
+                    style={{ accentColor: T.brass, width: 14, height: 14, flexShrink: 0 }}
+                  />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{sp.commonName}</div>
                   <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
@@ -2015,6 +2395,60 @@ function RegulationsTab() {
             setVerifyRow(null);
             refresh();
           }}
+        />
+      )}
+
+      {/* Floating bulk action bar. Bulk VERIFY is intentionally
+          absent — verification requires per-row source_url + attest
+          checkbox per the compliance spec. */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 400,
+          padding: '10px 14px',
+          background: T.card, borderTop: `1px solid ${T.brass}`,
+          display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+          boxShadow: '0 -6px 22px rgba(0,0,0,0.35)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginRight: 8 }}>
+            {selectedIds.size} selected
+          </div>
+          <div style={{ flex: 1 }} />
+          <GhostButton
+            onClick={doBulkDraftAI}
+            disabled={bulkBusy}
+            style={{ padding: '8px 12px', fontSize: 12 }}
+          >
+            Draft with AI
+          </GhostButton>
+          <GhostButton
+            onClick={doBulkMarkStale}
+            disabled={bulkBusy}
+            style={{ padding: '8px 12px', fontSize: 12, color: T.warn, borderColor: T.warn }}
+          >
+            Mark stale
+          </GhostButton>
+          <GhostButton
+            onClick={doBulkDeleteDrafts}
+            disabled={bulkBusy}
+            style={{ padding: '8px 12px', fontSize: 12, color: T.closed, borderColor: T.closed }}
+          >
+            Delete drafts
+          </GhostButton>
+          <GhostButton
+            onClick={clearSelection}
+            style={{ padding: '8px 12px', fontSize: 12 }}
+          >
+            Clear selection
+          </GhostButton>
+        </div>
+      )}
+
+      {bulkCascadeRunner && (
+        <RegsCascadeProgressModal
+          runner={bulkCascadeRunner}
+          onCancel={() => { bulkCascadeRunner.cancelToken.cancelled = true; }}
+          onClose={() => { setBulkCascadeRunner(null); clearSelection(); refresh(); }}
+          onRetryFailed={() => setBulkCascadeRunner(null)}
         />
       )}
     </div>
