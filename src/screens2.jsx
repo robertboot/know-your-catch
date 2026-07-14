@@ -3739,12 +3739,15 @@ function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
-    const reg = REGULATIONS[s.id]?.[jurisdiction.id];
+    // Uses the same store precedence as the display path — verified
+    // Supabase overlay first, bundled fallback second. Ensures quiz
+    // questions reflect what the user sees on the Regulations tab.
+    const reg = regulationFor(s.id, jurisdiction.id).regulation;
     return reg && reg.bagLimit != null;
   });
   if (candidates.length === 0) return null;
   const correct = candidates[Math.floor(Math.random() * candidates.length)];
-  const limit = REGULATIONS[correct.id][jurisdiction.id].bagLimit;
+  const limit = regulationFor(correct.id, jurisdiction.id).regulation.bagLimit;
   const distractors = _shuffle(_BAG_OPTIONS.filter(n => n !== limit)).slice(0, 3);
   const opts = _shuffle([limit, ...distractors]).map(n => ({
     key: 'bag-' + n, label: n === 0 ? '0 (no take)' : `${n} per angler`, isCorrect: n === limit,
@@ -3760,12 +3763,13 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
-    const reg = REGULATIONS[s.id]?.[jurisdiction.id];
+    // Same store precedence as bag-limit picker above.
+    const reg = regulationFor(s.id, jurisdiction.id).regulation;
     return reg && reg.minSize != null;
   });
   if (candidates.length === 0) return null;
   const correct = candidates[Math.floor(Math.random() * candidates.length)];
-  const size = REGULATIONS[correct.id][jurisdiction.id].minSize;
+  const size = regulationFor(correct.id, jurisdiction.id).regulation.minSize;
   const pool = [size - 6, size - 4, size - 2, size + 2, size + 4, size + 6, 12, 14, 16, 18, 20, 24, 28];
   const distractors = _shuffle([...new Set(pool)].filter(n => n !== size && n > 0)).slice(0, 3);
   const opts = _shuffle([size, ...distractors]).map(n => ({
@@ -4010,7 +4014,13 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
   const compareRight = question.type === 'lookalikes'
     ? (tier === 'wrong' ? question.primaryLookalike : pickedSpecies)
     : null;
-  const reg = jurisdiction ? REGULATIONS[sp.id]?.[jurisdiction.id] : null;
+  // Precedence: verified Supabase overlay → bundled fallback → none.
+  // Was reading REGULATIONS bundled directly, which meant Quiz always
+  // showed stale bundled regs even after admin verified fresher
+  // AI-drafted rows in the Regulations tab. Route through the same
+  // regulationFor() helper the RegulationsList and RegulationDetail
+  // screens use so all three surfaces stay in sync.
+  const reg = jurisdiction ? regulationFor(sp.id, jurisdiction.id).regulation : null;
   const status = reg ? seasonState(reg.open).status : 'unknown';
 
   const catName = (id) => (categoryById(id)?.name) || id;
