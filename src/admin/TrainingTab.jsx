@@ -43,7 +43,7 @@ import {
   uploadExport, listExports, getExportSignedUrl, deleteExport,
   modelBundleUploadUrl, trainingPhotoSignedUrls,
 } from '../training-exports-store.js';
-import { CATEGORIES } from '../data.js';
+import { getCategories, subscribe as subscribeCategoriesStore } from '../categories-store.js';
 import ModelsPanel from './ModelsPanel.jsx';
 import TestImagePanel from './TestImagePanel.jsx';
 import { SpeciesPickerModal, ModalShell } from './pickers.jsx';
@@ -1083,6 +1083,11 @@ function CoveragePanel({ onUploadSpecies }) {
   const [sortMode, setSortMode] = useState('gap'); // 'gap' | 'name' | 'count'
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'excluded' | 'thin' | 'good'
+  // Live categories for the filter dropdown — subscribe so an admin
+  // adding a new category on the Categories tab sees it here without
+  // reload.
+  const [cats, setCats] = useState(() => getCategories());
+  useEffect(() => subscribeCategoriesStore(() => setCats(getCategories())), []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1200,7 +1205,7 @@ function CoveragePanel({ onUploadSpecies }) {
             <SectionLabel style={{ marginBottom: 4 }}>Category</SectionLabel>
             <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, padding: '8px 10px', fontSize: 12 }}>
               <option value="">All</option>
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>

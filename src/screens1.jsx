@@ -826,10 +826,16 @@ export function IdentifyScreen({
 
   // Categories: filter by ones that have any active species so the
   // chip row doesn't show empty categories after overlay updates.
+  // Reads from the live categories-store overlay (not the bundled
+  // fallback) so admin-added categories in Supabase show up here on
+  // the next refresh cycle. Subscribes below so this list rebuilds
+  // when the overlay refreshes.
+  const [catsTick, bumpCats] = useState(0);
+  useEffect(() => subscribeCategories(() => bumpCats(v => v + 1)), []);
   const categoriesWithSpecies = useMemo(() => {
     const has = new Set(activeSpecies.map(s => s.category));
-    return CATEGORIES.filter(c => has.has(c.id));
-  }, [activeSpecies]);
+    return getCategories().filter(c => has.has(c.id));
+  }, [activeSpecies, catsTick]);
 
   // "Your species" (favorites) if present; else last recently viewed.
   const favIds = Array.isArray(state?.favorites) ? state.favorites : [];

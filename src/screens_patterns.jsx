@@ -20,7 +20,6 @@ import {
   Fish, Thermometer, Wind, Waves as WavesIcon, ChevronLeft, Download,
 } from 'lucide-react';
 import { T } from './theme.js';
-import { CATEGORIES } from './data.js';
 import { speciesById, formatSize, formatWeight, jurisdictionById } from './helpers.js';
 import { Card, PrimaryButton, GhostButton, SectionLabel, H1 } from './components.jsx';
 import { isNative } from './native.js';

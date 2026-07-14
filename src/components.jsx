@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles, Crop, RotateCcw } from 'lucide-react';
 import { T } from './theme.js';
-import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES, CATEGORIES } from './data.js';
+import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
+import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
 import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl } from './photos-store.js';
 
@@ -1353,6 +1354,10 @@ export function SpeciesRow({ species, onClick, favorited, onToggleFavorite }) {
 export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = true, title = 'Star your common catches' }) {
   const [picked, setPicked] = useState(() => new Set(favorites || []));
   const [q, setQ] = useState('');
+  // Subscribe to the live categories overlay so admin-added categories
+  // appear here without an app restart.
+  const [catsTick, bumpCats] = useState(0);
+  useEffect(() => subscribeCategories(() => bumpCats(v => v + 1)), []);
   const toggle = (id) => {
     setPicked(prev => {
       const next = new Set(prev);
@@ -1370,10 +1375,19 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
       if (!buckets.has(s.category)) buckets.set(s.category, []);
       buckets.get(s.category).push(s);
     }
-    return CATEGORIES
+    // Live categories first (respects sort_order + overlay adds), then
+    // any orphaned category ids on species we don't have in the store
+    // — rendered under their raw id so those species still show up
+    // instead of disappearing.
+    const liveCats = getCategories();
+    const knownIds = new Set(liveCats.map(c => c.id));
+    const orphans = [...buckets.keys()]
+      .filter(id => !knownIds.has(id))
+      .map(id => ({ id, name: id }));
+    return [...liveCats, ...orphans]
       .filter(c => buckets.has(c.id))
       .map(c => ({ cat: c, list: buckets.get(c.id).sort((a, b) => a.commonName.localeCompare(b.commonName)) }));
-  }, [q]);
+  }, [q, catsTick]);
   return (
     <div style={overlayStyle}>
       <div style={{ ...modalStyle, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
-  JURISDICTIONS, SPECIES, REGULATIONS, CATEGORIES,
+  JURISDICTIONS, SPECIES, REGULATIONS,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
 import { saveState } from './storage.js';
@@ -53,6 +53,7 @@ import { useScreenSize } from './screen-size.js';
 import { getLocation, getPhoto, isNative } from './native.js';
 import { SpeciesPickerModal, SpeciesSuggestModal } from './admin/pickers.jsx';
 import { newClientSpeciesId, submitSuggestion } from './species-suggestions-store.js';
+import { getCategories, categoryById, subscribe as subscribeCategories } from './categories-store.js';
 import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -462,10 +463,12 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
         const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
         return { s, reg, status: reg ? seasonState(reg.open).status : 'unknown' };
       });
-    // Sort: by-type groups by family (CATEGORIES order, alpha within);
-    // by-status floats what you can keep right now to the top; by-name is A–Z.
+    // Sort: by-type groups by family (live-store category order, alpha
+    // within); by-status floats what you can keep right now to the top;
+    // by-name is A–Z. Categories come from the live overlay so any admin-
+    // added categories sort correctly against their sort_order.
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
-    const catOrder = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
+    const catOrder = Object.fromEntries(getCategories().map((c, i) => [c.id, i]));
     list.sort((a, b) => {
       if (sort === 'status') return (statusRank[a.status] - statusRank[b.status]) || a.s.commonName.localeCompare(b.s.commonName);
       if (sort === 'type')   return ((catOrder[a.s.category] ?? 99) - (catOrder[b.s.category] ?? 99)) || a.s.commonName.localeCompare(b.s.commonName);
@@ -477,7 +480,10 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   const favRows = rows.filter(r => favSet.has(r.s.id));
   const otherRows = rows.filter(r => !favSet.has(r.s.id));
 
-  const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
+  // Unknown category (species with a category id not currently in the
+  // overlay OR the bundled seed) falls back to "Other" — better than
+  // dropping the species entirely.
+  const catName = (id) => (categoryById(id)?.name) || 'Other';
 
   const segBtn = (state, set, key, label) => (
     <button onClick={() => set(key)} style={{
@@ -853,7 +859,25 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
       {!jurisdiction ? (
         <Card><div style={{ color: T.inkMute, fontSize: isTablet ? 15 : 13 }}>Select your fishing waters first.</div></Card>
       ) : !reg ? (
-        <Card><div style={{ color: T.inkMute, fontSize: isTablet ? 15 : 13 }}>No regulation data on file for this species in {jurisdiction.name}.</div></Card>
+        <Card>
+          <div style={{ color: T.inkMute, fontSize: isTablet ? 15 : 13, lineHeight: 1.5, marginBottom: 10 }}>
+            Not tracked in ReelIntel yet for {jurisdiction.name}. Check with
+            your state or federal fisheries agency before keeping this fish.
+          </div>
+          <a
+            href={s.hms
+              ? 'https://www.fisheries.noaa.gov/topic/atlantic-highly-migratory-species'
+              : 'https://myfwc.com/fishing/saltwater/recreational/'}
+            target="_blank" rel="noopener noreferrer"
+            style={{
+              display: 'inline-block',
+              fontSize: isTablet ? 14 : 12, fontWeight: 700,
+              color: T.brass, textDecoration: 'underline',
+            }}
+          >
+            {s.hms ? 'Open NOAA HMS regs →' : 'Open FWC saltwater regs →'}
+          </a>
+        </Card>
       ) : (
         <Card style={{ padding: isTablet ? 20 : undefined }}>
           <SectionLabel style={{ marginBottom: isTablet ? 12 : 8, fontSize: isTablet ? 13 : undefined }}>{jurisdiction.name}</SectionLabel>
@@ -882,8 +906,8 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     update({ favorites: Array.from(next) });
   };
-  const catOrder = useMemo(() => Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i])), []);
-  const catName = (id) => (CATEGORIES.find(c => c.id === id) || { name: 'Other' }).name;
+  const catOrder = useMemo(() => Object.fromEntries(getCategories().map((c, i) => [c.id, i])), []);
+  const catName = (id) => (categoryById(id)?.name) || 'Other';
 
   const rows = useMemo(() => {
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
@@ -3917,7 +3941,7 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
   const reg = jurisdiction ? REGULATIONS[sp.id]?.[jurisdiction.id] : null;
   const status = reg ? seasonState(reg.open).status : 'unknown';
 
-  const catName = (id) => (CATEGORIES.find(c => c.id === id)?.name) || id;
+  const catName = (id) => (categoryById(id)?.name) || id;
   const fmtScore = (n) => (n % 1 === 0 ? String(n) : n.toFixed(1));
 
   const typeLabel = {

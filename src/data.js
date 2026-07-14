@@ -20,19 +20,32 @@ export const JURISDICTIONS = [
 ];
 
 export const CATEGORIES = [
-  { id: 'snapper', name: 'Snapper' }, { id: 'grouper', name: 'Grouper' },
+  // Offline-first fallback list. Runtime consumers should read from
+  // categories-store.getCategories() so admin-added / deactivated /
+  // renamed categories in Supabase win over this seed. Kept in sync
+  // with the live categories table so a fresh install with no network
+  // gets the same shape the overlay would produce.
+  { id: 'pelagic',  name: 'Pelagic' },
+  { id: 'snapper',  name: 'Snapper' },
+  { id: 'grouper',  name: 'Grouper' },
   { id: 'tilefish', name: 'Tilefish' },
-  { id: 'jacks', name: 'Jacks' }, { id: 'mackerel', name: 'Mackerel' },
-  { id: 'tuna', name: 'Tuna' }, { id: 'billfish', name: 'Billfish' },
-  { id: 'trigger', name: 'Triggerfish' }, { id: 'sharks', name: 'Sharks' },
-  { id: 'cobia', name: 'Cobia' }, { id: 'wahoo', name: 'Wahoo' },
-  { id: 'cod', name: 'Cod' },
+  { id: 'jacks',    name: 'Jacks' },
+  { id: 'mackerel', name: 'Mackerel' },
+  { id: 'tuna',     name: 'Tuna' },
+  { id: 'billfish', name: 'Billfish' },
+  { id: 'trigger',  name: 'Triggerfish' },
+  { id: 'sharks',   name: 'Sharks' },
+  { id: 'cobia',    name: 'Cobia' },
+  { id: 'wahoo',    name: 'Wahoo' },
+  { id: 'cod',      name: 'Cod' },
   { id: 'sturgeon', name: 'Sturgeon' },
   { id: 'flatfish', name: 'Flatfish' },
-  { id: 'drum', name: 'Drum' }, { id: 'croaker', name: 'Croaker' },
-  { id: 'panfish', name: 'Panfish' }, { id: 'ray', name: 'Ray' },
-  { id: 'bait', name: 'Bait Fish' },
-  { id: 'reef', name: 'Reef Fish' },
+  { id: 'drum',     name: 'Drum' },
+  { id: 'croaker',  name: 'Croaker' },
+  { id: 'panfish',  name: 'Panfish' },
+  { id: 'ray',      name: 'Ray' },
+  { id: 'bait',     name: 'Bait Fish' },
+  { id: 'reef',     name: 'Reef Fish' },
 ];
 
 export const SPECIES = [

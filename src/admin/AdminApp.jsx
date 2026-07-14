@@ -13,7 +13,7 @@
       swappable brand images (header logo, JSX splash, hero image). */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { T } from '../theme.js';
-import { SPECIES, CATEGORIES } from '../data.js';
+import { SPECIES } from '../data.js';
 import { client, isConfigured } from '../supabase-client.js';
 import {
   upsertSpecies, refreshSpecies,
