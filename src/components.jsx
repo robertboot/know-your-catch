@@ -1479,6 +1479,37 @@ export function BigButton({ icon, title, subtitle, onClick, accent = T.brass, is
   );
 }
 
+/* Adapt an existing crop rect to a new aspect ratio, preserving the
+   center point and roughly the same size. `aspect === null` means
+   Free — return the rect unchanged so the user's shape carries over
+   from the outgoing locked mode. Locked-aspect targets pick the
+   larger of the two current dimensions as the seed then compute the
+   other side from the aspect. Final rect is clamped to container. */
+function reshapeRect(rect, aspect, container) {
+  if (!rect) return null;
+  if (aspect == null) {
+    // Free — leave the current rect alone. Any user-shaped rect
+    // carries into Free unchanged (the whole point of the mode).
+    return { ...rect };
+  }
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  // Seed on the longer edge so a portrait rect stays portrait-sized
+  // when converting to landscape (rather than shrinking to fit).
+  const seed = Math.max(rect.w, rect.h);
+  let w = seed, h = seed / aspect;
+  if (h > container.h) { h = container.h; w = h * aspect; }
+  if (w > container.w) { w = container.w; h = w / aspect; }
+  w = Math.max(60, Math.round(w));
+  h = Math.max(60, Math.round(h));
+  let x = Math.round(cx - w / 2);
+  let y = Math.round(cy - h / 2);
+  // Clamp to container.
+  x = Math.max(0, Math.min(container.w - w, x));
+  y = Math.max(0, Math.min(container.h - h, y));
+  return { x, y, w, h };
+}
+
 /* CropStep — pan/zoom the image under a fixed-size crop frame, then
    export the framed region as a 512x512 JPEG.
 
@@ -1522,9 +1553,11 @@ export function CropStep({
   // null = free (crop frame is user-shaped via corner drag handles).
   // Options are exposed as tappable chips above the crop frame.
   const [aspect, setAspect] = React.useState(1);
-  // User-shaped crop rectangle, only used when aspect === null. Stored
-  // in container-relative pixels. Initialized when the user first
-  // switches to Free; cleared when they pick a locked aspect again.
+  // Current crop rectangle in container-relative pixels. Named
+  // "freeRect" for legacy diff readability, but this is now the
+  // single source of truth in every aspect mode — chip switches
+  // reshape it around its current center instead of resetting, so
+  // the user's fine-tuning survives a Free → Portrait → Free loop.
   const [freeRect, setFreeRect] = React.useState(null);
   // Which crop-handle is currently being dragged, or null when none.
   // Set from pointerdown on a handle; consumed by pointermove; cleared
@@ -1575,9 +1608,12 @@ export function CropStep({
   }, [natural, container]);
   const totalScale = fitScale * zoom;
 
-  // Derived default crop rectangle — used when aspect is locked, and
-  // as the initial shape when the user first switches to Free.
-  const defaultCropRect = React.useMemo(() => {
+  // Compute a sensibly-sized rect centered in the current container
+  // for a given aspect. Used to seed the initial cropRect on first
+  // measure. All later reshapes go through reshapeToAspect() so the
+  // user's current position + size is preserved across chip switches.
+  const containerDefault = React.useMemo(() => {
+    if (!container.w || !container.h) return null;
     const pad = 0.8;
     const availW = container.w * pad;
     const availH = container.h * pad;
@@ -1593,28 +1629,44 @@ export function CropStep({
     return {
       w: cw,
       h: ch,
-      x: (container.w - cw) / 2,
-      y: (container.h - ch) / 2,
+      x: Math.round((container.w - cw) / 2),
+      y: Math.round((container.h - ch) / 2),
     };
-  }, [container, aspect]);
-
-  // When the user switches to Free, seed freeRect with the derived
-  // default so the frame appears in a sensible place. When they switch
-  // to a locked aspect, throw the free rect away (cropRect derives from
-  // container + aspect again). Container resize also re-seeds so the
-  // frame doesn't stay stuck at old-container dimensions.
-  React.useEffect(() => {
-    if (aspect == null) {
-      setFreeRect(defaultCropRect);
-    } else {
-      setFreeRect(null);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aspect, container.w, container.h]);
+  }, [container.w, container.h]);
 
-  // Actual crop rectangle: Free mode uses freeRect (user-shaped);
-  // locked-aspect modes use the derived default.
-  const cropRect = (aspect == null && freeRect) ? freeRect : defaultCropRect;
+  // Seed cropRect once when the container is first measured. Later
+  // aspect-chip taps flow through the effect below — they REshape the
+  // existing rect around its current center instead of resetting to
+  // container-center. That means tapping Portrait after nudging the
+  // Square crop off-center keeps that position; tapping Free after
+  // Portrait inherits the Portrait rect and lets the user fine-tune.
+  React.useEffect(() => {
+    if (!containerDefault) return;
+    setFreeRect(prev => prev == null ? containerDefault : prev);
+  }, [containerDefault]);
+
+  // Adapt the current rect to a new aspect (or leave alone for Free),
+  // preserving center point + roughly the same size. Runs every time
+  // `aspect` changes.
+  const prevAspectRef = React.useRef(aspect);
+  React.useEffect(() => {
+    if (prevAspectRef.current === aspect) return;
+    prevAspectRef.current = aspect;
+    if (!container.w || !container.h) return;
+    setFreeRect(prev => {
+      const base = prev || containerDefault;
+      if (!base) return prev;
+      return reshapeRect(base, aspect, container);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aspect]);
+
+  // The crop rectangle is now a single source of truth — freeRect
+  // holds it whether Free is active or a locked aspect is active.
+  // "freeRect" name kept to keep the diff readable; think of it as
+  // "the current rect."
+  const cropRect = freeRect || containerDefault || { x: 0, y: 0, w: 0, h: 0 };
 
   // Compute the source rectangle in original-image coords the crop
   // covers, clamped to the image bounds. When the pan/zoom would sample

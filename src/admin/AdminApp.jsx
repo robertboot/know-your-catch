@@ -939,6 +939,14 @@ function SpeciesForm({ initial, onDone, onCancel }) {
     const { ok, error } = await upsertSpecies(payload);
     setSaving(false);
     if (!ok) { setError(error || 'Save failed.'); return; }
+    // Immediate confirmation so the admin sees the save landed even
+    // before the cascade modal / silent-cascade toast covers it. Was
+    // reported as missing feedback — the only pre-existing signal was
+    // the cascade prompt modal, which reads as "another decision to
+    // make," not "your save worked."
+    setCascadeToast(isNew
+      ? `Species created: ${payload.commonName}`
+      : `Saved changes to ${payload.commonName}`);
     // Species is saved. Now offer the regs cascade — unless the admin
     // has previously opted for auto-draft, in which case fire it
     // silently in the background and let the corner toast surface it.
