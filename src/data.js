@@ -29,6 +29,8 @@ export const CATEGORIES = [
   { id: 'cod', name: 'Cod' },
   { id: 'sturgeon', name: 'Sturgeon' },
   { id: 'flatfish', name: 'Flatfish' },
+  { id: 'drum', name: 'Drum' }, { id: 'croaker', name: 'Croaker' },
+  { id: 'panfish', name: 'Panfish' }, { id: 'ray', name: 'Ray' },
   { id: 'bait', name: 'Bait Fish' },
   { id: 'reef', name: 'Reef Fish' },
 ];
