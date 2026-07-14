@@ -2230,18 +2230,35 @@ function RegulationsTab() {
 
       {/* Select-all header — visible only when at least one row exists
           in the current jurisdiction, so a fresh-empty view doesn't
-          show an orphan checkbox. */}
+          show an orphan checkbox. Wrapped in a <label> so the whole
+          "Select all in view (N)" strip is tappable — the 14x14
+          native checkbox alone was under Apple's 44px min tap target
+          on iPad and the label text was catching taps that never
+          reached the checkbox. */}
       {rows.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px', fontSize: 11, color: T.inkMute }}>
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 8px', minHeight: 40,
+          fontSize: 12, color: T.ink, fontWeight: 700,
+          cursor: 'pointer', userSelect: 'none',
+          borderRadius: 6,
+          background: selectedIds.size === rows.length && selectedIds.size > 0
+            ? T.parchmentDeep : 'transparent',
+        }}>
           <input
             type="checkbox"
             aria-label="Select all rows in view"
             checked={selectedIds.size > 0 && selectedIds.size === rows.length}
             onChange={(e) => e.target.checked ? selectAllInView() : clearSelection()}
-            style={{ accentColor: T.brass, width: 14, height: 14 }}
+            style={{ accentColor: T.brass, width: 20, height: 20, cursor: 'pointer' }}
           />
           Select all in view ({rows.length})
-        </div>
+          {selectedIds.size > 0 && selectedIds.size < rows.length && (
+            <span style={{ color: T.brass, fontWeight: 600, fontSize: 11 }}>
+              ({selectedIds.size} selected)
+            </span>
+          )}
+        </label>
       )}
 
       <div style={{ display: 'grid', gap: 6, paddingBottom: selectedIds.size > 0 ? 80 : 0 }}>
