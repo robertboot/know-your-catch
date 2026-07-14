@@ -2038,28 +2038,61 @@ function RegulationsTab() {
     return m;
   }, [rows]);
 
-  const toggleSelect = (rowId) => {
+  // Sorted list of species to render — hoisted so the Select-all header
+  // and selectAllInView() both see exactly the same rows that render
+  // below. Was previously computed inside a per-render IIFE, which is
+  // why "Select all in view (N)" showed only the tiny subset of species
+  // that already had a regulation row.
+  const sortedSpecies = useMemo(() => {
+    const items = activeSpecies.slice();
+    if (sortMode === 'age') {
+      items.sort((a, b) => {
+        const ra = rowsBySpecies.get(a.id) || null;
+        const rb = rowsBySpecies.get(b.id) || null;
+        const daysA = ra && ra.status === 'verified' && ra.verified_at
+          ? -(new Date(ra.verified_at).getTime()) : Number.POSITIVE_INFINITY;
+        const daysB = rb && rb.status === 'verified' && rb.verified_at
+          ? -(new Date(rb.verified_at).getTime()) : Number.POSITIVE_INFINITY;
+        if (daysA !== daysB) return daysB - daysA;
+        return a.commonName.localeCompare(b.commonName);
+      });
+    }
+    return items;
+  }, [activeSpecies, sortMode, rowsBySpecies]);
+
+  const selectAllInView = () => {
+    setSelectedIds(new Set(sortedSpecies.map(s => s.id)));
+  };
+
+  // selectedIds holds SPECIES ids (not row ids). Bulk "Draft with AI"
+  // needs to work on species that don't have a row yet — that's the
+  // whole point of the flow. Stale/Delete filter down to species that
+  // do have a row before hitting the backend.
+  const toggleSelect = (speciesId) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(rowId)) next.delete(rowId); else next.add(rowId);
+      if (next.has(speciesId)) next.delete(speciesId); else next.add(speciesId);
       return next;
     });
-  };
-  const selectAllInView = () => {
-    setSelectedIds(new Set(rows.map(r => r.id)));
   };
   const clearSelection = () => setSelectedIds(new Set());
 
   const doBulkMarkStale = async () => {
-    const count = selectedIds.size;
-    if (!count) return;
+    const rowIds = Array.from(selectedIds)
+      .map(sid => rowsBySpecies.get(sid))
+      .filter(Boolean)
+      .map(r => r.id);
+    if (!rowIds.length) {
+      setError('None of the selected species have a regulation row to mark stale.');
+      return;
+    }
     const conf = window.prompt(
-      `Mark ${count} regulation${count === 1 ? '' : 's'} as STALE?\n` +
+      `Mark ${rowIds.length} regulation${rowIds.length === 1 ? '' : 's'} as STALE?\n` +
       `They'll drop from mobile users' view until re-verified. Type MARK STALE to confirm.`, ''
     );
     if (conf !== 'MARK STALE') return;
     setBulkBusy(true);
-    const r = await adminBulkMarkStale(Array.from(selectedIds));
+    const r = await adminBulkMarkStale(rowIds);
     setBulkBusy(false);
     if (!r.ok) { setError(r.error || 'bulk mark failed'); return; }
     clearSelection();
@@ -2067,15 +2100,21 @@ function RegulationsTab() {
   };
 
   const doBulkDeleteDrafts = async () => {
-    const count = selectedIds.size;
-    if (!count) return;
+    const rowIds = Array.from(selectedIds)
+      .map(sid => rowsBySpecies.get(sid))
+      .filter(Boolean)
+      .map(r => r.id);
+    if (!rowIds.length) {
+      setError('None of the selected species have a regulation row to delete.');
+      return;
+    }
     const conf = window.prompt(
-      `Delete DRAFT rows among the ${count} selected? Verified/stale/disputed rows will be skipped ` +
+      `Delete DRAFT rows among the ${rowIds.length} selected? Verified/stale/disputed rows will be skipped ` +
       `(delete verified via the per-row action, not bulk). Type DELETE DRAFTS to confirm.`, ''
     );
     if (conf !== 'DELETE DRAFTS') return;
     setBulkBusy(true);
-    const r = await adminBulkDeleteDrafts(Array.from(selectedIds));
+    const r = await adminBulkDeleteDrafts(rowIds);
     setBulkBusy(false);
     if (!r.ok) { setError(r.error || 'bulk delete failed'); return; }
     setError(''); clearSelection(); refresh();
@@ -2083,19 +2122,17 @@ function RegulationsTab() {
   };
 
   const doBulkDraftAI = async () => {
-    const count = selectedIds.size;
-    if (!count) return;
+    const species = Array.from(selectedIds)
+      .map(sid => activeSpecies.find(s => s.id === sid))
+      .filter(Boolean);
+    if (species.length === 0) return;
+    const count = species.length;
     const conf = window.prompt(
       `Draft AI regulations for ${count} selected species in ${jur.name}?\n` +
       `Est. ~$${(0.02 * count).toFixed(2)}, ~${Math.max(1, Math.round(count * 10 / 60))} min. ` +
       `Type UPDATE to confirm.`, ''
     );
     if (conf !== 'UPDATE') return;
-    const species = Array.from(selectedIds).map(id => {
-      const row = rows.find(r => r.id === id);
-      return row ? activeSpecies.find(s => s.id === row.species_id) : null;
-    }).filter(Boolean);
-    if (species.length === 0) return;
     // Cascade one-by-one: for each selected species, draft against the
     // CURRENT jurisdiction only (unlike the species-Save cascade which
     // fans out across all jurisdictions). Same runner shape so the
@@ -2228,32 +2265,30 @@ function RegulationsTab() {
         </div>
       )}
 
-      {/* Select-all header — visible only when at least one row exists
-          in the current jurisdiction, so a fresh-empty view doesn't
-          show an orphan checkbox. Wrapped in a <label> so the whole
-          "Select all in view (N)" strip is tappable — the 14x14
-          native checkbox alone was under Apple's 44px min tap target
-          on iPad and the label text was catching taps that never
-          reached the checkbox. */}
-      {rows.length > 0 && (
+      {/* Select-all header — counts every species currently rendered,
+          not just the ones with existing regulation rows, so bulk
+          Draft-with-AI can hit species that have no row yet. Wrapped
+          in a <label> so the whole strip is tappable — a bare 14x14
+          checkbox was under Apple's 44px min tap target on iPad. */}
+      {sortedSpecies.length > 0 && (
         <label style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '10px 8px', minHeight: 40,
           fontSize: 12, color: T.ink, fontWeight: 700,
           cursor: 'pointer', userSelect: 'none',
           borderRadius: 6,
-          background: selectedIds.size === rows.length && selectedIds.size > 0
+          background: selectedIds.size === sortedSpecies.length && selectedIds.size > 0
             ? T.parchmentDeep : 'transparent',
         }}>
           <input
             type="checkbox"
-            aria-label="Select all rows in view"
-            checked={selectedIds.size > 0 && selectedIds.size === rows.length}
+            aria-label="Select all species in view"
+            checked={selectedIds.size > 0 && selectedIds.size === sortedSpecies.length}
             onChange={(e) => e.target.checked ? selectAllInView() : clearSelection()}
             style={{ accentColor: T.brass, width: 20, height: 20, cursor: 'pointer' }}
           />
-          Select all in view ({rows.length})
-          {selectedIds.size > 0 && selectedIds.size < rows.length && (
+          Select all in view ({sortedSpecies.length})
+          {selectedIds.size > 0 && selectedIds.size < sortedSpecies.length && (
             <span style={{ color: T.brass, fontWeight: 600, fontSize: 11 }}>
               ({selectedIds.size} selected)
             </span>
@@ -2262,25 +2297,7 @@ function RegulationsTab() {
       )}
 
       <div style={{ display: 'grid', gap: 6, paddingBottom: selectedIds.size > 0 ? 80 : 0 }}>
-        {(() => {
-          // Sort by species (default) or by age (oldest verified first;
-          // no-regulation and drafts sink to the bottom of the age
-          // ordering so they don't crowd out true stale-verified rows).
-          const items = activeSpecies.slice();
-          if (sortMode === 'age') {
-            items.sort((a, b) => {
-              const ra = rowsBySpecies.get(a.id) || null;
-              const rb = rowsBySpecies.get(b.id) || null;
-              const daysA = ra && ra.status === 'verified' && ra.verified_at
-                ? -(new Date(ra.verified_at).getTime()) : Number.POSITIVE_INFINITY;
-              const daysB = rb && rb.status === 'verified' && rb.verified_at
-                ? -(new Date(rb.verified_at).getTime()) : Number.POSITIVE_INFINITY;
-              if (daysA !== daysB) return daysB - daysA;
-              return a.commonName.localeCompare(b.commonName);
-            });
-          }
-          return items;
-        })().map(sp => {
+        {sortedSpecies.map(sp => {
           const row = rowsBySpecies.get(sp.id) || null;
           const status = row?.status || 'none';
           const badge =
@@ -2307,23 +2324,32 @@ function RegulationsTab() {
                          : age.tier === 'aging' ? T.brass
                          :                        T.warn;
           const ageLine = row ? regulationAgePhrase(row) : null;
-          const canSelect = !!row; // no row → nothing to bulk-act on
-          const isSelected = row ? selectedIds.has(row.id) : false;
+          const isSelected = selectedIds.has(sp.id);
           return (
             <Card key={sp.id} style={{
               padding: 10,
               border: isSelected ? `2px solid ${T.brass}` : undefined,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {canSelect && (
+                {/* Species-level checkbox — every row is selectable so
+                    bulk Draft-with-AI can hit species that don't have a
+                    regulation row yet. Wrapped in a <label> for a bigger
+                    tap target than the bare 20px checkbox. */}
+                <label
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: 32, minHeight: 32, flexShrink: 0, cursor: 'pointer',
+                  }}
+                >
                   <input
                     type="checkbox"
                     aria-label={`Select ${sp.commonName}`}
                     checked={isSelected}
-                    onChange={() => toggleSelect(row.id)}
-                    style={{ accentColor: T.brass, width: 14, height: 14, flexShrink: 0 }}
+                    onChange={() => toggleSelect(sp.id)}
+                    style={{ accentColor: T.brass, width: 20, height: 20, cursor: 'pointer' }}
                   />
-                )}
+                </label>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{sp.commonName}</div>
                   <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
