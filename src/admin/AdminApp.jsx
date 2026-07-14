@@ -332,6 +332,17 @@ function SpeciesTab({ detailView, setDetailView }) {
   // Species tab now has two sub-panels: the existing species list and
   // the new suggestion queue where user-submitted custom species land.
   const [panel, setPanel] = useState('list');
+  // Quick Add modal — a compact form for the common case of "just get
+  // this species in the system so I can upload training photos to it,
+  // I'll flesh out the details later." The full SpeciesForm below is
+  // still the right form for a considered addition (~15 fields).
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddToast, setQuickAddToast] = useState('');
+  React.useEffect(() => {
+    if (!quickAddToast) return;
+    const t = setTimeout(() => setQuickAddToast(''), 4000);
+    return () => clearTimeout(t);
+  }, [quickAddToast]);
   if (panel === 'suggestions') {
     return (
       <>
@@ -396,17 +407,40 @@ function SpeciesTab({ detailView, setDetailView }) {
           label={`All · ${sorted.length}`} color={T.brass}
         />
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <input
           type="search" placeholder="Filter by name, scientific, or id…"
           value={filter} onChange={e => setFilter(e.target.value)}
-          style={{ ...inputStyle, flex: 1 }}
+          style={{ ...inputStyle, flex: 1, minWidth: 200 }}
         />
+        <PrimaryButton
+          onClick={() => setQuickAddOpen(true)}
+          style={{ padding: '10px 14px', flexShrink: 0 }}
+        >+ Quick Add</PrimaryButton>
         <GhostButton
           onClick={() => setDetailView({ kind: 'species-edit', id: null, title: 'Add species' })}
           style={{ padding: '10px 14px', flexShrink: 0 }}
-        >+ Add</GhostButton>
+        >+ Add (full)</GhostButton>
       </div>
+      {quickAddToast && (
+        <div role="status" style={{
+          padding: '8px 12px', marginBottom: 10,
+          background: 'rgba(94,224,172,0.14)', border: `1px solid ${T.open}`,
+          borderRadius: 8, color: T.open, fontSize: 12, fontWeight: 700,
+        }}>
+          {quickAddToast}
+        </div>
+      )}
+      {quickAddOpen && (
+        <QuickAddSpeciesModal
+          existingIds={new Set(SPECIES.map(s => s.id))}
+          onCancel={() => setQuickAddOpen(false)}
+          onSaved={(commonName) => {
+            setQuickAddOpen(false);
+            setQuickAddToast(`Added — you can now upload training photos to ${commonName}.`);
+          }}
+        />
+      )}
       <div style={{ fontSize: 11, color: T.inkMute, margin: '0 4px 10px' }}>
         {filtered.length} shown · {activeCount} active · {deactivatedCount} deactivated.
       </div>
@@ -715,6 +749,197 @@ function RejectSuggestionModal({ suggestion, onCancel, onPick }) {
 
 /* Small toggleable chip used by the Species tab's active/deactivated
    filter row. Kept local since no other tab needs it right now. */
+/* Quick Add species — compact modal for the common "just get this
+   species into the system so I can start uploading training photos
+   to it" case. Full details (habitat, lookalikes, illustration, etc.)
+   go to the ~15-field SpeciesForm below via the Edit button on the
+   list row.
+
+   Auto-derived on save:
+     id       — slug of the common name, collision-checked live
+     active   — true
+     altNames — [] (edit later)
+     lookalikes — [] (edit later)
+     habitat  — '' (edit later)
+     image    — null (SpeciesImage falls back to the FishMark
+                placeholder illustration)
+
+   Save rides the same upsertSpecies path the full form uses, so
+   the new species immediately appears in every consumer of the
+   SPECIES overlay: Training → Upload picker, mobile app species
+   picker on next refresh, Regulations list. */
+function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
+  const [commonName, setCommonName] = useState('');
+  const [scientific, setScientific] = useState('');
+  const [category, setCategory]     = useState('');
+  const [cue1, setCue1] = useState('');
+  const [cue2, setCue2] = useState('');
+  const [cue3, setCue3] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const activeCategories = getCategories();
+  const derivedId = React.useMemo(() => {
+    return (commonName || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 40);
+  }, [commonName]);
+  const idCollision = derivedId && existingIds.has(derivedId);
+  const missingRequired = !commonName.trim() || !scientific.trim() || !category;
+
+  const save = async () => {
+    setError('');
+    if (missingRequired) {
+      setError('Common name, scientific name, and category are required.');
+      return;
+    }
+    if (idCollision) return; // guard also enforced by disabled state
+    setBusy(true);
+    const keyIds = [cue1, cue2, cue3]
+      .map(c => (c || '').trim())
+      .filter(Boolean);
+    const payload = {
+      id: derivedId,
+      commonName: commonName.trim(),
+      scientific: scientific.trim(),
+      category,
+      active: true,
+      altNames: [],
+      lookalikes: [],
+      habitat: '',
+      keyIds,
+      image: null,
+    };
+    const r = await upsertSpecies(payload);
+    setBusy(false);
+    if (!r.ok) { setError(r.error || 'save failed'); return; }
+    onSaved(commonName.trim());
+  };
+
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`,
+        borderRadius: 12, padding: 18, maxWidth: 500, width: '100%',
+      }}>
+        <H1 size={18} style={{ marginBottom: 4 }}>Quick Add species</H1>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
+          Enough to start uploading training photos. Habitat, lookalikes,
+          illustration, and the rest can be filled in later via Edit.
+        </div>
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+              Common name <span style={{ color: T.warn }}>*</span>
+            </div>
+            <input
+              type="text" value={commonName}
+              onChange={e => setCommonName(e.target.value)}
+              placeholder="e.g. Cero Mackerel"
+              style={inputStyle}
+              autoFocus
+            />
+            {derivedId && (
+              <div style={{
+                fontSize: 11, marginTop: 4,
+                color: idCollision ? T.closed : T.inkMute,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              }}>
+                {idCollision
+                  ? `${derivedId} already exists — edit that species instead or change the name.`
+                  : `will be saved as: ${derivedId}`}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+              Scientific name <span style={{ color: T.warn }}>*</span>
+            </div>
+            <input
+              type="text" value={scientific}
+              onChange={e => setScientific(e.target.value)}
+              placeholder="e.g. Scomberomorus regalis"
+              style={{ ...inputStyle, fontStyle: 'italic' }}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+              Category <span style={{ color: T.warn }}>*</span>
+            </div>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Pick a category…</option>
+              {activeCategories.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
+              Key ID cues <span style={{ color: T.inkMute, fontWeight: 400 }}>(optional — up to 3)</span>
+            </div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              <input
+                type="text" value={cue1} onChange={e => setCue1(e.target.value)}
+                placeholder="1. Distinctive yellow stripe along body"
+                style={inputStyle}
+              />
+              <input
+                type="text" value={cue2} onChange={e => setCue2(e.target.value)}
+                placeholder="2. Second distinguishing feature"
+                style={inputStyle}
+              />
+              <input
+                type="text" value={cue3} onChange={e => setCue3(e.target.value)}
+                placeholder="3. Third distinguishing feature"
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div role="alert" style={{ fontSize: 12, color: T.closed }}>{error}</div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                background: 'transparent', border: 'none', color: T.inkMute,
+                fontSize: 12, cursor: 'pointer', padding: '8px 4px',
+              }}
+            >
+              Add more details later →
+            </button>
+            <div style={{ flex: 1 }} />
+            <GhostButton onClick={onCancel}>Cancel</GhostButton>
+            <PrimaryButton
+              onClick={save}
+              disabled={busy || missingRequired || idCollision}
+              style={{ padding: '8px 16px' }}
+            >
+              {busy ? 'Saving…' : 'Add species'}
+            </PrimaryButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatusChip({ active, onClick, label, color }) {
   return (
     <button onClick={onClick} style={{
