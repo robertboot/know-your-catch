@@ -56,6 +56,7 @@ function useDashboardData() {
     refreshedAt: null,
     errors: {},
     health: null,
+    pipeline: null,
     queue: null,
     species: null,
     regsMatrix: null,
@@ -71,10 +72,11 @@ function useDashboardData() {
     // Fire every fetch in parallel — the dashboard is one-shot on
     // mount + on the Refresh button, so we optimize for wall-clock.
     const [
-      healthRes, queueRes, speciesRes, regsMatrixRes,
+      healthRes, pipelineRes, queueRes, speciesRes, regsMatrixRes,
       trainingRes, categoriesRes, usersRes, recentRes,
     ] = await Promise.allSettled([
       fetchHealth(),
+      fetchPipeline(),
       fetchActionQueue(),
       fetchSpeciesCoverage(),
       fetchRegsMatrix(),
@@ -90,6 +92,7 @@ function useDashboardData() {
     };
 
     const health     = pick(healthRes);
+    const pipeline   = pick(pipelineRes);
     const queue      = pick(queueRes);
     const species    = pick(speciesRes);
     const regsMatrix = pick(regsMatrixRes);
@@ -102,11 +105,13 @@ function useDashboardData() {
       loading: false,
       refreshedAt: new Date().toISOString(),
       errors: {
-        health: health.err, queue: queue.err, species: species.err,
-        regsMatrix: regsMatrix.err, training: training.err,
-        categories: categories.err, users: users.err, recent: recent.err,
+        health: health.err, pipeline: pipeline.err, queue: queue.err,
+        species: species.err, regsMatrix: regsMatrix.err,
+        training: training.err, categories: categories.err,
+        users: users.err, recent: recent.err,
       },
       health: health.value,
+      pipeline: pipeline.value,
       queue: queue.value,
       species: species.value,
       regsMatrix: regsMatrix.value,
@@ -174,6 +179,146 @@ async function fetchHealth() {
     pendingBundles: bundles.ok ? bundles.rows.length : 0,
     lastAiDraft: lastAi?.drafted_at || null,
     lastAiDraftSpecies: lastAi?.species_id || null,
+  };
+}
+
+/* Training-data pipeline — how much new verified training data has
+   landed SINCE the last model was published. Answers the confidence
+   question "is my testing actually adding to the next model?" without
+   the admin having to guess. Also breaks down by source so you can
+   see what's coming from admin uploads vs. real user Fish-ID
+   corrections and confirmations. */
+async function fetchPipeline() {
+  const c = client();
+  if (!c) throw new Error('supabase not configured');
+
+  // Reference point: wall-clock time the current model was published.
+  // Priority order:
+  //   1. models-published/current.json's published_at (authoritative —
+  //      that's when the mobile app actually started serving the model)
+  //   2. model_versions row's imported_at (fallback if the manifest
+  //      is missing / older schema)
+  //   3. null (no model yet — count all-time)
+  let sinceIso = null;
+  let sinceLabel = 'all time';
+  let modelVersion = null;
+  try {
+    const url = publishedManifestUrl();
+    if (url) {
+      const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-store' });
+      if (resp.ok) {
+        const j = await resp.json();
+        if (j?.published_at) {
+          sinceIso = j.published_at;
+          modelVersion = j?.version_name || null;
+        }
+      }
+    }
+  } catch { /* best-effort */ }
+  if (!sinceIso) {
+    const prod = await getProductionModel().catch(() => null);
+    if (prod?.row?.imported_at) {
+      sinceIso = prod.row.imported_at;
+      modelVersion = prod.row.version_name || modelVersion;
+    }
+  }
+  if (sinceIso) {
+    sinceLabel = `since ${modelVersion || 'last publish'}`;
+  }
+
+  const now = Date.now();
+  const dayIso   = new Date(now -      86400_000).toISOString();
+  const weekIso  = new Date(now -  7 * 86400_000).toISOString();
+  const monthIso = new Date(now - 30 * 86400_000).toISOString();
+
+  // HEAD counts — verified rows only (that's the pool that ends up
+  // in the next export). Every filter fires in parallel.
+  const cnt = (fn) => fn.then(r => r.count || 0);
+  const baseSince = () => {
+    let q = c.from('training_images')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'verified');
+    if (sinceIso) q = q.gt('uploaded_at', sinceIso);
+    return q;
+  };
+  const baseAll = () => c.from('training_images')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'verified');
+  const baseWindow = (isoFloor) => c.from('training_images')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'verified')
+    .gt('uploaded_at', isoFloor);
+
+  const [
+    total,
+    newSince,
+    day24,
+    week7,
+    month30,
+    ownerSince,
+    confirmSince,
+    correctSince,
+    recentRows,
+  ] = await Promise.all([
+    cnt(baseAll()),
+    cnt(baseSince()),
+    cnt(baseWindow(dayIso)),
+    cnt(baseWindow(weekIso)),
+    cnt(baseWindow(monthIso)),
+    cnt(baseSince().eq('source', 'owner_upload')),
+    cnt(baseSince().eq('source', 'model_confirmation')),
+    cnt(baseSince().eq('source', 'model_correction')),
+    // Recent rows for the leaderboard + spark bar. Capped at 1000
+    // to keep the payload sane on high-volume projects; anything
+    // over that would need server-side aggregation anyway.
+    (() => {
+      let q = c.from('training_images')
+        .select('species_id, source, uploaded_at')
+        .eq('status', 'verified')
+        .order('uploaded_at', { ascending: false })
+        .limit(1000);
+      if (sinceIso) q = q.gt('uploaded_at', sinceIso);
+      return q.then(r => r.data || []);
+    })(),
+  ]);
+
+  // Species leaderboard — who contributed the most new rows since publish.
+  const bySpecies = new Map();
+  for (const r of recentRows) {
+    if (!r.species_id) continue;
+    bySpecies.set(r.species_id, (bySpecies.get(r.species_id) || 0) + 1);
+  }
+  const topSpecies = Array.from(bySpecies.entries())
+    .map(([id, count]) => ({
+      speciesId: id,
+      commonName: SPECIES.find(s => s.id === id)?.commonName || id,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  // Latest upload timestamp — proves the pipeline is actually alive
+  // ("last photo added 4 min ago" reads more convincingly than a
+  // static number).
+  const lastUploadedAt = recentRows[0]?.uploaded_at || null;
+
+  return {
+    hasPublishedModel: !!sinceIso,
+    sinceIso,
+    sinceLabel,
+    modelVersion,
+    total,
+    newSincePublish: sinceIso ? newSince : total,
+    last24h:  day24,
+    last7d:   week7,
+    last30d:  month30,
+    bySource: {
+      owner:        ownerSince,
+      confirmation: confirmSince,
+      correction:   correctSince,
+    },
+    topSpecies,
+    lastUploadedAt,
   };
 }
 
@@ -465,6 +610,9 @@ export default function HomeDashboard({ onGoTab }) {
 
       <HealthStrip data={state.health} err={state.errors.health} loading={state.loading} />
 
+      <PipelinePanel data={state.pipeline} err={state.errors.pipeline}
+                     loading={state.loading} onGoTab={onGoTab} />
+
       <ActionQueue data={state.queue} err={state.errors.queue}
                    loading={state.loading} onGoTab={onGoTab} />
 
@@ -541,6 +689,143 @@ function LoadingLine() {
     <div style={{ padding: 12, background: T.parchmentDeep, borderRadius: 8,
                   color: T.inkMute, fontSize: 12, textAlign: 'center' }}>
       Loading…
+    </div>
+  );
+}
+
+/* ---------- Training pipeline (since last publish) ---------- */
+function PipelinePanel({ data, err, loading, onGoTab }) {
+  const subtitle = data?.hasPublishedModel
+    ? `New verified training data since ${data.modelVersion || 'the last model'} went live. Every count below rolls into the next Colab export.`
+    : `No model published yet — every verified row below is queued for the first export.`;
+  return (
+    <Section title="Training data pipeline" subtitle={subtitle}>
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <Card style={{ padding: 12, display: 'grid', gap: 12 }}>
+          {/* Headline: new-since-publish + last-uploaded-at proof. */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 8,
+          }}>
+            <BigStat
+              label={data.hasPublishedModel ? 'New since last publish' : 'Verified photos (all time)'}
+              value={data.newSincePublish}
+              tone={data.newSincePublish > 0 ? 'ok' : 'neutral'} />
+            <BigStat
+              label="Last 24 hours"
+              value={data.last24h}
+              tone={data.last24h > 0 ? 'ok' : 'neutral'} />
+            <BigStat
+              label="Last 7 days"
+              value={data.last7d}
+              tone={data.last7d > 0 ? 'ok' : 'neutral'} />
+            <BigStat
+              label="Last 30 days"
+              value={data.last30d}
+              muted />
+            <BigStat
+              label="Verified pool (all time)"
+              value={data.total}
+              muted />
+          </div>
+
+          {/* Provenance — this is the answer to "does user testing
+              contribute to the next model?" spelled out on-screen. */}
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: 1.2, color: T.inkMute,
+                          fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+              Source breakdown{data.hasPublishedModel ? ' — since last publish' : ''}
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+              gap: 8,
+            }}>
+              <SourceTile
+                label="Admin uploads"
+                value={data.bySource.owner}
+                hint="Photos you upload from the Training tab (or Colab import)." />
+              <SourceTile
+                label="User Fish-ID confirmations"
+                value={data.bySource.confirmation}
+                hint="Anglers tapped ✓ on the model's suggestion." />
+              <SourceTile
+                label="User Fish-ID corrections"
+                value={data.bySource.correction}
+                hint="Anglers picked a different species than the model suggested." />
+            </div>
+          </div>
+
+          {/* Species leaderboard — what's growing fastest. */}
+          {data.topSpecies.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: 1.2, color: T.inkMute,
+                            fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+                Top species by new photos{data.hasPublishedModel ? ' since publish' : ''}
+              </div>
+              <div style={{ display: 'grid', gap: 4 }}>
+                {data.topSpecies.map(sp => (
+                  <div key={sp.speciesId} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 8px', background: T.parchmentDeep,
+                    borderRadius: 6, fontSize: 12,
+                  }}>
+                    <span style={{ fontWeight: 700, color: T.ink, flex: 1,
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {sp.commonName}
+                    </span>
+                    <span style={{ color: T.brass, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                      +{sp.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Freshness proof + jump-to-Training CTA. */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            paddingTop: 4, borderTop: `1px solid ${T.cardEdge}`,
+          }}>
+            <div style={{ fontSize: 11, color: T.inkMute, flex: 1 }}>
+              {data.lastUploadedAt
+                ? <>Last photo added <strong style={{ color: T.brass }}>{relativeTime(data.lastUploadedAt)}</strong>. Ready-for-export pool: {data.newSincePublish} rows.</>
+                : (data.hasPublishedModel
+                    ? 'Nothing new since the last publish yet.'
+                    : 'No verified rows yet.')}
+            </div>
+            <GhostButton onClick={() => onGoTab?.('training')}
+                         style={{ padding: '6px 12px', fontSize: 11 }}>
+              Open Training
+            </GhostButton>
+          </div>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+function SourceTile({ label, value, hint }) {
+  return (
+    <div style={{
+      background: T.parchmentDeep, borderRadius: 8, padding: '10px 12px',
+      border: `1px solid ${T.cardEdge}`,
+    }}>
+      <div style={{ fontSize: 10, letterSpacing: 1.2, color: T.inkMute,
+                    fontWeight: 800, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 900,
+                    color: value > 0 ? T.brass : T.inkSoft, marginTop: 2 }}>
+        {value || 0}
+      </div>
+      <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4, lineHeight: 1.35 }}>
+        {hint}
+      </div>
     </div>
   );
 }
