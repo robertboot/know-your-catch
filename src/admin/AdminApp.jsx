@@ -339,9 +339,17 @@ function SpeciesTab({ detailView, setDetailView }) {
   // 'active' | 'deactivated' | 'all' — default 'active' since most
   // review passes only care about live species.
   const [statusFilter, setStatusFilter] = useState('active');
+  // 'alpha' | 'category' — category groups species by their category
+  // (in categories-store sort_order) and orders by common name within
+  // each group. Alpha is a flat A-Z.
+  const [sortMode, setSortMode] = useState('alpha');
   // Species tab now has two sub-panels: the existing species list and
   // the new suggestion queue where user-submitted custom species land.
   const [panel, setPanel] = useState('list');
+  // Live categories — used both by SpeciesForm dropdown (already
+  // there) and by the "sort by category" ordering.
+  const [cats, setCats] = useState(() => getCategories());
+  useEffect(() => subscribeCategoriesStore(() => setCats(getCategories())), []);
 
   // Hoisted ABOVE the panel === 'suggestions' early return so hook
   // count stays constant across sub-tab switches. Previously this
@@ -349,11 +357,22 @@ function SpeciesTab({ detailView, setDetailView }) {
   // ("Rendered fewer hooks than expected") whenever an admin toggled
   // to Suggestions and back. The sort is cheap so computing it on
   // the Suggestions branch too is a non-issue.
-  const sorted = useMemo(() =>
-    [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName)),
+  const sorted = useMemo(() => {
+    const catOrder = Object.fromEntries(cats.map((c, i) => [c.id, i]));
+    return [...SPECIES].sort((a, b) => {
+      if (sortMode === 'category') {
+        // Unknown categories go to the end so a stale/missing category
+        // doesn't hide the row up top.
+        const rankA = catOrder[a.category] ?? 999;
+        const rankB = catOrder[b.category] ?? 999;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+      return a.commonName.localeCompare(b.commonName);
+    });
     // Re-sort when SPECIES changes (add / edit lands via species-store notify)
-    [SPECIES.length, SPECIES.map(s => s.id + (s.active === false ? ':d' : '')).join(',')]
-  );
+    // or when the category order / sort mode changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [SPECIES.length, SPECIES.map(s => s.id + (s.active === false ? ':d' : '')).join(','), sortMode, cats]);
 
   if (panel === 'suggestions') {
     return (
@@ -414,12 +433,21 @@ function SpeciesTab({ detailView, setDetailView }) {
           label={`All · ${sorted.length}`} color={T.brass}
         />
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           type="search" placeholder="Filter by name, scientific, or id…"
           value={filter} onChange={e => setFilter(e.target.value)}
           style={{ ...inputStyle, flex: 1, minWidth: 200 }}
         />
+        <select
+          value={sortMode}
+          onChange={e => setSortMode(e.target.value)}
+          style={{ ...inputStyle, padding: '10px 12px', fontSize: 12, flexShrink: 0 }}
+          title="Sort order"
+        >
+          <option value="alpha">Sort: A-Z</option>
+          <option value="category">Sort: Category</option>
+        </select>
         <PrimaryButton
           onClick={() => setDetailView({ kind: 'species-edit', id: null, title: 'Add species' })}
           style={{ padding: '10px 14px', flexShrink: 0 }}
