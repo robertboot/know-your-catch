@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
-  JURISDICTIONS, SPECIES, REGULATIONS,
+  JURISDICTIONS, SPECIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
 import { saveState } from './storage.js';
@@ -73,8 +73,8 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
   const heroMaxWidth = size === 'phone' ? 360 : size === 'tablet' ? 480 : 560;
   const heroHeight   = size === 'phone' ? 220 : size === 'tablet' ? 300 : 340;
   const fallbackSize = size === 'phone' ? 100 : 200;
-  const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
-  const fedReg = REGULATIONS[id]?.fed_gulf;
+  const reg = jurisdiction ? regulationFor(id, jurisdiction.id).regulation : null;
+  const fedReg = regulationFor(id, 'fed_gulf').regulation;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
   const pb = state.pbs[id];
 
@@ -681,7 +681,7 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {filtered.map(s => {
-          const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+          const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
           return (
             <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
               <SpeciesImage species={s} size={38} />
@@ -717,7 +717,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
     if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
     const yourClosed = [], otherClosed = [], yourUnknown = [], otherUnknown = [];
     for (const s of SPECIES) {
-      const reg = REGULATIONS[s.id]?.[jurisdiction.id];
+      const reg = regulationFor(s.id, jurisdiction.id).regulation;
       const status = reg ? seasonState(reg.open).status : 'unknown';
       const isFav = favSet.has(s.id);
       const row = { s, reg };
@@ -891,7 +891,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   const reg          = regResult.regulation;
   const regRow       = regResult.row || null; // raw Supabase row when source='verified'
   const regSource    = regResult.source;
-  const fedReg = REGULATIONS[id]?.fed_gulf;
+  const fedReg = regulationFor(id, 'fed_gulf').regulation;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
   const pb = state.pbs?.[id];
   return (
@@ -986,7 +986,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
     const list = SPECIES
       .filter(s => s.active !== false)
       .map(s => {
-        const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+        const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
         const status = reg ? seasonState(reg.open).status : 'unknown';
         return { s, reg, status };
       });
@@ -3243,7 +3243,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   // so it works airplane-mode. Absent regs default to a neutral
   // "check with the agency" state — never say "legal" when we don't
   // know.
-  const legalityReg = jurisdiction && speciesId ? REGULATIONS[speciesId]?.[jurisdiction.id] : null;
+  const legalityReg = jurisdiction && speciesId ? regulationFor(speciesId, jurisdiction.id).regulation : null;
   const legalitySeason = legalityReg ? seasonState(legalityReg.open) : null;
   const legalityChips = [];
   if (legalityReg) {

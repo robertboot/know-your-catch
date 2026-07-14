@@ -8,9 +8,10 @@ import {
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
-  JURISDICTIONS, CATEGORIES, SPECIES, REGULATIONS,
+  JURISDICTIONS, CATEGORIES, SPECIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
+import { regulationFor } from './regulations-store.js';
 import { defaultState, saveState } from './storage.js';
 import {
   speciesById, jurisdictionById, getComparison,
@@ -106,9 +107,14 @@ export function SplashScreen({
 const FEATURED_IDS = ['red_snapper', 'king_mackerel', 'gag_grouper', 'mahi', 'greater_amberjack', 'cobia', 'wahoo'];
 
 function regForSpecies(id, jurId) {
-  const byJur = REGULATIONS[id];
-  if (!byJur) return null;
-  return byJur[jurId] || byJur.fed_gulf || Object.values(byJur)[0] || null;
+  // Prefer the exact jurisdiction, then federal Gulf, then any
+  // verified/bundled row we can find. regulationFor() walks the
+  // verified Supabase overlay → bundled precedence per lookup.
+  const primary = regulationFor(id, jurId).regulation;
+  if (primary) return primary;
+  const fed = regulationFor(id, 'fed_gulf').regulation;
+  if (fed) return fed;
+  return null;
 }
 
 const STATUS_TEXT = {
@@ -865,7 +871,7 @@ export function IdentifyScreen({
   // Season status for a species in the current jurisdiction. Same
   // logic as Regulations list, returns { key, label, bg, fg }.
   const seasonForSpecies = (id) => {
-    const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
+    const reg = jurisdiction ? regulationFor(id, jurisdiction.id).regulation : null;
     if (!reg) return { key: 'unknown', label: 'Check', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
     const st = seasonState(reg.open).status;
     if (st === 'open')     return { key: 'open',     label: 'Open',     bg: 'rgba(52,211,153,0.14)', fg: '#5ee0ac' };
