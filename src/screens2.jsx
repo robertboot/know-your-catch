@@ -828,15 +828,19 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
         </>
       )}
 
-      {/* CONFIRM SOURCE: your-starred first, then the rest. */}
+      {/* Season varies — soft section for species whose season string
+          isn't cleanly parseable (rolling federal seasons, split-year
+          openings). With the fed fallback in regulationFor most rows
+          now resolve to real numbers; anything still here has genuine
+          text like "Verify with the agency". Presented as a footnote,
+          not a red flag. */}
       {totalUnknown > 0 && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
-            <AlertTriangle size={14} color={T.warn} />
-            <SectionLabel style={{ color: T.warn }}>Confirm source ({totalUnknown})</SectionLabel>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '18px 2px 8px' }}>
+            <SectionLabel style={{ color: T.inkMute }}>Season varies ({totalUnknown})</SectionLabel>
           </div>
-          <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, marginBottom: isTablet ? 16 : 12, lineHeight: 1.5, padding: isTablet ? '12px 14px' : '8px 10px', background: T.warnBg, borderRadius: 6, border: `1px solid ${T.warn}55` }}>
-            Flagged <strong>Confirm Source</strong> because we don't yet have verified status data for them in {jurisdiction ? jurisdiction.name : 'these waters'}. Check the official source before keeping any.
+          <div style={{ fontSize: isTablet ? 13 : 11, color: T.inkMute, marginBottom: isTablet ? 12 : 10, lineHeight: 1.5 }}>
+            Season windows shift year to year for these — tap for the current bag / size limit and a link to the {jurisdiction ? jurisdiction.agency || jurisdiction.name : 'agency'} page.
           </div>
           {buckets.yourUnknown.length > 0 && (
             <>
@@ -857,7 +861,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                {buckets.yourUnknown.map(row => renderRow(row, { status: 'unknown', accentBorder: T.warn }))}
+                {buckets.yourUnknown.map(row => renderRow(row, { status: 'unknown' }))}
               </div>
             </>
           )}
@@ -919,13 +923,14 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
       ) : !reg ? (
         <Card>
           <div style={{ color: T.inkMute, fontSize: isTablet ? 15 : 13, lineHeight: 1.5, marginBottom: 10 }}>
-            Not tracked in ReelIntel yet for {jurisdiction.name}. Check with
-            your state or federal fisheries agency before keeping this fish.
+            No regulation on file for {jurisdiction.name} yet. The link below
+            opens the {jurisdiction.agency || 'agency'} page for current bag,
+            size, and season limits.
           </div>
           <a
             href={s.hms
               ? 'https://www.fisheries.noaa.gov/topic/atlantic-highly-migratory-species'
-              : 'https://myfwc.com/fishing/saltwater/recreational/'}
+              : (jurisdiction.regsUrl || 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico')}
             target="_blank" rel="noopener noreferrer"
             style={{
               display: 'inline-block',
@@ -933,12 +938,24 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
               color: T.brass, textDecoration: 'underline',
             }}
           >
-            {s.hms ? 'Open NOAA HMS regs →' : 'Open FWC saltwater regs →'}
+            Open {s.hms ? 'NOAA HMS' : (jurisdiction.agency || 'agency')} regs →
           </a>
         </Card>
       ) : (
         <Card style={{ padding: isTablet ? 20 : undefined }}>
           <SectionLabel style={{ marginBottom: isTablet ? 12 : 8, fontSize: isTablet ? 13 : undefined }}>{jurisdiction.name}</SectionLabel>
+          {(regSource === 'verified-fed' || regSource === 'bundled-fed') && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              marginBottom: isTablet ? 14 : 10,
+              fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              color: T.brass, background: 'rgba(25, 212, 242, 0.08)',
+              padding: '3px 10px', borderRadius: 999,
+              border: `1px solid ${T.brass}55`,
+            }}>
+              FEDERAL GULF WATERS · {jurisdiction.name.toUpperCase()} DEFERS TO NOAA
+            </div>
+          )}
           {regSource === 'bundled' && (
             <div style={{
               display: 'inline-block', marginBottom: isTablet ? 14 : 10,
@@ -1019,7 +1036,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
     }}>{label}</button>
   );
 
-  const statusLabel = { unknown: 'Confirm Source', closed: 'Closed', upcoming: 'Opens soon', open: 'Open now' };
+  const statusLabel = { unknown: 'Season varies', closed: 'Closed', upcoming: 'Opens soon', open: 'Open now' };
 
   return (
     <div style={{ padding: '16px 16px' }}>

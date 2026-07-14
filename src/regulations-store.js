@@ -78,7 +78,20 @@ function overlayToRenderShape(row) {
 
 /** Read the current regulation for a (species, jurisdiction) pair
     with source provenance. Never returns a draft row on the mobile
-    app path — RLS blocks that at the DB. */
+    app path — RLS blocks that at the DB.
+
+    Precedence:
+      1. Verified overlay row for (species, jurisdiction)     → 'verified'
+      2. Bundled REGULATIONS[species][jurisdiction]           → 'bundled'
+      3. Fed fallback: verified overlay for (species,fed_gulf)→ 'verified-fed'
+      4. Fed fallback: bundled REGULATIONS[species][fed_gulf] → 'bundled-fed'
+      5. Nothing                                              → 'none'
+
+    The fed fallback matters because most Gulf recreational species
+    are caught in federal waters, and the state row is often just
+    "follow federal" — better to actually show the federal numbers
+    than to render a bare "confirm source" pill. Callers can look at
+    `.regulation._fromFed` to render a "Federal Gulf" chip. */
 export function regulationFor(speciesId, jurisdictionId) {
   if (!speciesId || !jurisdictionId) return { source: 'none', regulation: null };
   const overlayRow = _verified.get(speciesId)?.[jurisdictionId] || null;
@@ -86,10 +99,53 @@ export function regulationFor(speciesId, jurisdictionId) {
     return { source: 'verified', regulation: overlayToRenderShape(overlayRow), row: overlayRow };
   }
   const bundled = BUNDLED_REGS[speciesId]?.[jurisdictionId] || null;
-  if (bundled) {
+  if (bundled && hasAnyRegData(bundled)) {
     return { source: 'bundled', regulation: bundled, row: null };
   }
+  // Fed fallback — only when we're being asked about a STATE jurisdiction
+  // (fed_gulf falling back to itself would loop).
+  if (jurisdictionId !== 'fed_gulf') {
+    const fedVerified = _verified.get(speciesId)?.fed_gulf || null;
+    if (fedVerified) {
+      return {
+        source: 'verified-fed',
+        regulation: { ...overlayToRenderShape(fedVerified), _fromFed: true },
+        row: fedVerified,
+      };
+    }
+    const fedBundled = BUNDLED_REGS[speciesId]?.fed_gulf || null;
+    if (fedBundled && hasAnyRegData(fedBundled)) {
+      return {
+        source: 'bundled-fed',
+        regulation: { ...fedBundled, _fromFed: true },
+        row: null,
+      };
+    }
+  }
   return { source: 'none', regulation: null, row: null };
+}
+
+/** True when a regulation row carries at least one substantive
+    field the UI can render. A row that only has a placeholder
+    "check current season" open string and nothing else counts as
+    empty — the fed fallback should kick in. */
+function hasAnyRegData(reg) {
+  if (!reg) return false;
+  if (reg.minSize   != null) return true;
+  if (reg.maxSize   != null) return true;
+  if (reg.bagLimit  != null) return true;
+  if (reg.boatLimit != null) return true;
+  if (reg.vesselLimit != null) return true;
+  if (Array.isArray(reg.gear) && reg.gear.length > 0) return true;
+  if (reg.notes && reg.notes.trim()) return true;
+  if (reg.open) {
+    const o = String(reg.open).toLowerCase();
+    // Placeholder open strings don't count as data.
+    if (!/check current season|not federally managed|not managed|see state|follow state|verify with/i.test(o)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Full pull — pulls whatever RLS lets the caller see. For an

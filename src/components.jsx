@@ -103,8 +103,12 @@ export function StatusPill({ status, size = 'normal' }) {
     closed:   { label: 'CLOSED',      bg: T.closedBg, fg: T.closed,    shape: 'square' },
     upcoming: { label: 'OPENS SOON',  bg: T.warnBg,   fg: T.warn,      shape: 'triangle' },
     caution:  { label: 'VERIFY',      bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
-    unknown: { label: 'CONFIRM SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
-  }[status] || { label: 'CONFIRM SOURCE', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
+    // Unknown = season isn't cleanly parseable. Show a neutral "SEASON *"
+    // instead of a scary "CONFIRM SOURCE" so anglers see whatever data
+    // IS on file (min size, bag limit) rather than being told to leave.
+    // The asterisk hints at a footnote / source link nearby.
+    unknown:  { label: 'SEASON *',    bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
+  }[status] || { label: 'SEASON *',   bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
   const pad = size === 'small' ? '2px 8px' : size === 'large' ? '6px 14px' : '4px 10px';
   const fs = size === 'small' ? 10 : size === 'large' ? 13 : 11;
   const shape = m.shape === 'circle'
