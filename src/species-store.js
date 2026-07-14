@@ -23,6 +23,24 @@ import { client } from './supabase-client.js';
 const CACHE_KEY = 'kyc_species_overrides_v1';
 const PHOTOS_CACHE_KEY = 'kyc_species_photos_v1';
 
+/* KNOWN_SPECIES_COLUMNS — canonical list of columns on public.species.
+   upsertSpecies filters the outgoing payload against this list; any
+   snake_case key that isn't here is dropped with a console.warn.
+   Prevents an AI-Research-added field from breaking the whole save
+   when the DB schema hasn't caught up yet.
+
+   MUST STAY IN SYNC WITH:
+     supabase/species-tier-fields-schema.sql        (ALTER TABLE)
+     supabase/functions/research-species/index.ts   (KNOWN_RESEARCH_FIELDS,
+                                                     camelCase equivalent) */
+export const KNOWN_SPECIES_COLUMNS = [
+  'id', 'common_name', 'alt_names', 'scientific', 'category',
+  'key_ids', 'lookalikes', 'habitat', 'typical_size',
+  'typical_length_in', 'typical_weight_lb', 'world_record_lb',
+  'range_text', 'edibility', 'seasonality',
+  'reef_fish', 'hms', 'is_active',
+];
+
 // speciesId -> [{ url, credit, license, source, is_primary, sort_order, path }]
 const photoOverrides = new Map();
 
@@ -45,7 +63,7 @@ export function rowToSpecies(row) {
     typicalLengthIn: row.typical_length_in || '',
     typicalWeightLb: row.typical_weight_lb || '',
     worldRecordLb:   row.world_record_lb   || '',
-    geoRange:        row.geo_range         || '',
+    geoRange:        row.range_text        || '',
     edibility:       row.edibility         || '',
     seasonality:     row.seasonality       || '',
     reefFish:    row.reef_fish === true ? true : undefined,
@@ -74,7 +92,7 @@ export function speciesToRow(sp) {
     typical_length_in: sp.typicalLengthIn || null,
     typical_weight_lb: sp.typicalWeightLb || null,
     world_record_lb:   sp.worldRecordLb   || null,
-    geo_range:         sp.geoRange        || null,
+    range_text:        sp.geoRange        || null,
     edibility:         sp.edibility       || null,
     seasonality:       sp.seasonality     || null,
     reef_fish:         sp.reefFish === true,
@@ -282,12 +300,24 @@ export async function setPrimarySpeciesPhoto(photoId, speciesId) {
 
 /** Upsert a single species (JS shape) to Supabase. Only the admin
     calls this; RLS restricts writes to the admin email. On success,
-    updates cache + in-memory SPECIES + notifies. */
+    updates cache + in-memory SPECIES + notifies.
+
+    Whitelists the outgoing row against KNOWN_SPECIES_COLUMNS so an
+    experimental field the DB doesn't have yet (e.g. an AI-Research
+    return value we haven't migrated to a column) turns into a soft
+    console.warn instead of the whole save failing with "column
+    not found in schema cache". */
 export async function upsertSpecies(sp) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
-  const row = speciesToRow(sp);
-  const { error } = await c.from('species').upsert(row, { onConflict: 'id' });
+  const raw = speciesToRow(sp);
+  const filtered = {};
+  const known = new Set(KNOWN_SPECIES_COLUMNS);
+  for (const [k, v] of Object.entries(raw)) {
+    if (known.has(k)) filtered[k] = v;
+    else console.warn(`[species-upsert] dropped unknown column '${k}' — add to schema before persisting.`);
+  }
+  const { error } = await c.from('species').upsert(filtered, { onConflict: 'id' });
   if (error) return { ok: false, error: error.message };
   // Re-pull to keep the cache honest; cheap since the table is tiny.
   await refreshSpecies();

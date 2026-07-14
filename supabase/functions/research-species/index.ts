@@ -90,6 +90,22 @@ interface ResearchResult {
 
 const EDIBILITY_ALLOWED = new Set(['excellent', 'good', 'fair', 'poor']);
 
+/* Canonical camelCase whitelist of fields the client's species-store
+   knows how to persist. Filter the AI response through this before
+   returning so a rogue field the model invents (say the prompt gets
+   loosened later and it starts returning "gearBait") doesn't reach
+   the admin form or the DB. Kept in sync manually with:
+     src/species-store.js  KNOWN_SPECIES_COLUMNS  (snake_case DB
+                            equivalent — the two lists move together
+                            when the schema changes). */
+const KNOWN_RESEARCH_FIELDS = new Set<string>([
+  'scientific', 'category', 'altNames', 'habitat',
+  'keyIds', 'lookalikes',
+  'typicalLengthIn', 'typicalWeightLb', 'worldRecordLb',
+  'geoRange', 'edibility', 'seasonality',
+  'sourceNote',
+]);
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST')    return jsonResponse({ error: 'method_not_allowed' }, 405);
@@ -323,5 +339,11 @@ Return the JSON object only.`;
   }
   result.sourceNote = notes.length ? notes.join(' ') : undefined;
 
-  return jsonResponse(result);
+  // Final defense — drop any keys the schema doesn't know about. Also
+  // strips the model returning something the interface didn't declare.
+  const outgoing: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(result)) {
+    if (KNOWN_RESEARCH_FIELDS.has(k)) outgoing[k] = v;
+  }
+  return jsonResponse(outgoing);
 });
