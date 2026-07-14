@@ -24,6 +24,7 @@ import {
 } from '../species-store.js';
 import TrainingTab from './TrainingTab.jsx';
 import NotificationsTab from './NotificationsTab.jsx';
+import HomeDashboard from './HomeDashboard.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
   iosAppIconPublicUrl, uploadIosAppIcon, deleteIosAppIcon, getIosAppIconMeta,
@@ -276,7 +277,10 @@ function Loading() {
    Signed-in shell — tabs + active tab content
    ============================================================ */
 function SignedInShell({ email, onExit }) {
-  const [tab, setTab] = useState('species'); // 'species' | 'branding' | 'categories'
+  // Default landing = Dashboard so the admin sees the health/action
+  // queue before anything else. Deep-linking into a specific tab
+  // still works from HomeDashboard tiles via `switchTab`.
+  const [tab, setTab] = useState('dashboard');
   const [detailView, setDetailView] = useState(null); // e.g. { kind:'species-edit', id }
 
   const signOut = async () => { await client()?.auth?.signOut(); };
@@ -299,6 +303,7 @@ function SignedInShell({ email, onExit }) {
           </div>
         </>
       )}
+      {tab === 'dashboard'     && !detailView && <HomeDashboard onGoTab={switchTab} />}
       {tab === 'species'       && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
       {tab === 'regulations'   && !detailView && <RegulationsTab />}
       {tab === 'branding'      && !detailView && <BrandingTab />}
@@ -311,6 +316,7 @@ function SignedInShell({ email, onExit }) {
 
 function TabBar({ tab, onTab }) {
   const tabs = [
+    { id: 'dashboard',     label: 'Dashboard' },
     { id: 'species',       label: 'Species' },
     { id: 'regulations',   label: 'Regulations' },
     { id: 'training',      label: 'Training' },
@@ -319,7 +325,8 @@ function TabBar({ tab, onTab }) {
     { id: 'branding',      label: 'Branding' },
   ];
   return (
-    <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
+    <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`,
+                  marginBottom: 4, flexWrap: 'wrap' }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onTab(t.id)} style={{
           background: 'transparent', border: 'none',
