@@ -693,13 +693,20 @@ function ReviewPanel() {
 
   const applyCropSave = async ({ bbox }) => {
     if (!cropRow) return;
-    const r = await saveCropRecover(cropRow.id, bbox);
+    if (!bbox) { setError('crop returned no bbox'); closeCrop(); return; }
+    const priorId = cropRow.id;
+    const priorStatus = cropRow.status;
+    const priorReason = cropRow.rejection_reason;
+    // Close the modal first so the TrainingTab error banner (rendered
+    // behind the modal at z-index 0) is visible if the save fails.
+    // Was previously an early-return-without-close, which made every
+    // save error look like a dead button.
+    closeCrop();
+    const r = await saveCropRecover(priorId, bbox);
     if (!r.ok) { setError(r.error || 'crop save failed'); return; }
     console.log('[review-bulk]', new Date().toISOString(), 'crop-recover', {
-      id: cropRow.id, bbox,
-      priorStatus: cropRow.status, priorReason: cropRow.rejection_reason,
+      id: priorId, bbox, priorStatus, priorReason,
     });
-    closeCrop();
     refresh();
   };
 

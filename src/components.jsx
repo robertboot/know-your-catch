@@ -1746,6 +1746,17 @@ export function CropStep({
     const src = computeSourceRect();
     if (!src) return;
     setBusy(true);
+    // The bbox is source-of-truth for callers that just want the crop
+    // region (e.g. the admin Crop-to-recover flow, which stores the
+    // bbox and lets the training pipeline crop later). We compute it
+    // first so we can always deliver it, even if the pixel-baking step
+    // below fails for a cross-origin source.
+    const bbox = {
+      x: src.sx / natural.w,
+      y: src.sy / natural.h,
+      w: src.sw / natural.w,
+      h: src.sh / natural.h,
+    };
     try {
       // Destination canvas matches the CLAMPED source's aspect ratio
       // scaled so the longer side is 512. This was the stretching bug:
@@ -1762,24 +1773,30 @@ export function CropStep({
       canvas.height = outH;
       const ctx = canvas.getContext('2d');
       // Load fresh image element (imgRef may be a display copy).
+      // crossOrigin='anonymous' keeps Supabase-signed URLs from
+      // tainting the canvas — without it, toDataURL below throws a
+      // SecurityError and the caller sees a silent no-op. Supabase
+      // Storage serves the required CORS headers on signed URLs.
       const src2 = await new Promise((resolve, reject) => {
         const im = new Image();
+        im.crossOrigin = 'anonymous';
         im.onload = () => resolve(im);
         im.onerror = reject;
         im.src = imageSrc;
       });
       ctx.drawImage(src2, src.sx, src.sy, src.sw, src.sh, 0, 0, outW, outH);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      const bbox = {
-        x: src.sx / natural.w,
-        y: src.sy / natural.h,
-        w: src.sw / natural.w,
-        h: src.sh / natural.h,
-      };
       onConfirm({ dataUrl, bbox });
     } catch {
-      // Fall through to skip on failure — don't strand the user.
-      onSkip && onSkip();
+      // Canvas draw or toDataURL failed — most likely a CORS taint
+      // that the crossOrigin hint above couldn't clear. Callers that
+      // only need bbox (e.g. training crop-to-recover) still work with
+      // a null dataUrl; callers that need pixels can fall back to skip.
+      try {
+        onConfirm({ dataUrl: null, bbox });
+      } catch {
+        onSkip && onSkip();
+      }
     } finally {
       setBusy(false);
     }
