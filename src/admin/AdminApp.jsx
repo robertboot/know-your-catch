@@ -873,17 +873,30 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
       background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
+      {/* Flex column with a viewport-relative height cap so the modal
+          can't grow past the screen when Research populates a long
+          habitat + 5 keyIds + 5 lookalikes. Body scrolls, footer
+          stays pinned. */}
       <div onClick={e => e.stopPropagation()} style={{
         background: T.card, border: `1px solid ${T.cardEdge}`,
-        borderRadius: 12, padding: 18, maxWidth: 500, width: '100%',
+        borderRadius: 12, maxWidth: 500, width: '100%',
+        maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
       }}>
-        <H1 size={18} style={{ marginBottom: 4 }}>Quick Add species</H1>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
-          Enough to start uploading training photos. Habitat, lookalikes,
-          illustration, and the rest can be filled in later via Edit.
+        <div style={{ padding: '18px 18px 12px', flexShrink: 0 }}>
+          <H1 size={18} style={{ marginBottom: 4 }}>Quick Add species</H1>
+          <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+            Enough to start uploading training photos. Habitat, lookalikes,
+            illustration, and the rest can be filled in later via Edit.
+          </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{
+          display: 'grid', gap: 10,
+          padding: '0 18px 12px',
+          flex: 1, minHeight: 0, overflowY: 'auto',
+        }}>
           <div>
             <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>
               Common name <span style={{ color: T.warn }}>*</span>
@@ -1044,28 +1057,37 @@ function QuickAddSpeciesModal({ existingIds, onCancel, onSaved }) {
           {error && (
             <div role="alert" style={{ fontSize: 12, color: T.closed }}>{error}</div>
           )}
+        </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onCancel}
-              style={{
-                background: 'transparent', border: 'none', color: T.inkMute,
-                fontSize: 12, cursor: 'pointer', padding: '8px 4px',
-              }}
-            >
-              Add more details later →
-            </button>
-            <div style={{ flex: 1 }} />
-            <GhostButton onClick={onCancel}>Cancel</GhostButton>
-            <PrimaryButton
-              onClick={save}
-              disabled={busy || missingRequired || idCollision}
-              style={{ padding: '8px 16px' }}
-            >
-              {busy ? 'Saving…' : 'Add species'}
-            </PrimaryButton>
-          </div>
+        {/* Sticky footer — always visible regardless of how much
+            content the research populated. Bottom border shim mirrors
+            the modal's own edge for visual anchoring. */}
+        <div style={{
+          padding: '12px 18px',
+          borderTop: `1px solid ${T.cardEdge}`,
+          background: T.card,
+          display: 'flex', gap: 8, alignItems: 'center',
+          flexShrink: 0,
+        }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              background: 'transparent', border: 'none', color: T.inkMute,
+              fontSize: 12, cursor: 'pointer', padding: '4px 4px',
+            }}
+          >
+            Add more details later →
+          </button>
+          <div style={{ flex: 1 }} />
+          <GhostButton onClick={onCancel}>Cancel</GhostButton>
+          <PrimaryButton
+            onClick={save}
+            disabled={busy || missingRequired || idCollision}
+            style={{ padding: '8px 16px' }}
+          >
+            {busy ? 'Saving…' : 'Add species'}
+          </PrimaryButton>
         </div>
       </div>
     </div>
@@ -1105,8 +1127,86 @@ function SpeciesForm({ initial, onDone, onCancel }) {
   const [hms, setHms]                 = useState(!!initial?.hms);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+  const [researching, setResearching] = useState(false);
+  const [sourceNote, setSourceNote]   = useState('');
 
   const isNew = !initial;
+
+  // Uniqueness-preserving union for comma-separated list fields.
+  const unionCsv = (existingText, incomingArr) => {
+    const cur = existingText.split(',').map(s => s.trim()).filter(Boolean);
+    const seen = new Set(cur.map(x => x.toLowerCase()));
+    for (const v of incomingArr) {
+      const trimmed = String(v || '').trim();
+      if (!trimmed) continue;
+      if (seen.has(trimmed.toLowerCase())) continue;
+      seen.add(trimmed.toLowerCase());
+      cur.push(trimmed);
+    }
+    return cur.join(', ');
+  };
+
+  // Uniqueness-preserving union for newline-separated list (keyIds).
+  const unionLines = (existingText, incomingArr) => {
+    const cur = existingText.split('\n').map(s => s.trim()).filter(Boolean);
+    const seen = new Set(cur.map(x => x.toLowerCase()));
+    for (const v of incomingArr) {
+      const trimmed = String(v || '').trim();
+      if (!trimmed) continue;
+      if (seen.has(trimmed.toLowerCase())) continue;
+      seen.add(trimmed.toLowerCase());
+      cur.push(trimmed);
+    }
+    return cur.join('\n');
+  };
+
+  const doResearch = async () => {
+    if (researching || !commonName.trim()) return;
+    setError('');
+
+    // Fetch first — until we know what the model returned we can't
+    // tell whether any overwrite would actually happen.
+    setResearching(true);
+    const r = await researchSpecies({
+      commonName: commonName.trim(),
+      scientificName: scientific.trim(),
+    });
+    setResearching(false);
+    if (!r.ok) { setError(r.error || 'research failed'); return; }
+    const d = r.data || {};
+
+    // Compute which scalar fields the AI has content for AND which of
+    // ours already have content. The list of collisions drives the
+    // overwrite prompt.
+    const collisions = [];
+    if (d.scientific && scientific.trim())        collisions.push('scientific');
+    if (d.category   && category)                  collisions.push('category');
+    if ((d.habitat || '').trim() && habitat.trim()) collisions.push('habitat');
+    const overwriteAll = collisions.length > 0
+      ? window.confirm(
+          `Some fields already have values (${collisions.join(', ')}). ` +
+          `Overwrite with AI suggestions? Cancel = keep your text values, ` +
+          `just add new alt names and lookalikes.`
+        )
+      : true;
+
+    // Apply. For scalars: overwrite iff (empty) OR (user said yes).
+    // For list fields (altNames, keyIds, lookalikes): if overwrite=yes,
+    // replace with AI values; if no, MERGE union of existing + AI so
+    // "just add new stuff" works.
+    if (d.scientific && (overwriteAll || !scientific.trim())) setScientific(d.scientific);
+    if (d.category   && (overwriteAll || !category))          setCategory(d.category);
+    if (d.habitat    && (overwriteAll || !habitat.trim()))     setHabitat(d.habitat);
+
+    const aiAlt   = Array.isArray(d.altNames)   ? d.altNames   : [];
+    const aiCues  = Array.isArray(d.keyIds)     ? d.keyIds     : [];
+    const aiLooks = Array.isArray(d.lookalikes) ? d.lookalikes : [];
+    setAltNames(overwriteAll   ? aiAlt.join(', ')   : unionCsv(altNames, aiAlt));
+    setKeyIds(overwriteAll     ? aiCues.join('\n')  : unionLines(keyIds, aiCues));
+    setLookalikes(overwriteAll ? aiLooks.join(', ') : unionCsv(lookalikes, aiLooks));
+
+    setSourceNote(d.sourceNote || '');
+  };
 
   const save = async () => {
     setError('');
@@ -1136,6 +1236,42 @@ function SpeciesForm({ initial, onDone, onCancel }) {
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      {/* AI Research — fills category / habitat / keyIds / altNames /
+          lookalikes for the current common name. Same pipeline the
+          Quick Add modal uses. Overwrite-confirm gates any field
+          already populated; cancel-to-merge for list fields. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={doResearch}
+          disabled={researching || !commonName.trim()}
+          style={{
+            background: 'transparent',
+            border: `1.5px solid ${researching || !commonName.trim() ? T.inkMute : '#5ecdf2'}`,
+            color: researching || !commonName.trim() ? T.inkMute : '#5ecdf2',
+            borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 800,
+            cursor: researching || !commonName.trim() ? 'not-allowed' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          {researching ? <>Researching {commonName || 'species'}…</> : <>✨ Research with AI</>}
+        </button>
+        <div style={{ fontSize: 11, color: T.inkMute, flex: 1, minWidth: 200 }}>
+          Fills category, habitat, key IDs, alt names, and lookalikes from Claude.
+          Every field stays editable — nothing auto-saves.
+        </div>
+      </div>
+      {sourceNote && (
+        <div style={{
+          padding: '8px 10px', borderRadius: 8,
+          background: 'rgba(94,205,242,0.08)',
+          border: `1px solid rgba(94,205,242,0.35)`,
+          fontSize: 11, color: T.inkSoft, lineHeight: 1.5,
+        }}>
+          <strong style={{ color: '#5ecdf2', letterSpacing: 0.5 }}>AI-SUGGESTED.</strong>
+          {' '}Review each field before saving. {sourceNote}
+        </div>
+      )}
       <Card>
         <SectionLabel style={{ marginBottom: 6 }}>id (immutable key)</SectionLabel>
         <input
