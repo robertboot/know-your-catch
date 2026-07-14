@@ -1501,9 +1501,18 @@ export function CropStep({
   const [pan, setPan] = React.useState({ x: 0, y: 0 }); // translation in container px
   const [busy, setBusy] = React.useState(false);
   // Aspect ratio: 1 = square (default), 3/4 = portrait, 4/3 = landscape,
-  // null = free (crop frame fills the container's usable area).
+  // null = free (crop frame is user-shaped via corner drag handles).
   // Options are exposed as tappable chips above the crop frame.
   const [aspect, setAspect] = React.useState(1);
+  // User-shaped crop rectangle, only used when aspect === null. Stored
+  // in container-relative pixels. Initialized when the user first
+  // switches to Free; cleared when they pick a locked aspect again.
+  const [freeRect, setFreeRect] = React.useState(null);
+  // Which crop-handle is currently being dragged, or null when none.
+  // Set from pointerdown on a handle; consumed by pointermove; cleared
+  // on pointerup. Also used to short-circuit the pan-image gesture so
+  // the same finger doesn't do two things at once.
+  const activeHandleRef = React.useRef(null);
 
   // Active pointer map keyed by pointerId → most recent {x,y}.
   const pointersRef = React.useRef(new Map());
@@ -1548,10 +1557,9 @@ export function CropStep({
   }, [natural, container]);
   const totalScale = fitScale * zoom;
 
-  // Crop frame — sized so it fits inside 80% of the smaller container
-  // edge, honoring the chosen aspect ratio (or falling back to 80% of
-  // the whole container when the user picked "Free").
-  const cropRect = React.useMemo(() => {
+  // Derived default crop rectangle — used when aspect is locked, and
+  // as the initial shape when the user first switches to Free.
+  const defaultCropRect = React.useMemo(() => {
     const pad = 0.8;
     const availW = container.w * pad;
     const availH = container.h * pad;
@@ -1559,7 +1567,6 @@ export function CropStep({
     if (aspect == null) {
       cw = availW; ch = availH;
     } else {
-      // Fit the aspect box inside the available area.
       if (availW / aspect <= availH) { cw = availW; ch = availW / aspect; }
       else                            { ch = availH; cw = availH * aspect; }
     }
@@ -1572,6 +1579,24 @@ export function CropStep({
       y: (container.h - ch) / 2,
     };
   }, [container, aspect]);
+
+  // When the user switches to Free, seed freeRect with the derived
+  // default so the frame appears in a sensible place. When they switch
+  // to a locked aspect, throw the free rect away (cropRect derives from
+  // container + aspect again). Container resize also re-seeds so the
+  // frame doesn't stay stuck at old-container dimensions.
+  React.useEffect(() => {
+    if (aspect == null) {
+      setFreeRect(defaultCropRect);
+    } else {
+      setFreeRect(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aspect, container.w, container.h]);
+
+  // Actual crop rectangle: Free mode uses freeRect (user-shaped);
+  // locked-aspect modes use the derived default.
+  const cropRect = (aspect == null && freeRect) ? freeRect : defaultCropRect;
 
   // Compute the source rectangle in original-image coords the crop
   // covers, clamped to the image bounds. When the pan/zoom would sample
@@ -1600,7 +1625,26 @@ export function CropStep({
     return { sx, sy, sw, sh };
   }, [natural, totalScale, container, pan, cropRect]);
 
+  // Handle-drag path (Free mode only) — dragging one of the four crop
+  // corners reshapes freeRect directly. Kept separate from the pan/
+  // zoom gesture so a handle drag never accidentally pans the image.
+  const beginHandleDrag = (corner) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!containerRef.current) return;
+    containerRef.current.setPointerCapture?.(e.pointerId);
+    activeHandleRef.current = {
+      pointerId: e.pointerId,
+      corner,               // 'tl' | 'tr' | 'bl' | 'br'
+      startClient: { x: e.clientX, y: e.clientY },
+      startRect: { ...cropRect },
+    };
+  };
+  const MIN_CROP = 60;
   const onPointerDown = (e) => {
+    // If a handle drag is active for this pointer, let its own move
+    // handler run instead of the pan/zoom path.
+    if (activeHandleRef.current?.pointerId === e.pointerId) return;
     if (!containerRef.current) return;
     containerRef.current.setPointerCapture?.(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1615,6 +1659,38 @@ export function CropStep({
     }
   };
   const onPointerMove = (e) => {
+    // Handle-drag path: reshape freeRect based on which corner is
+    // being pulled. Clamped to the container bounds and MIN_CROP so
+    // the frame can't collapse to zero or escape the viewport.
+    const h = activeHandleRef.current;
+    if (h && h.pointerId === e.pointerId) {
+      e.stopPropagation();
+      const dx = e.clientX - h.startClient.x;
+      const dy = e.clientY - h.startClient.y;
+      const s = h.startRect;
+      let nx = s.x, ny = s.y, nw = s.w, nh = s.h;
+      if (h.corner === 'tl') { nx = s.x + dx; ny = s.y + dy; nw = s.w - dx; nh = s.h - dy; }
+      if (h.corner === 'tr') {              ny = s.y + dy; nw = s.w + dx; nh = s.h - dy; }
+      if (h.corner === 'bl') { nx = s.x + dx;                nw = s.w - dx; nh = s.h + dy; }
+      if (h.corner === 'br') {                              nw = s.w + dx; nh = s.h + dy; }
+      // Enforce minimum size by re-anchoring against the OPPOSITE
+      // corner (the one not being dragged).
+      if (nw < MIN_CROP) {
+        if (h.corner === 'tl' || h.corner === 'bl') nx = s.x + s.w - MIN_CROP;
+        nw = MIN_CROP;
+      }
+      if (nh < MIN_CROP) {
+        if (h.corner === 'tl' || h.corner === 'tr') ny = s.y + s.h - MIN_CROP;
+        nh = MIN_CROP;
+      }
+      // Clamp to container bounds.
+      if (nx < 0) { nw += nx; nx = 0; }
+      if (ny < 0) { nh += ny; ny = 0; }
+      if (nx + nw > container.w) nw = container.w - nx;
+      if (ny + nh > container.h) nh = container.h - ny;
+      setFreeRect({ x: nx, y: ny, w: nw, h: nh });
+      return;
+    }
     if (!pointersRef.current.has(e.pointerId)) return;
     const prev = pointersRef.current.get(e.pointerId);
     const cur = { x: e.clientX, y: e.clientY };
@@ -1643,6 +1719,9 @@ export function CropStep({
     }
   };
   const onPointerUp = (e) => {
+    if (activeHandleRef.current?.pointerId === e.pointerId) {
+      activeHandleRef.current = null;
+    }
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) pinchRef.current = null;
     try { containerRef.current?.releasePointerCapture?.(e.pointerId); } catch {}
@@ -1775,6 +1854,35 @@ export function CropStep({
               <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, borderTop: '1px solid rgba(255,255,255,0.35)' }} />
               <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, borderTop: '1px solid rgba(255,255,255,0.35)' }} />
             </div>
+            {/* Corner drag handles — only in Free mode. Each handle is
+                a generous 32px hit target with a smaller visible white
+                dot so the touch area exceeds what fingers cover. */}
+            {aspect == null && [
+              { corner: 'tl', cx: cropRect.x,               cy: cropRect.y },
+              { corner: 'tr', cx: cropRect.x + cropRect.w, cy: cropRect.y },
+              { corner: 'bl', cx: cropRect.x,               cy: cropRect.y + cropRect.h },
+              { corner: 'br', cx: cropRect.x + cropRect.w, cy: cropRect.y + cropRect.h },
+            ].map(({ corner, cx, cy }) => (
+              <div
+                key={corner}
+                onPointerDown={beginHandleDrag(corner)}
+                style={{
+                  position: 'absolute',
+                  left: cx - 22, top: cy - 22,
+                  width: 44, height: 44,
+                  cursor: 'nwse-resize',
+                  touchAction: 'none',
+                  zIndex: 5,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <div style={{
+                  width: 18, height: 18, borderRadius: 9,
+                  background: '#ffffff',
+                  boxShadow: '0 0 0 2px #062330, 0 2px 6px rgba(0,0,0,0.55)',
+                }} />
+              </div>
+            ))}
             {/* Aspect-ratio chip row, floated over the top of the crop
                 area. Kept inside the container so it moves with rotation
                 and never falls under a keyboard on desktop. */}
