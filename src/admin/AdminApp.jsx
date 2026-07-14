@@ -25,6 +25,7 @@ import {
 import TrainingTab from './TrainingTab.jsx';
 import NotificationsTab from './NotificationsTab.jsx';
 import HomeDashboard from './HomeDashboard.jsx';
+import LegalTab from './LegalTab.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
   iosAppIconPublicUrl, uploadIosAppIcon, deleteIosAppIcon, getIosAppIconMeta,
@@ -310,6 +311,7 @@ function SignedInShell({ email, onExit }) {
       {tab === 'categories'    && !detailView && <CategoriesTab />}
       {tab === 'training'      && !detailView && <TrainingTab />}
       {tab === 'notifications' && !detailView && <NotificationsTab />}
+      {tab === 'legal'         && !detailView && <LegalTab />}
     </Chrome>
   );
 }
@@ -323,6 +325,7 @@ function TabBar({ tab, onTab }) {
     { id: 'notifications', label: 'Notifications' },
     { id: 'categories',    label: 'Categories' },
     { id: 'branding',      label: 'Branding' },
+    { id: 'legal',         label: 'Legal' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`,

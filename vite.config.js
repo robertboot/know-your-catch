@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { resolve } from 'node:path';
 
 // Base resolution:
 //  - KYC_BASE env override (e.g. './' for a CDN/relative preview build)
@@ -26,4 +27,19 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react()],
   server: { port: 5173, open: true },
+  build: {
+    rollupOptions: {
+      input: {
+        // Main SPA entry.
+        main:    resolve(__dirname, 'index.html'),
+        // Static privacy page. Registered as an input so Vite runs
+        // %VITE_SUPABASE_URL% / %VITE_SUPABASE_ANON_KEY% substitution
+        // in its <script> block — that script fetches the latest
+        // legal_docs row on load so admin edits appear without a
+        // redeploy. Falls back to the HTML shipped in the file if
+        // Supabase isn't reachable.
+        privacy: resolve(__dirname, 'privacy.html'),
+      },
+    },
+  },
 }));

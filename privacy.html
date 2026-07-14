@@ -84,10 +84,10 @@
     <span class="sub">Privacy</span>
   </header>
 
-  <h1>Privacy Policy</h1>
-  <div class="updated">Last updated: July 14, 2026</div>
+  <h1 id="doc-title">Privacy Policy</h1>
+  <div class="updated" id="doc-updated">Last updated: July 14, 2026</div>
 
-  <div class="card">
+  <div class="card" id="doc-body">
     <h2>1. Who we are</h2>
     <p>ReelIntel is a fishing app for the Gulf of Mexico built by ReelIntel LLC (&ldquo;ReelIntel,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;).</p>
     <p>Contact: <a href="mailto:support@reelintel.ai">support@reelintel.ai</a></p>
@@ -132,5 +132,50 @@
     <span><a href="https://reelintel.ai">reelintel.ai</a></span>
   </footer>
 </main>
+
+<script>
+  // Live-fetch the current privacy row from Supabase and swap in the
+  // admin-edited HTML if one exists. The bundled content above is the
+  // fallback — if Supabase is unreachable or the row hasn't been saved
+  // yet, the page still renders. Vite replaces the two %VITE_*%
+  // placeholders below at build time (see vite.config.js — privacy.html
+  // is registered as a Rollup input specifically so this substitution
+  // runs). If either is empty, we skip the fetch entirely.
+  (function () {
+    var url = '%VITE_SUPABASE_URL%';
+    var key = '%VITE_SUPABASE_ANON_KEY%';
+    if (!url || url.indexOf('%VITE') === 0 || !key || key.indexOf('%VITE') === 0) return;
+    var endpoint = url.replace(/\/$/, '') +
+      '/rest/v1/legal_docs?slug=eq.privacy&select=title,body_html,updated_at';
+    fetch(endpoint, {
+      headers: { apikey: key, Authorization: 'Bearer ' + key, Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var row = rows && rows[0];
+        if (!row) return;
+        if (row.title) {
+          document.title = row.title + ' · ReelIntel';
+          var t = document.getElementById('doc-title');
+          if (t) t.textContent = row.title;
+        }
+        if (row.updated_at) {
+          var d = new Date(row.updated_at);
+          if (!isNaN(d)) {
+            var u = document.getElementById('doc-updated');
+            if (u) u.textContent = 'Last updated: ' +
+              d.toLocaleDateString('en-US',
+                { month: 'long', day: 'numeric', year: 'numeric' });
+          }
+        }
+        if (row.body_html) {
+          var body = document.getElementById('doc-body');
+          if (body) body.innerHTML = row.body_html;
+        }
+      })
+      .catch(function () { /* leave the bundled fallback in place */ });
+  })();
+</script>
 </body>
 </html>
