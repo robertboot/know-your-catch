@@ -40,6 +40,14 @@ export function rowToSpecies(row) {
     lookalikes:  Array.isArray(row.lookalikes) ? row.lookalikes : [],
     habitat:     row.habitat || '',
     typicalSize: row.typical_size || '',
+    // Research-fill columns (nullable) — see
+    // supabase/species-research-fields.sql for the migration.
+    typicalLengthIn: row.typical_length_in || '',
+    typicalWeightLb: row.typical_weight_lb || '',
+    worldRecordLb:   row.world_record_lb   || '',
+    geoRange:        row.geo_range         || '',
+    edibility:       row.edibility         || '',
+    seasonality:     row.seasonality       || '',
     reefFish:    row.reef_fish === true ? true : undefined,
     hms:         row.hms === true ? true : undefined,
     // Soft-delete flag. `undefined` (older cached rows) is treated as
@@ -54,21 +62,27 @@ export function rowToSpecies(row) {
    values so unchanged columns aren't clobbered. */
 export function speciesToRow(sp) {
   const row = {
-    id:            sp.id,
-    common_name:   sp.commonName,
-    alt_names:     Array.isArray(sp.altNames) ? sp.altNames : [],
-    scientific:    sp.scientific || '',
-    category:      sp.category || '',
-    key_ids:       Array.isArray(sp.keyIds) ? sp.keyIds : [],
-    lookalikes:    Array.isArray(sp.lookalikes) ? sp.lookalikes : [],
-    habitat:       sp.habitat || '',
-    typical_size: sp.typicalSize || '',
-    reef_fish:     sp.reefFish === true,
-    hms:           sp.hms === true,
+    id:                sp.id,
+    common_name:       sp.commonName,
+    alt_names:         Array.isArray(sp.altNames) ? sp.altNames : [],
+    scientific:        sp.scientific || '',
+    category:          sp.category || '',
+    key_ids:           Array.isArray(sp.keyIds) ? sp.keyIds : [],
+    lookalikes:        Array.isArray(sp.lookalikes) ? sp.lookalikes : [],
+    habitat:           sp.habitat || '',
+    typical_size:      sp.typicalSize || '',
+    typical_length_in: sp.typicalLengthIn || null,
+    typical_weight_lb: sp.typicalWeightLb || null,
+    world_record_lb:   sp.worldRecordLb   || null,
+    geo_range:         sp.geoRange        || null,
+    edibility:         sp.edibility       || null,
+    seasonality:       sp.seasonality     || null,
+    reef_fish:         sp.reefFish === true,
+    hms:               sp.hms === true,
     // Default TRUE at write time. Deactivation goes through
     // deactivateSpecies() below, not the shared upsert path, so the
     // bulk edit form doesn't accidentally re-activate a hidden row.
-    is_active:     sp.active === false ? false : true,
+    is_active:         sp.active === false ? false : true,
   };
   return row;
 }

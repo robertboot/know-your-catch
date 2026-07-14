@@ -251,8 +251,34 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
 
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Habitat & size</SectionLabel>
-        <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, marginBottom: 6 }}>{s.habitat}</div>
-        <div style={{ fontSize: 12, color: T.inkMute }}>Typical size: {s.typicalSize}</div>
+        {s.habitat && (
+          <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, marginBottom: 6 }}>{s.habitat}</div>
+        )}
+        {s.typicalSize && (
+          <div style={{ fontSize: 12, color: T.inkMute }}>Typical size: {s.typicalSize}</div>
+        )}
+        {(s.typicalLengthIn || s.typicalWeightLb || s.worldRecordLb) && (
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>
+            {s.typicalLengthIn && <>Length: {s.typicalLengthIn} in</>}
+            {s.typicalLengthIn && s.typicalWeightLb && <> · </>}
+            {s.typicalWeightLb && <>Weight: {s.typicalWeightLb} lb</>}
+            {(s.typicalLengthIn || s.typicalWeightLb) && s.worldRecordLb && <> · </>}
+            {s.worldRecordLb && <>World record: {s.worldRecordLb} lb</>}
+          </div>
+        )}
+        {s.geoRange && (
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>Range: {s.geoRange}</div>
+        )}
+        {s.edibility && (
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4, textTransform: 'capitalize' }}>
+            Edibility: {s.edibility}
+          </div>
+        )}
+        {s.seasonality && (
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4, fontStyle: 'italic' }}>
+            {s.seasonality}
+          </div>
+        )}
       </Card>
 
       <Card style={{ marginBottom: 12 }}>

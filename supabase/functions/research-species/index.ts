@@ -72,13 +72,23 @@ interface SpeciesRef { id: string; commonName: string }
 
 interface ResearchResult {
   scientific?: string;
-  category?: string;
+  category?: string | null;
   altNames: string[];
   habitat: string;
   keyIds: string[];
   lookalikes: string[];
+  // Tier-1 always-populate (leave empty string if AI is uncertain).
+  typicalLengthIn?: string;
+  typicalWeightLb?: string;
+  // Tier-2 confident-only.
+  worldRecordLb?: string;
+  geoRange?: string;
+  edibility?: string;  // must be 'excellent' | 'good' | 'fair' | 'poor' or empty
+  seasonality?: string;
   sourceNote?: string;
 }
+
+const EDIBILITY_ALLOWED = new Set(['excellent', 'good', 'fair', 'poor']);
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -127,47 +137,81 @@ You will receive a fish species name and produce a JSON object matching this exa
 
 {
   "scientific": "<Genus species>",
-  "category": "<one of: ${CATEGORIES.join(', ')}>",
+  "category": "<one of the exact strings in the CATEGORIES list below, OR null>",
   "altNames": ["regional or common alt name", "..."],
-  "habitat": "<one-paragraph habitat description>",
+  "habitat": "<2-4 sentence habitat description>",
   "keyIds": ["<visual ID cue>", "<visual ID cue>", "<visual ID cue>"],
   "lookalikes": ["<species_id from the provided list>", "..."],
+  "typicalLengthIn": "<range like \\"24-40\\" or a single \\"typical 28\\" — always inches>",
+  "typicalWeightLb": "<range like \\"5-15\\" or a single \\"typical 8\\" — always pounds>",
+  "worldRecordLb": "<optional: documented IGFA world record in pounds, e.g. \\"124.75\\">",
+  "geoRange": "<optional: geographic range, e.g. \\"Gulf of Mexico, western Atlantic\\">",
+  "edibility": "<optional: one of \\"excellent\\", \\"good\\", \\"fair\\", \\"poor\\">",
+  "seasonality": "<optional: short freeform seasonal / migration notes>",
   "sourceNote": "<one sentence: how confident you are and what your source basis was>"
 }
 
+CATEGORIES (exact strings, pick ONE or return null):
+${CATEGORIES.map(c => `  "${c}"`).join('\n')}
+
 RULES:
 
-1. keyIds must be 3–5 short, visual, angler-relevant identifying features
-   — the kind of thing you can check in a hand-held photo of the fish on
-   the deck. Examples: "Deep red iris", "Sharp pointed anal fin",
-   "Yellow tail edge". DO NOT include scientific characters like tooth
-   counts, vertebral counts, or gill raker counts unless they'd be
-   visible in a standard angler photo.
+1. category — you MUST pick one of the exact CATEGORIES strings above, OR
+   return null. Do NOT invent new categories. Do NOT return a common
+   name (like "redfish") as a category — those belong in altNames.
+   Category is the app's taxonomic family bucket (snapper, grouper,
+   drum, etc.), NOT a common name. If no listed category is a good
+   fit, return null and explain in sourceNote.
 
-2. lookalikes MUST be species_ids drawn from this exact list of species
-   already in the app. If a lookalike species doesn't have an id in the
-   list, do NOT include it and instead mention it in sourceNote:
+   Concrete rule: colloquial names like "redfish", "bull red", "spot
+   tail", "channel bass" belong in altNames. Only the family bucket
+   goes in category — Red Drum's category is whichever CATEGORIES
+   string represents drums (or null if none exists).
+
+2. keyIds — 3-5 short, visual, angler-relevant identifying features,
+   the kind you can check in a hand-held photo of the fish on the
+   deck. Examples: "Deep red iris", "Sharp pointed anal fin",
+   "Distinctive black spot near tail". DO NOT include scientific
+   characters like tooth counts, vertebral counts, or gill raker
+   counts unless they'd be visible in a standard angler photo.
+
+3. lookalikes MUST be species_ids drawn from this exact list of
+   species already in the app. If a lookalike species doesn't have
+   an id in the list, do NOT include it — mention it in sourceNote
+   instead:
 
 ${existingListSample}
    ${existingList.length > 400 ? `\n   (list truncated at 400 of ${existingList.length} entries)` : ''}
 
-3. category must be one of the enum values above. If uncertain, pick the
-   closest match. If genuinely no fit, use "reef" as a fallback.
+4. If confidence is low on any field, return SPARSE fields — empty
+   strings, empty arrays, or null — rather than fabricating. It is
+   BETTER to leave a field blank than to invent a plausible-sounding
+   wrong answer.
 
-4. If confidence is low on any field, return SPARSE fields — empty arrays,
-   empty strings — rather than fabricating. It is better to leave a field
-   blank than to invent a plausible-sounding wrong answer.
+5. altNames — 3-8 common regional or vernacular names. Include the
+   fish's well-known colloquial names here (e.g. Red Drum: "redfish",
+   "bull red", "spot tail bass", "channel bass"). Skip only if genuinely
+   uncertain.
 
-5. altNames: 3-8 common regional or vernacular names. Skip if uncertain.
-
-6. habitat: 2-4 sentences on depth range, structure preference (reefs,
+6. habitat — 2-4 sentences on depth range, structure preference (reefs,
    wrecks, sand, mangroves, etc.), and any relevant migration or
    seasonal notes. Angler-focused; skip zoology jargon.
 
-7. sourceNote: one sentence assessing your confidence. Example:
-   "Common Gulf snapper; well-documented at FishBase and NOAA — high
-   confidence on habitat and lookalikes." Or if low: "Uncertain
-   identification; the common name may refer to multiple species."
+7. typicalLengthIn / typicalWeightLb — for what an ANGLER typically
+   catches, not the fish's maximum. Use the units in the field name
+   (inches for length, pounds for weight). Format as a range like
+   "24-40" or a single "typical 28". Leave empty if uncertain.
+
+8. worldRecordLb — only include when you can cite a specific IGFA
+   record. If uncertain, omit.
+
+9. edibility — one of "excellent" / "good" / "fair" / "poor" ONLY.
+   Any other string will be rejected. Omit if uncertain.
+
+10. sourceNote — one sentence assessing your confidence. Example:
+    "Common Gulf snapper; well-documented at FishBase and NOAA — high
+    confidence on habitat and lookalikes." Or if low: "Uncertain
+    identification; the common name may refer to multiple species."
 
 Return the JSON object only.`;
 
@@ -235,13 +279,22 @@ Return the JSON object only.`;
     else dropped.push(la);
   }
 
-  // Filter category to the allowed enum.
-  const categoryRaw = (parsed.category || '').trim();
-  const category = CATEGORIES.includes(categoryRaw) ? categoryRaw : '';
+  // STRICT category validation. The AI is REQUIRED to pick one of
+  // CATEGORIES or return null. Any other value — including common
+  // names like "redfish" — is rejected server-side and surfaced in
+  // sourceNote so the admin knows the AI got it wrong and must pick
+  // manually. Never let a bad category enter the DB.
+  const categoryRaw = typeof parsed.category === 'string' ? parsed.category.trim() : '';
+  const category = CATEGORIES.includes(categoryRaw) ? categoryRaw : null;
+  const categoryRejected = categoryRaw && !CATEGORIES.includes(categoryRaw);
+
+  // Edibility whitelist.
+  const edibilityRaw = typeof parsed.edibility === 'string' ? parsed.edibility.trim().toLowerCase() : '';
+  const edibility = EDIBILITY_ALLOWED.has(edibilityRaw) ? edibilityRaw : '';
 
   const result: ResearchResult = {
     scientific: (parsed.scientific || '').trim() || undefined,
-    category:   category || undefined,
+    category:   category || null,
     altNames:   Array.isArray(parsed.altNames)
                   ? parsed.altNames.map((n: unknown) => String(n || '').trim()).filter(Boolean).slice(0, 12)
                   : [],
@@ -250,15 +303,25 @@ Return the JSON object only.`;
                   ? parsed.keyIds.map((k: unknown) => String(k || '').trim()).filter(Boolean).slice(0, 5)
                   : [],
     lookalikes: kept.slice(0, 6),
+    typicalLengthIn: (parsed.typicalLengthIn || '').trim() || undefined,
+    typicalWeightLb: (parsed.typicalWeightLb || '').trim() || undefined,
+    worldRecordLb:   (parsed.worldRecordLb   || '').trim() || undefined,
+    geoRange:        (parsed.geoRange        || '').trim() || undefined,
+    edibility:       edibility || undefined,
+    seasonality:     (parsed.seasonality     || '').trim() || undefined,
     sourceNote: (parsed.sourceNote || '').trim() || undefined,
   };
+
+  const notes: string[] = [];
+  if (result.sourceNote) notes.push(result.sourceNote);
+  if (categoryRejected) {
+    notes.push(`AI suggested category "${categoryRaw}" but that's not a recognized category — please select manually.`);
+  }
   if (dropped.length > 0) {
     const droppedList = dropped.slice(0, 6).join(', ');
-    const note = `Also considered: ${droppedList}, but not currently in the app's species list.`;
-    result.sourceNote = result.sourceNote
-      ? `${result.sourceNote} ${note}`
-      : note;
+    notes.push(`Also considered: ${droppedList}, but not currently in the app's species list.`);
   }
+  result.sourceNote = notes.length ? notes.join(' ') : undefined;
 
   return jsonResponse(result);
 });

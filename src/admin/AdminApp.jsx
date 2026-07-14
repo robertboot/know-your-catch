@@ -745,6 +745,12 @@ function SpeciesForm({ initial, onDone, onCancel }) {
   const [lookalikes, setLookalikes]   = useState((initial?.lookalikes || []).join(', '));
   const [habitat, setHabitat]         = useState(initial?.habitat || '');
   const [typicalSize, setTypicalSize] = useState(initial?.typicalSize || '');
+  const [typicalLengthIn, setTypicalLengthIn] = useState(initial?.typicalLengthIn || '');
+  const [typicalWeightLb, setTypicalWeightLb] = useState(initial?.typicalWeightLb || '');
+  const [worldRecordLb,  setWorldRecordLb]  = useState(initial?.worldRecordLb  || '');
+  const [geoRange,       setGeoRange]       = useState(initial?.geoRange       || '');
+  const [edibility,      setEdibility]      = useState(initial?.edibility      || '');
+  const [seasonality,    setSeasonality]    = useState(initial?.seasonality    || '');
   const [reefFish, setReefFish]       = useState(!!initial?.reefFish);
   const [hms, setHms]                 = useState(!!initial?.hms);
   const [saving, setSaving]           = useState(false);
@@ -801,9 +807,15 @@ function SpeciesForm({ initial, onDone, onCancel }) {
     // ours already have content. The list of collisions drives the
     // overwrite prompt.
     const collisions = [];
-    if (d.scientific && scientific.trim())        collisions.push('scientific');
-    if (d.category   && category)                  collisions.push('category');
-    if ((d.habitat || '').trim() && habitat.trim()) collisions.push('habitat');
+    if (d.scientific && scientific.trim())                 collisions.push('scientific');
+    if (d.category   && category)                          collisions.push('category');
+    if ((d.habitat || '').trim() && habitat.trim())        collisions.push('habitat');
+    if (d.typicalLengthIn && typicalLengthIn.trim())       collisions.push('typical length');
+    if (d.typicalWeightLb && typicalWeightLb.trim())       collisions.push('typical weight');
+    if (d.worldRecordLb   && worldRecordLb.trim())         collisions.push('world record');
+    if (d.geoRange        && geoRange.trim())              collisions.push('geographic range');
+    if (d.edibility       && edibility)                    collisions.push('edibility');
+    if (d.seasonality     && seasonality.trim())           collisions.push('seasonality');
     const overwriteAll = collisions.length > 0
       ? window.confirm(
           `Some fields already have values (${collisions.join(', ')}). ` +
@@ -819,6 +831,12 @@ function SpeciesForm({ initial, onDone, onCancel }) {
     if (d.scientific && (overwriteAll || !scientific.trim())) setScientific(d.scientific);
     if (d.category   && (overwriteAll || !category))          setCategory(d.category);
     if (d.habitat    && (overwriteAll || !habitat.trim()))     setHabitat(d.habitat);
+    if (d.typicalLengthIn && (overwriteAll || !typicalLengthIn.trim())) setTypicalLengthIn(d.typicalLengthIn);
+    if (d.typicalWeightLb && (overwriteAll || !typicalWeightLb.trim())) setTypicalWeightLb(d.typicalWeightLb);
+    if (d.worldRecordLb   && (overwriteAll || !worldRecordLb.trim()))   setWorldRecordLb(d.worldRecordLb);
+    if (d.geoRange        && (overwriteAll || !geoRange.trim()))        setGeoRange(d.geoRange);
+    if (d.edibility       && (overwriteAll || !edibility))              setEdibility(d.edibility);
+    if (d.seasonality     && (overwriteAll || !seasonality.trim()))     setSeasonality(d.seasonality);
 
     const aiAlt   = Array.isArray(d.altNames)   ? d.altNames   : [];
     const aiCues  = Array.isArray(d.keyIds)     ? d.keyIds     : [];
@@ -847,6 +865,12 @@ function SpeciesForm({ initial, onDone, onCancel }) {
       lookalikes: lookalikes.split(',').map(s => s.trim()).filter(Boolean),
       habitat: habitat.trim(),
       typicalSize: typicalSize.trim(),
+      typicalLengthIn: typicalLengthIn.trim(),
+      typicalWeightLb: typicalWeightLb.trim(),
+      worldRecordLb:   worldRecordLb.trim(),
+      geoRange:        geoRange.trim(),
+      edibility:       edibility || '',
+      seasonality:     seasonality.trim(),
       reefFish,
       hms,
     };
@@ -926,7 +950,24 @@ function SpeciesForm({ initial, onDone, onCancel }) {
 
       <Card>
         <Field label="Habitat" value={habitat} onChange={setHabitat} placeholder="Reefs, wrecks, ledges in 60–300 ft." />
-        <Field label="Typical size" value={typicalSize} onChange={setTypicalSize} placeholder="15–30 in" />
+        <Field label="Typical size (display)" value={typicalSize} onChange={setTypicalSize} placeholder='15–30 in' />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: 4 }}>
+          <Field label="Typical length (inches)" value={typicalLengthIn} onChange={setTypicalLengthIn} placeholder="24-40 or typical 28" />
+          <Field label="Typical weight (lb)"    value={typicalWeightLb} onChange={setTypicalWeightLb} placeholder="5-15 or typical 8" />
+          <Field label="World record (lb)"       value={worldRecordLb}   onChange={setWorldRecordLb}   placeholder="124.75" />
+        </div>
+        <Field label="Geographic range" value={geoRange} onChange={setGeoRange} placeholder="Gulf of Mexico, western Atlantic" />
+        <div style={{ marginTop: 8 }}>
+          <SectionLabel style={{ marginBottom: 6 }}>Edibility</SectionLabel>
+          <select value={edibility} onChange={e => setEdibility(e.target.value)} style={inputStyle}>
+            <option value="">— unset —</option>
+            <option value="excellent">Excellent</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="poor">Poor</option>
+          </select>
+        </div>
+        <Field label="Seasonality notes" value={seasonality} onChange={setSeasonality} placeholder="Spring spawning run inshore; offshore migration in fall" />
         <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: T.ink }}>
             <input type="checkbox" checked={reefFish} onChange={e => setReefFish(e.target.checked)} />
