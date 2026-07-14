@@ -340,6 +340,19 @@ function SpeciesTab({ detailView, setDetailView }) {
   // Species tab now has two sub-panels: the existing species list and
   // the new suggestion queue where user-submitted custom species land.
   const [panel, setPanel] = useState('list');
+
+  // Hoisted ABOVE the panel === 'suggestions' early return so hook
+  // count stays constant across sub-tab switches. Previously this
+  // useMemo sat below the early return and caused React #300
+  // ("Rendered fewer hooks than expected") whenever an admin toggled
+  // to Suggestions and back. The sort is cheap so computing it on
+  // the Suggestions branch too is a non-issue.
+  const sorted = useMemo(() =>
+    [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName)),
+    // Re-sort when SPECIES changes (add / edit lands via species-store notify)
+    [SPECIES.length, SPECIES.map(s => s.id + (s.active === false ? ':d' : '')).join(',')]
+  );
+
   if (panel === 'suggestions') {
     return (
       <>
@@ -352,11 +365,6 @@ function SpeciesTab({ detailView, setDetailView }) {
     );
   }
 
-  const sorted = useMemo(() =>
-    [...SPECIES].sort((a, b) => a.commonName.localeCompare(b.commonName)),
-    // Re-sort when SPECIES changes (add / edit lands via species-store notify)
-    [SPECIES.length, SPECIES.map(s => s.id + (s.active === false ? ':d' : '')).join(',')]
-  );
   const activeCount      = sorted.filter(s => s.active !== false).length;
   const deactivatedCount = sorted.length - activeCount;
   const byStatus = sorted.filter(s => {
