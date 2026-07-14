@@ -1500,6 +1500,10 @@ export function CropStep({
   const [zoom, setZoom] = React.useState(1);            // user-controlled multiplier on top of fit
   const [pan, setPan] = React.useState({ x: 0, y: 0 }); // translation in container px
   const [busy, setBusy] = React.useState(false);
+  // Aspect ratio: 1 = square (default), 3/4 = portrait, 4/3 = landscape,
+  // null = free (crop frame fills the container's usable area).
+  // Options are exposed as tappable chips above the crop frame.
+  const [aspect, setAspect] = React.useState(1);
 
   // Active pointer map keyed by pointerId → most recent {x,y}.
   const pointersRef = React.useRef(new Map());
@@ -1544,33 +1548,57 @@ export function CropStep({
   }, [natural, container]);
   const totalScale = fitScale * zoom;
 
-  // Crop frame — centered square at 80% of the smaller container edge.
-  const cropSize = React.useMemo(() => {
-    const min = Math.min(container.w, container.h);
-    return Math.max(120, Math.round(min * 0.8));
-  }, [container]);
-  const cropX = (container.w - cropSize) / 2;
-  const cropY = (container.h - cropSize) / 2;
+  // Crop frame — sized so it fits inside 80% of the smaller container
+  // edge, honoring the chosen aspect ratio (or falling back to 80% of
+  // the whole container when the user picked "Free").
+  const cropRect = React.useMemo(() => {
+    const pad = 0.8;
+    const availW = container.w * pad;
+    const availH = container.h * pad;
+    let cw, ch;
+    if (aspect == null) {
+      cw = availW; ch = availH;
+    } else {
+      // Fit the aspect box inside the available area.
+      if (availW / aspect <= availH) { cw = availW; ch = availW / aspect; }
+      else                            { ch = availH; cw = availH * aspect; }
+    }
+    cw = Math.max(80, Math.round(cw));
+    ch = Math.max(80, Math.round(ch));
+    return {
+      w: cw,
+      h: ch,
+      x: (container.w - cw) / 2,
+      y: (container.h - ch) / 2,
+    };
+  }, [container, aspect]);
 
   // Compute the source rectangle in original-image coords the crop
-  // covers, clamped to the image bounds.
+  // covers, clamped to the image bounds. When the pan/zoom would sample
+  // outside the source we shrink the source rect — the commit step
+  // then draws that clamped source into a destination canvas whose
+  // aspect ratio MATCHES the clamped source, so no stretching happens.
   const computeSourceRect = React.useCallback(() => {
     if (!natural || totalScale === 0) return null;
     const dispW = natural.w * totalScale;
     const dispH = natural.h * totalScale;
     const imgTLx = (container.w - dispW) / 2 + pan.x;
     const imgTLy = (container.h - dispH) / 2 + pan.y;
-    let sx = (cropX - imgTLx) / totalScale;
-    let sy = (cropY - imgTLy) / totalScale;
-    let sw = cropSize / totalScale;
-    let sh = cropSize / totalScale;
-    // Clamp so we never sample outside the source.
-    sx = Math.max(0, Math.min(natural.w - 1, sx));
-    sy = Math.max(0, Math.min(natural.h - 1, sy));
-    sw = Math.max(1, Math.min(natural.w - sx, sw));
-    sh = Math.max(1, Math.min(natural.h - sy, sh));
+    let sx = (cropRect.x - imgTLx) / totalScale;
+    let sy = (cropRect.y - imgTLy) / totalScale;
+    let sw = cropRect.w / totalScale;
+    let sh = cropRect.h / totalScale;
+    // Clamp so we never sample outside the source. Trim symmetrically
+    // when overflowing so the effective crop centers on the visible
+    // portion instead of shifting.
+    if (sx < 0) { sw += sx; sx = 0; }
+    if (sy < 0) { sh += sy; sy = 0; }
+    if (sx + sw > natural.w) sw = natural.w - sx;
+    if (sy + sh > natural.h) sh = natural.h - sy;
+    sw = Math.max(1, sw);
+    sh = Math.max(1, sh);
     return { sx, sy, sw, sh };
-  }, [natural, totalScale, container, pan, cropX, cropY, cropSize]);
+  }, [natural, totalScale, container, pan, cropRect]);
 
   const onPointerDown = (e) => {
     if (!containerRef.current) return;
@@ -1626,10 +1654,19 @@ export function CropStep({
     if (!src) return;
     setBusy(true);
     try {
+      // Destination canvas matches the CLAMPED source's aspect ratio
+      // scaled so the longer side is 512. This was the stretching bug:
+      // previously we forced a 512x512 square destination, so when the
+      // source rect was smaller than the requested crop (clamped for
+      // out-of-bounds), drawImage stretched it back out to square.
+      // Now the destination reflects what the source actually is.
+      const OUT_MAX = 512;
+      const s = OUT_MAX / Math.max(src.sw, src.sh);
+      const outW = Math.max(1, Math.round(src.sw * s));
+      const outH = Math.max(1, Math.round(src.sh * s));
       const canvas = document.createElement('canvas');
-      const OUT = 512;
-      canvas.width = OUT;
-      canvas.height = OUT;
+      canvas.width = outW;
+      canvas.height = outH;
       const ctx = canvas.getContext('2d');
       // Load fresh image element (imgRef may be a display copy).
       const src2 = await new Promise((resolve, reject) => {
@@ -1638,7 +1675,7 @@ export function CropStep({
         im.onerror = reject;
         im.src = imageSrc;
       });
-      ctx.drawImage(src2, src.sx, src.sy, src.sw, src.sh, 0, 0, OUT, OUT);
+      ctx.drawImage(src2, src.sx, src.sy, src.sw, src.sh, 0, 0, outW, outH);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
       const bbox = {
         x: src.sx / natural.w,
@@ -1717,18 +1754,18 @@ export function CropStep({
         )}
 
         {/* Scrim outside the crop rectangle. Four rects around the
-            centered crop square darken the rest of the image so the
-            framed area reads clearly. */}
+            centered crop frame darken the rest of the image so the
+            framed area reads clearly. Frame respects `aspect`. */}
         {container.w > 0 && (
           <>
-            <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: cropY, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', left: 0, top: cropY + cropSize, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', left: 0, top: cropY, width: cropX, height: cropSize, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', left: cropX + cropSize, top: cropY, right: 0, height: cropSize, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: cropRect.y, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 0, top: cropRect.y + cropRect.h, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: 0, top: cropRect.y, width: cropRect.x, height: cropRect.h, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', left: cropRect.x + cropRect.w, top: cropRect.y, right: 0, height: cropRect.h, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
             {/* Crop frame border + rule-of-thirds grid. */}
             <div style={{
-              position: 'absolute', left: cropX, top: cropY,
-              width: cropSize, height: cropSize,
+              position: 'absolute', left: cropRect.x, top: cropRect.y,
+              width: cropRect.w, height: cropRect.h,
               border: '2px solid #ffffff',
               boxSizing: 'border-box',
               pointerEvents: 'none',
@@ -1737,6 +1774,43 @@ export function CropStep({
               <div style={{ position: 'absolute', left: '66.66%', top: 0, bottom: 0, borderLeft: '1px solid rgba(255,255,255,0.35)' }} />
               <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, borderTop: '1px solid rgba(255,255,255,0.35)' }} />
               <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, borderTop: '1px solid rgba(255,255,255,0.35)' }} />
+            </div>
+            {/* Aspect-ratio chip row, floated over the top of the crop
+                area. Kept inside the container so it moves with rotation
+                and never falls under a keyboard on desktop. */}
+            <div style={{
+              position: 'absolute', top: 12, left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex', gap: 6,
+              background: 'rgba(0,0,0,0.55)', borderRadius: 999,
+              padding: 4,
+            }}>
+              {[
+                { label: 'Square', value: 1 },
+                { label: 'Portrait', value: 3 / 4 },
+                { label: 'Landscape', value: 4 / 3 },
+                { label: 'Free', value: null },
+              ].map((opt) => {
+                const active = aspect === opt.value;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setAspect(opt.value)}
+                    style={{
+                      minHeight: 32,
+                      padding: '6px 12px', borderRadius: 999,
+                      border: '1px solid ' + (active ? '#5ecdf2' : 'rgba(255,255,255,0.3)'),
+                      background: active ? '#5ecdf2' : 'transparent',
+                      color: active ? '#062330' : '#fff',
+                      fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
