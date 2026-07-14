@@ -112,7 +112,27 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
         notes: `Auto-imported from Colab · ${pendingRow.path}`,
       });
       if (!r.ok) throw new Error(r.error || 'import failed');
-      await markBundleImported(pendingRow.path);
+      // Move the bundle out of pending/ so it stops showing up in the
+      // Pending Bundles card on every refresh. Historical bug: the
+      // move was awaited but not checked, so an RLS mismatch or
+      // storage-move race silently re-shipped the SAME bundle over and
+      // over — the admin thought "Import" was failing and would click
+      // it repeatedly, ending up with four identical Big Red X.0 rows.
+      // Now: surface the move failure as a warning so the admin knows
+      // the DB import succeeded but the bundle is still in pending/.
+      const mv = await markBundleImported(pendingRow.path);
+      if (!mv.ok) {
+        // Non-fatal — the model version imported fine, but the source
+        // bundle wasn't moved. Report so the admin can manually delete
+        // it from Storage instead of re-importing until they get four
+        // duplicate rows.
+        setError(
+          `Model imported as ${versionName}, but couldn't move the ` +
+          `Colab bundle out of pending/: ${mv.error || 'unknown'}. ` +
+          `Delete it from Supabase Storage → model-artifacts → pending/ ` +
+          `manually, otherwise it'll keep showing up on Refresh.`
+        );
+      }
       refresh();
     } catch (e) {
       setError(e?.message || String(e));
