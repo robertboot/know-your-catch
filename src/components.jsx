@@ -50,11 +50,34 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
     probe.onerror = () => {
       if (debugTag && typeof console !== 'undefined') {
         // eslint-disable-next-line no-console
-        console.warn(`[PhotoImg:${debugTag}] primary failed to load, staying on thumb`, {
+        console.warn(`[PhotoImg:${debugTag}] primary failed, trying cloudUrl`, {
           primary: (primary || '').slice ? primary?.slice(0, 80) : primary,
         });
       }
-      // Stay on the thumb — better a small photo than a broken one.
+      // Before giving up on the thumb: try the cloudUrl if we have one
+      // and it differs from what already failed. This is the cross-
+      // device sync case — the entry pulled from another device carries
+      // THAT device's capacitor:// src which can never resolve here,
+      // but its cloudUrl (Supabase public URL) works from anywhere.
+      // Without this fallback the render stays stuck on the 240px thumb
+      // displayed at full size = user-visible pixelation.
+      const cloudUrl = (photo && typeof photo === 'object' && photo.cloudUrl) || null;
+      if (!cloudUrl || cloudUrl === primary || cancelled) return;
+      const cloudProbe = new Image();
+      cloudProbe.onload = () => {
+        if (!cancelled) setSrc(cloudUrl);
+        if (debugTag && typeof console !== 'undefined') {
+          // eslint-disable-next-line no-console
+          console.log(`[PhotoImg:${debugTag}] cloudUrl loaded, swapped in`);
+        }
+      };
+      cloudProbe.onerror = () => {
+        if (debugTag && typeof console !== 'undefined') {
+          // eslint-disable-next-line no-console
+          console.warn(`[PhotoImg:${debugTag}] cloudUrl also failed, staying on thumb`);
+        }
+      };
+      cloudProbe.src = cloudUrl;
     };
     probe.src = primary;
     return () => { cancelled = true; probe.onload = null; probe.onerror = null; };

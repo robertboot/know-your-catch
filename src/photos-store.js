@@ -158,12 +158,21 @@ export function photoThumbUrl(p) {
 /* Synchronous full-size URL for <img src=...> / lightbox / share.
    On native this is already a capacitor:// URL the WebView can load
    directly — no async disk read needed. Cross-device sync case:
-   entries pulled from another device only have cloudUrl (no local
-   file yet); fall back to that so the photo renders while the
-   background lazy-download populates the on-disk copy. */
+   entries pulled from another device carry the ORIGINATING device's
+   capacitor:// src, which is meaningless on the current device (the
+   file exists only on the device that saved). Detect that and prefer
+   cloudUrl so cross-device renders hit the full-res Supabase copy
+   instead of falling through to the 240px thumb. */
 export function photoDisplayUrl(p) {
   if (!p) return null;
   if (typeof p === 'string') return p;
+  // A capacitor:// src is device-local by construction — the file only
+  // exists on the device that saved it. On any other device the URL
+  // resolves to nothing and the load fails, kicking us back to the
+  // pixelated thumb. If we also have a cloudUrl, prefer it — the
+  // Supabase public URL works from anywhere including the origin device.
+  const srcIsDeviceLocal = typeof p.src === 'string' && p.src.startsWith('capacitor://');
+  if (srcIsDeviceLocal && p.cloudUrl) return p.cloudUrl;
   return p.src || p.cloudUrl || p.thumb || null;
 }
 
