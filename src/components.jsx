@@ -1920,14 +1920,24 @@ export function CropStep({
             ))}
             {/* Aspect-ratio chip row, floated over the top of the crop
                 area. Kept inside the container so it moves with rotation
-                and never falls under a keyboard on desktop. */}
-            <div style={{
-              position: 'absolute', top: 12, left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex', gap: 6,
-              background: 'rgba(0,0,0,0.55)', borderRadius: 999,
-              padding: 4,
-            }}>
+                and never falls under a keyboard on desktop. Pointer
+                events are stopped at the row wrapper so the container's
+                pan/zoom setPointerCapture doesn't swallow the chip's
+                click — that was the bug that left every option except
+                Square unselectable. */}
+            <div
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerMove={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute', top: 12, left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex', gap: 6,
+                background: 'rgba(0,0,0,0.55)', borderRadius: 999,
+                padding: 4,
+                touchAction: 'auto',
+                zIndex: 6,
+              }}>
               {[
                 { label: 'Square', value: 1 },
                 { label: 'Portrait', value: 3 / 4 },
@@ -1939,7 +1949,8 @@ export function CropStep({
                   <button
                     key={opt.label}
                     type="button"
-                    onClick={() => setAspect(opt.value)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); setAspect(opt.value); }}
                     style={{
                       minHeight: 32,
                       padding: '6px 12px', borderRadius: 999,
@@ -1948,6 +1959,7 @@ export function CropStep({
                       color: active ? '#062330' : '#fff',
                       fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
                       cursor: 'pointer',
+                      touchAction: 'manipulation',
                     }}
                   >
                     {opt.label}
