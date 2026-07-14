@@ -40,6 +40,8 @@ import { researchSpecies } from '../species-research-store.js';
 import {
   fetchRegulations, adminListRegulations, adminUpsertRegulation,
   adminVerifyRegulation, adminUnverifyRegulation, draftWithAI,
+  regulationAge, regulationAgePhrase,
+  adminMarkAllStale, adminCountStalable,
 } from '../regulations-store.js';
 import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
@@ -1712,6 +1714,13 @@ function RegulationsTab() {
   const [editRow, setEditRow] = useState(null);   // full row edit modal
   const [verifyRow, setVerifyRow] = useState(null); // verify modal
   const [drafting, setDrafting] = useState(null); // speciesId being drafted
+  // Sort control — 'species' (alphabetical, default) or 'age' (oldest
+  // verified first so admin can knock out the most-stale first).
+  const [sortMode, setSortMode] = useState('species');
+  // Count of verified-and-older-than-a-year rows for the bulk button
+  // label. Recomputed on refresh via adminCountStalable.
+  const [stalableCount, setStalableCount] = useState(0);
+  const [markingStale, setMarkingStale] = useState(false);
 
   const jur = JURISDICTIONS.find(j => j.id === jurId);
   const activeSpecies = useMemo(
@@ -1727,6 +1736,10 @@ function RegulationsTab() {
     if (!r.ok) { setError(r.error || 'load failed'); return; }
     setError('');
     setRows(r.rows);
+    // Fire the stalable count in parallel — cheap head query.
+    adminCountStalable({ jurisdictionId: jurId }).then((cnt) => {
+      if (cnt?.ok) setStalableCount(cnt.count);
+    });
   }, [jurId]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -1735,6 +1748,21 @@ function RegulationsTab() {
     for (const r of rows) m.set(r.species_id, r);
     return m;
   }, [rows]);
+
+  const doMarkAllStale = async () => {
+    if (stalableCount === 0) return;
+    const conf = window.prompt(
+      `Mark all ${stalableCount} regulations for ${jur.name} that were verified more than 1 year ago as STALE?\n\n` +
+      `They'll drop from mobile users' view until you re-draft + re-verify. Type MARK STALE to confirm.`,
+      ''
+    );
+    if (conf !== 'MARK STALE') return;
+    setMarkingStale(true);
+    const r = await adminMarkAllStale({ jurisdictionId: jurId });
+    setMarkingStale(false);
+    if (!r.ok) { setError(r.error || 'mark-stale failed'); return; }
+    refresh();
+  };
 
   const doDraft = async (species) => {
     setDrafting(species.id);
@@ -1769,8 +1797,8 @@ function RegulationsTab() {
 
   return (
     <div style={{ display: 'grid', gap: 10 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 220 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: 2, minWidth: 220 }}>
           <SectionLabel style={{ marginBottom: 4 }}>Jurisdiction</SectionLabel>
           <select value={jurId} onChange={e => setJurId(e.target.value)} style={inputStyle}>
             {JURISDICTIONS.map(j => (
@@ -1778,8 +1806,35 @@ function RegulationsTab() {
             ))}
           </select>
         </div>
+        <div style={{ minWidth: 160 }}>
+          <SectionLabel style={{ marginBottom: 4 }}>Sort</SectionLabel>
+          <select value={sortMode} onChange={e => setSortMode(e.target.value)} style={inputStyle}>
+            <option value="species">Species (A–Z)</option>
+            <option value="age">Age (oldest verified first)</option>
+          </select>
+        </div>
         <GhostButton onClick={refresh} disabled={loading} style={{ padding: '10px 14px' }}>
           {loading ? 'Loading…' : 'Refresh'}
+        </GhostButton>
+      </div>
+
+      <div style={{
+        display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+        padding: '8px 10px', borderRadius: 8, background: T.parchmentDeep,
+        border: `1px solid ${T.cardEdge}`,
+      }}>
+        <div style={{ flex: 1, minWidth: 220, fontSize: 12, color: T.inkSoft, lineHeight: 1.4 }}>
+          <strong style={{ color: T.ink }}>Refresh cycle helper</strong> — annual FWC / NOAA rewrite pass.
+          Flips verified rows older than 1 year to <strong>stale</strong> so they show up as needing re-draft.
+        </div>
+        <GhostButton
+          onClick={doMarkAllStale}
+          disabled={stalableCount === 0 || markingStale}
+          style={{ padding: '8px 12px', fontSize: 12, color: T.warn, borderColor: T.warn }}
+        >
+          {markingStale
+            ? 'Marking…'
+            : `Mark all verified > 1yr as stale (${stalableCount})`}
         </GhostButton>
       </div>
 
@@ -1796,7 +1851,25 @@ function RegulationsTab() {
       )}
 
       <div style={{ display: 'grid', gap: 6 }}>
-        {activeSpecies.map(sp => {
+        {(() => {
+          // Sort by species (default) or by age (oldest verified first;
+          // no-regulation and drafts sink to the bottom of the age
+          // ordering so they don't crowd out true stale-verified rows).
+          const items = activeSpecies.slice();
+          if (sortMode === 'age') {
+            items.sort((a, b) => {
+              const ra = rowsBySpecies.get(a.id) || null;
+              const rb = rowsBySpecies.get(b.id) || null;
+              const daysA = ra && ra.status === 'verified' && ra.verified_at
+                ? -(new Date(ra.verified_at).getTime()) : Number.POSITIVE_INFINITY;
+              const daysB = rb && rb.status === 'verified' && rb.verified_at
+                ? -(new Date(rb.verified_at).getTime()) : Number.POSITIVE_INFINITY;
+              if (daysA !== daysB) return daysB - daysA;
+              return a.commonName.localeCompare(b.commonName);
+            });
+          }
+          return items;
+        })().map(sp => {
           const row = rowsBySpecies.get(sp.id) || null;
           const status = row?.status || 'none';
           const badge =
@@ -1816,6 +1889,13 @@ function RegulationsTab() {
             if (row.boat_limit  != null) parts.push(`boat ${row.boat_limit}`);
             return parts.join(' · ');
           };
+          // Age line + colour: default/subtle-brass/warn based on tier.
+          const age = row ? regulationAge(row) : null;
+          const ageColor = !age                 ? T.inkMute
+                         : age.tier === 'fresh' ? T.inkMute
+                         : age.tier === 'aging' ? T.brass
+                         :                        T.warn;
+          const ageLine = row ? regulationAgePhrase(row) : null;
           return (
             <Card key={sp.id} style={{ padding: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1824,6 +1904,11 @@ function RegulationsTab() {
                   <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
                     {short(row) || <em style={{ color: T.inkMute }}>no regulation on file</em>}
                   </div>
+                  {ageLine && (
+                    <div style={{ fontSize: 10, color: ageColor, marginTop: 3, fontWeight: 600 }}>
+                      {ageLine}
+                    </div>
+                  )}
                 </div>
                 <span style={{
                   fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 800,

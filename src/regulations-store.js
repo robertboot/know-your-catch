@@ -198,6 +198,109 @@ export async function adminUnverifyRegulation(id, reason) {
   return { ok: true };
 }
 
+/* Staleness bands — hard-coded threshold days. A verified regulation
+   is 'fresh' for the first 90 days, 'aging' 90-365 days, then 'stale'
+   past a year (annual regs cycle at FWC / NOAA). Any non-verified row
+   (draft / stale / disputed) always reports tier='stale'. */
+const FRESH_DAYS_MAX = 90;
+const AGING_DAYS_MAX = 365;
+
+/** Age of a regulation for display. `regulation` here is the raw
+    Supabase row shape (verified_at, drafted_at, status). Also
+    accepts the render-shape from regulationFor().row.
+    Returns { days, tier: 'fresh'|'aging'|'stale', asOfIso, source }.
+      days   — integer days since verified (or drafted if never
+               verified); null if we have no timestamp
+      tier   — bucketed age
+      asOfIso — the ISO timestamp we're aging against
+      source  — 'verified' | 'drafted' | 'unknown' — which timestamp
+                was used. Callers wanting the display line ("Verified
+                X ago") should key off this. */
+export function regulationAge(row) {
+  if (!row) return { days: null, tier: 'stale', asOfIso: null, source: 'unknown' };
+  const status = row.status || 'draft';
+  const isVerified = status === 'verified';
+  const iso = isVerified ? row.verified_at : (row.drafted_at || row.updated_at || null);
+  if (!iso) {
+    return { days: null, tier: isVerified ? 'aging' : 'stale', asOfIso: null,
+             source: isVerified ? 'verified' : 'drafted' };
+  }
+  const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+  // Non-verified rows are always 'stale' for the admin sort/filter
+  // regardless of their draft age.
+  const tier = !isVerified                ? 'stale'
+             : days > AGING_DAYS_MAX      ? 'stale'
+             : days > FRESH_DAYS_MAX      ? 'aging'
+             :                              'fresh';
+  return { days, tier, asOfIso: iso, source: isVerified ? 'verified' : 'drafted' };
+}
+
+/** Human-readable age phrase for the admin row. */
+export function regulationAgePhrase(row) {
+  const { days, tier, source } = regulationAge(row);
+  if (days == null) {
+    if (source === 'verified') return 'Verified — timestamp missing';
+    return `${row?.status === 'stale' ? 'Marked stale' : (row?.status === 'draft' ? 'Drafted' : 'Unknown')}`;
+  }
+  const ago = daysAgoPhrase(days);
+  if (source === 'verified') {
+    return tier === 'stale' ? `Verified ${ago} — refresh recommended`
+         : `Verified ${ago}`;
+  }
+  // Non-verified rows.
+  if (row?.status === 'stale')    return `Marked stale ${ago} — needs re-draft + verify`;
+  if (row?.status === 'draft')    return `AI-drafted ${ago} — needs verification`;
+  if (row?.status === 'disputed') return `Disputed ${ago} — resolve before publishing`;
+  return `Updated ${ago}`;
+}
+
+function daysAgoPhrase(days) {
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30)  return `${days} days ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.round(days / 365);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+/** Admin-only bulk-mark-stale — takes any status='verified' row with
+    verified_at older than `olderThanDays` and flips status to 'stale'.
+    Returns { ok, count, error }. Called from the annual refresh-cycle
+    helper in the admin tab. */
+export async function adminMarkAllStale({ jurisdictionId = null, olderThanDays = 365 } = {}) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured', count: 0 };
+  const cutoff = new Date(Date.now() - olderThanDays * 86_400_000).toISOString();
+  let q = c.from('regulations')
+    .update({ status: 'stale' })
+    .eq('status', 'verified')
+    .lt('verified_at', cutoff)
+    .select('id');
+  if (jurisdictionId) q = q.eq('jurisdiction_id', jurisdictionId);
+  const { data, error } = await q;
+  if (error) return { ok: false, error: error.message, count: 0 };
+  await fetchRegulations();
+  return { ok: true, count: (data || []).length };
+}
+
+/** Admin-only: preview count of rows that would be marked stale by
+    adminMarkAllStale. Used to render the "Mark all verified older
+    than 1 year as stale (N)" label. */
+export async function adminCountStalable({ jurisdictionId = null, olderThanDays = 365 } = {}) {
+  const c = client();
+  if (!c) return { ok: false, count: 0 };
+  const cutoff = new Date(Date.now() - olderThanDays * 86_400_000).toISOString();
+  let q = c.from('regulations')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'verified')
+    .lt('verified_at', cutoff);
+  if (jurisdictionId) q = q.eq('jurisdiction_id', jurisdictionId);
+  const { count, error } = await q;
+  if (error) return { ok: false, count: 0, error: error.message };
+  return { ok: true, count: count || 0 };
+}
+
 /** Admin-only: call the research-regulations edge function for one
     (species, jurisdiction) pair. Returns the raw draft — caller
     decides whether to upsert it. */

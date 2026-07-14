@@ -54,7 +54,7 @@ import { getLocation, getPhoto, isNative } from './native.js';
 import { SpeciesPickerModal, SpeciesSuggestModal } from './admin/pickers.jsx';
 import { newClientSpeciesId, submitSuggestion } from './species-suggestions-store.js';
 import { getCategories, categoryById, subscribe as subscribeCategories } from './categories-store.js';
-import { regulationFor } from './regulations-store.js';
+import { regulationFor, regulationAge } from './regulations-store.js';
 import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -337,6 +337,56 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           caption={photo.credit ? `${s.commonName} · ${photo.credit} · ${photo.license}` : s.commonName}
           onClose={() => setLightboxOpen(false)}
         />
+      )}
+    </div>
+  );
+}
+
+/* Footer for verified regulations. Shows verified date + source
+   domain (extracted from source_url), plus a tap-to-verify link
+   opening the source in the system browser. Compliance-hardening:
+   angler sees freshness AND has a path to authoritative source. */
+function VerifiedRegFooter({ row, jurisdiction, isTablet }) {
+  const age = regulationAge(row);
+  const verifiedDate = row.verified_at
+    ? new Date(row.verified_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  let sourceDomain = null;
+  if (row.source_url) {
+    try { sourceDomain = new URL(row.source_url).hostname.replace(/^www\./, ''); }
+    catch { sourceDomain = null; }
+  }
+  const agency = jurisdiction?.agency || 'your state agency';
+  const ageColor = age.tier === 'fresh' ? T.inkMute
+                 : age.tier === 'aging' ? T.brass
+                 :                        T.warn;
+  return (
+    <div style={{
+      marginTop: isTablet ? 16 : 12,
+      paddingTop: isTablet ? 12 : 10,
+      borderTop: `1px dashed ${T.cardEdge}`,
+      fontSize: isTablet ? 12 : 11,
+      color: ageColor,
+      fontStyle: 'italic', lineHeight: 1.5,
+    }}>
+      Regulations last verified {verifiedDate || 'recently'}
+      {sourceDomain ? <> against <strong style={{ fontStyle: 'normal', color: ageColor }}>{sourceDomain}</strong></> : null}.
+      {' '}Always check with {agency} before keeping fish.
+      {row.source_url && (
+        <>
+          {' '}
+          <a
+            href={row.source_url}
+            target="_blank" rel="noopener noreferrer"
+            style={{
+              color: T.brass, textDecoration: 'underline',
+              textDecorationThickness: '1px',
+              fontStyle: 'normal',
+            }}
+          >
+            Open source →
+          </a>
+        </>
       )}
     </div>
   );
@@ -839,6 +889,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   // (with the agency deep link) for none.
   const regResult    = jurisdiction ? regulationFor(id, jurisdiction.id) : { source: 'none', regulation: null };
   const reg          = regResult.regulation;
+  const regRow       = regResult.row || null; // raw Supabase row when source='verified'
   const regSource    = regResult.source;
   const fedReg = REGULATIONS[id]?.fed_gulf;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
@@ -905,6 +956,9 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
             </div>
           )}
           <RegBlock reg={reg} units={state.units} jurisdiction={jurisdiction} fedColumn={showFedColumn ? fedReg : null} />
+          {regSource === 'verified' && regRow && (
+            <VerifiedRegFooter row={regRow} jurisdiction={jurisdiction} isTablet={isTablet} />
+          )}
         </Card>
       )}
     </div>
