@@ -37,6 +37,11 @@ import {
   listSuggestions, approveSuggestion, rejectSuggestion, mergeSuggestion,
 } from '../species-suggestions-store.js';
 import { researchSpecies } from '../species-research-store.js';
+import {
+  fetchRegulations, adminListRegulations, adminUpsertRegulation,
+  adminVerifyRegulation, adminUnverifyRegulation, draftWithAI,
+} from '../regulations-store.js';
+import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
 import { speciesPhoto } from '../helpers.js';
 import { uploadImage } from './upload.js';
@@ -291,6 +296,7 @@ function SignedInShell({ email, onExit }) {
         </>
       )}
       {tab === 'species'       && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
+      {tab === 'regulations'   && !detailView && <RegulationsTab />}
       {tab === 'branding'      && !detailView && <BrandingTab />}
       {tab === 'categories'    && !detailView && <CategoriesTab />}
       {tab === 'training'      && !detailView && <TrainingTab />}
@@ -302,6 +308,7 @@ function SignedInShell({ email, onExit }) {
 function TabBar({ tab, onTab }) {
   const tabs = [
     { id: 'species',       label: 'Species' },
+    { id: 'regulations',   label: 'Regulations' },
     { id: 'training',      label: 'Training' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'categories',    label: 'Categories' },
@@ -1682,6 +1689,333 @@ function Chrome({ title, children, onExit, exitLabel = '← Back to app' }) {
         )}
       </div>
       {children}
+    </div>
+  );
+}
+
+/* ============================================================
+   Regulations tab — draft (AI or manual) → verify → publish
+   ============================================================ */
+function RegulationsTab() {
+  const [jurId, setJurId] = useState(JURISDICTIONS[0].id);
+  const [rows, setRows]   = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+  const [editRow, setEditRow] = useState(null);   // full row edit modal
+  const [verifyRow, setVerifyRow] = useState(null); // verify modal
+  const [drafting, setDrafting] = useState(null); // speciesId being drafted
+
+  const jur = JURISDICTIONS.find(j => j.id === jurId);
+  const activeSpecies = useMemo(
+    () => SPECIES.filter(s => s.active !== false)
+      .sort((a, b) => a.commonName.localeCompare(b.commonName)),
+    []
+  );
+
+  const refresh = React.useCallback(async () => {
+    setLoading(true);
+    const r = await adminListRegulations({ jurisdictionId: jurId });
+    setLoading(false);
+    if (!r.ok) { setError(r.error || 'load failed'); return; }
+    setError('');
+    setRows(r.rows);
+  }, [jurId]);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const rowsBySpecies = useMemo(() => {
+    const m = new Map();
+    for (const r of rows) m.set(r.species_id, r);
+    return m;
+  }, [rows]);
+
+  const doDraft = async (species) => {
+    setDrafting(species.id);
+    setError('');
+    const r = await draftWithAI({ species, jurisdiction: jur });
+    setDrafting(null);
+    if (!r.ok) { setError(r.error || 'draft failed'); return; }
+    const existing = rowsBySpecies.get(species.id);
+    const payload = {
+      species_id: species.id,
+      jurisdiction_id: jurId,
+      season_text: r.draft.seasonText,
+      min_size_in: r.draft.minSizeIn,
+      max_size_in: r.draft.maxSizeIn,
+      bag_limit:   r.draft.bagLimit,
+      boat_limit:  r.draft.boatLimit,
+      notes:       r.draft.notes,
+      source_note: r.draft.sourceNote,
+      // Keep verified status if the row was already verified — draft
+      // shouldn't clobber a verified record silently. Open the edit
+      // modal so the admin can review the AI's numbers against the
+      // existing verified ones.
+      status:      existing?.status === 'verified' ? 'verified' : 'draft',
+      drafted_by:  'ai',
+      source_url:  existing?.source_url || '',
+    };
+    const up = await adminUpsertRegulation(payload);
+    if (!up.ok) { setError(up.error || 'save failed'); return; }
+    refresh();
+    setEditRow(up.row);
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <SectionLabel style={{ marginBottom: 4 }}>Jurisdiction</SectionLabel>
+          <select value={jurId} onChange={e => setJurId(e.target.value)} style={inputStyle}>
+            {JURISDICTIONS.map(j => (
+              <option key={j.id} value={j.id}>{j.name} · {j.agency}</option>
+            ))}
+          </select>
+        </div>
+        <GhostButton onClick={refresh} disabled={loading} style={{ padding: '10px 14px' }}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </GhostButton>
+      </div>
+
+      <div style={{ fontSize: 11, color: T.inkMute, padding: '4px 4px', lineHeight: 1.5 }}>
+        <strong style={{ color: T.ink }}>Draft with AI</strong> generates a compliance-drafted regulation. It
+        stays as a DRAFT — never visible to mobile app users — until you tap Verify with a source URL.
+        Bundled fallback in the app still renders when there's no verified row here.
+      </div>
+
+      {error && (
+        <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        {activeSpecies.map(sp => {
+          const row = rowsBySpecies.get(sp.id) || null;
+          const status = row?.status || 'none';
+          const badge =
+            status === 'verified' ? { bg: T.open,   fg: T.oceanDeep, label: 'Verified' }
+          : status === 'draft'    ? { bg: T.brass,  fg: T.oceanDeep, label: 'Draft' }
+          : status === 'stale'    ? { bg: T.warn,   fg: T.oceanDeep, label: 'Stale' }
+          : status === 'disputed' ? { bg: T.closed, fg: '#fff',      label: 'Disputed' }
+          :                         { bg: T.parchmentDeep, fg: T.inkMute, label: 'None' };
+          const isDrafting = drafting === sp.id;
+          const short = (row) => {
+            if (!row) return '';
+            const parts = [];
+            if (row.season_text)  parts.push(row.season_text);
+            if (row.min_size_in != null) parts.push(`min ${row.min_size_in}"`);
+            if (row.max_size_in != null) parts.push(`max ${row.max_size_in}"`);
+            if (row.bag_limit   != null) parts.push(`bag ${row.bag_limit}`);
+            if (row.boat_limit  != null) parts.push(`boat ${row.boat_limit}`);
+            return parts.join(' · ');
+          };
+          return (
+            <Card key={sp.id} style={{ padding: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{sp.commonName}</div>
+                  <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                    {short(row) || <em style={{ color: T.inkMute }}>no regulation on file</em>}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 800,
+                  padding: '3px 8px', borderRadius: 999,
+                  background: badge.bg, color: badge.fg,
+                }}>{badge.label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                <GhostButton
+                  onClick={() => doDraft(sp)}
+                  disabled={isDrafting}
+                  style={{ padding: '6px 10px', fontSize: 11 }}
+                >
+                  {isDrafting ? 'Drafting…' : (row ? 'Re-draft with AI' : 'Draft with AI')}
+                </GhostButton>
+                {row && (
+                  <GhostButton onClick={() => setEditRow(row)} style={{ padding: '6px 10px', fontSize: 11 }}>
+                    Edit
+                  </GhostButton>
+                )}
+                {row && row.status !== 'verified' && (
+                  <GhostButton
+                    onClick={() => setVerifyRow(row)}
+                    style={{ padding: '6px 10px', fontSize: 11, color: T.open, borderColor: T.open }}
+                  >
+                    Verify
+                  </GhostButton>
+                )}
+                {row && row.status === 'verified' && (
+                  <GhostButton
+                    onClick={async () => {
+                      const reason = window.prompt('Un-verify reason (visible in source_note):', '');
+                      if (reason == null) return;
+                      const r = await adminUnverifyRegulation(row.id, reason);
+                      if (!r.ok) setError(r.error || 'un-verify failed');
+                      else refresh();
+                    }}
+                    style={{ padding: '6px 10px', fontSize: 11, color: T.warn, borderColor: T.warn }}
+                  >
+                    Un-verify
+                  </GhostButton>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {editRow && (
+        <RegulationEditModal
+          row={editRow}
+          jurisdiction={jur}
+          species={SPECIES.find(s => s.id === editRow.species_id)}
+          onCancel={() => setEditRow(null)}
+          onSaved={async (patch) => {
+            const r = await adminUpsertRegulation({ ...editRow, ...patch });
+            if (!r.ok) { setError(r.error || 'save failed'); return; }
+            setEditRow(null);
+            refresh();
+          }}
+        />
+      )}
+
+      {verifyRow && (
+        <RegulationVerifyModal
+          row={verifyRow}
+          jurisdiction={jur}
+          species={SPECIES.find(s => s.id === verifyRow.species_id)}
+          onCancel={() => setVerifyRow(null)}
+          onVerified={async (sourceUrl) => {
+            const email = (typeof window !== 'undefined' && window.__kycAdminEmail) || null;
+            const r = await adminVerifyRegulation(verifyRow.id, {
+              sourceUrl, sessionEmail: email,
+            });
+            if (!r.ok) { setError(r.error || 'verify failed'); return; }
+            setVerifyRow(null);
+            refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function RegulationEditModal({ row, jurisdiction, species, onCancel, onSaved }) {
+  const [seasonText, setSeasonText] = useState(row.season_text || '');
+  const [minSize,    setMinSize]    = useState(row.min_size_in != null ? String(row.min_size_in) : '');
+  const [maxSize,    setMaxSize]    = useState(row.max_size_in != null ? String(row.max_size_in) : '');
+  const [bag,        setBag]        = useState(row.bag_limit   != null ? String(row.bag_limit)   : '');
+  const [boat,       setBoat]       = useState(row.boat_limit  != null ? String(row.boat_limit)  : '');
+  const [notes,      setNotes]      = useState(row.notes || '');
+  const [sourceNote, setSourceNote] = useState(row.source_note || '');
+  const [sourceUrl,  setSourceUrl]  = useState(row.source_url  || '');
+
+  const num = (s) => (s.trim() === '' ? null : Number(s));
+
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3,27,51,0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 12,
+        maxWidth: 520, width: '100%', maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '16px 18px 8px', flexShrink: 0 }}>
+          <H1 size={17}>{species?.commonName || row.species_id} — {jurisdiction?.name}</H1>
+          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4 }}>
+            Status: <strong>{row.status}</strong> · drafted by {row.drafted_by}
+          </div>
+        </div>
+        <div style={{ padding: '0 18px 12px', overflowY: 'auto', flex: 1, display: 'grid', gap: 10 }}>
+          <Field label="Season (freeform)" value={seasonText} onChange={setSeasonText} placeholder="Year-round · Jun 1 - Aug 31 · etc." />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            <Field label="Min size (in)" value={minSize} onChange={setMinSize} placeholder="16" />
+            <Field label="Max size (in)" value={maxSize} onChange={setMaxSize} placeholder="27" />
+            <Field label="Bag limit (per angler / day)" value={bag} onChange={setBag} placeholder="2" />
+            <Field label="Boat limit"       value={boat} onChange={setBoat} placeholder="8" />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>Notes</div>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 4, fontWeight: 700 }}>Source note (AI note or your citation)</div>
+            <textarea value={sourceNote} onChange={e => setSourceNote(e.target.value)} rows={3}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <Field label="Source URL (required for Verify)" value={sourceUrl} onChange={setSourceUrl}
+            placeholder={jurisdiction?.regsUrl || 'https://…'} />
+        </div>
+        <div style={{
+          padding: '12px 18px', borderTop: `1px solid ${T.cardEdge}`,
+          background: T.card, display: 'flex', gap: 8, justifyContent: 'flex-end',
+          flexShrink: 0,
+        }}>
+          <GhostButton onClick={onCancel}>Cancel</GhostButton>
+          <PrimaryButton onClick={() => onSaved({
+            season_text: seasonText.trim() || null,
+            min_size_in: num(minSize),
+            max_size_in: num(maxSize),
+            bag_limit:   num(bag),
+            boat_limit:  num(boat),
+            notes:       notes.trim() || null,
+            source_note: sourceNote.trim() || null,
+            source_url:  sourceUrl.trim() || null,
+          })} style={{ padding: '8px 16px' }}>
+            Save draft
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RegulationVerifyModal({ row, jurisdiction, species, onCancel, onVerified }) {
+  const [sourceUrl, setSourceUrl] = useState(row.source_url || jurisdiction?.regsUrl || '');
+  const [confirmed, setConfirmed] = useState(false);
+  const canVerify = !!sourceUrl.trim() && confirmed;
+  const today = new Date().toLocaleDateString();
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(3,27,51,0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 12,
+        padding: 18, maxWidth: 500, width: '100%',
+      }}>
+        <H1 size={17} style={{ marginBottom: 4 }}>Verify regulation</H1>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
+          <strong style={{ color: T.ink }}>{species?.commonName || row.species_id}</strong> in <strong style={{ color: T.ink }}>{jurisdiction?.name}</strong>.
+          Verifying makes this regulation visible to mobile app users. Requires a citable source.
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <Field
+            label="Source URL (required)"
+            value={sourceUrl} onChange={setSourceUrl}
+            placeholder={jurisdiction?.regsUrl || 'https://…'}
+          />
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: T.ink, cursor: 'pointer', lineHeight: 1.5 }}>
+            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} style={{ accentColor: T.brass, marginTop: 2 }} />
+            <span>I verified these regulations against the source above on {today}.</span>
+          </label>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+            <GhostButton onClick={onCancel}>Cancel</GhostButton>
+            <PrimaryButton
+              onClick={() => onVerified(sourceUrl.trim())}
+              disabled={!canVerify}
+              style={{ padding: '8px 16px', opacity: canVerify ? 1 : 0.5 }}
+            >
+              Verify &amp; publish
+            </PrimaryButton>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

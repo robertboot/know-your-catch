@@ -54,6 +54,7 @@ import { getLocation, getPhoto, isNative } from './native.js';
 import { SpeciesPickerModal, SpeciesSuggestModal } from './admin/pickers.jsx';
 import { newClientSpeciesId, submitSuggestion } from './species-suggestions-store.js';
 import { getCategories, categoryById, subscribe as subscribeCategories } from './categories-store.js';
+import { regulationFor } from './regulations-store.js';
 import exifr from 'exifr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -460,7 +461,7 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
     const list = SPECIES
       .filter(s => !lower || s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)))
       .map(s => {
-        const reg = jurisdiction ? REGULATIONS[s.id]?.[jurisdiction.id] : null;
+        const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
         return { s, reg, status: reg ? seasonState(reg.open).status : 'unknown' };
       });
     // Sort: by-type groups by family (live-store category order, alpha
@@ -832,7 +833,13 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   const isLandscape = size === 'tablet-landscape';
   const s = speciesById(id);
   if (!s) return <div style={{ padding: 20 }}>Not found.</div>;
-  const reg = jurisdiction ? REGULATIONS[id]?.[jurisdiction.id] : null;
+  // Precedence: verified Supabase overlay → bundled fallback → none.
+  // regulationFor returns { source, regulation, row } so the render
+  // can add a caveat chip for bundled and an honest empty state
+  // (with the agency deep link) for none.
+  const regResult    = jurisdiction ? regulationFor(id, jurisdiction.id) : { source: 'none', regulation: null };
+  const reg          = regResult.regulation;
+  const regSource    = regResult.source;
   const fedReg = REGULATIONS[id]?.fed_gulf;
   const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
   const pb = state.pbs?.[id];
@@ -881,6 +888,17 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
       ) : (
         <Card style={{ padding: isTablet ? 20 : undefined }}>
           <SectionLabel style={{ marginBottom: isTablet ? 12 : 8, fontSize: isTablet ? 13 : undefined }}>{jurisdiction.name}</SectionLabel>
+          {regSource === 'bundled' && (
+            <div style={{
+              display: 'inline-block', marginBottom: isTablet ? 14 : 10,
+              fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              color: T.inkMute, background: T.parchmentDeep,
+              padding: '3px 8px', borderRadius: 999,
+              border: `1px solid ${T.cardEdge}`,
+            }}>
+              LOCAL DATA · NOT YET VERIFIED
+            </div>
+          )}
           {stale && (
             <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: isTablet ? 14 : 10, borderRadius: 4, fontSize: isTablet ? 14 : 12, color: T.brassDeep, marginBottom: isTablet ? 16 : 12, display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={isTablet ? 20 : 16} /> Data is more than 7 days old. Refresh when online.

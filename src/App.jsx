@@ -13,6 +13,7 @@ import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.j
 import { initModel } from './model-loader.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
+import { fetchRegulations, subscribe as subscribeRegulations } from './regulations-store.js';
 import { subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword } from './auth.js';
 import {
   pullAll as cloudPullAll,
@@ -147,6 +148,7 @@ export default function App() {
     refreshSpecies().catch(() => {});
     refreshBrandAssets().catch(() => {});
     refreshCategories().catch(() => {});
+    fetchRegulations().catch(() => {});
     // Kick off the ML model fetch/cache in the background. First
     // launch online: downloads the promoted model (~1 MB) and caches
     // it. Subsequent launches: fast cache-hit unless a newer version
@@ -161,6 +163,7 @@ export default function App() {
   useEffect(() => subscribeSpecies(() => setSpeciesVersion(v => v + 1)), []);
   useEffect(() => subscribeBrand(() => setSpeciesVersion(v => v + 1)), []);
   useEffect(() => subscribeCategories(() => setSpeciesVersion(v => v + 1)), []);
+  useEffect(() => subscribeRegulations(() => setSpeciesVersion(v => v + 1)), []);
   // Auth + sync subscriptions.
   useEffect(() => subscribeAuth(setSession), []);
   useEffect(() => subscribeSyncStatus(setSyncStatus), []);

@@ -1,0 +1,269 @@
+/* research-regulations — Edge Function.
+
+   AI-drafted regulations for the admin verification workflow. Same
+   admin JWT + email allowlist as the other admin functions. Returns
+   a JSON draft object with strict server-side validation: numeric
+   fields outside plausible ranges are coerced to null and surfaced
+   in sourceNote. Any field the AI can't confidently fill returns
+   null — never a guess. The result is ALWAYS a draft; verification
+   is a separate, human-only step.
+
+   Auth: Bearer JWT, admin allowlist.
+
+   REQUIRED SECRETS (set once in Supabase dashboard):
+     ANTHROPIC_API_KEY
+
+   Body: {
+     speciesId:      string,        // e.g. 'red_snapper'
+     speciesName:    string,        // 'Red Snapper' (client provides common name)
+     scientificName: string?,       // 'Lutjanus campechanus'
+     altNames:       string[]?,     // ['Sow Snapper', 'Genuine Red']
+     jurisdictionId: string,        // 'fed_gulf'
+     jurisdictionName: string,      // 'Federal Gulf Waters'
+     jurisdictionAgency: string,    // 'NOAA / GMFMC'
+     jurisdictionRegsUrl: string?,  // agency landing page
+   }
+
+   Response: {
+     seasonText?:  string | null,
+     minSizeIn?:   number | null,
+     maxSizeIn?:   number | null,
+     bagLimit?:    number | null,
+     boatLimit?:   number | null,
+     notes?:       string | null,
+     sourceNote:   string,    // required — how the AI arrived at the values
+   } */
+
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const ADMIN_EMAILS = ['robertb1023@me.com'];
+const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_MODEL    = 'claude-sonnet-4-6';
+const ANTHROPIC_VERSION  = '2023-06-01';
+const MAX_TOKENS         = 1000;
+
+// Plausibility bounds — any numeric value outside these ranges is
+// dropped to null and mentioned in sourceNote. Tuned wide but not
+// permissive: min_size 0-120 in covers everything from bait to
+// blue marlin; bag_limit 0-1000 covers baitfish; boat_limit same.
+const RANGES = {
+  minSizeIn: [0, 120],
+  maxSizeIn: [0, 200],
+  bagLimit:  [0, 1000],
+  boatLimit: [0, 5000],
+};
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  });
+}
+
+function isAdminEmail(email: string | null | undefined) {
+  return !!email && ADMIN_EMAILS.includes(email.trim().toLowerCase());
+}
+
+/* Numeric coercion — accepts number, numeric-string, null, undefined.
+   Returns null if out of range or unparseable, appending an
+   `implausible` note the caller can splice into sourceNote. */
+function coerceNumeric(
+  raw: unknown,
+  key: keyof typeof RANGES,
+  rejects: string[],
+): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(n)) return null;
+  const [lo, hi] = RANGES[key];
+  if (n < lo || n > hi) {
+    rejects.push(`AI suggested ${key}=${raw} — rejected as implausible (allowed ${lo}-${hi}).`);
+    return null;
+  }
+  return n;
+}
+
+interface ResearchBody {
+  speciesId?: string;
+  speciesName?: string;
+  scientificName?: string;
+  altNames?: string[];
+  jurisdictionId?: string;
+  jurisdictionName?: string;
+  jurisdictionAgency?: string;
+  jurisdictionRegsUrl?: string;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST')    return jsonResponse({ error: 'method_not_allowed' }, 405);
+
+  const SUPABASE_URL      = Deno.env.get('SUPABASE_URL');
+  const SERVICE_ROLE      = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!SUPABASE_URL || !SERVICE_ROLE) return jsonResponse({ error: 'server_misconfigured', detail: 'missing supabase env' }, 500);
+  if (!ANTHROPIC_API_KEY)             return jsonResponse({ error: 'server_misconfigured', detail: 'missing ANTHROPIC_API_KEY' }, 500);
+
+  // Admin JWT gate.
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return jsonResponse({ error: 'no_auth' }, 401);
+  const jwt = authHeader.slice(7);
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
+  if (userErr || !userRes?.user?.email) return jsonResponse({ error: 'invalid_auth' }, 401);
+  if (!isAdminEmail(userRes.user.email)) return jsonResponse({ error: 'forbidden' }, 403);
+
+  let body: ResearchBody;
+  try { body = await req.json(); } catch {
+    return jsonResponse({ error: 'bad_json' }, 400);
+  }
+  const speciesId   = (body.speciesId   || '').trim();
+  const speciesName = (body.speciesName || '').trim();
+  const jurisdictionId   = (body.jurisdictionId   || '').trim();
+  const jurisdictionName = (body.jurisdictionName || '').trim();
+  const jurisdictionAgency  = (body.jurisdictionAgency  || '').trim();
+  const jurisdictionRegsUrl = (body.jurisdictionRegsUrl || '').trim();
+  if (!speciesId || !speciesName || !jurisdictionId || !jurisdictionName) {
+    return jsonResponse({ error: 'missing_fields' }, 400);
+  }
+
+  const altSuffix = Array.isArray(body.altNames) && body.altNames.length
+    ? ` (also known as: ${body.altNames.join(', ')})`
+    : '';
+  const scientific = (body.scientificName || '').trim();
+
+  const systemPrompt = `You are drafting a recreational-fishing regulation record for a US saltwater fishing app. Compliance-critical output — err heavily toward null. A wrong bag limit or size is a real-world safety and legal failure.
+
+You will receive a species + jurisdiction. Return a JSON object matching this exact schema — JSON ONLY, no wrapping prose, no markdown fences:
+
+{
+  "seasonText":  "<'Year-round' | 'Jun 1 - Aug 31' | free-text season description, or null>",
+  "minSizeIn":   <number of inches, or null>,
+  "maxSizeIn":   <number of inches for slot limits, or null>,
+  "bagLimit":    <integer per angler per day, or null>,
+  "boatLimit":   <integer per vessel, or null>,
+  "notes":       "<short freeform explanation, or null>",
+  "sourceNote":  "<REQUIRED: which agency doc / publication you're drawing from and how confident you are>"
+}
+
+HARD RULES:
+
+1. If you do NOT know the current value for a field with high
+   confidence, return null for that field. Do NOT guess. Do NOT
+   invent a plausible-sounding number. A missing value is HONEST;
+   a wrong value is a compliance failure.
+
+2. sourceNote is REQUIRED. Cite the specific agency publication
+   ("FWC 2024-25 saltwater recreational regs — Snapper",
+    "NOAA Gulf reef fish FMP amendment 51", etc.) and how confident
+   you are. If you're relying on general training data without a
+   specific citation, say so.
+
+3. Regulations change annually. If your training data is more than
+   a year old, prefix sourceNote with "STALE:" and encourage the
+   admin to verify against the live source URL.
+
+4. Federal vs state waters have DIFFERENT limits. Do not mix them.
+   The jurisdiction is exactly what the caller specified.
+
+5. If the species is HMS (Highly Migratory — tunas, billfish,
+   swordfish, most sharks), federal NOAA HMS rules apply everywhere
+   and state jurisdictions do NOT override. In that case return
+   the NOAA HMS limits and note it in sourceNote.
+
+6. Slot limits (both minSizeIn and maxSizeIn set) are common for
+   drum, snook, redfish, etc. Set both when they apply.
+
+7. Season formats: use "Year-round" for open all year; "Jun 1 - Aug 31"
+   for date ranges; free text for complex ("Open Jun 1 - Aug 31,
+   reopens Sep 15 - Nov 30 in state waters") when the season has
+   multiple windows.
+
+8. bagLimit is PER ANGLER PER DAY. boatLimit is PER VESSEL. Do NOT
+   confuse them. If only one is specified in the source, set the
+   other to null.
+
+Return the JSON object only.`;
+
+  const userMessage = [
+    `Species: ${speciesName}${scientific ? ` (${scientific})` : ''}${altSuffix}`,
+    `Species id: ${speciesId}`,
+    `Jurisdiction: ${jurisdictionName} — id ${jurisdictionId}`,
+    jurisdictionAgency  ? `Agency: ${jurisdictionAgency}` : null,
+    jurisdictionRegsUrl ? `Agency source (verify against this): ${jurisdictionRegsUrl}` : null,
+  ].filter(Boolean).join('\n');
+
+  let anthropicResp: Response;
+  try {
+    anthropicResp = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: MAX_TOKENS,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+  } catch (e) {
+    return jsonResponse({ error: 'anthropic_network', detail: (e as Error).message }, 502);
+  }
+  if (!anthropicResp.ok) {
+    const t = await anthropicResp.text().catch(() => '');
+    return jsonResponse({ error: 'anthropic_error', status: anthropicResp.status, detail: t.slice(0, 500) }, 502);
+  }
+  const anthropicJson = await anthropicResp.json().catch(() => null) as any;
+  const rawText: string = anthropicJson?.content?.[0]?.text || '';
+  if (!rawText) return jsonResponse({ error: 'empty_response' }, 502);
+
+  const jsonText = rawText.replace(/^```(?:json)?\n/, '').replace(/\n```\s*$/, '').trim();
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(jsonText); }
+  catch {
+    return jsonResponse({ error: 'model_bad_json', sample: rawText.slice(0, 300) }, 502);
+  }
+
+  // Validate numerics against plausibility bounds.
+  const rejects: string[] = [];
+  const minSizeIn = coerceNumeric(parsed.minSizeIn, 'minSizeIn', rejects);
+  const maxSizeIn = coerceNumeric(parsed.maxSizeIn, 'maxSizeIn', rejects);
+  const bagLimit  = coerceNumeric(parsed.bagLimit,  'bagLimit',  rejects);
+  const boatLimit = coerceNumeric(parsed.boatLimit, 'boatLimit', rejects);
+
+  // Additional sanity: if both sizes set, max >= min.
+  let sizeFlip = false;
+  if (minSizeIn != null && maxSizeIn != null && maxSizeIn < minSizeIn) {
+    rejects.push(`AI returned maxSizeIn=${maxSizeIn} < minSizeIn=${minSizeIn} — dropped max as implausible.`);
+    sizeFlip = true;
+  }
+
+  const seasonText = typeof parsed.seasonText === 'string' && parsed.seasonText.trim() ? parsed.seasonText.trim() : null;
+  const notes      = typeof parsed.notes      === 'string' && parsed.notes.trim()      ? parsed.notes.trim()      : null;
+  const modelSourceNote = typeof parsed.sourceNote === 'string' ? parsed.sourceNote.trim() : '';
+
+  const sourceNoteParts = [modelSourceNote, ...rejects].filter(Boolean);
+  const sourceNote = sourceNoteParts.length
+    ? sourceNoteParts.join(' ')
+    : 'Model returned no source note.';
+
+  return jsonResponse({
+    seasonText,
+    minSizeIn,
+    maxSizeIn: sizeFlip ? null : maxSizeIn,
+    bagLimit,
+    boatLimit,
+    notes,
+    sourceNote,
+  });
+});
