@@ -28,7 +28,7 @@ import {
   inputStyle,
 } from '../components.jsx';
 import {
-  uploadTrainingImage, listTrainingImages,
+  uploadTrainingImage, stableTrainingId, listTrainingImages,
   approve, reject, correctSpecies, deleteTrainingImage,
   signedUrl, countsBySpecies,
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
@@ -178,6 +178,9 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
   const [queue, setQueue] = useState([]); // [{ file, id, speciesId, status, error, path }]
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
+  // Fetch All (folders): hidden directory picker + import summary.
+  const folderRef = useRef(null);
+  const [folderSummary, setFolderSummary] = useState(null); // {matched, unmatched:[names], files}
 
   const speciesOptions = useMemo(
     () => [...SPECIES].filter(s => s.active !== false)
@@ -211,6 +214,70 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
     setQueue(q => [...q, ...rows]);
   };
 
+  // Fetch All: user picks the base photos folder (e.g. "Fish ID
+  // Model"); we walk every subfolder, match the folder name to a
+  // species, and queue every image as PENDING with a deterministic
+  // id — so re-importing the same folder skips what's already up,
+  // and everything lands in Review pre-categorized for one-tap
+  // Approve.
+  const normName = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const speciesMatcher = useMemo(() => {
+    const exact = new Map();
+    for (const sp of SPECIES) {
+      if (sp.active === false) continue;
+      exact.set(normName(sp.commonName), sp.id);
+      for (const alt of (sp.altNames || [])) exact.set(normName(alt), sp.id);
+    }
+    return (folderName) => {
+      const n = normName(folderName);
+      if (!n) return null;
+      if (exact.has(n)) return exact.get(n);
+      // Folder names sometimes carry extra words ("Scamp Grouper" for
+      // "Scamp"): match when the folder STARTS WITH a known name or a
+      // known name starts with the folder, longest name wins.
+      let best = null, bestLen = 0;
+      for (const [name, id] of exact) {
+        if ((n.startsWith(name + ' ') || name.startsWith(n + ' ') || name === n)
+            && name.length > bestLen) {
+          best = id; bestLen = name.length;
+        }
+      }
+      return best;
+    };
+  }, []);
+
+  const onPickFolder = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    const rows = [];
+    const unmatched = new Set();
+    let skippedNonImage = 0;
+    for (const f of files) {
+      if (!/\.(jpe?g|png)$/i.test(f.name)) { skippedNonImage += 1; continue; }
+      const parts = (f.webkitRelativePath || f.name).split('/');
+      // ".../<Species Folder>/images/<file>" — species folder is the
+      // segment before "images"; otherwise the folder the file sits in.
+      const imagesIdx = parts.findIndex(seg => seg.toLowerCase() === 'images');
+      const folder = imagesIdx > 0 ? parts[imagesIdx - 1]
+        : parts.length >= 2 ? parts[parts.length - 2] : '';
+      const speciesId = speciesMatcher(folder);
+      if (!speciesId) { unmatched.add(folder || '(no folder)'); continue; }
+      rows.push({
+        file: f,
+        id: crypto.randomUUID(),
+        speciesId,
+        status: 'queued',
+        error: null,
+        path: null,
+        pending: true,               // land as pending → Review queue
+        stableKey: `${speciesId}|${f.name}`,
+      });
+    }
+    setFolderSummary({ matched: rows.length, unmatched: [...unmatched], skippedNonImage });
+    if (rows.length) setQueue(q => [...q, ...rows]);
+  };
+
   // When switching to batch mode (or changing the batch species) with
   // queued rows already present, retroactively tag every queued row
   // that has no species set. That way switching modes doesn't leave a
@@ -238,7 +305,10 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
     // Sequential to keep the UI reactive + avoid RLS thrash.
     for (const row of readyRows) {
       setQueue(q => q.map(r => r.id === row.id ? { ...r, status: 'uploading' } : r));
-      const res = await uploadTrainingImage(row.file, row.speciesId);
+      const res = await uploadTrainingImage(row.file, row.speciesId,
+        row.pending
+          ? { status: 'pending', stableId: await stableTrainingId(row.stableKey) }
+          : {});
       setQueue(q => q.map(r => r.id === row.id
         ? { ...r,
             status: res.ok ? 'done' : 'error',
@@ -273,10 +343,40 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
     <div style={{ display: 'grid', gap: 12 }}>
       <Card>
         <SectionLabel style={{ marginBottom: 8 }}>Mode</SectionLabel>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <ModeBtn active={mode === 'batch'} onClick={() => setMode('batch')}>Batch (one species)</ModeBtn>
           <ModeBtn active={mode === 'per-image'} onClick={() => setMode('per-image')}>Per-image</ModeBtn>
+          <ModeBtn active={false} onClick={() => folderRef.current?.click()}>Fetch All (folders)</ModeBtn>
         </div>
+        <input
+          ref={folderRef}
+          type="file"
+          webkitdirectory=""
+          multiple
+          style={{ display: 'none' }}
+          onChange={onPickFolder}
+        />
+        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
+          <strong style={{ color: T.ink }}>Fetch All</strong> — pick your photo base folder
+          (e.g. "Fish ID Model"). Every subfolder is matched to its species automatically and
+          the photos queue as <strong>pending</strong>, so they land in Review pre-categorized
+          for quick Approve. Re-running skips photos already uploaded.
+        </div>
+        {folderSummary && (
+          <div style={{
+            marginTop: 8, padding: '8px 10px', borderRadius: 8,
+            background: folderSummary.unmatched.length ? T.warnBg : T.openBg,
+            border: `1px solid ${folderSummary.unmatched.length ? T.warn : T.open}`,
+            fontSize: 12, color: T.ink, lineHeight: 1.5,
+          }}>
+            Queued {folderSummary.matched} photos across matched species.
+            {folderSummary.skippedNonImage > 0 && <> Skipped {folderSummary.skippedNonImage} non-image files.</>}
+            {folderSummary.unmatched.length > 0 && (
+              <> Could not match folders: <strong>{folderSummary.unmatched.join(', ')}</strong> —
+              rename them to the species name in the app, or upload them via Batch mode.</>
+            )}
+          </div>
+        )}
         {mode === 'batch' && (
           <div style={{ marginTop: 10 }}>
             <SectionLabel style={{ marginBottom: 6 }}>Species for this batch</SectionLabel>

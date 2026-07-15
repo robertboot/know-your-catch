@@ -190,7 +190,23 @@ export function classifyCoverage(verified) {
    Returns { ok, id, storagePath, error, stage }.
      stage: 'ensure_species' | 'storage_upload' | 'db_insert' — tells
      the caller where the failure happened so it can classify + banner. */
-export async function uploadTrainingImage(file, speciesId) {
+/* Deterministic id for bulk imports — SHA-1 of a stable key
+   (speciesId + source filename) folded into UUID shape. Re-running
+   the same folder import generates the same id, so the PK/storage
+   collision tells us "already uploaded" instead of duplicating. */
+export async function stableTrainingId(key) {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(key));
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+const DUP_RE = /already exists|duplicate/i;
+
+export async function uploadTrainingImage(file, speciesId, opts = {}) {
+  // opts.status:   'verified' (default — owner uploads ARE the review)
+  //                or 'pending' (bulk folder imports awaiting review).
+  // opts.stableId: deterministic id for idempotent re-runs; duplicate
+  //                collisions return { ok:true, skipped:true }.
   const c = client();
   if (!c) return { ok: false, stage: 'client', error: 'not-configured' };
   if (!file || !speciesId) return { ok: false, stage: 'client', error: 'missing file or species' };
@@ -207,7 +223,7 @@ export async function uploadTrainingImage(file, speciesId) {
     return { ok: false, stage: 'ensure_species', error: seed.error };
   }
 
-  const id = crypto.randomUUID();
+  const id = opts.stableId || crypto.randomUUID();
   const ext = (file.name?.match(/\.([a-z0-9]+)$/i)?.[1] || 'jpg').toLowerCase();
   const storagePath = `${speciesId}/${id}.${ext}`;
 
@@ -257,6 +273,11 @@ export async function uploadTrainingImage(file, speciesId) {
     body: JSON.stringify({}),
   });
   if (signResult.kind !== 'ok') {
+    // Stable-id re-run: the object already exists in storage from a
+    // prior import — that's a skip, not a failure.
+    if (opts.stableId && DUP_RE.test(String(signResult.body || ''))) {
+      return { ok: true, skipped: true, storagePath };
+    }
     console.error('[training upload] sign step failed', {
       signUrl, ...signResult,
     });
@@ -289,6 +310,9 @@ export async function uploadTrainingImage(file, speciesId) {
   if (putResult.kind === 'ok') {
     // fall through to DB insert
   } else if (putResult.kind === 'non_2xx') {
+    if (opts.stableId && DUP_RE.test(String(putResult.body || ''))) {
+      return { ok: true, skipped: true, storagePath };
+    }
     console.error('[training upload] signed PUT non-2xx', {
       putUrl, status: putResult.status, statusText: putResult.statusText,
       body: (putResult.body || '').slice(0, 400),
@@ -321,16 +345,21 @@ export async function uploadTrainingImage(file, speciesId) {
   // export. Model-feedback rows (model_confirmation / model_correction)
   // already land verified via saveModelFeedback below.
   const nowIso = new Date().toISOString();
+  const status = opts.status === 'pending' ? 'pending' : 'verified';
   const { data, error } = await c.from('training_images').insert({
     id,
     species_id: speciesId,
     storage_path: storagePath,
     source: 'owner_upload',
-    status: 'verified',
+    status,
     uploaded_by: email,
-    reviewed_by: email,
-    reviewed_at: nowIso,
+    // Pending rows await the Review queue — no reviewer stamp yet.
+    ...(status === 'verified' ? { reviewed_by: email, reviewed_at: nowIso } : {}),
   }).select('id').single();
+  if (error && error.code === '23505' && opts.stableId) {
+    // Row already inserted by a prior import run — skip, keep bytes.
+    return { ok: true, skipped: true, storagePath };
+  }
   if (error) {
     console.error('[training upload] training_images.insert failed', {
       storagePath, error,
