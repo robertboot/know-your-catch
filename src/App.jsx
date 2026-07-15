@@ -157,6 +157,31 @@ export default function App() {
     initModel().catch(() => {});
   }, []);
 
+  // Re-fetch the verified regulations overlay every time the app
+  // returns to the foreground (not just cold boot). iOS keeps the
+  // webview alive for days — without this, an angler who verified
+  // new regs in the admin (or a season that flipped overnight) kept
+  // seeing the stale overlay until they force-killed the app.
+  // Throttled to once per 5 minutes so tab-switching on web doesn't
+  // hammer Supabase. Offline failures stay silent — last-known-good
+  // cache keeps rendering.
+  const lastRegsFetchRef = useRef(Date.now());
+  useEffect(() => {
+    const REFETCH_MIN_MS = 5 * 60 * 1000;
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (Date.now() - lastRegsFetchRef.current < REFETCH_MIN_MS) return;
+      lastRegsFetchRef.current = Date.now();
+      fetchRegulations().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, []);
+
   // Overlay subscriptions: bump a version counter on every notify so
   // screens re-read the (mutated in place) SPECIES const + brandAsset()
   // lookups reflect the latest cache.
