@@ -135,7 +135,7 @@ function useDashboardData() {
    ============================================================ */
 
 async function fetchHealth() {
-  const [prod, bundles, lastAi] = await Promise.all([
+  const [prod, bundles, lastAi, autoRun] = await Promise.all([
     getProductionModel(),
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
@@ -147,6 +147,20 @@ async function fetchHealth() {
         .order('drafted_at', { ascending: false })
         .limit(1);
       return data?.[0] || null;
+    })(),
+    // Latest autonomous-updater run. Table may not exist until the
+    // auto-update migration runs — treat any error as "not set up".
+    (async () => {
+      const c = client();
+      if (!c) return null;
+      try {
+        const { data, error } = await c.from('regs_auto_runs')
+          .select('ran_at, checked, published, drafted, unchanged, failed')
+          .order('ran_at', { ascending: false })
+          .limit(1);
+        if (error) return null;
+        return data?.[0] || null;
+      } catch { return null; }
     })(),
   ]);
 
@@ -179,6 +193,7 @@ async function fetchHealth() {
     pendingBundles: bundles.ok ? bundles.rows.length : 0,
     lastAiDraft: lastAi?.drafted_at || null,
     lastAiDraftSpecies: lastAi?.species_id || null,
+    autoRun,
   };
 }
 
@@ -863,6 +878,16 @@ function HealthStrip({ data, err, loading }) {
             value={data.lastAiDraft ? relativeTime(data.lastAiDraft) : '—'}
             tone={data.lastAiDraft ? 'neutral' : 'warn'}
             hint={data.lastAiDraftSpecies ? `${data.lastAiDraftSpecies}` : 'No AI drafts recorded'}
+          />
+          <Tile
+            label="Regs auto-updater"
+            value={data.autoRun ? relativeTime(data.autoRun.ran_at) : 'NOT RUNNING'}
+            tone={data.autoRun
+              ? (data.autoRun.failed > 0 ? 'warn' : 'ok')
+              : 'warn'}
+            hint={data.autoRun
+              ? `Checked ${data.autoRun.checked} · published ${data.autoRun.published} · drafted ${data.autoRun.drafted}${data.autoRun.failed ? ` · ${data.autoRun.failed} failed` : ''}`
+              : 'Run regulations-auto-update-schema.sql + deploy auto-update-regulations'}
           />
         </div>
       )}

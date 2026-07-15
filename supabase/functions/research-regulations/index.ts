@@ -39,7 +39,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const ADMIN_EMAILS = ['robertb1023@me.com'];
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL    = 'claude-sonnet-4-6';
+const ANTHROPIC_MODEL    = 'claude-sonnet-5';
 const ANTHROPIC_VERSION  = '2023-06-01';
 // Web search interleaves reasoning + search-result digestion into the
 // output stream before the final JSON, so this needs headroom well
