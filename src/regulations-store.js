@@ -342,7 +342,12 @@ export async function adminUpsertRegulation(row, { sessionEmail = null } = {}) {
     // Preserve status if already 'verified' — draft edits alone
     // should not un-verify a row; call adminUnverifyRegulation for that.
     status:          row.status      ?? 'draft',
-    drafted_by:      row.drafted_by  ?? (sessionEmail || 'admin'),
+    // Caller-provided drafted_by wins (the AI cascade passes 'ai');
+    // otherwise stamp the session. NOTE for manual-edit callers: pass
+    // drafted_by explicitly as the admin email — that's what the
+    // auto-updater's protection rule keys on (drafted_by !== 'ai'
+    // means human-authored, never overwrite).
+    drafted_by:      row.drafted_by ?? (sessionEmail || 'admin'),
   };
   const { data, error } = await c.from('regulations')
     .upsert(payload, { onConflict: 'species_id,jurisdiction_id' })

@@ -279,6 +279,13 @@ function Loading() {
    Signed-in shell — tabs + active tab content
    ============================================================ */
 function SignedInShell({ email, onExit }) {
+  // Expose the signed-in email for store calls that stamp authorship
+  // (adminUpsertRegulation, legal docs). Was read in several places
+  // but never actually set — callers silently fell back to 'admin'.
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.__kycAdminEmail = email || null;
+    return () => { if (typeof window !== 'undefined') window.__kycAdminEmail = null; };
+  }, [email]);
   // Default landing = Dashboard so the admin sees the health/action
   // queue before anything else. Deep-linking into a specific tab
   // still works from HomeDashboard tiles via `switchTab`.
@@ -2261,7 +2268,14 @@ function RegulationsTab() {
           species={SPECIES.find(s => s.id === editRow.species_id)}
           onCancel={() => setEditRow(null)}
           onSaved={async (patch) => {
-            const r = await adminUpsertRegulation({ ...editRow, ...patch });
+            const email = (typeof window !== 'undefined' && window.__kycAdminEmail) || null;
+            // Manual save claims authorship — drafted_by flips from
+            // 'ai' to the admin, which is what makes the auto-updater
+            // treat this row as protected (never overwritten).
+            const r = await adminUpsertRegulation(
+              { ...editRow, ...patch, drafted_by: email || 'admin' },
+              { sessionEmail: email },
+            );
             if (!r.ok) { setError(r.error || 'save failed'); return; }
             setEditRow(null);
             refresh();

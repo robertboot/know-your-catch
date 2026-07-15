@@ -302,23 +302,31 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
     const readyRows = queue.filter(r => r.status === 'queued' && r.speciesId);
     if (readyRows.length === 0) return;
     setUploading(true);
-    // Sequential to keep the UI reactive + avoid RLS thrash.
-    for (const row of readyRows) {
-      setQueue(q => q.map(r => r.id === row.id ? { ...r, status: 'uploading' } : r));
-      const res = await uploadTrainingImage(row.file, row.speciesId,
-        row.pending
-          ? { status: 'pending', stableId: await stableTrainingId(row.stableKey) }
-          : {});
-      setQueue(q => q.map(r => r.id === row.id
-        ? { ...r,
-            status: res.ok ? 'done' : 'error',
-            error:  res.ok ? null    : res.error,
-            stage:      res.ok ? null : res.stage,
-            statusCode: res.ok ? null : (res.statusCode || null),
-            code:       res.ok ? null : (res.code       || null),
-            path:   res.ok ? res.storagePath : null }
-        : r));
-    }
+    // Small worker pool — folder imports can queue thousands of
+    // files; strictly sequential would take hours, unbounded
+    // parallel would thrash storage. 4 lanes is the sweet spot.
+    let next = 0;
+    const worker = async () => {
+      while (next < readyRows.length) {
+        const row = readyRows[next++];
+        setQueue(q => q.map(r => r.id === row.id ? { ...r, status: 'uploading' } : r));
+        const res = await uploadTrainingImage(row.file, row.speciesId,
+          row.pending
+            ? { status: 'pending', stableId: await stableTrainingId(row.stableKey) }
+            : {});
+        setQueue(q => q.map(r => r.id === row.id
+          ? { ...r,
+              status: res.ok ? 'done' : 'error',
+              skipped: !!res.skipped,
+              error:  res.ok ? null    : res.error,
+              stage:      res.ok ? null : res.stage,
+              statusCode: res.ok ? null : (res.statusCode || null),
+              code:       res.ok ? null : (res.code       || null),
+              path:   res.ok ? res.storagePath : null }
+          : r));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, readyRows.length) }, worker));
     setUploading(false);
   };
 
@@ -456,7 +464,16 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
           )}
 
           <div style={{ display: 'grid', gap: 6 }}>
-            {queue.map(row => (
+            {/* Folder imports can queue thousands of rows — rendering
+                them all freezes the tab. Show active + recent ones and
+                summarize the rest; totals above stay exact. */}
+            {(queue.length <= 80
+              ? queue
+              : [
+                  ...queue.filter(r => r.status === 'uploading' || r.status === 'error').slice(0, 40),
+                  ...queue.filter(r => r.status === 'queued').slice(0, 40),
+                ]
+            ).map(row => (
               <UploadRow
                 key={row.id}
                 row={row}
@@ -466,6 +483,12 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
                 onRemove={() => removeRow(row.id)}
               />
             ))}
+            {queue.length > 80 && (
+              <div style={{ fontSize: 11, color: T.inkMute, padding: '6px 2px' }}>
+                Showing active rows only — {queue.length} total in queue,
+                {' '}{doneCount} uploaded so far.
+              </div>
+            )}
           </div>
 
           {(errorCount > 0 || doneCount > 0) && (
