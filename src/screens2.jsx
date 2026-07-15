@@ -3260,20 +3260,46 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   // so it works airplane-mode. Absent regs default to a neutral
   // "check with the agency" state — never say "legal" when we don't
   // know.
-  const legalityReg = jurisdiction && speciesId ? regulationFor(speciesId, jurisdiction.id).regulation : null;
+  const legalityResult = jurisdiction && speciesId ? regulationFor(speciesId, jurisdiction.id) : { source: 'none', regulation: null };
+  const legalityReg = legalityResult.regulation;
   const legalitySeason = legalityReg ? seasonState(legalityReg.open) : null;
   const legalityChips = [];
   if (legalityReg) {
     if (legalitySeason?.reason) legalityChips.push(legalitySeason.reason);
     if (legalityReg.minSize != null) legalityChips.push(`Min size ${formatSize(legalityReg.minSize, state.units)}`);
+    if (legalityReg.maxSize != null) legalityChips.push(`Max size ${formatSize(legalityReg.maxSize, state.units)}`);
     if (legalityReg.bagLimit != null) legalityChips.push(`Bag limit ${legalityReg.bagLimit}`);
+    if (legalityReg._fromFed) legalityChips.push('Federal Gulf rules');
   }
   const legalityStatus =
     !speciesId ? null
     : !legalityReg ? 'unknown'
-    : legalitySeason?.status === 'closed' ? 'closed'
-    : legalitySeason?.status === 'open'   ? 'open'
+    : legalitySeason?.status === 'closed'   ? 'closed'
+    : legalitySeason?.status === 'open'     ? 'open'
+    : legalitySeason?.status === 'upcoming' ? 'closed'  // not open yet = can't keep today
     : 'unknown';
+  // Length check against the slot: if the angler typed a length and it's
+  // outside min/max, that overrides an open season — undersize/oversize
+  // fish can't be kept even in season.
+  const lengthIn = length !== '' && Number.isFinite(Number(length))
+    ? (state.units === 'metric' ? Number(length) / 2.54 : Number(length))
+    : null;
+  const sizeViolation = legalityReg && lengthIn != null && (
+    (legalityReg.minSize != null && lengthIn < legalityReg.minSize) ? 'under' :
+    (legalityReg.maxSize != null && lengthIn > legalityReg.maxSize) ? 'over'  : null
+  );
+  const effectiveLegality = legalityStatus === 'open' && sizeViolation ? 'closed' : legalityStatus;
+  const legalityHeadline =
+    effectiveLegality === 'open'   ? 'Legal to keep'
+    : effectiveLegality === 'closed' ? (
+        sizeViolation === 'under' ? 'Undersize — release it'
+      : sizeViolation === 'over'  ? 'Oversize — release it'
+      : legalitySeason?.status === 'upcoming' ? 'Season not open yet'
+      : 'Season closed — release it')
+    // Unknown: lead with what we KNOW (size/bag rules are on file for
+    // nearly every species), never a bare "confirm source" punt.
+    : legalityReg ? 'Rules below — season set in-season'
+    : 'No rules on file for these waters';
 
   return (
     <div style={{ padding: '16px 16px 24px' }}>
@@ -3438,33 +3464,31 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             closed, neutral when we don't have data. Chips list the
             deciding factors so the angler can see the numbers, not
             just the verdict. */}
-        {speciesId && jurisdiction && legalityStatus && (
+        {speciesId && jurisdiction && effectiveLegality && (
           <div style={{
             marginTop: 12, padding: '10px 12px', borderRadius: 8,
-            background: legalityStatus === 'open'   ? T.openBg
-                       : legalityStatus === 'closed' ? T.closedBg
-                       : T.warnBg,
+            background: effectiveLegality === 'open'   ? T.openBg
+                       : effectiveLegality === 'closed' ? T.closedBg
+                       : T.parchmentDeep,
             border: `1px solid ${
-              legalityStatus === 'open'   ? T.open
-              : legalityStatus === 'closed' ? T.closed
-              : T.warn
+              effectiveLegality === 'open'   ? T.open
+              : effectiveLegality === 'closed' ? T.closed
+              : T.cardEdge
             }`,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: legalityChips.length ? 8 : 0 }}>
-              {legalityStatus === 'open'
+              {effectiveLegality === 'open'
                 ? <ShieldCheck    size={18} color={T.open} />
-                : legalityStatus === 'closed'
+                : effectiveLegality === 'closed'
                 ? <ShieldAlert    size={18} color={T.closed} />
-                : <ShieldQuestion size={18} color={T.warn} />}
+                : <ShieldQuestion size={18} color={T.inkSoft} />}
               <div style={{
                 fontSize: 13, fontWeight: 800, letterSpacing: 0.4,
-                color: legalityStatus === 'open' ? T.open
-                     : legalityStatus === 'closed' ? T.closed
-                     : T.warn,
+                color: effectiveLegality === 'open' ? T.open
+                     : effectiveLegality === 'closed' ? T.closed
+                     : T.inkSoft,
               }}>
-                {legalityStatus === 'open'   ? 'Legal to keep'
-                 : legalityStatus === 'closed' ? 'Not legal to keep'
-                 : 'Check with the agency'}
+                {legalityHeadline}
               </div>
             </div>
             {legalityChips.length > 0 && (
@@ -3476,6 +3500,20 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                   }}>{chip}</span>
                 ))}
               </div>
+            )}
+            {/* Agency deep link — always available when the season isn't
+                a definitive open/closed, so "set in-season" is one tap
+                from the answer instead of a dead end. */}
+            {effectiveLegality === 'unknown' && jurisdiction?.regsUrl && (
+              <a href={jurisdiction.regsUrl} target="_blank" rel="noopener noreferrer"
+                 onClick={(e) => e.stopPropagation()}
+                 style={{
+                   display: 'inline-block', marginTop: 8,
+                   fontSize: 12, fontWeight: 700, color: T.brass,
+                   textDecoration: 'underline',
+                 }}>
+                Current {jurisdiction.agency || 'agency'} season →
+              </a>
             )}
           </div>
         )}

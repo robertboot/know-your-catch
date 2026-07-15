@@ -95,8 +95,13 @@ function mkDate(monthStr, day, year) {
 
 // Pull every "Mon D – Mon D[, YYYY]" range out of a string with its
 // character offset. A trailing year applies to ranges without one.
+// Separators cover what both humans and the AI-draft pipeline write:
+// en/em dash, hyphen, and the words to / through / thru / until.
+// ("June 1 through August 31" was previously unparseable, which sent
+// perfectly good verified seasons into the 'unknown' bucket.)
+const RANGE_SEP = `(?:\\s*[–—-]\\s*|\\s+(?:to|through|thru|until)\\s+)`;
 function parseRanges(text, fallbackYear) {
-  const re = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})\\s*[–-]\\s*${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
+  const re = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*\\d{4})?${RANGE_SEP}${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
   const out = [];
   let m;
   while ((m = re.exec(text)) !== null) {
@@ -123,18 +128,33 @@ export function seasonState(open, today = new Date()) {
   if (/^check current season$/i.test(raw) || /^verify/i.test(o))
     return { status: 'unknown', reason: 'Set in-season — confirm with the agency' };
 
-  // An explicit (re)open date — "Opens/Reopens <Mon D>, YYYY" with no end.
-  const opensM = raw.match(new RegExp(`opens?\\s+${MONTH_RE}\\s+(\\d{1,2}),?\\s*(\\d{4})`, 'i'));
-  if (opensM) {
-    const d = mkDate(opensM[1], +opensM[2], +opensM[3]);
-    if (d) return today < d
-      ? { status: 'upcoming', reason: `Opens ${fmtDate(d)}` }
-      : { status: 'open', reason: `Open since ${fmtDate(d)}` };
+  // Parse ranges FIRST — "Open Jun 1 – Aug 31" must be treated as a
+  // window, not as a bare "Opens Jun 1" start date. The opens-date
+  // path below only runs when the string has no parseable range.
+  const ranges = parseRanges(raw, year);
+
+  // An explicit (re)open date — "Opens/Reopens <Mon D>[, YYYY]" with
+  // no end date anywhere in the string. Year optional: AI drafts and
+  // agency pages often write "Opens May 22" for the current season.
+  // Assume the year that puts the date closest to today (a January
+  // "Opens Dec 1" means last month, not eleven months out).
+  if (ranges.length === 0) {
+    const opensM = raw.match(new RegExp(`opens?\\s+${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'i'));
+    if (opensM) {
+      let d = mkDate(opensM[1], +opensM[2], opensM[3] ? +opensM[3] : year);
+      if (d && !opensM[3]) {
+        const half = 182 * 86400000;
+        if (d - today > half)      d = mkDate(opensM[1], +opensM[2], year - 1);
+        else if (today - d > half) d = mkDate(opensM[1], +opensM[2], year + 1);
+      }
+      if (d) return today < d
+        ? { status: 'upcoming', reason: `Opens ${fmtDate(d)}` }
+        : { status: 'open', reason: `Open since ${fmtDate(d)}` };
+    }
   }
 
   // Split ranges into closures vs open windows by the position of the
   // word "closed": ranges at/after it are closures.
-  const ranges = parseRanges(raw, year);
   const closedAt = o.indexOf('closed');
   const closedRanges = closedAt < 0 ? [] : ranges.filter(r => r.idx >= closedAt);
   const openRanges = ranges.filter(r => !closedRanges.includes(r));
