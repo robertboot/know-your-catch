@@ -239,6 +239,55 @@ export async function adminListRegulations({ jurisdictionId = null } = {}) {
   return { ok: true, rows: data || [] };
 }
 
+/** Admin-only: purge stale pre-automation drafts — draft rows the
+    auto-updater has never checked (last_checked_at is null). These
+    are leftovers from the manual no-web-search drafting era; the
+    updater regenerates each pair with live research as its rotation
+    reaches it, so deleting them costs nothing (drafts are invisible
+    to app users anyway). Verified / stale / disputed rows are never
+    touched. */
+export async function adminPurgeStaleDrafts() {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const { data, error } = await c.from('regulations')
+    .delete()
+    .eq('status', 'draft')
+    .is('last_checked_at', null)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, count: (data || []).length };
+}
+
+/** Admin-only: how many stale pre-automation drafts exist (all
+    jurisdictions) — the purge button's badge count. */
+export async function adminCountStaleDrafts() {
+  const c = client();
+  if (!c) return { ok: false, count: 0 };
+  const { count, error } = await c.from('regulations')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'draft')
+    .is('last_checked_at', null);
+  if (error) return { ok: false, count: 0, error: error.message };
+  return { ok: true, count: count || 0 };
+}
+
+/** Admin-only: latest auto-updater runs for the report header.
+    Table may not exist until the auto-update migration runs. */
+export async function adminListAutoRuns(limit = 5) {
+  const c = client();
+  if (!c) return { ok: false, rows: [] };
+  try {
+    const { data, error } = await c.from('regs_auto_runs')
+      .select('ran_at, checked, published, drafted, unchanged, failed')
+      .order('ran_at', { ascending: false })
+      .limit(limit);
+    if (error) return { ok: false, rows: [], error: error.message };
+    return { ok: true, rows: data || [] };
+  } catch (e) {
+    return { ok: false, rows: [], error: e?.message || 'failed' };
+  }
+}
+
 /** Admin-only write. Sets drafted_by to the current admin email if
     the row doesn't have one yet. Verified rows should be flipped
     via adminVerifyRegulation() below — this is for draft edits. */

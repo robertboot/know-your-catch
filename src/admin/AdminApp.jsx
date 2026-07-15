@@ -44,6 +44,7 @@ import {
   adminVerifyRegulation, adminUnverifyRegulation, draftWithAI,
   regulationAge, regulationAgePhrase,
   adminMarkAllStale, adminCountStalable,
+  adminPurgeStaleDrafts, adminCountStaleDrafts,
   adminBulkMarkStale, adminBulkDeleteDrafts, runRegsCascade,
   getAutoDraftRegsPref, setAutoDraftRegsPref,
   isAutoVerified, regulationLastCheckedPhrase,
@@ -51,7 +52,7 @@ import {
 } from '../regulations-store.js';
 import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
-import { speciesPhoto } from '../helpers.js';
+import { speciesPhoto, relativeTime } from '../helpers.js';
 import { uploadImage } from './upload.js';
 import {
   Card, PrimaryButton, GhostButton, SectionLabel, H1, Field, inputStyle,
@@ -2032,6 +2033,10 @@ function RegulationsTab() {
   // label. Recomputed on refresh via adminCountStalable.
   const [stalableCount, setStalableCount] = useState(0);
   const [markingStale, setMarkingStale] = useState(false);
+  // Purge badge — pre-automation drafts (never checked by the
+  // updater) still stored.
+  const [staleDraftCount, setStaleDraftCount] = useState(0);
+  const [purging, setPurging] = useState(false);
   // Bulk selection — Set of row ids (Supabase primary keys). Selection
   // scoped to the current jurisdiction because that's what's rendered;
   // switching jurisdictions clears via the effect below.
@@ -2060,12 +2065,16 @@ function RegulationsTab() {
     if (!r.ok) { setError(r.error || 'load failed'); return; }
     setError('');
     setRows(r.rows);
-    // Fire the stalable count in parallel — cheap head query.
+    // Fire the side counts in parallel — cheap head queries.
     adminCountStalable({ jurisdictionId: jurId }).then((cnt) => {
       if (cnt?.ok) setStalableCount(cnt.count);
     });
     // Pipeline-health card — latest auto-updater run summary.
     getLatestAutoRun().then((run) => setAutoRun(run));
+    // Purge badge — how many pre-automation drafts still linger.
+    adminCountStaleDrafts().then((cnt) => {
+      if (cnt?.ok) setStaleDraftCount(cnt.count);
+    });
   }, [jurId]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -2247,6 +2256,24 @@ function RegulationsTab() {
     setEditRow(up.row);
   };
 
+  const doPurgeStaleDrafts = async () => {
+    if (!staleDraftCount) return;
+    const conf = window.prompt(
+      `Delete ${staleDraftCount} old draft${staleDraftCount === 1 ? '' : 's'} from the pre-automation era ` +
+      `(never checked by the auto-updater, all jurisdictions)?\n` +
+      `They're invisible to app users, and the updater re-researches every pair with live web ` +
+      `search as its rotation reaches it. Type PURGE to confirm.`, ''
+    );
+    if (conf !== 'PURGE') return;
+    setPurging(true);
+    const r = await adminPurgeStaleDrafts();
+    setPurging(false);
+    if (!r.ok) { setError(r.error || 'purge failed'); return; }
+    setError('');
+    setStaleDraftCount(0);
+    refresh();
+  };
+
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -2302,6 +2329,22 @@ function RegulationsTab() {
             </div>
           )}
         </div>
+        {staleDraftCount > 0 && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+            <span style={{ fontSize: 11, color: T.inkSoft, flex: 1, minWidth: 200 }}>
+              {staleDraftCount} old drafts from the pre-automation era are still stored
+              (made without web search — many are low quality). Safe to purge; the
+              updater re-researches every pair on rotation.
+            </span>
+            <GhostButton
+              onClick={doPurgeStaleDrafts}
+              disabled={purging}
+              style={{ padding: '6px 12px', fontSize: 11, color: T.warn, borderColor: T.warn }}
+            >
+              {purging ? 'Purging…' : `Purge ${staleDraftCount} old drafts`}
+            </GhostButton>
+          </div>
+        )}
       </div>
 
       {/* Filter chips — narrow the render to a single status class. */}
