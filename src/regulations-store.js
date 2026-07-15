@@ -94,58 +94,91 @@ function overlayToRenderShape(row) {
     `.regulation._fromFed` to render a "Federal Gulf" chip. */
 export function regulationFor(speciesId, jurisdictionId) {
   if (!speciesId || !jurisdictionId) return { source: 'none', regulation: null };
-  const overlayRow = _verified.get(speciesId)?.[jurisdictionId] || null;
-  if (overlayRow) {
-    // PER-FIELD merge: the verified row wins on every field it
-    // actually has, and the bundled row fills the gaps. Whole-row
-    // precedence was a trap — the AI drafting pipeline errs toward
-    // null on fields it can't confirm (especially season, which
-    // changes annually), so a verified row with season_text=null
-    // was SHADOWING bundled season info and the app told anglers
-    // "No season on file" for red snapper. Never let a null beat
-    // real data.
-    const shape = overlayToRenderShape(overlayRow);
-    const bundledFill = BUNDLED_REGS[speciesId]?.[jurisdictionId] || null;
-    if (bundledFill) {
-      if (shape.open == null      && bundledFill.open != null)      { shape.open = bundledFill.open; shape._seasonFromBundled = true; }
-      if (shape.minSize == null   && bundledFill.minSize != null)   shape.minSize = bundledFill.minSize;
-      if (shape.maxSize == null   && bundledFill.maxSize != null)   shape.maxSize = bundledFill.maxSize;
-      if (shape.bagLimit == null  && bundledFill.bagLimit != null)  shape.bagLimit = bundledFill.bagLimit;
-      if (shape.boatLimit == null && bundledFill.vesselLimit != null) shape.boatLimit = bundledFill.vesselLimit;
-      if (shape.notes == null     && bundledFill.notes != null)     shape.notes = bundledFill.notes;
-      // Gear requirements only exist in the bundled dataset — the
-      // overlay schema has no gear column, so verified rows always
-      // inherit them.
-      if (Array.isArray(bundledFill.gear) && bundledFill.gear.length) shape.gear = bundledFill.gear;
-      if (bundledFill.sectors && !shape.sectors) shape.sectors = bundledFill.sectors;
+  // Memo cache: the resolve is pure given (species, jurisdiction,
+  // overlay generation) but runs in hot list loops (~95 species per
+  // render, per keystroke in search). Cleared whenever the overlay
+  // refreshes (see fetchRegulations → _resolveCache.clear()).
+  const cacheKey = `${speciesId}|${jurisdictionId}`;
+  const hit = _resolveCache.get(cacheKey);
+  if (hit) return hit;
+
+  // Resolve one jurisdiction: verified overlay merged per-field with
+  // the bundled row (verified wins wherever it has data; bundled
+  // fills the nulls, EXCEPT placeholder seasons — a null verified
+  // season must not inherit 'Check current season', because that
+  // placeholder would then both render as 'Season varies' AND block
+  // the fed fallback below). Returns null when neither layer has
+  // substantive data, so the caller can fall through to fed.
+  const resolveAt = (jurId) => {
+    const overlayRow = _verified.get(speciesId)?.[jurId] || null;
+    const bundled = BUNDLED_REGS[speciesId]?.[jurId] || null;
+    if (overlayRow) {
+      const shape = overlayToRenderShape(overlayRow);
+      if (bundled) {
+        if (shape.open == null && bundled.open != null && !isPlaceholderSeason(bundled.open)) {
+          shape.open = bundled.open;
+          shape._seasonFromBundled = true;
+        }
+        for (const [dst, src] of FILL_FIELDS) {
+          if (shape[dst] == null && bundled[src] != null) shape[dst] = bundled[src];
+        }
+        // Gear + sectors only exist in the bundled dataset — the
+        // overlay schema has no columns for them.
+        if (Array.isArray(bundled.gear) && bundled.gear.length) shape.gear = bundled.gear;
+        if (bundled.sectors && !shape.sectors) shape.sectors = bundled.sectors;
+      }
+      // A verified row that STILL has no substantive data after the
+      // merge (e.g. season_text 'Follow federal regulations', all
+      // numerics null, empty bundled row) must not shadow the fed
+      // fallback — that emptiness check previously only guarded the
+      // bundled path.
+      if (!hasAnyRegData(shape)) return null;
+      return { source: 'verified', regulation: shape, row: overlayRow };
     }
-    return { source: 'verified', regulation: shape, row: overlayRow };
-  }
-  const bundled = BUNDLED_REGS[speciesId]?.[jurisdictionId] || null;
-  if (bundled && hasAnyRegData(bundled)) {
-    return { source: 'bundled', regulation: bundled, row: null };
-  }
-  // Fed fallback — only when we're being asked about a STATE jurisdiction
-  // (fed_gulf falling back to itself would loop).
-  if (jurisdictionId !== 'fed_gulf') {
-    const fedVerified = _verified.get(speciesId)?.fed_gulf || null;
-    if (fedVerified) {
-      return {
-        source: 'verified-fed',
-        regulation: { ...overlayToRenderShape(fedVerified), _fromFed: true },
-        row: fedVerified,
+    if (bundled && hasAnyRegData(bundled)) {
+      return { source: 'bundled', regulation: bundled, row: null };
+    }
+    return null;
+  };
+
+  let result = resolveAt(jurisdictionId);
+  // Fed fallback — only for STATE jurisdictions (fed_gulf falling
+  // back to itself would loop). Same resolve, so a verified fed row
+  // gets the identical per-field bundled merge it gets when viewed
+  // directly as Federal Gulf.
+  if (!result && jurisdictionId !== 'fed_gulf') {
+    const fed = resolveAt('fed_gulf');
+    if (fed) {
+      result = {
+        source: `${fed.source}-fed`, // 'verified-fed' | 'bundled-fed'
+        regulation: { ...fed.regulation, _fromFed: true },
+        row: fed.row,
       };
     }
-    const fedBundled = BUNDLED_REGS[speciesId]?.fed_gulf || null;
-    if (fedBundled && hasAnyRegData(fedBundled)) {
-      return {
-        source: 'bundled-fed',
-        regulation: { ...fedBundled, _fromFed: true },
-        row: null,
-      };
-    }
   }
-  return { source: 'none', regulation: null, row: null };
+  if (!result) result = { source: 'none', regulation: null, row: null };
+  _resolveCache.set(cacheKey, result);
+  return result;
+}
+
+// [render-shape key, bundled key] pairs for the per-field merge.
+// boatLimit maps from the bundled dataset's vesselLimit name.
+const FILL_FIELDS = [
+  ['minSize', 'minSize'],
+  ['maxSize', 'maxSize'],
+  ['bagLimit', 'bagLimit'],
+  ['boatLimit', 'vesselLimit'],
+  ['notes', 'notes'],
+];
+
+const _resolveCache = new Map();
+
+/** Placeholder season strings — hedges, not data. Single predicate
+    shared by hasAnyRegData and the merge above so 'what counts as a
+    placeholder' can't drift between the two. */
+export function isPlaceholderSeason(text) {
+  if (!text) return true;
+  return /check current season|not federally managed|not managed|see state|follow state|follow federal|see federal|verify with/i.test(String(text));
 }
 
 /** True when a regulation row carries at least one substantive
@@ -161,13 +194,7 @@ function hasAnyRegData(reg) {
   if (reg.vesselLimit != null) return true;
   if (Array.isArray(reg.gear) && reg.gear.length > 0) return true;
   if (reg.notes && reg.notes.trim()) return true;
-  if (reg.open) {
-    const o = String(reg.open).toLowerCase();
-    // Placeholder open strings don't count as data.
-    if (!/check current season|not federally managed|not managed|see state|follow state|verify with/i.test(o)) {
-      return true;
-    }
-  }
+  if (reg.open && !isPlaceholderSeason(reg.open)) return true;
   return false;
 }
 
@@ -190,6 +217,7 @@ export async function fetchRegulations() {
     // predictable.
     const verifiedRows = rows.filter(r => r.status === 'verified');
     _verified = indexRows(verifiedRows);
+    _resolveCache.clear();
     saveCache(verifiedRows);
     notify();
     return { ok: true, rows, verifiedCount: verifiedRows.length };

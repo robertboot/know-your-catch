@@ -103,12 +103,12 @@ export function StatusPill({ status, size = 'normal' }) {
     closed:   { label: 'CLOSED',      bg: T.closedBg, fg: T.closed,    shape: 'square' },
     upcoming: { label: 'OPENS SOON',  bg: T.warnBg,   fg: T.warn,      shape: 'triangle' },
     caution:  { label: 'VERIFY',      bg: T.warnBg,   fg: T.brassDeep, shape: 'triangle' },
-    // Unknown = season isn't cleanly parseable. Show a neutral "SEASON *"
-    // instead of a scary "CONFIRM SOURCE" so anglers see whatever data
-    // IS on file (min size, bag limit) rather than being told to leave.
-    // The asterisk hints at a footnote / source link nearby.
-    unknown:  { label: 'SEASON *',    bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
-  }[status] || { label: 'SEASON *',   bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
+    // Unknown = season isn't cleanly parseable. Neutral "SEASON
+    // VARIES" (matches the copy used across list screens) instead of
+    // a scary "CONFIRM SOURCE" — anglers still see whatever data IS
+    // on file (min size, bag limit) rather than being told to leave.
+    unknown:  { label: 'SEASON VARIES', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' },
+  }[status] || { label: 'SEASON VARIES', bg: T.parchmentDeep, fg: T.inkSoft, shape: 'circle' };
   const pad = size === 'small' ? '2px 8px' : size === 'large' ? '6px 14px' : '4px 10px';
   const fs = size === 'small' ? 10 : size === 'large' ? 13 : 11;
   const shape = m.shape === 'circle'
@@ -1608,10 +1608,10 @@ export function CropStep({
   }, [natural, container]);
   const totalScale = fitScale * zoom;
 
-  // Compute a sensibly-sized rect centered in the current container
-  // for a given aspect. Used to seed the initial cropRect on first
-  // measure. All later reshapes go through reshapeToAspect() so the
-  // user's current position + size is preserved across chip switches.
+  // Default rect for the CURRENT aspect, centered in the container.
+  // Used to seed on first measure and as the pre-seed render
+  // fallback. Depends on aspect deliberately — it always describes
+  // "where a fresh crop for this aspect would go".
   const containerDefault = React.useMemo(() => {
     if (!container.w || !container.h) return null;
     const pad = 0.8;
@@ -1632,8 +1632,7 @@ export function CropStep({
       x: Math.round((container.w - cw) / 2),
       y: Math.round((container.h - ch) / 2),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [container.w, container.h]);
+  }, [container.w, container.h, aspect]);
 
   // Seed cropRect once when the container is first measured. Later
   // aspect-chip taps flow through the effect below — they REshape the
@@ -1662,10 +1661,36 @@ export function CropStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aspect]);
 
-  // The crop rectangle is now a single source of truth — freeRect
-  // holds it whether Free is active or a locked aspect is active.
-  // "freeRect" name kept to keep the diff readable; think of it as
-  // "the current rect."
+  // Re-clamp on container resize (rotation, window resize) — the
+  // rect is stored in container pixels, so a rotate could otherwise
+  // strand it partly or wholly outside the new container with its
+  // handles unreachable. Scale proportionally, then clamp.
+  const prevContainerRef = React.useRef(container);
+  React.useEffect(() => {
+    const prev = prevContainerRef.current;
+    prevContainerRef.current = container;
+    if (!container.w || !container.h || !prev.w || !prev.h) return;
+    if (prev.w === container.w && prev.h === container.h) return;
+    setFreeRect(r => {
+      if (!r) return r;
+      const sx = container.w / prev.w;
+      const sy = container.h / prev.h;
+      let nx = r.x * sx, ny = r.y * sy, nw = r.w * sx, nh = r.h * sy;
+      nw = Math.max(60, Math.min(container.w, nw));
+      nh = Math.max(60, Math.min(container.h, nh));
+      nx = Math.max(0, Math.min(container.w - nw, nx));
+      ny = Math.max(0, Math.min(container.h - nh, ny));
+      const next = { x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) };
+      // Locked aspects must survive the non-uniform scale.
+      return aspect == null ? next : reshapeRect(next, aspect, container);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [container.w, container.h]);
+
+  // The crop rectangle is a single source of truth — freeRect holds
+  // it whether Free is active or a locked aspect is active.
+  // "freeRect" name kept for diff readability; think of it as "the
+  // current rect."
   const cropRect = freeRect || containerDefault || { x: 0, y: 0, w: 0, h: 0 };
 
   // Compute the source rectangle in original-image coords the crop

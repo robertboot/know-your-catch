@@ -18,7 +18,7 @@ import {
   speciesById, jurisdictionById, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
-  shareReport, fetchWeatherForTime,
+  shareReport, fetchWeatherForTime, PROHIBITED_RE,
 } from './helpers.js';
 
 /* <img> wrapper that falls back to the inline thumb data URL when
@@ -75,7 +75,10 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
   const fallbackSize = size === 'phone' ? 100 : 200;
   const reg = jurisdiction ? regulationFor(id, jurisdiction.id).regulation : null;
   const fedReg = regulationFor(id, 'fed_gulf').regulation;
-  const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
+  // No comparison column when the state view is ALREADY showing the
+  // federal rules via fallback — it would compare federal to itself.
+  const showFedColumn = reg && fedReg && !reg._fromFed
+    && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
   const pb = state.pbs[id];
 
   const saveNote = () => {
@@ -896,7 +899,10 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   const regRow       = regResult.row || null; // raw Supabase row when source='verified'
   const regSource    = regResult.source;
   const fedReg = regulationFor(id, 'fed_gulf').regulation;
-  const showFedColumn = reg && fedReg && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
+  // No comparison column when the state view is ALREADY showing the
+  // federal rules via fallback — it would compare federal to itself.
+  const showFedColumn = reg && fedReg && !reg._fromFed
+    && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
   const pb = state.pbs?.[id];
   return (
     <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
@@ -953,18 +959,35 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
               padding: '3px 10px', borderRadius: 999,
               border: `1px solid ${T.brass}55`,
             }}>
-              FEDERAL GULF WATERS · {jurisdiction.name.toUpperCase()} DEFERS TO NOAA
+              {/* Honest framing: we don't have this state's own rules,
+                  so we're SHOWING the federal ones — not asserting the
+                  state defers (delegated species like red snapper set
+                  their own state seasons). */}
+              SHOWING FEDERAL GULF RULES · NO {(jurisdiction.short || jurisdiction.name).toUpperCase()} DATA ON FILE
             </div>
           )}
-          {regSource === 'bundled' && (
+          {(regSource === 'bundled' || regSource === 'bundled-fed') && (
             <div style={{
               display: 'inline-block', marginBottom: isTablet ? 14 : 10,
               fontSize: 10, fontWeight: 800, letterSpacing: 1,
               color: T.inkMute, background: T.parchmentDeep,
               padding: '3px 8px', borderRadius: 999,
               border: `1px solid ${T.cardEdge}`,
+              marginLeft: regSource === 'bundled-fed' ? 6 : 0,
             }}>
               LOCAL DATA · NOT YET VERIFIED
+            </div>
+          )}
+          {(regSource === 'verified' || regSource === 'verified-fed') && reg?._seasonFromBundled && (
+            <div style={{
+              display: 'inline-block', marginBottom: isTablet ? 14 : 10,
+              fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              color: T.warn, background: T.warnBg,
+              padding: '3px 8px', borderRadius: 999,
+              border: `1px solid ${T.warn}55`,
+              marginLeft: 6,
+            }}>
+              SEASON FROM LOCAL DATA — NOT IN VERIFIED SOURCE
             </div>
           )}
           {stale && (
@@ -973,7 +996,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
             </div>
           )}
           <RegBlock reg={reg} units={state.units} jurisdiction={jurisdiction} fedColumn={showFedColumn ? fedReg : null} />
-          {regSource === 'verified' && regRow && (
+          {(regSource === 'verified' || regSource === 'verified-fed') && regRow && (
             <VerifiedRegFooter row={regRow} jurisdiction={jurisdiction} isTablet={isTablet} />
           )}
         </Card>
@@ -3271,16 +3294,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     if (legalityReg.bagLimit != null) legalityChips.push(`Bag limit ${legalityReg.bagLimit}`);
     if (legalityReg._fromFed) legalityChips.push('Federal Gulf rules');
   }
-  const legalityStatus =
-    !speciesId ? null
-    : !legalityReg ? 'unknown'
-    : legalitySeason?.status === 'closed'   ? 'closed'
-    : legalitySeason?.status === 'open'     ? 'open'
-    : legalitySeason?.status === 'upcoming' ? 'closed'  // not open yet = can't keep today
-    : 'unknown';
-  // Length check against the slot: if the angler typed a length and it's
-  // outside min/max, that overrides an open season — undersize/oversize
-  // fish can't be kept even in season.
+  // Length check against the slot: an undersize/oversize fish can't
+  // be kept REGARDLESS of season status — even when the season is
+  // unknown, 12" < 16" min is a certain verdict.
   const lengthIn = length !== '' && Number.isFinite(Number(length))
     ? (state.units === 'metric' ? Number(length) / 2.54 : Number(length))
     : null;
@@ -3288,11 +3304,36 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     (legalityReg.minSize != null && lengthIn < legalityReg.minSize) ? 'under' :
     (legalityReg.maxSize != null && lengthIn > legalityReg.maxSize) ? 'over'  : null
   );
-  const effectiveLegality = legalityStatus === 'open' && sizeViolation ? 'closed' : legalityStatus;
+  // Retention prohibitions: bag limit 0 or prohibition vocabulary in
+  // the season/notes text mean "never keep", whatever the season
+  // parser thought.
+  const prohibited = legalityReg && (
+    legalityReg.bagLimit === 0
+    || PROHIBITED_RE.test(String(legalityReg.open || ''))
+    || PROHIBITED_RE.test(String(legalityReg.notes || ''))
+  );
+  // Verdict order: certain no-keep facts first (prohibition, size
+  // violation), then season state, then unknown.
+  const effectiveLegality =
+    !speciesId ? null
+    : !legalityReg ? 'unknown'
+    : prohibited ? 'closed'
+    : sizeViolation ? 'closed'
+    : legalitySeason?.status === 'closed'   ? 'closed'
+    : legalitySeason?.status === 'upcoming' ? 'closed'  // not open yet = can't keep today
+    : legalitySeason?.status === 'open'     ? 'open'
+    : 'unknown';
+  // A green verdict computed from FED-fallback data is not a state-
+  // waters guarantee — delegated species (red snapper!) set their own
+  // state seasons. No-keep verdicts stay decisive (conservative);
+  // the open verdict softens to a federal-scoped statement.
+  const fedSoftOpen = effectiveLegality === 'open' && !!legalityReg?._fromFed;
   const legalityHeadline =
-    effectiveLegality === 'open'   ? 'Legal to keep'
+    effectiveLegality === 'open'
+      ? (fedSoftOpen ? 'Open under FEDERAL rules — state season may differ' : 'Legal to keep')
     : effectiveLegality === 'closed' ? (
-        sizeViolation === 'under' ? 'Undersize — release it'
+        prohibited ? 'Retention prohibited — release it'
+      : sizeViolation === 'under' ? 'Undersize — release it'
       : sizeViolation === 'over'  ? 'Oversize — release it'
       : legalitySeason?.status === 'upcoming' ? 'Season not open yet'
       : 'Season closed — release it')
@@ -3467,24 +3508,24 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         {speciesId && jurisdiction && effectiveLegality && (
           <div style={{
             marginTop: 12, padding: '10px 12px', borderRadius: 8,
-            background: effectiveLegality === 'open'   ? T.openBg
+            background: effectiveLegality === 'open'   ? (fedSoftOpen ? T.warnBg : T.openBg)
                        : effectiveLegality === 'closed' ? T.closedBg
                        : T.parchmentDeep,
             border: `1px solid ${
-              effectiveLegality === 'open'   ? T.open
+              effectiveLegality === 'open'   ? (fedSoftOpen ? T.warn : T.open)
               : effectiveLegality === 'closed' ? T.closed
               : T.cardEdge
             }`,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: legalityChips.length ? 8 : 0 }}>
               {effectiveLegality === 'open'
-                ? <ShieldCheck    size={18} color={T.open} />
+                ? <ShieldCheck    size={18} color={fedSoftOpen ? T.warn : T.open} />
                 : effectiveLegality === 'closed'
                 ? <ShieldAlert    size={18} color={T.closed} />
                 : <ShieldQuestion size={18} color={T.inkSoft} />}
               <div style={{
                 fontSize: 13, fontWeight: 800, letterSpacing: 0.4,
-                color: effectiveLegality === 'open' ? T.open
+                color: effectiveLegality === 'open' ? (fedSoftOpen ? T.warn : T.open)
                      : effectiveLegality === 'closed' ? T.closed
                      : T.inkSoft,
               }}>
@@ -3795,10 +3836,11 @@ function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
     // Uses the same store precedence as the display path — verified
-    // Supabase overlay first, bundled fallback second. Ensures quiz
-    // questions reflect what the user sees on the Regulations tab.
+    // Supabase overlay first, bundled fallback second. Fed-fallback
+    // regs are EXCLUDED: the prompt names the state, so grading a
+    // federal number as the state answer would teach the wrong limit.
     const reg = regulationFor(s.id, jurisdiction.id).regulation;
-    return reg && reg.bagLimit != null;
+    return reg && !reg._fromFed && reg.bagLimit != null;
   });
   if (candidates.length === 0) return null;
   const correct = candidates[Math.floor(Math.random() * candidates.length)];
@@ -3818,9 +3860,10 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
-    // Same store precedence as bag-limit picker above.
+    // Same store precedence as bag-limit picker above; fed-fallback
+    // regs excluded for the same reason.
     const reg = regulationFor(s.id, jurisdiction.id).regulation;
-    return reg && reg.minSize != null;
+    return reg && !reg._fromFed && reg.minSize != null;
   });
   if (candidates.length === 0) return null;
   const correct = candidates[Math.floor(Math.random() * candidates.length)];

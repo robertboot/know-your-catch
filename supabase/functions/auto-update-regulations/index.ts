@@ -6,14 +6,20 @@
      1. Builds the species × jurisdiction grid from the live species
         table and picks the BATCH least-recently-checked pairs.
      2. Researches each pair with Claude + web search against the
-        agency's current published season.
+        agency's current published season (concurrency 3, so a batch
+        fits inside the edge-function wall-clock).
      3. Publishes automatically when the evidence is strong:
         confidence 'high' + a citable source URL + a season — the row
         lands status='verified', verified_by='auto-updater',
         auto_published=true. Weak results stay drafts for the admin.
-        Existing verified data is NEVER downgraded by a null-heavy
-        draft — worst case the pair just gets its last_checked_at
-        bumped and rotates to the back of the queue.
+        SAFETY RAILS:
+          - a draft null NEVER overwrites an existing value — updates
+            coalesce field-by-field against the current row
+          - 'disputed' rows are never touched (data or status) — the
+            admin flagged them for a reason
+          - verified rows are never downgraded by a weak draft
+          - failed row-less pairs get a stub draft row so they rotate
+            to the back of the queue instead of starving it
      4. Logs one summary row in regs_auto_runs (dashboard Health tile).
 
    Auth: x-cron-secret header must match the CRON_SECRET env var.
@@ -23,53 +29,19 @@
      ANTHROPIC_API_KEY
      CRON_SECRET
 
-   Body (optional): { batch?: number }   // default 6, max 12 */
+   Body (optional): { batch?: number }   // default 5, max 8 */
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  ANTHROPIC_ENDPOINT, ANTHROPIC_MODEL, ANTHROPIC_VERSION,
+  JURISDICTIONS, coerceNumeric, jsonResponse, finalTextBlock, salvageJson,
+} from '../_shared/regs-shared.ts';
 
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL    = 'claude-sonnet-5';
-const ANTHROPIC_VERSION  = '2023-06-01';
-const MAX_TOKENS         = 4000;
-const DEFAULT_BATCH      = 6;
-const MAX_BATCH          = 12;
-
-// Static jurisdiction descriptors — mirrors src/data.js. These change
-// ~never; species come from the live table.
-const JURISDICTIONS = [
-  { id: 'al_state', name: 'Alabama State Waters',     agency: 'ADCNR',        regsUrl: 'https://www.outdooralabama.com/fishing/saltwater-fishing' },
-  { id: 'fl_state', name: 'Florida State Waters',     agency: 'FWC',          regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
-  { id: 'ms_state', name: 'Mississippi State Waters', agency: 'MDMR',         regsUrl: 'https://dmr.ms.gov/marine-fisheries/' },
-  { id: 'la_state', name: 'Louisiana State Waters',   agency: 'LDWF',         regsUrl: 'https://www.wlf.louisiana.gov/page/recreational-fishing-regulations' },
-  { id: 'tx_state', name: 'Texas State Waters',       agency: 'TPWD',         regsUrl: 'https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing/' },
-  { id: 'fed_gulf', name: 'Federal Gulf Waters',      agency: 'NOAA / GMFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico' },
-];
-
-const RANGES: Record<string, [number, number]> = {
-  minSizeIn: [0, 120],
-  maxSizeIn: [0, 200],
-  bagLimit:  [0, 1000],
-  boatLimit: [0, 5000],
-};
-
-function coerceNumeric(raw: unknown, key: keyof typeof RANGES, rejects: string[]): number | null {
-  if (raw === null || raw === undefined || raw === '') return null;
-  const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
-  if (!Number.isFinite(n)) return null;
-  const [lo, hi] = RANGES[key];
-  if (n < lo || n > hi) {
-    rejects.push(`${key}=${raw} rejected (allowed ${lo}-${hi})`);
-    return null;
-  }
-  return n;
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status, headers: { 'Content-Type': 'application/json' },
-  });
-}
+const MAX_TOKENS    = 4000;
+const DEFAULT_BATCH = 5;
+const MAX_BATCH     = 8;
+const CONCURRENCY   = 3;
 
 interface Draft {
   seasonText: string | null;
@@ -160,20 +132,10 @@ Final message: the JSON object only.`;
     return { error: `anthropic ${resp.status}: ${t.slice(0, 200)}` };
   }
   const json = await resp.json().catch(() => null) as any;
-  const textBlocks = Array.isArray(json?.content)
-    ? json.content.filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
-    : [];
-  const rawText: string = textBlocks.length ? textBlocks[textBlocks.length - 1].text : '';
+  const rawText = finalTextBlock(json);
   if (!rawText) return { error: 'empty response' };
-
-  const stripped = rawText.replace(/^```(?:json)?\n/, '').replace(/\n```\s*$/, '').trim();
-  let parsed: Record<string, unknown>;
-  try { parsed = JSON.parse(stripped); }
-  catch {
-    const m = stripped.match(/\{[\s\S]*\}/);
-    try { parsed = JSON.parse(m ? m[0] : ''); }
-    catch { return { error: `bad json: ${rawText.slice(0, 150)}` }; }
-  }
+  const parsed = salvageJson(rawText);
+  if (!parsed) return { error: `bad json: ${rawText.slice(0, 150)}` };
 
   const rejects: string[] = [];
   const minSizeIn = coerceNumeric(parsed.minSizeIn, 'minSizeIn', rejects);
@@ -188,8 +150,12 @@ Final message: the JSON object only.`;
   const notes      = typeof parsed.notes      === 'string' && parsed.notes.trim()      ? parsed.notes.trim()      : null;
   const rawUrl     = typeof parsed.sourceUrl  === 'string' ? parsed.sourceUrl.trim() : '';
   const sourceUrl  = /^https?:\/\//i.test(rawUrl) ? rawUrl : null;
-  const conf       = parsed.confidence === 'high' || parsed.confidence === 'medium' || parsed.confidence === 'low'
-    ? parsed.confidence : 'low';
+  // Any rejected numeric downgrades confidence — a value the
+  // validator had to throw away means the model's read of the page
+  // was off, and auto-publish must not proceed on the remainder.
+  let conf = parsed.confidence === 'high' || parsed.confidence === 'medium' || parsed.confidence === 'low'
+    ? parsed.confidence as Draft['confidence'] : 'low';
+  if (rejects.length && conf === 'high') conf = 'medium';
   const noteParts  = [typeof parsed.sourceNote === 'string' ? parsed.sourceNote.trim() : '', ...rejects].filter(Boolean);
 
   return {
@@ -198,6 +164,20 @@ Final message: the JSON object only.`;
     sourceUrl,
     confidence: conf,
   };
+}
+
+/* Small concurrency pool — run tasks() with at most `limit` in
+   flight. Keeps the batch inside the edge wall-clock without
+   hammering the Anthropic API. */
+async function pool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  let next = 0;
+  const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      await worker(items[i]);
+    }
+  });
+  await Promise.all(lanes);
 }
 
 Deno.serve(async (req: Request) => {
@@ -231,7 +211,7 @@ Deno.serve(async (req: Request) => {
   const activeSpecies = (speciesRows || []).filter(s => s.is_active !== false);
 
   const { data: regRows, error: regErr } = await db.from('regulations')
-    .select('id, species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, last_checked_at');
+    .select('id, species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, source_note, source_url, last_checked_at');
   if (regErr) return jsonResponse({ error: `regulations query: ${regErr.message}` }, 500);
   const regByPair = new Map<string, NonNullable<typeof regRows>[number]>();
   for (const r of regRows || []) regByPair.set(`${r.species_id}|${r.jurisdiction_id}`, r);
@@ -254,17 +234,46 @@ Deno.serve(async (req: Request) => {
   let published = 0, drafted = 0, unchanged = 0, failed = 0;
   const detail: Record<string, string>[] = [];
 
-  for (const { sp, jur, row } of work) {
-    const draft = await researchPair(ANTHROPIC_API_KEY, sp, jur);
+  await pool(work, CONCURRENCY, async ({ sp, jur, row }) => {
     const pairKey = `${sp.id} × ${jur.id}`;
+
+    // NEVER touch disputed rows — the admin flagged conflicting
+    // sources; only a human resolves that. Bump the check clock so
+    // the pair rotates, leave everything else alone.
+    if (row?.status === 'disputed') {
+      const { error } = await db.from('regulations')
+        .update({ last_checked_at: nowIso }).eq('id', row.id);
+      if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
+      else       { unchanged += 1; detail.push({ pair: pairKey, outcome: 'skipped-disputed' }); }
+      return;
+    }
+
+    const draft = await researchPair(ANTHROPIC_API_KEY, sp, jur);
 
     if ('error' in draft) {
       failed += 1;
       detail.push({ pair: pairKey, outcome: 'failed', reason: draft.error });
-      // Bump last_checked_at on an existing row so a persistent
-      // failure doesn't pin this pair at the head of the queue.
-      if (row) await db.from('regulations').update({ last_checked_at: nowIso }).eq('id', row.id);
-      continue;
+      if (row) {
+        // Bump so a persistent failure doesn't pin this pair at the
+        // head of the queue.
+        await db.from('regulations').update({ last_checked_at: nowIso }).eq('id', row.id);
+      } else {
+        // Row-less pair: write a stub draft so it carries a
+        // last_checked_at and rotates instead of starving the grid.
+        // Visible to the admin as an empty draft with the failure
+        // note — honest breadcrumb, not clutter.
+        await db.from('regulations').upsert({
+          species_id: sp.id,
+          jurisdiction_id: jur.id,
+          status: 'draft',
+          drafted_by: 'ai',
+          drafted_at: nowIso,
+          source_note: `auto-updater: research failed — ${draft.error}`,
+          auto_published: false,
+          last_checked_at: nowIso,
+        }, { onConflict: 'species_id,jurisdiction_id' });
+      }
+      return;
     }
 
     const strong = draft.confidence === 'high'
@@ -274,75 +283,84 @@ Deno.serve(async (req: Request) => {
 
     const hasAnyData = !!draft.seasonText || draft.minSizeIn != null || draft.bagLimit != null;
 
+    // Field-level coalesce: a draft null NEVER erases an existing
+    // value. If an agency genuinely drops a limit, the admin removes
+    // it by hand — the cost of a stale max-size is far lower than
+    // silently deleting a verified slot limit because one AI pass
+    // omitted it.
+    const merged = {
+      season_text: draft.seasonText ?? row?.season_text ?? null,
+      min_size_in: draft.minSizeIn  ?? row?.min_size_in ?? null,
+      max_size_in: draft.maxSizeIn  ?? row?.max_size_in ?? null,
+      bag_limit:   draft.bagLimit   ?? row?.bag_limit   ?? null,
+      boat_limit:  draft.boatLimit  ?? row?.boat_limit  ?? null,
+      notes:       draft.notes      ?? row?.notes       ?? null,
+    };
+
+    const base = {
+      species_id: sp.id,
+      jurisdiction_id: jur.id,
+      source_note: draft.sourceNote,
+      source_url:  draft.sourceUrl ?? row?.source_url ?? null,
+      drafted_by: 'ai',
+      drafted_at: nowIso,
+      last_checked_at: nowIso,
+    };
+
+    let payload: Record<string, unknown>;
+    let outcome: 'published' | 'drafted' | 'unchanged';
+
     if (strong) {
-      // Auto-publish. Upsert on the (species,jurisdiction) unique key.
-      const { error } = await db.from('regulations').upsert({
-        ...(row ? { id: row.id } : {}),
-        species_id: sp.id,
-        jurisdiction_id: jur.id,
-        season_text: draft.seasonText,
-        min_size_in: draft.minSizeIn,
-        max_size_in: draft.maxSizeIn,
-        bag_limit:   draft.bagLimit,
-        boat_limit:  draft.boatLimit,
-        notes:       draft.notes,
-        source_note: draft.sourceNote,
-        source_url:  draft.sourceUrl,
+      payload = {
+        ...base, ...merged,
         status: 'verified',
-        drafted_by: 'ai',
-        drafted_at: nowIso,
         verified_by: 'auto-updater',
         verified_at: nowIso,
         auto_published: true,
-        last_checked_at: nowIso,
-      }, { onConflict: 'species_id,jurisdiction_id' });
-      if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
-      else       { published += 1; detail.push({ pair: pairKey, outcome: 'published', season: draft.seasonText || '' }); }
-      continue;
-    }
-
-    if (row && row.status === 'verified') {
-      // NEVER downgrade verified data with a weak draft — just note
-      // the check happened and move on. The admin's verified values
-      // (or a prior auto-publish) stay live.
+      };
+      outcome = 'published';
+    } else if (row && row.status === 'verified') {
+      // Weak draft + existing verified data: keep everything, just
+      // note the check happened.
       const { error } = await db.from('regulations')
-        .update({ last_checked_at: nowIso })
-        .eq('id', row.id);
+        .update({ last_checked_at: nowIso }).eq('id', row.id);
       if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
       else       { unchanged += 1; detail.push({ pair: pairKey, outcome: 'unchanged', confidence: draft.confidence }); }
-      continue;
+      return;
+    } else {
+      // Non-verified (or missing) row + weak draft → store as draft
+      // so the admin sees it in the Regulations tab and the pair
+      // rotates. hasAnyData=false still writes base (check clock +
+      // failure-note provenance) but preserves prior field values
+      // via the coalesce above.
+      payload = {
+        ...base,
+        ...(hasAnyData || row ? merged : {}),
+        status: 'draft',
+        auto_published: false,
+      };
+      outcome = 'drafted';
     }
 
-    // Non-verified (or missing) row + weak draft → store as draft so
-    // the admin sees it in the Regulations tab, and the pair rotates.
-    const { error } = await db.from('regulations').upsert({
-      ...(row ? { id: row.id } : {}),
-      species_id: sp.id,
-      jurisdiction_id: jur.id,
-      ...(hasAnyData ? {
-        season_text: draft.seasonText,
-        min_size_in: draft.minSizeIn,
-        max_size_in: draft.maxSizeIn,
-        bag_limit:   draft.bagLimit,
-        boat_limit:  draft.boatLimit,
-        notes:       draft.notes,
-      } : {}),
-      source_note: draft.sourceNote,
-      source_url:  draft.sourceUrl,
-      status: row?.status === 'stale' ? 'stale' : 'draft',
-      drafted_by: 'ai',
-      drafted_at: nowIso,
-      auto_published: false,
-      last_checked_at: nowIso,
-    }, { onConflict: 'species_id,jurisdiction_id' });
-    if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
-    else       { drafted += 1; detail.push({ pair: pairKey, outcome: 'drafted', confidence: draft.confidence }); }
-  }
-
-  await db.from('regs_auto_runs').insert({
-    checked: work.length, published, drafted, unchanged, failed,
-    detail,
+    const { error } = await db.from('regulations')
+      .upsert(payload, { onConflict: 'species_id,jurisdiction_id' });
+    if (error) {
+      failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message });
+    } else if (outcome === 'published') {
+      published += 1; detail.push({ pair: pairKey, outcome, season: draft.seasonText || '' });
+    } else {
+      drafted += 1; detail.push({ pair: pairKey, outcome, confidence: draft.confidence });
+    }
   });
+
+  // Best-effort run log — never let a logging failure turn a
+  // completed batch into a 500.
+  try {
+    await db.from('regs_auto_runs').insert({
+      checked: work.length, published, drafted, unchanged, failed,
+      detail,
+    });
+  } catch { /* logged results still returned below */ }
 
   return jsonResponse({ ok: true, checked: work.length, published, drafted, unchanged, failed });
 });

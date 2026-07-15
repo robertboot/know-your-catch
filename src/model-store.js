@@ -83,7 +83,7 @@ export async function getProductionModel() {
   const c = client();
   if (!c) return null;
   const { data } = await c.from('model_versions')
-    .select('id, version_name, model_file_path, labels_json, metrics_json')
+    .select('id, version_name, model_file_path, labels_json, metrics_json, imported_at')
     .eq('is_production', true).limit(1).maybeSingle();
   return data || null;
 }

@@ -36,26 +36,17 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  ANTHROPIC_ENDPOINT, ANTHROPIC_MODEL, ANTHROPIC_VERSION,
+  coerceNumeric, jsonResponse as sharedJsonResponse,
+  finalTextBlock, salvageJson,
+} from '../_shared/regs-shared.ts';
 
 const ADMIN_EMAILS = ['robertb1023@me.com'];
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL    = 'claude-sonnet-5';
-const ANTHROPIC_VERSION  = '2023-06-01';
 // Web search interleaves reasoning + search-result digestion into the
 // output stream before the final JSON, so this needs headroom well
 // beyond the ~200-token answer itself.
-const MAX_TOKENS         = 4000;
-
-// Plausibility bounds — any numeric value outside these ranges is
-// dropped to null and mentioned in sourceNote. Tuned wide but not
-// permissive: min_size 0-120 in covers everything from bait to
-// blue marlin; bag_limit 0-1000 covers baitfish; boat_limit same.
-const RANGES = {
-  minSizeIn: [0, 120],
-  maxSizeIn: [0, 200],
-  bagLimit:  [0, 1000],
-  boatLimit: [0, 5000],
-};
+const MAX_TOKENS = 4000;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,34 +54,13 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Browser-invoked function → every response carries CORS headers.
 function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders },
-  });
+  return sharedJsonResponse(body, status, corsHeaders);
 }
 
 function isAdminEmail(email: string | null | undefined) {
   return !!email && ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
-
-/* Numeric coercion — accepts number, numeric-string, null, undefined.
-   Returns null if out of range or unparseable, appending an
-   `implausible` note the caller can splice into sourceNote. */
-function coerceNumeric(
-  raw: unknown,
-  key: keyof typeof RANGES,
-  rejects: string[],
-): number | null {
-  if (raw === null || raw === undefined || raw === '') return null;
-  const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
-  if (!Number.isFinite(n)) return null;
-  const [lo, hi] = RANGES[key];
-  if (n < lo || n > hi) {
-    rejects.push(`AI suggested ${key}=${raw} — rejected as implausible (allowed ${lo}-${hi}).`);
-    return null;
-  }
-  return n;
 }
 
 interface ResearchBody {
@@ -242,28 +212,11 @@ Your FINAL message must be the JSON object only.`;
     return jsonResponse({ error: 'anthropic_error', status: anthropicResp.status, detail: t.slice(0, 500) }, 502);
   }
   const anthropicJson = await anthropicResp.json().catch(() => null) as any;
-  // With web search enabled the content array interleaves
-  // server_tool_use / web_search_tool_result / text blocks. The
-  // final text block carries the JSON answer.
-  const textBlocks = Array.isArray(anthropicJson?.content)
-    ? anthropicJson.content.filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
-    : [];
-  const rawText: string = textBlocks.length ? textBlocks[textBlocks.length - 1].text : '';
+  const rawText = finalTextBlock(anthropicJson);
   if (!rawText) return jsonResponse({ error: 'empty_response' }, 502);
 
-  const jsonText = rawText.replace(/^```(?:json)?\n/, '').replace(/\n```\s*$/, '').trim();
-  let parsed: Record<string, unknown>;
-  try { parsed = JSON.parse(jsonText); }
-  catch {
-    // Search-enabled responses occasionally lead with a sentence
-    // before the JSON despite instructions. Salvage the outermost
-    // object literal before giving up.
-    const braceMatch = jsonText.match(/\{[\s\S]*\}/);
-    try { parsed = JSON.parse(braceMatch ? braceMatch[0] : ''); }
-    catch {
-      return jsonResponse({ error: 'model_bad_json', sample: rawText.slice(0, 300) }, 502);
-    }
-  }
+  const parsed = salvageJson(rawText);
+  if (!parsed) return jsonResponse({ error: 'model_bad_json', sample: rawText.slice(0, 300) }, 502);
 
   // Validate numerics against plausibility bounds.
   const rejects: string[] = [];

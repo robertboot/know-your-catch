@@ -43,9 +43,10 @@ create policy regs_auto_runs_admin_read on public.regs_auto_runs
   using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
 
 -- 3) Hourly schedule. pg_cron + pg_net ship with Supabase; the job
---    POSTs to the edge function with the shared secret. Batch of 6
---    pairs per run ≈ 144 pairs/day → the full ~570-pair grid
---    (95 species × 6 jurisdictions) refreshes about every 4 days.
+--    POSTs to the edge function with the shared secret. Batch of 5
+--    pairs per run (concurrency 3 inside the function keeps it well
+--    under the edge wall-clock) ≈ 120 pairs/day → the full ~570-pair
+--    grid (95 species × 6 jurisdictions) refreshes about every 5 days.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
@@ -66,7 +67,7 @@ select cron.schedule(
       'Content-Type', 'application/json',
       'x-cron-secret', 'YOUR_CRON_SECRET'
     ),
-    body    := '{"batch": 6}'::jsonb
+    body    := '{"batch": 5}'::jsonb
   );
   $$
 );

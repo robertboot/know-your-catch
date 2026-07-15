@@ -872,12 +872,12 @@ export function IdentifyScreen({
   // logic as Regulations list, returns { key, label, bg, fg }.
   const seasonForSpecies = (id) => {
     const reg = jurisdiction ? regulationFor(id, jurisdiction.id).regulation : null;
-    if (!reg) return { key: 'unknown', label: 'Check', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
+    if (!reg) return { key: 'unknown', label: 'Varies', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
     const st = seasonState(reg.open).status;
     if (st === 'open')     return { key: 'open',     label: 'Open',     bg: 'rgba(52,211,153,0.14)', fg: '#5ee0ac' };
     if (st === 'closed')   return { key: 'closed',   label: 'Closed',   bg: 'rgba(248,113,113,0.14)', fg: '#f87171' };
     if (st === 'upcoming') return { key: 'upcoming', label: 'Opens soon', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
-    return { key: 'unknown', label: 'Check', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
+    return { key: 'unknown', label: 'Varies', bg: 'rgba(251,191,36,0.16)', fg: '#fbbf24' };
   };
 
   // Shared inline styles matching the spec's token palette. Kept

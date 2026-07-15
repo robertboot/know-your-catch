@@ -93,25 +93,47 @@ function mkDate(monthStr, day, year) {
   return new Date(Date.UTC(year, m, day, 12, 0, 0));
 }
 
-// Pull every "Mon D – Mon D[, YYYY]" range out of a string with its
-// character offset. A trailing year applies to ranges without one.
-// Separators cover what both humans and the AI-draft pipeline write:
-// en/em dash, hyphen, and the words to / through / thru / until.
-// ("June 1 through August 31" was previously unparseable, which sent
-// perfectly good verified seasons into the 'unknown' bucket.)
+// Pull every "Mon D[, YYYY] – Mon D[, YYYY]" range out of a string
+// with its character offset. Separators cover what both humans and
+// the AI-draft pipeline write: en/em dash, hyphen, and the words
+// to / through / thru / until. ("June 1 through August 31" was
+// previously unparseable, which sent perfectly good verified seasons
+// into the 'unknown' bucket.)
+//
+// Year resolution, in order:
+//   - explicit year on a date binds to THAT date ("Nov 1, 2025 -
+//     Feb 28, 2026" is a real split-year window, not an inverted one)
+//   - a lone trailing year fills the start date too
+//   - no years at all: fallbackYear for both, and an inverted result
+//     (Nov 1 – Feb 28) is a calendar wrap → end rolls into next year
 const RANGE_SEP = `(?:\\s*[–—-]\\s*|\\s+(?:to|through|thru|until)\\s+)`;
+const RANGE_RE_SRC = `${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?${RANGE_SEP}${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`;
 function parseRanges(text, fallbackYear) {
-  const re = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*\\d{4})?${RANGE_SEP}${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
+  const re = new RegExp(RANGE_RE_SRC, 'ig');
   const out = [];
   let m;
   while ((m = re.exec(text)) !== null) {
-    const year = m[5] ? +m[5] : fallbackYear;
-    const a = mkDate(m[1], +m[2], year);
-    const b = mkDate(m[3], +m[4], year);
-    if (a && b) out.push({ a, b, idx: m.index });
+    const yearA = m[3] ? +m[3] : (m[6] ? +m[6] : fallbackYear);
+    const yearB = m[6] ? +m[6] : fallbackYear;
+    let a = mkDate(m[1], +m[2], yearA);
+    let b = mkDate(m[4], +m[5], yearB);
+    // Calendar wrap without explicit years: "Nov 1 – Feb 28" means
+    // the end lands in the following year, not eleven months before
+    // the start.
+    if (a && b && b < a && !m[3] && !m[6]) {
+      b = mkDate(m[4], +m[5], yearB + 1);
+    }
+    // Explicitly-dated inverted ranges are data errors — drop them
+    // rather than evaluate a window that can never be active.
+    if (a && b && b >= a) out.push({ a, b, idx: m.index });
   }
   return out;
 }
+
+// Words that mean "you cannot keep this fish" — shared by the season
+// parser and the catch-legality logic so a prohibition never renders
+// as an open season no matter which path evaluates it.
+export const PROHIBITED_RE = /\bprohibit(?:ed|ion)?\b|\bno\s+(?:retention|harvest|take)\b|\bcatch[\s-]+and[\s-]+release\s+only\b|\bmay\s+not\s+be\s+(?:retained|harvested|kept)\b/i;
 
 const inRange = (d, r) => d >= r.a && d <= r.b;
 
@@ -128,60 +150,16 @@ export function seasonState(open, today = new Date()) {
   if (/^check current season$/i.test(raw) || /^verify/i.test(o))
     return { status: 'unknown', reason: 'Set in-season — confirm with the agency' };
 
-  // Parse ranges FIRST — "Open Jun 1 – Aug 31" must be treated as a
-  // window, not as a bare "Opens Jun 1" start date. The opens-date
-  // path below only runs when the string has no parseable range.
+  // Parse dashed/worded ranges first — "Open Jun 1 – Aug 31" must be
+  // treated as a window, not as a bare "Opens Jun 1" start date.
   const ranges = parseRanges(raw, year);
 
-  // Bare "Mon D[, YYYY]" dates anywhere in the string — used by both
-  // the prose-window parse (two dates but no dash separator, e.g.
-  // "June 1, 2026 and will close at 12:01 a.m. on October 26, 2026")
-  // and the single-"Opens" parse below.
-  const bareDates = [];
-  if (ranges.length === 0) {
-    const DATE_RE = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
-    let dm;
-    while ((dm = DATE_RE.exec(raw)) !== null) {
-      const d = mkDate(dm[1], +dm[2], dm[3] ? +dm[3] : year);
-      if (d) bareDates.push(d);
-    }
-  }
-
-  // Prose window: two or more dates in chronological order (and not a
-  // leading-"closed" sentence) read as an open window from the first
-  // date to the last — takes precedence over the "Opens" parse so the
-  // stated close date is honored.
-  if (ranges.length === 0 && bareDates.length >= 2 && !o.startsWith('closed')
-      && bareDates[0] < bareDates[bareDates.length - 1]) {
-    const a = bareDates[0], b = bareDates[bareDates.length - 1];
-    if (today < a)  return { status: 'upcoming', reason: `Opens ${fmtDate(a)}` };
-    if (today <= b) return { status: 'open', reason: cleanSeason(open) };
-    return { status: 'closed', reason: 'Season has ended for this year' };
-  }
-
-  // An explicit (re)open date — "Opens/Reopens <Mon D>[, YYYY]" with
-  // no end date anywhere in the string. Year optional: AI drafts and
-  // agency pages often write "Opens May 22" for the current season.
-  // Assume the year that puts the date closest to today (a January
-  // "Opens Dec 1" means last month, not eleven months out).
-  if (ranges.length === 0) {
-    const opensM = raw.match(new RegExp(`opens?\\s+${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'i'));
-    if (opensM) {
-      let d = mkDate(opensM[1], +opensM[2], opensM[3] ? +opensM[3] : year);
-      if (d && !opensM[3]) {
-        const half = 182 * 86400000;
-        if (d - today > half)      d = mkDate(opensM[1], +opensM[2], year - 1);
-        else if (today - d > half) d = mkDate(opensM[1], +opensM[2], year + 1);
-      }
-      if (d) return today < d
-        ? { status: 'upcoming', reason: `Opens ${fmtDate(d)}` }
-        : { status: 'open', reason: `Open since ${fmtDate(d)}` };
-    }
-  }
-
   // Split ranges into closures vs open windows by the position of the
-  // word "closed": ranges at/after it are closures.
-  const closedAt = o.indexOf('closed');
+  // FIRST closure word — 'closed', 'closure', 'prohibited', 'no
+  // retention/harvest/take' all count, so "Harvest prohibited May 1 –
+  // Jul 15" reads as a closure, not an open window. Ranges at/after
+  // the closure word are closures.
+  const closedAt = o.search(CLOSURE_VOCAB_RE);
   const closedRanges = closedAt < 0 ? [] : ranges.filter(r => r.idx >= closedAt);
   const openRanges = ranges.filter(r => !closedRanges.includes(r));
 
@@ -197,6 +175,65 @@ export function seasonState(open, today = new Date()) {
     return { status: 'closed', reason: 'Season has ended for this year' };
   }
 
+  // Bare "Mon D[, YYYY]" dates with their offsets — prose parsing for
+  // strings with no dashed range, e.g. "June 1, 2026 and will close
+  // at 12:01 a.m. on October 26, 2026".
+  const bareDates = [];
+  if (ranges.length === 0) {
+    BARE_DATE_RE.lastIndex = 0;
+    let dm;
+    while ((dm = BARE_DATE_RE.exec(raw)) !== null) {
+      const d = mkDate(dm[1], +dm[2], dm[3] ? +dm[3] : year);
+      if (d) bareDates.push({ d, idx: dm.index });
+    }
+  }
+
+  // Prose window: two or more dates in chronological order. Polarity
+  // depends on whether closure vocabulary precedes the first date:
+  //   "closed June 15, 2026; reopens January 1, 2027" → CLOSED window
+  //   "June 1, 2026 and will close on October 26, 2026" → OPEN window
+  if (bareDates.length >= 2 && bareDates[0].d < bareDates[bareDates.length - 1].d) {
+    const a = bareDates[0].d, b = bareDates[bareDates.length - 1].d;
+    const isClosureWindow = closedAt >= 0 && closedAt < bareDates[0].idx;
+    if (isClosureWindow) {
+      // Inside the stated closure → closed until the reopen date;
+      // outside it → open.
+      if (today >= a && today < b)
+        return { status: 'closed', reason: `Closed — reopens ${fmtDate(b)}` };
+      return { status: 'open', reason: 'Open (outside the stated closure)' };
+    }
+    if (today < a)  return { status: 'upcoming', reason: `Opens ${fmtDate(a)}` };
+    if (today <= b) return { status: 'open', reason: cleanSeason(open) };
+    return { status: 'closed', reason: 'Season has ended for this year' };
+  }
+
+  // An explicit (re)open date — "Opens/Reopens <Mon D>[, YYYY]" with
+  // no other window information. Runs whenever no OPEN window parsed,
+  // which covers both plain strings and closure-only strings like
+  // "Opens May 22, 2026; closed Jul 4 – Jul 6" (evaluated in April,
+  // the May 22 open date must yield 'upcoming', not 'open'). Year
+  // optional: assume the year that puts the date closest to today.
+  {
+    const opensM = raw.match(OPENS_RE);
+    if (opensM) {
+      let d = mkDate(opensM[1], +opensM[2], opensM[3] ? +opensM[3] : year);
+      if (d && !opensM[3]) {
+        const half = 182 * 86400000;
+        if (d - today > half)      d = mkDate(opensM[1], +opensM[2], year - 1);
+        else if (today - d > half) d = mkDate(opensM[1], +opensM[2], year + 1);
+      }
+      if (d) return today < d
+        ? { status: 'upcoming', reason: `Opens ${fmtDate(d)}` }
+        : { status: 'open', reason: `Open since ${fmtDate(d)}` };
+    }
+  }
+
+  // Retention prohibitions with no dates at all — "Retention
+  // prohibited (Atlantic)", "Catch and release only" — are closed
+  // seasons for keep-or-release purposes, full stop.
+  if (PROHIBITED_RE.test(o))
+    return { status: 'closed', reason: cleanSeason(open) || 'Retention prohibited' };
+
   // No open windows: a leading Open/Year-round (or a string that only
   // states closures) is open whenever no closure is active right now.
   if (/^(open|year-round|year round)\b/.test(o) || closedRanges.length)
@@ -204,6 +241,14 @@ export function seasonState(open, today = new Date()) {
 
   return fallback(regStatus({ open }));
 }
+
+// Hoisted patterns — seasonState runs per species in list renders
+// (~95 calls per rebuild); compiling these per call was measurable
+// jank on low-end phones. BARE_DATE_RE is 'g'-flagged: reset
+// lastIndex before each use.
+const CLOSURE_VOCAB_RE = /closed|closure|prohibit|no\s+(?:retention|harvest|take)/;
+const BARE_DATE_RE = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
+const OPENS_RE = new RegExp(`opens?\\s+${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'i');
 
 function addDay(d) { return new Date(d.getTime() + 86400000); }
 function fmtDate(d) {
@@ -219,12 +264,39 @@ export function regStatus(r) {
   const o = raw.toLowerCase();
   if (/not federally managed|not managed|see state|follow state/.test(o)) return 'unknown';
   if (/^check current season$/i.test(raw)) return 'unknown';
+  // Retention prohibitions are closed for keep/release purposes,
+  // regardless of phrasing ("Retention prohibited", "no harvest",
+  // "catch and release only").
+  if (PROHIBITED_RE.test(o)) return 'closed';
   // A leading "Open"/"Year-round" governs even if a later clause notes a
   // closed window; an entry that *starts* closed is closed.
   if (/^(open|year-round|year round)\b/.test(o)) return 'open';
   if (o.startsWith('closed')) return 'closed';
   if (o.includes('closed')) return 'closed';
-  return 'open';
+  // Unrecognized text is UNKNOWN, not open. This was `return 'open'`
+  // — which meant any season phrasing the parser didn't recognize
+  // rendered as an open season in a compliance app. Honest beats
+  // optimistic.
+  return 'unknown';
+}
+
+/* Time-ago formatter — "just now", "5m ago", "3h ago", "2d ago",
+   or the locale date past 30 days. Shared by the admin dashboard +
+   Legal tab (was two byte-identical private copies). */
+export function relativeTime(iso) {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '—';
+  const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (diffSec < 45)          return 'just now';
+  if (diffSec < 90)          return '1m ago';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60)          return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24)           return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30)          return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 export function differs(a, b) {

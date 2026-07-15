@@ -44,6 +44,7 @@ import { listPendingBundles } from '../training-exports-store.js';
 import { getProductionModel, publishedManifestUrl } from '../model-store.js';
 import { listSuggestions } from '../species-suggestions-store.js';
 import { Card, GhostButton, H1, SectionLabel } from '../components.jsx';
+import { relativeTime } from '../helpers.js';
 
 /* ============================================================
    Data hook — parallel fan-out of every dashboard fetch.
@@ -69,14 +70,20 @@ function useDashboardData() {
   const refresh = async () => {
     setState(s => ({ ...s, loading: true, errors: {} }));
 
+    // Model info (production row + published manifest) is needed by
+    // BOTH the Health strip and the Pipeline panel — fetch it once
+    // here and hand it to both, instead of two cache-busted fetches
+    // of the same manifest per refresh.
+    const modelInfo = await fetchModelInfo().catch(() => null);
+
     // Fire every fetch in parallel — the dashboard is one-shot on
     // mount + on the Refresh button, so we optimize for wall-clock.
     const [
       healthRes, pipelineRes, queueRes, speciesRes, regsMatrixRes,
       trainingRes, categoriesRes, usersRes, recentRes,
     ] = await Promise.allSettled([
-      fetchHealth(),
-      fetchPipeline(),
+      fetchHealth(modelInfo),
+      fetchPipeline(modelInfo),
       fetchActionQueue(),
       fetchSpeciesCoverage(),
       fetchRegsMatrix(),
@@ -134,9 +141,33 @@ function useDashboardData() {
    Individual fetch functions.
    ============================================================ */
 
-async function fetchHealth() {
-  const [prod, bundles, lastAi, autoRun] = await Promise.all([
-    getProductionModel(),
+/* Production model row + published manifest, fetched once per
+   refresh and shared by fetchHealth + fetchPipeline. NOTE:
+   getProductionModel() returns the model_versions ROW directly (or
+   null) — an earlier version of this file read `prod?.row`, which is
+   always undefined, so the Health tile permanently showed
+   NOT PUBLISHED even with a live model. */
+async function fetchModelInfo() {
+  const prod = await getProductionModel();
+  let manifest = null;
+  try {
+    const url = publishedManifestUrl();
+    if (url) {
+      // Bust caches so we don't show a stale manifest after a
+      // re-promote in the same session.
+      const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-store' });
+      if (resp.ok) manifest = await resp.json();
+    }
+  } catch { /* best-effort */ }
+  return {
+    row: prod || null,
+    publishedAt: manifest?.published_at || null,
+    manifestVersion: manifest?.version_name || null,
+  };
+}
+
+async function fetchHealth(modelInfo) {
+  const [bundles, lastAi, autoRun] = await Promise.all([
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
       const c = client();
@@ -164,31 +195,12 @@ async function fetchHealth() {
     })(),
   ]);
 
-  const modelClasses = prod?.row?.labels_json?.labels?.length || 0;
-  const modelVersion = prod?.row?.version_name || null;
-
-  // Try to read the published manifest for the wall-clock publish
-  // time. Cheap: one anon fetch against the public bucket.
-  let publishedAt = null;
-  try {
-    const url = publishedManifestUrl();
-    if (url) {
-      // Bust caches so we don't show a stale manifest after a
-      // re-promote in the same session.
-      const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-store' });
-      if (resp.ok) {
-        const j = await resp.json();
-        publishedAt = j?.published_at || null;
-      }
-    }
-  } catch { /* best-effort */ }
-
+  const prod = modelInfo?.row || null;
   return {
-    model: prod?.row ? {
-      version: modelVersion,
-      classCount: modelClasses,
-      publishedAt,
-      warning: prod?.publishWarning || null,
+    model: prod ? {
+      version: prod.version_name || modelInfo?.manifestVersion || null,
+      classCount: prod.labels_json?.labels?.length || 0,
+      publishedAt: modelInfo?.publishedAt || null,
     } : null,
     pendingBundles: bundles.ok ? bundles.rows.length : 0,
     lastAiDraft: lastAi?.drafted_at || null,
@@ -203,7 +215,7 @@ async function fetchHealth() {
    the admin having to guess. Also breaks down by source so you can
    see what's coming from admin uploads vs. real user Fish-ID
    corrections and confirmations. */
-async function fetchPipeline() {
+async function fetchPipeline(modelInfo) {
   const c = client();
   if (!c) throw new Error('supabase not configured');
 
@@ -214,32 +226,10 @@ async function fetchPipeline() {
   //   2. model_versions row's imported_at (fallback if the manifest
   //      is missing / older schema)
   //   3. null (no model yet — count all-time)
-  let sinceIso = null;
-  let sinceLabel = 'all time';
-  let modelVersion = null;
-  try {
-    const url = publishedManifestUrl();
-    if (url) {
-      const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-store' });
-      if (resp.ok) {
-        const j = await resp.json();
-        if (j?.published_at) {
-          sinceIso = j.published_at;
-          modelVersion = j?.version_name || null;
-        }
-      }
-    }
-  } catch { /* best-effort */ }
-  if (!sinceIso) {
-    const prod = await getProductionModel().catch(() => null);
-    if (prod?.row?.imported_at) {
-      sinceIso = prod.row.imported_at;
-      modelVersion = prod.row.version_name || modelVersion;
-    }
-  }
-  if (sinceIso) {
-    sinceLabel = `since ${modelVersion || 'last publish'}`;
-  }
+  // modelInfo is fetched ONCE per refresh and shared with fetchHealth.
+  let sinceIso = modelInfo?.publishedAt || modelInfo?.row?.imported_at || null;
+  let modelVersion = modelInfo?.manifestVersion || modelInfo?.row?.version_name || null;
+  let sinceLabel = sinceIso ? `since ${modelVersion || 'last publish'}` : 'all time';
 
   const now = Date.now();
   const dayIso   = new Date(now -      86400_000).toISOString();
@@ -283,12 +273,12 @@ async function fetchPipeline() {
     cnt(baseSince().eq('source', 'owner_upload')),
     cnt(baseSince().eq('source', 'model_confirmation')),
     cnt(baseSince().eq('source', 'model_correction')),
-    // Recent rows for the leaderboard + spark bar. Capped at 1000
-    // to keep the payload sane on high-volume projects; anything
-    // over that would need server-side aggregation anyway.
+    // Recent rows for the leaderboard + freshness line. Capped at
+    // 1000 to keep the payload sane on high-volume projects;
+    // anything over that would need server-side aggregation anyway.
     (() => {
       let q = c.from('training_images')
-        .select('species_id, source, uploaded_at')
+        .select('species_id, uploaded_at')
         .eq('status', 'verified')
         .order('uploaded_at', { ascending: false })
         .limit(1000);
@@ -1413,7 +1403,9 @@ function ActionTile({ label, count, hint, ctaLabel, onClick, urgent }) {
 }
 
 function BigStat({ label, value, muted, tone }) {
-  const color = tone === 'warn' ? T.brass : tone === 'closed' ? T.closed
+  const color = tone === 'ok'   ? T.open
+              : tone === 'warn' ? T.brass
+              : tone === 'closed' ? T.closed
               : muted ? T.inkMute : T.ink;
   return (
     <div>
@@ -1499,19 +1491,3 @@ function Td({ children, align = 'left', tone, muted, colSpan, style }) {
   );
 }
 
-/* Time helper — "just now", "5m ago", "3h ago", "2d ago", or the date. */
-function relativeTime(iso) {
-  if (!iso) return '—';
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return '—';
-  const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (diffSec < 45)          return 'just now';
-  if (diffSec < 90)          return '1m ago';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60)          return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24)           return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 30)          return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
