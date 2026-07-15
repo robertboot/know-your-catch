@@ -119,6 +119,7 @@ function catchToRow(c, userId) {
     weather:      c.weather || null,
     jurisdiction: c.jurisdiction || null,
     photos:       Array.isArray(c.photos) ? c.photos : [],
+    meta_needs_review: !!c.metaNeedsReview,
     deleted_at:   null,
   };
 }
@@ -142,6 +143,7 @@ function rowToCatch(r) {
     jurisdiction: r.jurisdiction,
     photos:       Array.isArray(r.photos) ? r.photos : [],
     photo:        (Array.isArray(r.photos) && r.photos.length > 0) ? r.photos[0] : null,
+    metaNeedsReview: !!r.meta_needs_review,
   };
 }
 

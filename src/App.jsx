@@ -719,12 +719,18 @@ export default function App() {
               }]);
               return;
             }
+            // Unified photo-confirm page: catch entry opens with the
+            // overlay (photo + metadata verdict + species confirm) —
+            // replaces the old separate identify_confirm card.
             setStack(st => [...st.slice(0, -1), {
-              name: 'identify_confirm',
-              imageDataUrl: screen.imageDataUrl,
-              originalDataUrl: screen.originalDataUrl,
+              name: 'catch_entry',
               aiIdentifiedSpeciesId,
               aiConfidence,
+              confirmPhoto: {
+                imageDataUrl: originalForLog,
+                aiIdentifiedSpeciesId,
+                aiConfidence,
+              },
             }]);
             return;
           }
@@ -893,6 +899,7 @@ export default function App() {
         aiWasConfirmed={screen.aiWasConfirmed}
         openUploadOnMount={screen.openUploadOnMount}
         openSuggestOnMount={screen.openSuggestOnMount}
+        confirmPhoto={screen.confirmPhoto}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}
       />;

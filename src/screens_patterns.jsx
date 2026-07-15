@@ -205,7 +205,11 @@ export function PatternsScreen({ state, onPickSpecies }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const isLandscape = size === 'tablet-landscape';
-  const catchLog = state.catchLog || [];
+  // Catches flagged metaNeedsReview confirmed a photo with no
+  // location/time and haven't been completed — their defaults would
+  // poison every when/where analysis below, so they're excluded
+  // until the angler fills in real details (badge in the Logbook).
+  const catchLog = (state.catchLog || []).filter(c => !c.metaNeedsReview);
   const pbs = state.pbs || {};
   const [drillId, setDrillId] = useState(null);
 

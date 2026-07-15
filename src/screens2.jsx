@@ -53,6 +53,7 @@ import { useScreenSize } from './screen-size.js';
 import { getLocation, getPhoto, isNative } from './native.js';
 import { SpeciesPickerModal, SpeciesSuggestModal } from './admin/pickers.jsx';
 import { newClientSpeciesId, submitSuggestion } from './species-suggestions-store.js';
+import { identifyPhoto } from './identifyPhoto.js';
 import { getCategories, categoryById, subscribe as subscribeCategories } from './categories-store.js';
 import { regulationFor, regulationAge } from './regulations-store.js';
 import exifr from 'exifr';
@@ -2503,6 +2504,17 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                     ! Details pending
                   </span>
                 )}
+                {!isQuick && c.metaNeedsReview && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    background: T.warnBg, color: T.warn,
+                    border: `1px solid ${T.warn}`,
+                    fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+                    padding: '2px 6px', borderRadius: 4,
+                  }}>
+                    ! Needs location &amp; time
+                  </span>
+                )}
                 {isPB(c.id) && (
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -2904,7 +2916,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount, openSuggestOnMount }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount, openSuggestOnMount, confirmPhoto }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
@@ -2954,6 +2966,36 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   // Tracks what EXIF was actually found on the first uploaded photo so
   // the UI can tell the angler if their photo had no metadata.
   const [photoExifStatus, setPhotoExifStatus] = useState(null); // 'gps+time' | 'gps' | 'time' | 'none' | null
+  // Photo-1 confirmation overlay. Every first photo (upload, camera,
+  // or capture flow) stops here so the angler SEES what metadata was
+  // found (or that none was) and confirms the species before the
+  // photo drives the catch record. pendingConfirm:
+  //   { dataUrl, meta: {source:'photo'|'device'|'none', lat?, lon?, time?},
+  //     idStatus: 'running'|'done', idSpeciesId, idConfidence }
+  const [pendingConfirm, setPendingConfirm] = useState(null);
+  // True when the angler confirmed a photo WITHOUT usable metadata
+  // and hasn't manually entered location+time yet. Saved on the
+  // catch; drives the 'needs details' badge and excludes the catch
+  // from Patterns analysis until cleared. Editing an existing row
+  // seeds from what's stored.
+  const [metaNeedsReview, setMetaNeedsReview] = useState(existing?.metaNeedsReview || false);
+
+  // Open the confirmation overlay for a first photo. Runs Fish ID in
+  // the background and patches the overlay state when it lands.
+  const openPhotoConfirm = (dataUrl, meta) => {
+    setPendingConfirm({ dataUrl, meta, idStatus: 'running', idSpeciesId: null, idConfidence: null });
+    identifyPhoto(dataUrl, { jurisdictionId: jurisdiction?.id || null }).then((res) => {
+      const top = res?.candidates?.[0] || null;
+      setPendingConfirm(pc => pc && pc.dataUrl === dataUrl ? {
+        ...pc,
+        idStatus: 'done',
+        idSpeciesId: top?.speciesId || null,
+        idConfidence: typeof res?.confidenceScore === 'number' ? res.confidenceScore : (top?.score ?? null),
+      } : pc);
+    }).catch(() => {
+      setPendingConfirm(pc => pc && pc.dataUrl === dataUrl ? { ...pc, idStatus: 'done' } : pc);
+    });
+  };
   // Manual edit inputs.
   const [editingLoc, setEditingLoc] = useState(false);
   const [latInput, setLatInput] = useState('');
@@ -3031,6 +3073,63 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     }
   }, [openUploadOnMount]);
 
+  // Capture flow (home camera button) lands here with the photo +
+  // Fish ID result already computed — open the same confirmation
+  // overlay instead of the old separate confirm card. One-shot.
+  const confirmKickedRef = React.useRef(false);
+  useEffect(() => {
+    if (confirmPhoto?.imageDataUrl && !confirmKickedRef.current) {
+      confirmKickedRef.current = true;
+      setPendingConfirm({
+        dataUrl: confirmPhoto.imageDataUrl,
+        meta: { source: 'device', time: new Date() },
+        idStatus: 'done',
+        idSpeciesId: confirmPhoto.aiIdentifiedSpeciesId || null,
+        idConfidence: confirmPhoto.aiConfidence ?? null,
+      });
+    }
+  }, [confirmPhoto]);
+
+  // Overlay resolution: apply the (possibly cropped) photo, the
+  // metadata decision, and the species pick to the form in one shot.
+  const resolvePhotoConfirm = async ({ finalDataUrl, useMeta, speciesPick, suggestNew }) => {
+    const pc = pendingConfirm;
+    setPendingConfirm(null);
+    if (!pc) return;
+    const entry = await savePhoto(finalDataUrl || pc.dataUrl);
+    setPhotos(p => [entry, ...p].slice(0, 3));
+    setPhotoSource(pc.meta.source === 'device' ? 'camera' : 'upload');
+    if (useMeta && pc.meta.source === 'photo') {
+      if (pc.meta.lat != null) setLoc({ lat: pc.meta.lat, lon: pc.meta.lon, error: null, loading: false });
+      if (pc.meta.time) setWhen(pc.meta.time);
+      setMetaSource('photo');
+      setMetaNeedsReview(false);
+      setPhotoExifStatus(pc.meta.lat != null && pc.meta.time ? 'gps+time' : pc.meta.lat != null ? 'gps' : 'time');
+    } else if (useMeta && pc.meta.source === 'device') {
+      fetchGps();
+      setWhen(pc.meta.time || new Date());
+      setMetaSource('device');
+      setMetaNeedsReview(false);
+      setPhotoExifStatus(null);
+    } else {
+      // Confirmed WITHOUT metadata — flag the record until the angler
+      // fills in location + time manually. Protects Patterns/analysis
+      // from silently-wrong defaults.
+      setMetaSource(null);
+      setMetaNeedsReview(true);
+      setPhotoExifStatus('none');
+    }
+    if (speciesPick) {
+      setSpeciesId(speciesPick);
+      setAiBadgeConfidence(pc.idConfidence ?? null);
+    }
+    if (suggestNew) {
+      setSuggestInitial('');
+      setSuggestOpen(true);
+    }
+  };
+  const cancelPhotoConfirm = () => setPendingConfirm(null);
+
   // Fish ID → "Add to database": land here with the scanned photo
   // already attached and the suggest modal open, so the angler can
   // name the unknown fish immediately. One-shot.
@@ -3050,14 +3149,15 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const acceptCameraPhoto = async (rawDataUrl) => {
     if (!rawDataUrl || photos.length >= 3) return;
     const isFirst = photos.length === 0;
+    if (isFirst) {
+      // Photo 1 drives the record — stop at the confirmation overlay
+      // (device GPS + capture time are the metadata on offer).
+      openPhotoConfirm(rawDataUrl, { source: 'device', time: new Date() });
+      return;
+    }
     const entry = await savePhoto(rawDataUrl);
     setPhotos(p => [...p, entry].slice(0, 3));
     setPhotoSource('camera');
-    if (isFirst) {
-      fetchGps();          // re-acquire current device GPS
-      setWhen(new Date()); // catch time = the moment we took the photo
-      setMetaSource('device');
-    }
   };
 
   const handleCameraPick = async (e) => {
@@ -3094,39 +3194,42 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     // Was the catch empty before this batch? If so, the first file in
     // the batch becomes Photo 1 and drives the location + time.
     const wasEmpty = photos.length === 0;
-    // savePhoto owns the tier-aware downscale (native 2400/0.90,
-    // web 1600/0.82). Pass raw Files; state only carries thumb + URL.
-    Promise.all(batch.map((f) => savePhoto(f))).then((entries) => {
-      setPhotos(p => [...p, ...entries].slice(0, 3));
-      setPhotoSource('upload');
-    });
-    if (!wasEmpty) return; // additional shots — don't touch location/time
+    // Additional shots (2-3) apply instantly — they carry no data.
+    const instant = wasEmpty ? batch.slice(1) : batch;
+    if (instant.length) {
+      Promise.all(instant.map((f) => savePhoto(f))).then((entries) => {
+        setPhotos(p => [...p, ...entries].slice(0, 3));
+        setPhotoSource('upload');
+      });
+    }
+    if (!wasEmpty) return;
+    // Photo 1: read EXIF first, then stop at the confirmation overlay
+    // so the angler SEES whether metadata was found before it drives
+    // the record. Some photos return DateTimeOriginal as a string
+    // like "2024:03:15 12:30:45"; parseExifDate handles both forms.
     const f = batch[0];
-    // Force the parser to include GPS + the main EXIF date tags and to
-    // translate them. Some photos return DateTimeOriginal as a string
-    // like "2024:03:15 12:30:45" (EXIF uses colons in the date part,
-    // which JS's Date constructor can't parse), so we handle both Date
-    // and string forms explicitly.
-    exifr.parse(f, {
-      tiff: true, exif: true, gps: true,
-      translateValues: true, reviveValues: true, sanitize: true, mergeOutput: true,
-      pick: ['latitude', 'longitude', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef',
-             'DateTimeOriginal', 'CreateDate', 'ModifyDate', 'OffsetTimeOriginal'],
-    }).then((meta) => {
-      const gotGps = !!(meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude));
-      const parsed = parseExifDate(meta?.DateTimeOriginal)
-        || parseExifDate(meta?.CreateDate)
-        || parseExifDate(meta?.ModifyDate);
-      if (gotGps) setLoc({ lat: meta.latitude, lon: meta.longitude, error: null, loading: false });
-      if (parsed) setWhen(parsed);
-      if (gotGps || parsed) setMetaSource('photo');
-      setPhotoExifStatus(
-        gotGps && parsed ? 'gps+time' :
-        gotGps ? 'gps' :
-        parsed ? 'time' :
-        'none'
-      );
-    }).catch(() => setPhotoExifStatus('none'));
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      exifr.parse(f, {
+        tiff: true, exif: true, gps: true,
+        translateValues: true, reviveValues: true, sanitize: true, mergeOutput: true,
+        pick: ['latitude', 'longitude', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef',
+               'DateTimeOriginal', 'CreateDate', 'ModifyDate', 'OffsetTimeOriginal'],
+      }).then((meta) => {
+        const gotGps = !!(meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude));
+        const parsed = parseExifDate(meta?.DateTimeOriginal)
+          || parseExifDate(meta?.CreateDate)
+          || parseExifDate(meta?.ModifyDate);
+        openPhotoConfirm(dataUrl, (gotGps || parsed) ? {
+          source: 'photo',
+          lat: gotGps ? meta.latitude : null,
+          lon: gotGps ? meta.longitude : null,
+          time: parsed || null,
+        } : { source: 'none' });
+      }).catch(() => openPhotoConfirm(dataUrl, { source: 'none' }));
+    };
+    reader.readAsDataURL(f);
   };
 
   const removePhotoAt = (i) => {
@@ -3173,6 +3276,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const useDeviceGps = () => {
     fetchGps();
     setMetaSource('device');
+    setMetaNeedsReview(false);
   };
 
   const startEditLoc = () => {
@@ -3187,6 +3291,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         Number.isFinite(lo) && lo >= -180 && lo <= 180) {
       setLoc({ lat: la, lon: lo, error: null, loading: false });
       setMetaSource('manual');
+      setMetaNeedsReview(false);
     }
     setEditingLoc(false);
   };
@@ -3202,6 +3307,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     if (!isNaN(d.getTime())) {
       setWhen(d);
       setMetaSource('manual');
+      setMetaNeedsReview(false);
     }
     setEditingWhen(false);
   };
@@ -3234,6 +3340,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       aiIdentifiedSpeciesId: aiIdentifiedSpeciesId ?? existing?.aiIdentifiedSpeciesId ?? null,
       aiConfidence:          aiConfidence          ?? existing?.aiConfidence          ?? null,
       aiWasConfirmed:        aiWasConfirmed        ?? existing?.aiWasConfirmed        ?? false,
+      // True until the angler supplies real location + time for a
+      // photo that carried none — drives the 'needs details' badge
+      // and keeps the catch out of Patterns analysis meanwhile.
+      metaNeedsReview,
     };
 
     const nextCatchLog = existing
@@ -3505,6 +3615,18 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         </div>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
         <input ref={uploadRef} type="file" accept="image/*" multiple onChange={handleUploadPick} style={{ display: 'none' }} />
+        {/* Photo-1 confirmation overlay — metadata verdict + species
+            confirm + optional crop, blocking until the angler decides. */}
+        {pendingConfirm && (
+          <PhotoConfirmOverlay
+            pc={pendingConfirm}
+            resolveSpecies={resolveSpecies}
+            speciesOptions={speciesSorted}
+            units={state.units}
+            onResolve={resolvePhotoConfirm}
+            onCancel={cancelPhotoConfirm}
+          />
+        )}
         {/* On-demand crop overlay (position:fixed). Catch photos keep
             the full frame by default; this is the opt-in trim. */}
         {cropIdx != null && cropSrc && (
@@ -3892,6 +4014,191 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
       key: s.id, label: s.commonName, isCorrect: s.id === correct.id,
     })),
   };
+}
+
+/* ============================================================
+   PHOTO CONFIRM OVERLAY — Photo 1 gatekeeper.
+   Shows the photo (with opt-in crop), states plainly whether
+   usable metadata was found, and confirms the species after Fish
+   ID runs. Nothing lands on the catch record until the angler
+   picks one of the explicit Confirm actions — so wrong metadata
+   can never slip in silently and poison Patterns/analysis.
+   ============================================================ */
+function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onResolve, onCancel }) {
+  const [workingUrl, setWorkingUrl] = useState(pc.dataUrl); // cropped or original
+  const [cropping, setCropping] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
+  const [suggestNew, setSuggestNew] = useState(false);
+
+  const idSpecies = pc.idSpeciesId ? resolveSpecies(pc.idSpeciesId) : null;
+  const chosenId = suggestNew ? null : (speciesPick ?? pc.idSpeciesId ?? null);
+  const chosen = chosenId ? resolveSpecies(chosenId) : null;
+  const pct = pc.idConfidence != null ? Math.round(pc.idConfidence * 100) : null;
+
+  const hasMeta = pc.meta.source === 'photo'
+    ? (pc.meta.lat != null || !!pc.meta.time)
+    : pc.meta.source === 'device';
+
+  const confirm = (useMeta) => onResolve({
+    finalDataUrl: workingUrl,
+    useMeta,
+    speciesPick: chosenId,
+    suggestNew,
+  });
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 400,
+      background: T.bgDeep, color: T.ink,
+      display: 'flex', flexDirection: 'column',
+      overflowY: 'auto',
+      padding: '16px 16px 24px',
+      paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
+      paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)',
+    }}>
+      <H1 size={20} style={{ marginBottom: 12 }}>Confirm this photo</H1>
+
+      {/* Photo + crop affordance */}
+      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 12, border: `1px solid ${T.cardEdge}` }}>
+        <img src={workingUrl} alt="Your catch" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', background: '#000' }} />
+        <button onClick={() => setCropping(true)} style={{
+          position: 'absolute', top: 8, left: 8,
+          borderRadius: 6, padding: '5px 10px',
+          background: 'rgba(3, 27, 51, 0.85)', color: '#5ecdf2',
+          border: '1px solid #5ecdf2', cursor: 'pointer',
+          fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+        }}>
+          CROP
+        </button>
+      </div>
+
+      {/* Metadata verdict — the point of this page: no ambiguity about
+          whether data was found. */}
+      <Card style={{
+        marginBottom: 10, padding: 12,
+        borderColor: pc.meta.source === 'none' ? T.warn : T.open,
+      }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Photo data</SectionLabel>
+        {pc.meta.source === 'photo' && (
+          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
+            {pc.meta.lat != null
+              ? <div><strong style={{ color: T.open }}>✓ Location found:</strong> {pc.meta.lat.toFixed(4)}°, {pc.meta.lon.toFixed(4)}°</div>
+              : <div><strong style={{ color: T.warn }}>✗ No location</strong> in this photo</div>}
+            {pc.meta.time
+              ? <div><strong style={{ color: T.open }}>✓ Time found:</strong> {pc.meta.time.toLocaleString()}</div>
+              : <div><strong style={{ color: T.warn }}>✗ No time</strong> in this photo</div>}
+          </div>
+        )}
+        {pc.meta.source === 'device' && (
+          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
+            <div><strong style={{ color: T.open }}>✓ Using device GPS</strong> (your location right now)</div>
+            <div><strong style={{ color: T.open }}>✓ Time:</strong> {(pc.meta.time || new Date()).toLocaleString()}</div>
+          </div>
+        )}
+        {pc.meta.source === 'none' && (
+          <div style={{ fontSize: 13, color: T.warn, lineHeight: 1.6 }}>
+            <strong>This photo carries no location or time data.</strong>
+            <div style={{ color: T.inkSoft, marginTop: 4 }}>
+              You can still add it — the catch will be marked
+              <strong> needs details</strong> until you enter where and when,
+              so your fishing data stays accurate.
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Species confirm — Fish ID result with correct/add options. */}
+      <Card style={{ marginBottom: 12, padding: 12 }}>
+        <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
+        {pc.idStatus === 'running' && !speciesPick && !suggestNew && (
+          <div style={{ fontSize: 13, color: T.inkMute }}>Identifying species…</div>
+        )}
+        {suggestNew && (
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.brass }}>
+            New species — you'll name it on the next screen
+          </div>
+        )}
+        {!suggestNew && chosen && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>{chosen.commonName}</div>
+              {!speciesPick && pct != null && (
+                <div style={{ fontSize: 11, color: pct >= 80 ? T.open : pct >= 60 ? T.warn : T.closed, fontWeight: 700, marginTop: 2 }}>
+                  Fish ID · {pct}% confident
+                </div>
+              )}
+              {speciesPick && (
+                <div style={{ fontSize: 11, color: T.brass, fontWeight: 700, marginTop: 2 }}>Picked by you</div>
+              )}
+            </div>
+          </div>
+        )}
+        {!suggestNew && !chosen && pc.idStatus === 'done' && (
+          <div style={{ fontSize: 13, color: T.inkMute }}>
+            Couldn't identify this fish — pick the species below, or add it if it's not in the app.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+          <GhostButton onClick={() => { setPickerOpen(true); }} style={{ padding: '7px 12px', fontSize: 12 }}>
+            {chosen ? 'Pick different species' : 'Pick species'}
+          </GhostButton>
+          <button onClick={() => setSuggestNew(v => !v)} style={{
+            background: suggestNew ? T.brass : 'transparent',
+            color: suggestNew ? T.oceanDeep : T.brass,
+            border: `1px solid ${T.brass}`, borderRadius: 8,
+            padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}>
+            {suggestNew ? '✓ Adding new species' : 'Not in the app? Add it'}
+          </button>
+        </div>
+      </Card>
+
+      {/* Confirm actions — explicit, blocking, no silent defaults. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
+        {hasMeta && (
+          <PrimaryButton onClick={() => confirm(true)}>
+            Confirm — use this location &amp; time
+          </PrimaryButton>
+        )}
+        <GhostButton onClick={() => confirm(false)} style={{ width: '100%' }}>
+          {hasMeta
+            ? "Confirm — I'll enter details manually"
+            : "Confirm — I'll enter location & time manually"}
+        </GhostButton>
+        <button onClick={onCancel} style={{
+          background: 'transparent', border: 'none', color: T.inkMute,
+          fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 8,
+        }}>
+          Cancel — don't use this photo
+        </button>
+      </div>
+
+      {cropping && (
+        <CropStep
+          imageSrc={workingUrl}
+          title="Crop photo"
+          primaryLabel="Use crop"
+          cancelLabel="Cancel"
+          onCancel={() => setCropping(false)}
+          onConfirm={({ dataUrl }) => {
+            if (dataUrl) setWorkingUrl(dataUrl);
+            setCropping(false);
+          }}
+        />
+      )}
+
+      {pickerOpen && (
+        <SpeciesPickerModal
+          speciesOptions={speciesOptions}
+          currentSpeciesId={chosenId}
+          onCancel={() => setPickerOpen(false)}
+          onPick={(sid) => { setSpeciesPick(sid); setSuggestNew(false); setPickerOpen(false); }}
+          title="What species is it?"
+        />
+      )}
+    </div>
+  );
 }
 
 const _BAG_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 10, 15, 20];
