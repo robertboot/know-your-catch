@@ -96,7 +96,30 @@ export function regulationFor(speciesId, jurisdictionId) {
   if (!speciesId || !jurisdictionId) return { source: 'none', regulation: null };
   const overlayRow = _verified.get(speciesId)?.[jurisdictionId] || null;
   if (overlayRow) {
-    return { source: 'verified', regulation: overlayToRenderShape(overlayRow), row: overlayRow };
+    // PER-FIELD merge: the verified row wins on every field it
+    // actually has, and the bundled row fills the gaps. Whole-row
+    // precedence was a trap — the AI drafting pipeline errs toward
+    // null on fields it can't confirm (especially season, which
+    // changes annually), so a verified row with season_text=null
+    // was SHADOWING bundled season info and the app told anglers
+    // "No season on file" for red snapper. Never let a null beat
+    // real data.
+    const shape = overlayToRenderShape(overlayRow);
+    const bundledFill = BUNDLED_REGS[speciesId]?.[jurisdictionId] || null;
+    if (bundledFill) {
+      if (shape.open == null      && bundledFill.open != null)      { shape.open = bundledFill.open; shape._seasonFromBundled = true; }
+      if (shape.minSize == null   && bundledFill.minSize != null)   shape.minSize = bundledFill.minSize;
+      if (shape.maxSize == null   && bundledFill.maxSize != null)   shape.maxSize = bundledFill.maxSize;
+      if (shape.bagLimit == null  && bundledFill.bagLimit != null)  shape.bagLimit = bundledFill.bagLimit;
+      if (shape.boatLimit == null && bundledFill.vesselLimit != null) shape.boatLimit = bundledFill.vesselLimit;
+      if (shape.notes == null     && bundledFill.notes != null)     shape.notes = bundledFill.notes;
+      // Gear requirements only exist in the bundled dataset — the
+      // overlay schema has no gear column, so verified rows always
+      // inherit them.
+      if (Array.isArray(bundledFill.gear) && bundledFill.gear.length) shape.gear = bundledFill.gear;
+      if (bundledFill.sectors && !shape.sectors) shape.sectors = bundledFill.sectors;
+    }
+    return { source: 'verified', regulation: shape, row: overlayRow };
   }
   const bundled = BUNDLED_REGS[speciesId]?.[jurisdictionId] || null;
   if (bundled && hasAnyRegData(bundled)) {

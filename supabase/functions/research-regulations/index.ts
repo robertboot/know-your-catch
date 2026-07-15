@@ -41,7 +41,10 @@ const ADMIN_EMAILS = ['robertb1023@me.com'];
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL    = 'claude-sonnet-4-6';
 const ANTHROPIC_VERSION  = '2023-06-01';
-const MAX_TOKENS         = 1000;
+// Web search interleaves reasoning + search-result digestion into the
+// output stream before the final JSON, so this needs headroom well
+// beyond the ~200-token answer itself.
+const MAX_TOKENS         = 4000;
 
 // Plausibility bounds — any numeric value outside these ranges is
 // dropped to null and mentioned in sourceNote. Tuned wide but not
@@ -139,9 +142,12 @@ Deno.serve(async (req: Request) => {
     : '';
   const scientific = (body.scientificName || '').trim();
 
-  const systemPrompt = `You are drafting a recreational-fishing regulation record for a US saltwater fishing app. Compliance-critical output — err heavily toward null. A wrong bag limit or size is a real-world safety and legal failure.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const systemPrompt = `You are drafting a recreational-fishing regulation record for a US saltwater fishing app. Compliance-critical output. A wrong bag limit or size is a real-world safety and legal failure — but so is a MISSING season for a heavily-fished species whose season is publicly documented: the app then can't tell an angler whether they can keep the fish at all.
 
-You will receive a species + jurisdiction. Return a JSON object matching this exact schema — JSON ONLY, no wrapping prose, no markdown fences:
+Today's date is ${todayStr}. You have a web search tool — USE IT. Search the agency's current-season page for this species + jurisdiction before answering. Seasons change every year; your training data is stale by definition.
+
+After researching, return a JSON object matching this exact schema — JSON ONLY in your final response, no wrapping prose, no markdown fences:
 
 {
   "seasonText":  "<'Year-round' | 'Jun 1 - Aug 31' | free-text season description, or null>",
@@ -150,28 +156,34 @@ You will receive a species + jurisdiction. Return a JSON object matching this ex
   "bagLimit":    <integer per angler per day, or null>,
   "boatLimit":   <integer per vessel, or null>,
   "notes":       "<short freeform explanation, or null>",
-  "sourceNote":  "<REQUIRED: which agency doc / publication you're drawing from and how confident you are>"
+  "sourceNote":  "<REQUIRED: which agency page / publication you found and how confident you are>"
 }
 
 HARD RULES:
 
-1. If you do NOT know the current value for a field with high
-   confidence, return null for that field. Do NOT guess. Do NOT
-   invent a plausible-sounding number. A missing value is HONEST;
-   a wrong value is a compliance failure.
+1. SEARCH FIRST for the season. For major managed species (snappers,
+   groupers, amberjack, triggerfish, red drum, flounder…) the current
+   season is published on the agency site — find it and return it with
+   the year included (e.g. "Opens May 22, 2026" or
+   "Jun 1 - Aug 31, 2026"). Return null for seasonText ONLY when the
+   search genuinely cannot resolve a current season — and then say in
+   sourceNote what you searched and why it didn't resolve.
 
-2. sourceNote is REQUIRED. Cite the specific agency publication
-   ("FWC 2024-25 saltwater recreational regs — Snapper",
-    "NOAA Gulf reef fish FMP amendment 51", etc.) and how confident
-   you are. If you're relying on general training data without a
-   specific citation, say so.
+2. For numeric fields (sizes, limits): if the search + your knowledge
+   do NOT establish the current value with high confidence, return
+   null. Do NOT guess numbers. A missing number is honest; a wrong
+   number is a compliance failure.
 
-3. Regulations change annually. If your training data is more than
-   a year old, prefix sourceNote with "STALE:" and encourage the
-   admin to verify against the live source URL.
+3. sourceNote is REQUIRED. Cite the specific page or publication you
+   found ("MDMR Tails n' Scales red snapper page, retrieved today",
+   "FWC saltwater recreational regs — Snapper"), with a URL when you
+   have one, and state your confidence. If web search failed and
+   you're on training data alone, say so and prefix with "STALE:".
 
 4. Federal vs state waters have DIFFERENT limits. Do not mix them.
-   The jurisdiction is exactly what the caller specified.
+   The jurisdiction is exactly what the caller specified. Gulf red
+   snapper state seasons are delegated — each state sets its own
+   private-recreational season; search that state's agency, not NOAA.
 
 5. If the species is HMS (Highly Migratory — tunas, billfish,
    swordfish, most sharks), federal NOAA HMS rules apply everywhere
@@ -181,16 +193,17 @@ HARD RULES:
 6. Slot limits (both minSizeIn and maxSizeIn set) are common for
    drum, snook, redfish, etc. Set both when they apply.
 
-7. Season formats: use "Year-round" for open all year; "Jun 1 - Aug 31"
-   for date ranges; free text for complex ("Open Jun 1 - Aug 31,
-   reopens Sep 15 - Nov 30 in state waters") when the season has
-   multiple windows.
+7. Season formats: use "Year-round" for open all year; "Jun 1 - Aug 31, 2026"
+   for date ranges (include the year); free text for complex seasons
+   ("Open May 22 - Jul 6, 2026, then Fri-Sun through Labor Day").
+   Write dates as "Mon D" — the app parses them for live open/closed
+   status.
 
 8. bagLimit is PER ANGLER PER DAY. boatLimit is PER VESSEL. Do NOT
    confuse them. If only one is specified in the source, set the
    other to null.
 
-Return the JSON object only.`;
+Your FINAL message must be the JSON object only.`;
 
   const userMessage = [
     `Species: ${speciesName}${scientific ? ` (${scientific})` : ''}${altSuffix}`,
@@ -214,6 +227,11 @@ Return the JSON object only.`;
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
+        // Server-side web search — the whole point: current-year
+        // seasons live on agency pages, not in training data. The
+        // API runs searches server-side and the model cites what it
+        // found. max_uses caps runaway search loops per draft.
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
       }),
     });
   } catch (e) {
@@ -224,14 +242,27 @@ Return the JSON object only.`;
     return jsonResponse({ error: 'anthropic_error', status: anthropicResp.status, detail: t.slice(0, 500) }, 502);
   }
   const anthropicJson = await anthropicResp.json().catch(() => null) as any;
-  const rawText: string = anthropicJson?.content?.[0]?.text || '';
+  // With web search enabled the content array interleaves
+  // server_tool_use / web_search_tool_result / text blocks. The
+  // final text block carries the JSON answer.
+  const textBlocks = Array.isArray(anthropicJson?.content)
+    ? anthropicJson.content.filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+    : [];
+  const rawText: string = textBlocks.length ? textBlocks[textBlocks.length - 1].text : '';
   if (!rawText) return jsonResponse({ error: 'empty_response' }, 502);
 
   const jsonText = rawText.replace(/^```(?:json)?\n/, '').replace(/\n```\s*$/, '').trim();
   let parsed: Record<string, unknown>;
   try { parsed = JSON.parse(jsonText); }
   catch {
-    return jsonResponse({ error: 'model_bad_json', sample: rawText.slice(0, 300) }, 502);
+    // Search-enabled responses occasionally lead with a sentence
+    // before the JSON despite instructions. Salvage the outermost
+    // object literal before giving up.
+    const braceMatch = jsonText.match(/\{[\s\S]*\}/);
+    try { parsed = JSON.parse(braceMatch ? braceMatch[0] : ''); }
+    catch {
+      return jsonResponse({ error: 'model_bad_json', sample: rawText.slice(0, 300) }, 502);
+    }
   }
 
   // Validate numerics against plausibility bounds.

@@ -2610,6 +2610,18 @@ function RegulationVerifyModal({ row, jurisdiction, species, onCancel, onVerifie
           <strong style={{ color: T.ink }}>{species?.commonName || row.species_id}</strong> in <strong style={{ color: T.ink }}>{jurisdiction?.name}</strong>.
           Verifying makes this regulation visible to mobile app users. Requires a citable source.
         </div>
+        {!String(row.season_text || '').trim() && (
+          <div style={{
+            padding: '8px 10px', borderRadius: 8, marginBottom: 12,
+            background: T.warnBg, border: `1px solid ${T.warn}`,
+            fontSize: 12, color: T.warn, fontWeight: 700, lineHeight: 1.5,
+          }}>
+            No season text on this row. The app will fall back to the bundled
+            season (which may be a stale placeholder). Strongly consider adding
+            the current season via Edit before verifying — season is the #1
+            thing anglers look for.
+          </div>
+        )}
         <div style={{ display: 'grid', gap: 10 }}>
           <Field
             label="Source URL (required)"
