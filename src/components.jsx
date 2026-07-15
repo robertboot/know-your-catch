@@ -474,7 +474,7 @@ export function InfoModal({ title, children, onClose }) {
    user preference for < 60% is explicit-only). Any interaction
    (touch, focus, hover) pauses the timer permanently.
    ============================================================ */
-export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId, aiConfidence, onConfirm, onCorrect }) {
+export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId, aiConfidence, onConfirm, onCorrect, onSuggestNew }) {
   const species = aiIdentifiedSpeciesId ? speciesById(aiIdentifiedSpeciesId) : null;
   const pct = aiConfidence != null ? Math.round(aiConfidence * 100) : null;
 
@@ -525,6 +525,11 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
     if (doneRef.current) return;
     doneRef.current = true;
     onCorrect && onCorrect();
+  };
+  const suggestNew = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onSuggestNew && onSuggestNew();
   };
 
   return (
@@ -624,6 +629,15 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
         <GhostButton onClick={correct} style={{ width: '100%' }}>
           Not this fish → pick species
         </GhostButton>
+        {onSuggestNew && (
+          <button onClick={suggestNew} style={{
+            background: 'transparent', border: 'none', color: T.brass,
+            fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            padding: 8, textDecoration: 'underline',
+          }}>
+            Fish not in the app? Add it to the database
+          </button>
+        )}
       </div>
     </div>
   );

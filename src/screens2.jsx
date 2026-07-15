@@ -44,7 +44,7 @@ function CoordsLink({ lat, lon }) {
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
-  PhotoImg,
+  PhotoImg, CropStep,
   inputStyle,
 } from './components.jsx';
 import { AccountSection } from './auth-ui.jsx';
@@ -512,6 +512,10 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
     const list = SPECIES
+      // Bait fish are excluded from every Regulations surface — their
+      // rules are cast-net/bait-harvest guidance, not keep/release
+      // compliance. Matches the admin + auto-updater grid filter.
+      .filter(s => s.category !== 'bait')
       .filter(s => !lower || s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)))
       .map(s => {
         const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
@@ -720,6 +724,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
     if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
     const yourClosed = [], otherClosed = [], yourUnknown = [], otherUnknown = [];
     for (const s of SPECIES) {
+      if (s.category === 'bait') continue; // no bait on regs surfaces
       const reg = regulationFor(s.id, jurisdiction.id).regulation;
       const status = reg ? seasonState(reg.open).status : 'unknown';
       const isFav = favSet.has(s.id);
@@ -1025,6 +1030,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
     const list = SPECIES
       .filter(s => s.active !== false)
+      .filter(s => s.category !== 'bait') // no bait on regs surfaces
       .map(s => {
         const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
         const status = reg ? seasonState(reg.open).status : 'unknown';
@@ -2898,7 +2904,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount, openSuggestOnMount }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
@@ -3025,6 +3031,18 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     }
   }, [openUploadOnMount]);
 
+  // Fish ID → "Add to database": land here with the scanned photo
+  // already attached and the suggest modal open, so the angler can
+  // name the unknown fish immediately. One-shot.
+  const suggestKickedRef = React.useRef(false);
+  useEffect(() => {
+    if (openSuggestOnMount && !suggestKickedRef.current) {
+      suggestKickedRef.current = true;
+      setSuggestInitial('');
+      setSuggestOpen(true);
+    }
+  }, [openSuggestOnMount]);
+
   // Only Photo #1 drives the catch's location & time. Photos #2 and
   // #3 are just additional shots — they don't change anything.
   // Common post-capture flow — accepts a data URL from either the
@@ -3124,6 +3142,32 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       setPhotoExifStatus(null);
       if (metaSource === 'photo') setMetaSource(null);
     }
+  };
+
+  // On-demand crop for a catch photo. DELIBERATELY not automatic:
+  // catch photos are keepsakes — anglers usually want the people in
+  // frame, so the whole photo goes in by default. (Fish ID's capture
+  // flow still auto-crops, where isolating the fish helps the model.)
+  const [cropIdx, setCropIdx] = React.useState(null);
+  const [cropSrc, setCropSrc] = React.useState(null);
+  const openPhotoCrop = async (i) => {
+    const p = photos[i];
+    if (!p) return;
+    // CropStep draws to a canvas, so it needs a data URL (capacitor://
+    // src taints). photoAsDataUrl handles all entry shapes.
+    const src = await photoAsDataUrl(p);
+    if (!src) return;
+    setCropIdx(i);
+    setCropSrc(src);
+  };
+  const applyPhotoCrop = async ({ dataUrl }) => {
+    if (dataUrl == null || cropIdx == null) { setCropIdx(null); setCropSrc(null); return; }
+    const old = photos[cropIdx];
+    const entry = await savePhoto(dataUrl);
+    setPhotos(p => p.map((ph, idx) => idx === cropIdx ? entry : ph));
+    deletePhoto(old); // drop the uncropped bytes; entry replaces it
+    setCropIdx(null);
+    setCropSrc(null);
   };
   // Manually overrides the photo-derived location with a fresh device GPS.
   const useDeviceGps = () => {
@@ -3380,6 +3424,15 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                       LOCATION + TIME
                     </div>
                   )}
+                  <button onClick={() => openPhotoCrop(i)} aria-label="Crop photo" style={{
+                    position: 'absolute', top: 4, left: 4,
+                    borderRadius: 6, padding: '3px 7px',
+                    background: 'rgba(3, 27, 51, 0.85)', color: '#5ecdf2',
+                    border: '1px solid #5ecdf2', cursor: 'pointer',
+                    fontSize: 9, fontWeight: 800, letterSpacing: 0.6,
+                  }}>
+                    CROP
+                  </button>
                   <button onClick={() => removePhotoAt(i)} aria-label="Remove photo" style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 24, height: 24, borderRadius: '50%',
@@ -3452,6 +3505,18 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         </div>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
         <input ref={uploadRef} type="file" accept="image/*" multiple onChange={handleUploadPick} style={{ display: 'none' }} />
+        {/* On-demand crop overlay (position:fixed). Catch photos keep
+            the full frame by default; this is the opt-in trim. */}
+        {cropIdx != null && cropSrc && (
+          <CropStep
+            imageSrc={cropSrc}
+            title="Crop photo"
+            primaryLabel="Use crop"
+            cancelLabel="Cancel"
+            onCancel={() => { setCropIdx(null); setCropSrc(null); }}
+            onConfirm={applyPhotoCrop}
+          />
+        )}
       </Card>
 
       <Card style={{ marginBottom: 12 }}>
@@ -3835,6 +3900,7 @@ function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
+    if (s.category === 'bait') return false; // no bait regs questions
     // Uses the same store precedence as the display path — verified
     // Supabase overlay first, bundled fallback second. Fed-fallback
     // regs are EXCLUDED: the prompt names the state, so grading a
@@ -3860,6 +3926,7 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
+    if (s.category === 'bait') return false; // no bait regs questions
     // Same store precedence as bag-limit picker above; fed-fallback
     // regs excluded for the same reason.
     const reg = regulationFor(s.id, jurisdiction.id).regulation;

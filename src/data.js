@@ -34,7 +34,7 @@ export const CATEGORIES = [
   { id: 'tuna',     name: 'Tuna' },
   { id: 'billfish', name: 'Billfish' },
   { id: 'trigger',  name: 'Triggerfish' },
-  { id: 'sharks',   name: 'Sharks' },
+  { id: 'sharks',   name: 'Sharks & Rays' },
   { id: 'cobia',    name: 'Cobia' },
   { id: 'wahoo',    name: 'Wahoo' },
   { id: 'cod',      name: 'Cod' },

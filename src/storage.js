@@ -163,10 +163,31 @@ export async function downscaleImageDataUrl(input, maxDim = 1600, quality = 0.82
       const ratio = Math.min(1, maxDim / longest); // scale down only
       const w = Math.max(1, Math.round(srcW * ratio));
       const h = Math.max(1, Math.round(srcH * ratio));
+      // Stepped downscale: a single drawImage from a 4000px camera
+      // frame to a small thumb aliases badly (the "pixelated
+      // thumbnails" complaint). Halve repeatedly until within 2x of
+      // the target, then do the final resize with high-quality
+      // smoothing — sharper result at the SAME output byte size.
+      let source = img;
+      let curW = srcW, curH = srcH;
+      while (curW / 2 >= w && curH / 2 >= h && curW > 32 && curH > 32) {
+        const stepW = Math.max(w, Math.round(curW / 2));
+        const stepH = Math.max(h, Math.round(curH / 2));
+        const stepCanvas = document.createElement('canvas');
+        stepCanvas.width = stepW; stepCanvas.height = stepH;
+        const stepCtx = stepCanvas.getContext('2d');
+        stepCtx.imageSmoothingEnabled = true;
+        stepCtx.imageSmoothingQuality = 'high';
+        stepCtx.drawImage(source, 0, 0, stepW, stepH);
+        source = stepCanvas;
+        curW = stepW; curH = stepH;
+      }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, 0, 0, w, h);
       try {
         const out = canvas.toDataURL('image/jpeg', quality);
         // Keep the re-encode only if it actually saved bytes — re-

@@ -45,8 +45,13 @@ const PHOTO_DIR = 'photos';
    Thumb: 240 px / 0.65 — cheap to generate, only used for list rows. */
 const WEB_MAX_DIM     = 1600;
 const WEB_QUALITY     = 0.82;
-const THUMB_DIM       = 240;
-const THUMB_QUALITY   = 0.65;
+// 384px @ 0.72 with the stepped high-quality downscale in storage.js
+// — sharp on 3x phone grids (~120-130 CSS px tiles) while staying
+// ~20-40KB per thumb. Was 240/0.65 with a single-pass downscale,
+// which aliased visibly ("pixelated thumbnails"). Full-size display
+// path (photoDisplayUrl) is untouched.
+const THUMB_DIM       = 384;
+const THUMB_QUALITY   = 0.72;
 
 function newPhotoId() {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;

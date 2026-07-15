@@ -766,6 +766,18 @@ export default function App() {
             aiWasConfirmed: false,
           }]);
         }}
+        onSuggestNew={() => {
+          // Fish isn't in the database at all — catch entry with the
+          // add-species modal open; local placeholder + admin review.
+          setStack(st => [...st.slice(0, -1), {
+            name: 'catch_entry',
+            prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl,
+            aiIdentifiedSpeciesId: screen.aiIdentifiedSpeciesId,
+            aiConfidence: screen.aiConfidence,
+            aiWasConfirmed: false,
+            openSuggestOnMount: true,
+          }]);
+        }}
       />;
       break;
     case 'photo_result':
@@ -813,6 +825,16 @@ export default function App() {
           });
           push({ name: 'catch_entry', preselectSpeciesId: correctSpeciesId, prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl });
         }}
+        onSuggestNew={() => {
+          // Unknown fish — route to catch entry with the scanned photo
+          // attached and the add-species modal open. The species lands
+          // locally right away and queues for admin review.
+          push({
+            name: 'catch_entry',
+            prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl,
+            openSuggestOnMount: true,
+          });
+        }}
         onRetake={() => setStack(st => st.filter(s => s.name !== 'photo_crop' && s.name !== 'photo_analyzing' && s.name !== 'photo_result'))}
         onManual={() => reset([{ name: 'home' }, { name: 'identify' }, { name: 'categories' }])}
       />;
@@ -843,7 +865,7 @@ export default function App() {
       body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} onEditFavorites={() => setShowFavorites(true)} />;
       break;
     case 'forecast':
-      body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} />;
+      body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} update={update} />;
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}
@@ -870,6 +892,7 @@ export default function App() {
         aiIdentifiedSpeciesId={screen.aiIdentifiedSpeciesId}
         aiWasConfirmed={screen.aiWasConfirmed}
         openUploadOnMount={screen.openUploadOnMount}
+        openSuggestOnMount={screen.openSuggestOnMount}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}
       />;

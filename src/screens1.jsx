@@ -1618,7 +1618,7 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
   );
 }
 
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onSaveWithoutFeedback, onRetake, onManual }) {
+export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onSaveWithoutFeedback, onRetake, onManual, onSuggestNew }) {
   const { confidence, candidates } = result || {};
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
@@ -1659,6 +1659,15 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             Try another photo
           </PrimaryButton>
           <GhostButton onClick={onManual} style={{ width: '100%' }}>Identify manually instead</GhostButton>
+          {onSuggestNew && (
+            <button onClick={onSuggestNew} style={{
+              background: 'transparent', border: 'none', color: T.brass,
+              fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              padding: 8, textDecoration: 'underline',
+            }}>
+              Fish not in the app? Add it to the database
+            </button>
+          )}
         </div>
       </div>
     );
@@ -1987,6 +1996,21 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           }}
           title="What species is it?"
         />
+      )}
+
+      {/* Escape hatch below the top pick: the scanned fish may not be
+          in the database at all. Routes to catch entry with the photo
+          attached and the add-species modal open — the species lands
+          locally right away and queues for admin review. */}
+      {onSuggestNew && (
+        <button onClick={onSuggestNew} style={{
+          background: 'transparent', border: 'none', color: T.brass,
+          fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          padding: '4px 8px 12px', textDecoration: 'underline',
+          display: 'block', margin: '0 auto',
+        }}>
+          Fish not in the app? Add it to the database
+        </button>
       )}
 
       {modal?.lookalikeId && (
@@ -2420,11 +2444,56 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
   );
 }
 
-export function WeatherForecastScreen({ jurisdiction, state }) {
+export function WeatherForecastScreen({ jurisdiction, state, update }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const [coords, setCoords]   = useState(null);
   const [locLabel, setLocLabel] = useState('');
+  // Saved fishing spots — synced user state. selectedSpotId tracks
+  // which chip is active ('current' = live GPS).
+  const spots = Array.isArray(state?.fishingSpots) ? state.fishingSpots : [];
+  const [selectedSpotId, setSelectedSpotId] = useState('current');
+  // First-visit explainer for the spots feature. Dismiss-once via
+  // localStorage; deliberately device-local (a returning user on a
+  // new device gets the one-time refresher, which is fine).
+  const [showSpotsIntro, setShowSpotsIntro] = useState(() => {
+    try { return localStorage.getItem('kyc_spots_intro_dismissed') !== '1'; }
+    catch { return true; }
+  });
+  const dismissSpotsIntro = () => {
+    setShowSpotsIntro(false);
+    try { localStorage.setItem('kyc_spots_intro_dismissed', '1'); } catch {}
+  };
+
+  const selectSpot = (spot) => {
+    setSelectedSpotId(spot.id);
+    setCoords({ lat: spot.lat, lon: spot.lon });
+    setLocLabel(spot.name);
+  };
+  const starSpot = (id) => {
+    if (!update) return;
+    update({ fishingSpots: spots.map(sp => ({ ...sp, starred: sp.id === id })) });
+  };
+  const deleteSpot = (id) => {
+    if (!update) return;
+    if (!window.confirm('Remove this fishing spot?')) return;
+    update({ fishingSpots: spots.filter(sp => sp.id !== id) });
+    if (selectedSpotId === id) useMyLocation();
+  };
+  const saveSpot = (lat, lon, suggestedName) => {
+    if (!update) return null;
+    const name = window.prompt('Name this fishing spot:', suggestedName || '');
+    if (!name || !name.trim()) return null;
+    const spot = {
+      id: `spot_${Date.now().toString(36)}`,
+      name: name.trim(),
+      lat, lon,
+      // First saved spot becomes the starred home water automatically.
+      starred: spots.length === 0,
+    };
+    update({ fishingSpots: [...spots, spot] });
+    return spot;
+  };
   const [current, setCurrent] = useState(null);
   const [daily, setDaily]     = useState([]);
   const [hourly, setHourly]   = useState([]);
@@ -2438,6 +2507,7 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
 
   const useMyLocation = async () => {
     setChanging(false); setSearchQ(''); setSearchResults([]);
+    setSelectedSpotId('current');
     try {
       const loc = await getLocation();
       if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)) {
@@ -2479,6 +2549,13 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
   const pickResult = (r) => {
     setCoords({ lat: r.lat, lon: r.lon });
     setLocLabel(r.label);
+    setSelectedSpotId(null); // one-off view, not a saved spot
+    setChanging(false); setSearchQ(''); setSearchResults([]);
+  };
+  const pickAndSaveResult = (r) => {
+    const spot = saveSpot(r.lat, r.lon, r.label.split(',')[0]);
+    if (spot) selectSpot(spot);
+    else pickResult(r);
     setChanging(false); setSearchQ(''); setSearchResults([]);
   };
 
@@ -2564,8 +2641,95 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
   }, [coords]);
 
   return (
-    <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
+    <div style={{ padding: isTablet ? '22px 22px' : '16px 16px', maxWidth: '100%', overflowX: 'hidden' }}>
       <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Weather Forecast</H1>
+
+      {/* One-time explainer for Fishing Spots. */}
+      {showSpotsIntro && (
+        <Card style={{ marginBottom: 12, padding: isTablet ? 16 : 12, borderColor: T.brass }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, fontSize: isTablet ? 14 : 12, color: T.inkSoft, lineHeight: 1.55 }}>
+              <strong style={{ color: T.ink }}>Fishing Spots</strong> — save the places you fish
+              and switch the forecast between them with one tap. Star ★ your main spot
+              ("where you fish"): that's the water ReelIntel will watch to recognize and
+              notify you of the best fishing days — a feature coming soon.
+            </div>
+            <button onClick={dismissSpotsIntro} aria-label="Dismiss"
+              style={{
+                background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
+                borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 800,
+                cursor: 'pointer', flexShrink: 0,
+              }}>
+              GOT IT
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Spots chips — current location + saved spots + add. */}
+      <div className="kyc-hscroll" style={{
+        display: 'flex', gap: 8, alignItems: 'center',
+        overflowX: 'auto', overflowY: 'hidden',
+        margin: '0 0 10px', paddingBottom: 4,
+      }}>
+        <button onClick={useMyLocation} style={{
+          flexShrink: 0,
+          background: selectedSpotId === 'current' ? T.brass : 'transparent',
+          color: selectedSpotId === 'current' ? T.oceanDeep : T.brass,
+          border: `1.5px solid ${T.brass}`, borderRadius: 999,
+          padding: '7px 14px', fontSize: 12, fontWeight: 800,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+          whiteSpace: 'nowrap',
+        }}>
+          <MapPin size={13} /> Current location
+        </button>
+        {spots.map(sp => {
+          const active = selectedSpotId === sp.id;
+          return (
+            <span key={sp.id} style={{
+              flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center',
+              background: active ? T.brass : T.parchmentDeep,
+              border: `1.5px solid ${active ? T.brass : T.cardEdge}`,
+              borderRadius: 999, overflow: 'hidden', whiteSpace: 'nowrap',
+            }}>
+              <button onClick={() => starSpot(sp.id)}
+                aria-label={sp.starred ? `${sp.name} is your main spot` : `Make ${sp.name} your main spot`}
+                title="Star = your main fishing spot"
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '7px 4px 7px 12px', fontSize: 13, lineHeight: 1,
+                  color: sp.starred ? (active ? T.oceanDeep : '#FFC857') : (active ? 'rgba(3,27,51,0.45)' : T.inkMute),
+                }}>
+                {sp.starred ? '★' : '☆'}
+              </button>
+              <button onClick={() => selectSpot(sp)} style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '7px 6px', fontSize: 12, fontWeight: 800,
+                color: active ? T.oceanDeep : T.ink, whiteSpace: 'nowrap',
+              }}>
+                {sp.name}
+              </button>
+              <button onClick={() => deleteSpot(sp.id)} aria-label={`Remove ${sp.name}`} style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '7px 12px 7px 4px', fontSize: 12, lineHeight: 1,
+                color: active ? 'rgba(3,27,51,0.55)' : T.inkMute,
+              }}>
+                ×
+              </button>
+            </span>
+          );
+        })}
+        <button onClick={() => setChanging(true)} style={{
+          flexShrink: 0,
+          background: 'transparent', color: T.inkSoft,
+          border: `1.5px dashed ${T.cardEdge}`, borderRadius: 999,
+          padding: '7px 14px', fontSize: 12, fontWeight: 800,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>
+          + Add spot
+        </button>
+      </div>
 
       {/* Location bar: current label + change button OR the search UI. */}
       {!changing ? (
@@ -2580,6 +2744,13 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
               </div>
             )}
           </div>
+          {coords && selectedSpotId === null && (
+            <GhostButton
+              onClick={() => { const sp = saveSpot(coords.lat, coords.lon, locLabel.split(',')[0]); if (sp) selectSpot(sp); }}
+              style={{ padding: '6px 12px', fontSize: 12, color: T.brass, borderColor: T.brass }}>
+              Save spot
+            </GhostButton>
+          )}
           <GhostButton onClick={() => setChanging(true)} style={{ padding: '6px 12px', fontSize: 12 }}>
             Change
           </GhostButton>
@@ -2624,17 +2795,27 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
           {searchResults.length > 0 && (
             <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
               {searchResults.map((r, i) => (
-                <button key={i} onClick={() => pickResult(r)} style={{
+                <div key={i} style={{
                   background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 6,
-                  color: T.ink, padding: '10px 12px', fontSize: 13,
-                  textAlign: 'left', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  padding: '10px 12px',
+                  display: 'flex', alignItems: 'center', gap: 8,
                 }}>
-                  <span>{r.label}</span>
-                  <span style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>
-                    {r.lat.toFixed(2)}°, {r.lon.toFixed(2)}°
-                  </span>
-                </button>
+                  <button onClick={() => pickResult(r)} style={{
+                    background: 'transparent', border: 'none', color: T.ink,
+                    fontSize: 13, textAlign: 'left', cursor: 'pointer',
+                    flex: 1, minWidth: 0, padding: 0,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {r.label}
+                  </button>
+                  <button onClick={() => pickAndSaveResult(r)} style={{
+                    background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
+                    borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 800,
+                    cursor: 'pointer', flexShrink: 0,
+                  }}>
+                    SAVE AS SPOT
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -2723,28 +2904,39 @@ export function WeatherForecastScreen({ jurisdiction, state }) {
                     : dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                   return (
                     <div key={d.date} style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: isTablet ? '12px 14px' : '10px 12px',
+                      // Every cell can shrink (minWidth:0 + ellipsis) so the
+                      // row NEVER exceeds the card — the old fixed widths
+                      // summed past a phone's width and shoved the whole
+                      // page sideways.
+                      display: 'flex', alignItems: 'center', gap: isTablet ? 12 : 8,
+                      padding: isTablet ? '12px 14px' : '10px 10px',
                       background: T.parchmentDeep, borderRadius: 8,
                       border: `1px solid ${T.cardEdge}`,
+                      maxWidth: '100%', overflow: 'hidden',
                     }}>
                       <div style={{
-                        fontSize: isTablet ? 15 : 13, fontWeight: 700, color: T.ink,
-                        width: isTablet ? 140 : 110,
+                        fontSize: isTablet ? 15 : 12, fontWeight: 700, color: T.ink,
+                        width: isTablet ? 140 : 88, flexShrink: 0,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>{day}</div>
-                      {weatherIcon(d.weatherCode, isTablet ? 28 : 24, T.brass)}
-                      <div style={{ flex: 1, fontSize: isTablet ? 14 : 12, color: T.inkSoft }}>
+                      <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+                        {weatherIcon(d.weatherCode, isTablet ? 28 : 22, T.brass)}
+                      </span>
+                      <div style={{
+                        flex: 1, minWidth: 0, fontSize: isTablet ? 14 : 11, color: T.inkSoft,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
                         {weatherLabel(d.weatherCode)}
                       </div>
-                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, minWidth: isTablet ? 96 : 76, textAlign: 'right' }}>
-                        {compassDir(d.windDir || 0)} {Math.round(d.windMax || 0)} mph
+                      <div style={{ fontSize: isTablet ? 14 : 11, color: T.inkMute, flexShrink: 0, textAlign: 'right' }}>
+                        {compassDir(d.windDir || 0)} {Math.round(d.windMax || 0)}
                       </div>
                       <div style={{
-                        fontSize: isTablet ? 16 : 14, fontWeight: 800, color: T.ink,
-                        minWidth: isTablet ? 96 : 76, textAlign: 'right',
+                        fontSize: isTablet ? 16 : 13, fontWeight: 800, color: T.ink,
+                        flexShrink: 0, textAlign: 'right',
                       }}>
                         <span style={{ color: T.warn }}>{Math.round(d.tMax)}°</span>
-                        <span style={{ color: T.inkMute, margin: '0 6px' }}>·</span>
+                        <span style={{ color: T.inkMute, margin: '0 4px' }}>·</span>
                         <span style={{ color: T.inkSoft }}>{Math.round(d.tMin)}°</span>
                       </div>
                     </div>

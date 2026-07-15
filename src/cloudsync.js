@@ -70,6 +70,10 @@ export const USER_STATE_KEYS = [
   // are pulled back by refreshCustomSpeciesStatus (in App.jsx boot),
   // which reads from public.species_suggestions.
   'customSpecies',
+  // Saved fishing spots [{id, name, lat, lon, starred}]. The starred
+  // spot is the angler's home water — the future best-fishing-day
+  // prediction/notification feature keys on it.
+  'fishingSpots',
 ];
 
 function pickUserState(state) {
