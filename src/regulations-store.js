@@ -249,26 +249,60 @@ export async function adminListRegulations({ jurisdictionId = null } = {}) {
 export async function adminPurgeStaleDrafts() {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
-  const { data, error } = await c.from('regulations')
+  // Two junk classes, both strictly AI-authored (manual rows are
+  // never touched):
+  //   1. Every AI draft — old no-web-search leftovers AND re-checked
+  //      ones (the updater's coalesce used to carry old junk values
+  //      forward, so 'checked' does not mean 'clean').
+  //   2. Verified-but-EMPTY AI rows — bulk-verified drafts from the
+  //      old era with no season and no numerics. The app already
+  //      ignores them (hasAnyRegData), but they clutter the report
+  //      as 'Live' rows with nothing in them.
+  // The updater re-researches every deleted pair on rotation.
+  const del1 = await c.from('regulations')
     .delete()
     .eq('status', 'draft')
-    .is('last_checked_at', null)
+    .eq('drafted_by', 'ai')
     .select('id');
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, count: (data || []).length };
+  if (del1.error) return { ok: false, error: del1.error.message };
+  const del2 = await c.from('regulations')
+    .delete()
+    .eq('status', 'verified')
+    .eq('drafted_by', 'ai')
+    .is('season_text', null)
+    .is('min_size_in', null)
+    .is('max_size_in', null)
+    .is('bag_limit', null)
+    .is('boat_limit', null)
+    .select('id');
+  if (del2.error) return { ok: false, error: del2.error.message };
+  return { ok: true, count: (del1.data || []).length + (del2.data || []).length };
 }
 
-/** Admin-only: how many stale pre-automation drafts exist (all
-    jurisdictions) — the purge button's badge count. */
+/** Admin-only: how many junk AI rows exist (all jurisdictions) —
+    the purge button's badge count. Mirrors the two delete filters
+    in adminPurgeStaleDrafts. */
 export async function adminCountStaleDrafts() {
   const c = client();
   if (!c) return { ok: false, count: 0 };
-  const { count, error } = await c.from('regulations')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'draft')
-    .is('last_checked_at', null);
-  if (error) return { ok: false, count: 0, error: error.message };
-  return { ok: true, count: count || 0 };
+  const [drafts, emptyVerified] = await Promise.all([
+    c.from('regulations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'draft')
+      .eq('drafted_by', 'ai'),
+    c.from('regulations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'verified')
+      .eq('drafted_by', 'ai')
+      .is('season_text', null)
+      .is('min_size_in', null)
+      .is('max_size_in', null)
+      .is('bag_limit', null)
+      .is('boat_limit', null),
+  ]);
+  if (drafts.error) return { ok: false, count: 0, error: drafts.error.message };
+  if (emptyVerified.error) return { ok: false, count: 0, error: emptyVerified.error.message };
+  return { ok: true, count: (drafts.count || 0) + (emptyVerified.count || 0) };
 }
 
 /** Admin-only: latest auto-updater runs for the report header.

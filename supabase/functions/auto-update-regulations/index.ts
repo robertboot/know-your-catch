@@ -241,17 +241,29 @@ Deno.serve(async (req: Request) => {
   let published = 0, drafted = 0, unchanged = 0, failed = 0;
   const detail: Record<string, string>[] = [];
 
+  // Rows the updater must never modify beyond the check clock:
+  // disputed rows (admin flagged conflicting sources) and anything a
+  // HUMAN authored or edited (drafted_by is an email, not 'ai') —
+  // manual entries are kept verbatim, full stop.
+  const isProtected = (row: any) =>
+    row && (row.status === 'disputed'
+      || (row.drafted_by && row.drafted_by !== 'ai'));
+
+  // A row with no season and no numerics carries nothing an angler
+  // can use — junk from the old bulk-verify era even when its status
+  // says 'verified'. Such rows are healable, not protected.
+  const isEmptyRow = (row: any) =>
+    row && row.season_text == null && row.min_size_in == null
+      && row.max_size_in == null && row.bag_limit == null && row.boat_limit == null;
+
   await pool(work, CONCURRENCY, async ({ sp, jur, row }) => {
     const pairKey = `${sp.id} × ${jur.id}`;
 
-    // NEVER touch disputed rows — the admin flagged conflicting
-    // sources; only a human resolves that. Bump the check clock so
-    // the pair rotates, leave everything else alone.
-    if (row?.status === 'disputed') {
+    if (isProtected(row)) {
       const { error } = await db.from('regulations')
         .update({ last_checked_at: nowIso }).eq('id', row.id);
       if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
-      else       { unchanged += 1; detail.push({ pair: pairKey, outcome: 'skipped-disputed' }); }
+      else       { unchanged += 1; detail.push({ pair: pairKey, outcome: 'skipped-protected' }); }
       return;
     }
 
@@ -288,27 +300,35 @@ Deno.serve(async (req: Request) => {
       && !!draft.seasonText
       && (draft.bagLimit != null || draft.minSizeIn != null);
 
-    const hasAnyData = !!draft.seasonText || draft.minSizeIn != null || draft.bagLimit != null;
-
-    // Field-level coalesce: a draft null NEVER erases an existing
-    // value. If an agency genuinely drops a limit, the admin removes
-    // it by hand — the cost of a stale max-size is far lower than
-    // silently deleting a verified slot limit because one AI pass
-    // omitted it.
-    const merged = {
-      season_text: draft.seasonText ?? row?.season_text ?? null,
-      min_size_in: draft.minSizeIn  ?? row?.min_size_in ?? null,
-      max_size_in: draft.maxSizeIn  ?? row?.max_size_in ?? null,
-      bag_limit:   draft.bagLimit   ?? row?.bag_limit   ?? null,
-      boat_limit:  draft.boatLimit  ?? row?.boat_limit  ?? null,
-      notes:       draft.notes      ?? row?.notes       ?? null,
+    // The coalesce rail protects VERIFIED rows that actually carry
+    // data — a strong re-check that omits max_size must not erase a
+    // verified slot limit. It must NOT protect AI drafts: those can
+    // carry junk from the pre-web-search era, and coalescing junk
+    // forward re-stamps garbage with today's date (real bug, seen as
+    // Little Tunny notes riding on a Mahi-Mahi row). Drafts get the
+    // researcher's values verbatim, nulls included.
+    const protectValues = row && row.status === 'verified' && !isEmptyRow(row);
+    const merged = protectValues ? {
+      season_text: draft.seasonText ?? row.season_text ?? null,
+      min_size_in: draft.minSizeIn  ?? row.min_size_in ?? null,
+      max_size_in: draft.maxSizeIn  ?? row.max_size_in ?? null,
+      bag_limit:   draft.bagLimit   ?? row.bag_limit   ?? null,
+      boat_limit:  draft.boatLimit  ?? row.boat_limit  ?? null,
+      notes:       draft.notes      ?? row.notes       ?? null,
+    } : {
+      season_text: draft.seasonText,
+      min_size_in: draft.minSizeIn,
+      max_size_in: draft.maxSizeIn,
+      bag_limit:   draft.bagLimit,
+      boat_limit:  draft.boatLimit,
+      notes:       draft.notes,
     };
 
     const base = {
       species_id: sp.id,
       jurisdiction_id: jur.id,
       source_note: draft.sourceNote,
-      source_url:  draft.sourceUrl ?? row?.source_url ?? null,
+      source_url:  draft.sourceUrl ?? (protectValues ? row?.source_url ?? null : null),
       drafted_by: 'ai',
       drafted_at: nowIso,
       last_checked_at: nowIso,
@@ -326,23 +346,25 @@ Deno.serve(async (req: Request) => {
         auto_published: true,
       };
       outcome = 'published';
-    } else if (row && row.status === 'verified') {
-      // Weak draft + existing verified data: keep everything, just
-      // note the check happened.
+    } else if (protectValues) {
+      // Weak draft + existing verified DATA: keep everything, just
+      // note the check happened. (Verified-but-EMPTY rows — old
+      // bulk-verify junk — deliberately fall through and get
+      // replaced by an honest draft below.)
       const { error } = await db.from('regulations')
         .update({ last_checked_at: nowIso }).eq('id', row.id);
       if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
       else       { unchanged += 1; detail.push({ pair: pairKey, outcome: 'unchanged', confidence: draft.confidence }); }
       return;
     } else {
-      // Non-verified (or missing) row + weak draft → store as draft
-      // so the admin sees it in the Regulations tab and the pair
-      // rotates. hasAnyData=false still writes base (check clock +
-      // failure-note provenance) but preserves prior field values
-      // via the coalesce above.
+      // Unproven research → an honest draft carrying exactly what
+      // the researcher found (even all-nulls). Old junk values are
+      // overwritten, never carried forward. Empty verified rows get
+      // demoted to draft here — the app's fallback (bundled/fed)
+      // serves anglers better than a data-free 'verified' row.
       payload = {
         ...base,
-        ...(hasAnyData || row ? merged : {}),
+        ...merged,
         status: 'draft',
         auto_published: false,
       };

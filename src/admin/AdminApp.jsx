@@ -2059,10 +2059,10 @@ function RegulationsTab() {
   const doPurgeStaleDrafts = async () => {
     if (!staleDraftCount) return;
     const conf = window.prompt(
-      `Delete ${staleDraftCount} old draft${staleDraftCount === 1 ? '' : 's'} from the pre-automation era ` +
-      `(never checked by the auto-updater, all jurisdictions)?\n` +
-      `They're invisible to app users, and the updater re-researches every pair with live web ` +
-      `search on rotation. Type PURGE to confirm.`, ''
+      `Delete ${staleDraftCount} junk AI row${staleDraftCount === 1 ? '' : 's'} (all jurisdictions)?\n` +
+      `Covers unproven AI drafts and empty bulk-verified rows. Manual entries and ` +
+      `data-carrying verified rows are never touched. The updater re-researches every ` +
+      `pair with live web search on rotation. Type PURGE to confirm.`, ''
     );
     if (conf !== 'PURGE') return;
     setPurging(true);
@@ -2123,15 +2123,17 @@ function RegulationsTab() {
         {staleDraftCount > 0 && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: T.inkSoft, flex: 1, minWidth: 200 }}>
-              {staleDraftCount} old drafts from the pre-automation era are still stored.
-              Safe to purge — the updater re-researches every pair on rotation.
+              {staleDraftCount} junk AI rows from the pre-automation era are still stored
+              (unproven drafts + empty rows bulk-verified with no data — some carry
+              wrong-species text). Purge them; the researcher redoes every pair from
+              live agency pages on rotation. Manual entries are never touched.
             </span>
             <GhostButton
               onClick={doPurgeStaleDrafts}
               disabled={purging}
               style={{ padding: '6px 12px', fontSize: 11, color: T.warn, borderColor: T.warn }}
             >
-              {purging ? 'Purging…' : `Purge ${staleDraftCount} old drafts`}
+              {purging ? 'Purging…' : `Purge ${staleDraftCount} junk rows`}
             </GhostButton>
           </div>
         )}
@@ -2300,7 +2302,7 @@ function RegulationEditModal({ row, jurisdiction, species, onCancel, onSaved }) 
           </div>
         </div>
         <div style={{ padding: '0 18px 12px', overflowY: 'auto', flex: 1, display: 'grid', gap: 10 }}>
-          <Field label="Season (freeform)" value={seasonText} onChange={setSeasonText} placeholder="Year-round · Jun 1 - Aug 31 · etc." />
+          <Field label="Season — type it as the agency publishes it" value={seasonText} onChange={setSeasonText} placeholder="e.g. Year-round · Jun 1 - Aug 31, 2026 · Opens May 22, 2026" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
             <Field label="Min size (in)" value={minSize} onChange={setMinSize} placeholder="16" />
             <Field label="Max size (in)" value={maxSize} onChange={setMaxSize} placeholder="27" />
