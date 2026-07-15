@@ -2529,16 +2529,48 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
     if (!q) return;
     setSearching(true); setSearchError('');
     try {
-      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`;
+      // The geocoder matches PLACE NAMES only — "Gulf Shores, AL"
+      // as one string finds nothing, which made zip codes feel
+      // mandatory. Split a trailing state (abbreviation or full
+      // name) off the query, search on the city alone, then filter
+      // the results by that state.
+      let namePart = q;
+      let stateFilter = null;
+      const commaIdx = q.lastIndexOf(',');
+      if (commaIdx > 0) {
+        const tail = q.slice(commaIdx + 1).trim();
+        const full = US_STATES[tail.toUpperCase()] || (
+          Object.values(US_STATES).find(n => n.toLowerCase() === tail.toLowerCase())
+        );
+        if (full) {
+          namePart = q.slice(0, commaIdx).trim();
+          stateFilter = full.toLowerCase();
+        }
+      }
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(namePart)}&count=20&language=en&format=json`;
       const r = await fetch(url);
       if (!r.ok) throw new Error(`geocoding ${r.status}`);
       const j = await r.json();
-      const results = (j?.results || []).map(x => ({
+      let results = (j?.results || []).map(x => ({
         lat: x.latitude, lon: x.longitude,
+        admin1: x.admin1 || '',
+        country: x.country_code || '',
         label: [x.name, x.admin1, x.country_code].filter(Boolean).join(', '),
       }));
+      if (stateFilter) {
+        const filtered = results.filter(x =>
+          x.country === 'US' && x.admin1.toLowerCase() === stateFilter);
+        // Only narrow when the filter still leaves matches — a miss
+        // (admin1 quirk) shouldn't blank the list entirely.
+        if (filtered.length > 0) results = filtered;
+      } else {
+        // No state given: float US matches to the top — this is a
+        // Gulf fishing app, Paris TX beats Paris FR.
+        results.sort((a, b) => (b.country === 'US') - (a.country === 'US'));
+      }
+      results = results.slice(0, 8);
       setSearchResults(results);
-      if (results.length === 0) setSearchError('No matches. Try a city name or zip code.');
+      if (results.length === 0) setSearchError('No matches. Try "city, state" (e.g. Gulf Shores, AL) or a zip code.');
     } catch (e) {
       setSearchError(e?.message || 'Search failed.');
     } finally {
@@ -2769,7 +2801,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               type="search" value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') runSearch(); }}
-              placeholder="City, state, or zip"
+              placeholder='e.g. Gulf Shores, AL — or a zip'
               autoFocus
               style={{
                 flex: 1, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
@@ -2954,6 +2986,23 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
     </div>
   );
 }
+
+/* US state abbreviation -> full name, for "city, ST" weather-spot
+   searches (the geocoder's admin1 field carries the full name). */
+const US_STATES = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi',
+  MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire',
+  NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina',
+  ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee',
+  TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington',
+  WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', DC: 'District of Columbia',
+  PR: 'Puerto Rico',
+};
 
 /* Local copy of the compass helper — screens2 keeps its own copy for
    the catch detail screen; duplicating avoids a circular import here. */
