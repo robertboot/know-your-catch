@@ -133,6 +133,32 @@ export function seasonState(open, today = new Date()) {
   // path below only runs when the string has no parseable range.
   const ranges = parseRanges(raw, year);
 
+  // Bare "Mon D[, YYYY]" dates anywhere in the string — used by both
+  // the prose-window parse (two dates but no dash separator, e.g.
+  // "June 1, 2026 and will close at 12:01 a.m. on October 26, 2026")
+  // and the single-"Opens" parse below.
+  const bareDates = [];
+  if (ranges.length === 0) {
+    const DATE_RE = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
+    let dm;
+    while ((dm = DATE_RE.exec(raw)) !== null) {
+      const d = mkDate(dm[1], +dm[2], dm[3] ? +dm[3] : year);
+      if (d) bareDates.push(d);
+    }
+  }
+
+  // Prose window: two or more dates in chronological order (and not a
+  // leading-"closed" sentence) read as an open window from the first
+  // date to the last — takes precedence over the "Opens" parse so the
+  // stated close date is honored.
+  if (ranges.length === 0 && bareDates.length >= 2 && !o.startsWith('closed')
+      && bareDates[0] < bareDates[bareDates.length - 1]) {
+    const a = bareDates[0], b = bareDates[bareDates.length - 1];
+    if (today < a)  return { status: 'upcoming', reason: `Opens ${fmtDate(a)}` };
+    if (today <= b) return { status: 'open', reason: cleanSeason(open) };
+    return { status: 'closed', reason: 'Season has ended for this year' };
+  }
+
   // An explicit (re)open date — "Opens/Reopens <Mon D>[, YYYY]" with
   // no end date anywhere in the string. Year optional: AI drafts and
   // agency pages often write "Opens May 22" for the current season.
