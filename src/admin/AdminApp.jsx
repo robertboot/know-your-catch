@@ -47,6 +47,7 @@ import {
   adminBulkMarkStale, adminBulkDeleteDrafts, runRegsCascade,
   getAutoDraftRegsPref, setAutoDraftRegsPref,
   isAutoVerified, regulationLastCheckedPhrase,
+  getLatestAutoRun,
 } from '../regulations-store.js';
 import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
@@ -2021,7 +2022,12 @@ function RegulationsTab() {
   // Filter chip — 'all' | 'verified_admin' | 'verified_auto' | 'draft' | 'stale'.
   // 'verified_admin' = human-verified (auto_published=false).
   // 'verified_auto'  = auto-updater published, not yet co-signed.
-  const [filterMode, setFilterMode] = useState('all');
+  // Default to 'verified_auto' — the admin's primary job on this tab
+  // is now REVIEWING what the hourly auto-updater has published, not
+  // manually drafting each row (the pipeline covers that).
+  const [filterMode, setFilterMode] = useState('verified_auto');
+  // Auto-updater pipeline health — last-run summary for the top card.
+  const [autoRun, setAutoRun] = useState(null);
   // Count of verified-and-older-than-a-year rows for the bulk button
   // label. Recomputed on refresh via adminCountStalable.
   const [stalableCount, setStalableCount] = useState(0);
@@ -2058,6 +2064,8 @@ function RegulationsTab() {
     adminCountStalable({ jurisdictionId: jurId }).then((cnt) => {
       if (cnt?.ok) setStalableCount(cnt.count);
     });
+    // Pipeline-health card — latest auto-updater run summary.
+    getLatestAutoRun().then((run) => setAutoRun(run));
   }, [jurId]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -2262,36 +2270,77 @@ function RegulationsTab() {
         </GhostButton>
       </div>
 
-      {/* Filter chips — narrow the render to a single status class so
-          the admin can eyeball "what has the auto-updater published
-          that I haven't co-signed yet?" without scrolling every row. */}
+      {/* Pipeline health — the auto-updater runs every hour via cron
+          and publishes strong-evidence regs directly to mobile users.
+          The admin's job on this tab is to REVIEW what it published
+          (co-sign or un-verify) and triage the weak drafts. This
+          card + the default 'Auto-published' filter make that queue
+          the front-and-center thing. */}
+      <div style={{
+        display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+        padding: '10px 12px', borderRadius: 8,
+        background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+      }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700, marginBottom: 4 }}>
+            Auto-updater pipeline
+          </div>
+          {autoRun ? (
+            <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
+              Last run {new Date(autoRun.ran_at).toLocaleString()} ·
+              {' '}<strong style={{ color: T.ink }}>{autoRun.checked}</strong> checked ·
+              {' '}<strong style={{ color: T.open }}>{autoRun.published}</strong> published ·
+              {' '}<strong style={{ color: T.brass }}>{autoRun.drafted}</strong> drafted ·
+              {' '}<strong style={{ color: T.inkMute }}>{autoRun.unchanged}</strong> unchanged
+              {autoRun.failed > 0 && <> · <strong style={{ color: T.warn }}>{autoRun.failed}</strong> failed</>}
+              . Runs hourly via cron.
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
+              No auto-updater runs recorded yet. The pipeline runs hourly and publishes
+              high-confidence rows directly to mobile users; you review + co-sign here.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filter chips — narrow the render to a single status class. */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {[
-          { id: 'all',             label: 'All' },
-          { id: 'verified_admin',  label: 'Verified by admin' },
-          { id: 'verified_auto',   label: 'Auto-published' },
-          { id: 'draft',           label: 'Drafts' },
-          { id: 'stale',           label: 'Stale' },
-        ].map(f => {
-          const active = filterMode === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilterMode(f.id)}
-              style={{
-                background: active ? T.brass : 'transparent',
-                color:      active ? T.oceanDeep : T.brass,
-                border:    `1.5px solid ${T.brass}`,
-                padding: '5px 12px', borderRadius: 999,
-                fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
-                cursor: 'pointer',
-              }}
-            >
-              {f.label}
-            </button>
-          );
-        })}
+        {(() => {
+          const bucket = { verified_admin: 0, verified_auto: 0, draft: 0, stale: 0 };
+          for (const r of rows) {
+            if (r.status === 'verified')      bucket[isAutoVerified(r) ? 'verified_auto' : 'verified_admin']++;
+            else if (r.status === 'draft')    bucket.draft++;
+            else if (r.status === 'stale')    bucket.stale++;
+          }
+          const chips = [
+            { id: 'verified_auto',   label: 'To review (auto-published)', count: bucket.verified_auto },
+            { id: 'draft',           label: 'Drafts',                     count: bucket.draft },
+            { id: 'stale',           label: 'Stale',                      count: bucket.stale },
+            { id: 'verified_admin',  label: 'Signed off',                 count: bucket.verified_admin },
+            { id: 'all',             label: 'All',                        count: rows.length },
+          ];
+          return chips.map(f => {
+            const active = filterMode === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilterMode(f.id)}
+                style={{
+                  background: active ? T.brass : 'transparent',
+                  color:      active ? T.oceanDeep : T.brass,
+                  border:    `1.5px solid ${T.brass}`,
+                  padding: '5px 12px', borderRadius: 999,
+                  fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                  cursor: 'pointer',
+                }}
+              >
+                {f.label} ({f.count})
+              </button>
+            );
+          });
+        })()}
       </div>
 
       <div style={{
@@ -2315,9 +2364,10 @@ function RegulationsTab() {
       </div>
 
       <div style={{ fontSize: 11, color: T.inkMute, padding: '4px 4px', lineHeight: 1.5 }}>
-        <strong style={{ color: T.ink }}>Draft with AI</strong> generates a compliance-drafted regulation. It
-        stays as a DRAFT — never visible to mobile app users — until you tap Verify with a source URL.
-        Bundled fallback in the app still renders when there's no verified row here.
+        Your workflow: use <strong style={{ color: T.ink }}>To review</strong> to co-sign or un-verify
+        anything the auto-updater published; use <strong style={{ color: T.ink }}>Drafts</strong> to
+        triage weak-confidence rows the pipeline held back for a human. The per-row
+        <em> Re-run AI </em> button is a manual override — the pipeline already re-checks every row on rotation.
       </div>
 
       {error && (
@@ -2458,7 +2508,7 @@ function RegulationsTab() {
                   disabled={isDrafting}
                   style={{ padding: '6px 10px', fontSize: 11 }}
                 >
-                  {isDrafting ? 'Drafting…' : (row ? 'Re-draft with AI' : 'Draft with AI')}
+                  {isDrafting ? 'Re-running…' : (row ? 'Re-run AI' : 'Draft with AI')}
                 </GhostButton>
                 {row && (
                   <GhostButton onClick={() => setEditRow(row)} style={{ padding: '6px 10px', fontSize: 11 }}>

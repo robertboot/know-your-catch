@@ -374,6 +374,21 @@ function daysAgoPhrase(days) {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
+/** Latest auto-updater run summary for the pipeline-health card at
+    the top of the admin Regulations tab. Returns null when nothing
+    has run yet. */
+export async function getLatestAutoRun() {
+  const c = client();
+  if (!c) return null;
+  const { data, error } = await c.from('regs_auto_runs')
+    .select('ran_at, checked, published, drafted, unchanged, failed')
+    .order('ran_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return data || null;
+}
+
 /** True if a verified row was published by the auto-updater rather
     than co-signed by a human admin. Two signals: auto_published flag
     (canonical since the auto-updater added it) OR verified_by set
