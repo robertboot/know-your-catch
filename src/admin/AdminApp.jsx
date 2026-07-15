@@ -2035,8 +2035,14 @@ function RegulationsTab() {
   useEffect(() => { setSelectedIds(new Set()); }, [jurId]);
 
   const jur = JURISDICTIONS.find(j => j.id === jurId);
+  // Bait-category species are excluded from Regulations — their
+  // rules are cast-net / bait-harvest guidance, not the recreational
+  // keep/release compliance surface the app is for. Kept in sync
+  // with the auto-updater's pair-grid filter.
   const activeSpecies = useMemo(
-    () => SPECIES.filter(s => s.active !== false)
+    () => SPECIES
+      .filter(s => s.active !== false)
+      .filter(s => s.category !== 'bait')
       .sort((a, b) => a.commonName.localeCompare(b.commonName)),
     []
   );

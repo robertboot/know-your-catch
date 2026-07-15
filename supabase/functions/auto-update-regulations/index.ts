@@ -205,10 +205,17 @@ Deno.serve(async (req: Request) => {
 
   // Build the pair grid: live species × static jurisdictions, joined
   // against existing regulation rows for rotation ordering.
+  // Bait-category species are excluded — their agency guidance is
+  // cast-net / bait-harvest rules, not the recreational keep/release
+  // compliance surface this pipeline exists for. Skipping them saves
+  // Anthropic API calls and keeps the pair rotation focused. Kept in
+  // sync with the admin RegulationsTab filter in AdminApp.jsx.
   const { data: speciesRows, error: spErr } = await db.from('species')
-    .select('id, common_name, scientific, alt_names, is_active');
+    .select('id, common_name, scientific, alt_names, category, is_active');
   if (spErr) return jsonResponse({ error: `species query: ${spErr.message}` }, 500);
-  const activeSpecies = (speciesRows || []).filter(s => s.is_active !== false);
+  const activeSpecies = (speciesRows || [])
+    .filter(s => s.is_active !== false)
+    .filter(s => s.category !== 'bait');
 
   const { data: regRows, error: regErr } = await db.from('regulations')
     .select('id, species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, source_note, source_url, last_checked_at');
