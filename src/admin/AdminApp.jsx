@@ -41,11 +41,9 @@ import {
 import { researchSpecies } from '../species-research-store.js';
 import {
   fetchRegulations, adminListRegulations, adminUpsertRegulation,
-  adminVerifyRegulation, adminUnverifyRegulation, draftWithAI,
-  regulationAge, regulationAgePhrase,
-  adminMarkAllStale, adminCountStalable,
+  regulationAgePhrase,
   adminPurgeStaleDrafts, adminCountStaleDrafts,
-  adminBulkMarkStale, adminBulkDeleteDrafts, runRegsCascade,
+  runRegsCascade,
   getAutoDraftRegsPref, setAutoDraftRegsPref,
   isAutoVerified, regulationLastCheckedPhrase,
   getLatestAutoRun,
@@ -2007,49 +2005,29 @@ function Chrome({ title, children, onExit, exitLabel = '← Back to app' }) {
 }
 
 /* ============================================================
-   Regulations tab — draft (AI or manual) → verify → publish
+   Regulations tab — automation REPORT.
+   The auto-updater researches every species × jurisdiction pair
+   hourly (web search against the agency page) and publishes what
+   it can prove. This tab just shows what it did. The only manual
+   affordance is a small per-row Edit for hand-corrections (e.g.
+   typing a season straight off an agency page) — edits are kept
+   verbatim and never downgraded by the updater.
    ============================================================ */
 function RegulationsTab() {
   const [jurId, setJurId] = useState(JURISDICTIONS[0].id);
   const [rows, setRows]   = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  const [editRow, setEditRow] = useState(null);   // full row edit modal
-  const [verifyRow, setVerifyRow] = useState(null); // verify modal
-  const [drafting, setDrafting] = useState(null); // speciesId being drafted
-  // Sort control — 'species' (alphabetical, default) or 'age' (oldest
-  // verified first so admin can knock out the most-stale first).
-  const [sortMode, setSortMode] = useState('species');
-  // Filter chip — 'all' | 'verified_admin' | 'verified_auto' | 'draft' | 'stale'.
-  // 'verified_admin' = human-verified (auto_published=false).
-  // 'verified_auto'  = auto-updater published, not yet co-signed.
-  // Default to 'verified_auto' — the admin's primary job on this tab
-  // is now REVIEWING what the hourly auto-updater has published, not
-  // manually drafting each row (the pipeline covers that).
-  const [filterMode, setFilterMode] = useState('verified_auto');
-  // Auto-updater pipeline health — last-run summary for the top card.
+  const [editRow, setEditRow] = useState(null);   // manual-correction modal
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'verified' | 'draft' | 'stale' | 'none'
   const [autoRun, setAutoRun] = useState(null);
-  // Count of verified-and-older-than-a-year rows for the bulk button
-  // label. Recomputed on refresh via adminCountStalable.
-  const [stalableCount, setStalableCount] = useState(0);
-  const [markingStale, setMarkingStale] = useState(false);
-  // Purge badge — pre-automation drafts (never checked by the
-  // updater) still stored.
   const [staleDraftCount, setStaleDraftCount] = useState(0);
   const [purging, setPurging] = useState(false);
-  // Bulk selection — Set of row ids (Supabase primary keys). Selection
-  // scoped to the current jurisdiction because that's what's rendered;
-  // switching jurisdictions clears via the effect below.
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkCascadeRunner, setBulkCascadeRunner] = useState(null);
-  useEffect(() => { setSelectedIds(new Set()); }, [jurId]);
 
   const jur = JURISDICTIONS.find(j => j.id === jurId);
-  // Bait-category species are excluded from Regulations — their
-  // rules are cast-net / bait-harvest guidance, not the recreational
-  // keep/release compliance surface the app is for. Kept in sync
-  // with the auto-updater's pair-grid filter.
+  // Bait-category species are excluded — their rules are cast-net /
+  // bait-harvest guidance, not the keep/release compliance surface.
+  // Kept in sync with the auto-updater's pair-grid filter.
   const activeSpecies = useMemo(
     () => SPECIES
       .filter(s => s.active !== false)
@@ -2065,13 +2043,7 @@ function RegulationsTab() {
     if (!r.ok) { setError(r.error || 'load failed'); return; }
     setError('');
     setRows(r.rows);
-    // Fire the side counts in parallel — cheap head queries.
-    adminCountStalable({ jurisdictionId: jurId }).then((cnt) => {
-      if (cnt?.ok) setStalableCount(cnt.count);
-    });
-    // Pipeline-health card — latest auto-updater run summary.
     getLatestAutoRun().then((run) => setAutoRun(run));
-    // Purge badge — how many pre-automation drafts still linger.
     adminCountStaleDrafts().then((cnt) => {
       if (cnt?.ok) setStaleDraftCount(cnt.count);
     });
@@ -2084,185 +2056,13 @@ function RegulationsTab() {
     return m;
   }, [rows]);
 
-  // Sorted list of species to render — hoisted so the Select-all header
-  // and selectAllInView() both see exactly the same rows that render
-  // below. Was previously computed inside a per-render IIFE, which is
-  // why "Select all in view (N)" showed only the tiny subset of species
-  // that already had a regulation row.
-  const sortedSpecies = useMemo(() => {
-    const items = activeSpecies.slice();
-    if (sortMode === 'age') {
-      items.sort((a, b) => {
-        const ra = rowsBySpecies.get(a.id) || null;
-        const rb = rowsBySpecies.get(b.id) || null;
-        const daysA = ra && ra.status === 'verified' && ra.verified_at
-          ? -(new Date(ra.verified_at).getTime()) : Number.POSITIVE_INFINITY;
-        const daysB = rb && rb.status === 'verified' && rb.verified_at
-          ? -(new Date(rb.verified_at).getTime()) : Number.POSITIVE_INFINITY;
-        if (daysA !== daysB) return daysB - daysA;
-        return a.commonName.localeCompare(b.commonName);
-      });
-    }
-    return items;
-  }, [activeSpecies, sortMode, rowsBySpecies]);
-
-  const selectAllInView = () => {
-    setSelectedIds(new Set(sortedSpecies.map(s => s.id)));
-  };
-
-  // selectedIds holds SPECIES ids (not row ids). Bulk "Draft with AI"
-  // needs to work on species that don't have a row yet — that's the
-  // whole point of the flow. Stale/Delete filter down to species that
-  // do have a row before hitting the backend.
-  const toggleSelect = (speciesId) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(speciesId)) next.delete(speciesId); else next.add(speciesId);
-      return next;
-    });
-  };
-  const clearSelection = () => setSelectedIds(new Set());
-
-  const doBulkMarkStale = async () => {
-    const rowIds = Array.from(selectedIds)
-      .map(sid => rowsBySpecies.get(sid))
-      .filter(Boolean)
-      .map(r => r.id);
-    if (!rowIds.length) {
-      setError('None of the selected species have a regulation row to mark stale.');
-      return;
-    }
-    const conf = window.prompt(
-      `Mark ${rowIds.length} regulation${rowIds.length === 1 ? '' : 's'} as STALE?\n` +
-      `They'll drop from mobile users' view until re-verified. Type MARK STALE to confirm.`, ''
-    );
-    if (conf !== 'MARK STALE') return;
-    setBulkBusy(true);
-    const r = await adminBulkMarkStale(rowIds);
-    setBulkBusy(false);
-    if (!r.ok) { setError(r.error || 'bulk mark failed'); return; }
-    clearSelection();
-    refresh();
-  };
-
-  const doBulkDeleteDrafts = async () => {
-    const rowIds = Array.from(selectedIds)
-      .map(sid => rowsBySpecies.get(sid))
-      .filter(Boolean)
-      .map(r => r.id);
-    if (!rowIds.length) {
-      setError('None of the selected species have a regulation row to delete.');
-      return;
-    }
-    const conf = window.prompt(
-      `Delete DRAFT rows among the ${rowIds.length} selected? Verified/stale/disputed rows will be skipped ` +
-      `(delete verified via the per-row action, not bulk). Type DELETE DRAFTS to confirm.`, ''
-    );
-    if (conf !== 'DELETE DRAFTS') return;
-    setBulkBusy(true);
-    const r = await adminBulkDeleteDrafts(rowIds);
-    setBulkBusy(false);
-    if (!r.ok) { setError(r.error || 'bulk delete failed'); return; }
-    setError(''); clearSelection(); refresh();
-    if (r.skipped > 0) setError(`Deleted ${r.count} drafts; skipped ${r.skipped} non-draft row(s).`);
-  };
-
-  const doBulkDraftAI = async () => {
-    const species = Array.from(selectedIds)
-      .map(sid => activeSpecies.find(s => s.id === sid))
-      .filter(Boolean);
-    if (species.length === 0) return;
-    const count = species.length;
-    const conf = window.prompt(
-      `Draft AI regulations for ${count} selected species in ${jur.name}?\n` +
-      `Est. ~$${(0.02 * count).toFixed(2)}, ~${Math.max(1, Math.round(count * 10 / 60))} min. ` +
-      `Type UPDATE to confirm.`, ''
-    );
-    if (conf !== 'UPDATE') return;
-    // Cascade one-by-one: for each selected species, draft against the
-    // CURRENT jurisdiction only (unlike the species-Save cascade which
-    // fans out across all jurisdictions). Same runner shape so the
-    // progress modal renders identically.
-    const cancelToken = { cancelled: false };
-    const runner = { species: { commonName: `${species.length} species` }, cancelToken, silent: false, progress: null, done: false, result: null };
-    setBulkCascadeRunner(runner);
-    (async () => {
-      const failed = [];
-      const succeeded = [];
-      for (let i = 0; i < species.length; i++) {
-        if (cancelToken.cancelled) break;
-        const sp = species[i];
-        setBulkCascadeRunner({ ...runner, progress: { index: i, total: species.length, jurisdiction: { name: sp.commonName }, phase: 'start' } });
-        const r = await runRegsCascade({
-          species: sp,
-          jurisdictions: [jur],
-          onProgress: () => {},
-          cancelToken,
-        });
-        if (r.failed.length > 0) failed.push({ jurisdictionId: sp.id, error: r.failed[0].error });
-        else succeeded.push(sp.id);
-        if (i < species.length - 1) await new Promise(res => setTimeout(res, 500));
-      }
-      setBulkCascadeRunner({
-        ...runner, done: true,
-        result: { succeeded, failed, cancelled: cancelToken.cancelled },
-      });
-    })();
-  };
-
-  const doMarkAllStale = async () => {
-    if (stalableCount === 0) return;
-    const conf = window.prompt(
-      `Mark all ${stalableCount} regulations for ${jur.name} that were verified more than 1 year ago as STALE?\n\n` +
-      `They'll drop from mobile users' view until you re-draft + re-verify. Type MARK STALE to confirm.`,
-      ''
-    );
-    if (conf !== 'MARK STALE') return;
-    setMarkingStale(true);
-    const r = await adminMarkAllStale({ jurisdictionId: jurId });
-    setMarkingStale(false);
-    if (!r.ok) { setError(r.error || 'mark-stale failed'); return; }
-    refresh();
-  };
-
-  const doDraft = async (species) => {
-    setDrafting(species.id);
-    setError('');
-    const r = await draftWithAI({ species, jurisdiction: jur });
-    setDrafting(null);
-    if (!r.ok) { setError(r.error || 'draft failed'); return; }
-    const existing = rowsBySpecies.get(species.id);
-    const payload = {
-      species_id: species.id,
-      jurisdiction_id: jurId,
-      season_text: r.draft.seasonText,
-      min_size_in: r.draft.minSizeIn,
-      max_size_in: r.draft.maxSizeIn,
-      bag_limit:   r.draft.bagLimit,
-      boat_limit:  r.draft.boatLimit,
-      notes:       r.draft.notes,
-      source_note: r.draft.sourceNote,
-      // Keep verified status if the row was already verified — draft
-      // shouldn't clobber a verified record silently. Open the edit
-      // modal so the admin can review the AI's numbers against the
-      // existing verified ones.
-      status:      existing?.status === 'verified' ? 'verified' : 'draft',
-      drafted_by:  'ai',
-      source_url:  existing?.source_url || '',
-    };
-    const up = await adminUpsertRegulation(payload);
-    if (!up.ok) { setError(up.error || 'save failed'); return; }
-    refresh();
-    setEditRow(up.row);
-  };
-
   const doPurgeStaleDrafts = async () => {
     if (!staleDraftCount) return;
     const conf = window.prompt(
       `Delete ${staleDraftCount} old draft${staleDraftCount === 1 ? '' : 's'} from the pre-automation era ` +
       `(never checked by the auto-updater, all jurisdictions)?\n` +
       `They're invisible to app users, and the updater re-researches every pair with live web ` +
-      `search as its rotation reaches it. Type PURGE to confirm.`, ''
+      `search on rotation. Type PURGE to confirm.`, ''
     );
     if (conf !== 'PURGE') return;
     setPurging(true);
@@ -2274,67 +2074,57 @@ function RegulationsTab() {
     refresh();
   };
 
+  // Per-jurisdiction coverage counts for the report header.
+  const counts = useMemo(() => {
+    const c = { verified: 0, draft: 0, stale: 0, disputed: 0 };
+    for (const r of rows) if (c[r.status] != null) c[r.status] += 1;
+    const none = Math.max(0, activeSpecies.length - rows.length);
+    return { ...c, none, total: activeSpecies.length };
+  }, [rows, activeSpecies]);
+
+  const short = (row) => {
+    if (!row) return '';
+    const parts = [];
+    if (row.season_text)  parts.push(row.season_text);
+    if (row.min_size_in != null) parts.push(`min ${row.min_size_in}"`);
+    if (row.max_size_in != null) parts.push(`max ${row.max_size_in}"`);
+    if (row.bag_limit   != null) parts.push(`bag ${row.bag_limit}`);
+    if (row.boat_limit  != null) parts.push(`boat ${row.boat_limit}`);
+    return parts.join(' · ');
+  };
+
   return (
     <div style={{ display: 'grid', gap: 10 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <div style={{ flex: 2, minWidth: 220 }}>
-          <SectionLabel style={{ marginBottom: 4 }}>Jurisdiction</SectionLabel>
-          <select value={jurId} onChange={e => setJurId(e.target.value)} style={inputStyle}>
-            {JURISDICTIONS.map(j => (
-              <option key={j.id} value={j.id}>{j.name} · {j.agency}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ minWidth: 160 }}>
-          <SectionLabel style={{ marginBottom: 4 }}>Sort</SectionLabel>
-          <select value={sortMode} onChange={e => setSortMode(e.target.value)} style={inputStyle}>
-            <option value="species">Species (A–Z)</option>
-            <option value="age">Age (oldest verified first)</option>
-          </select>
-        </div>
-        <GhostButton onClick={refresh} disabled={loading} style={{ padding: '10px 14px' }}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </GhostButton>
-      </div>
-
-      {/* Pipeline health — the auto-updater runs every hour via cron
-          and publishes strong-evidence regs directly to mobile users.
-          The admin's job on this tab is to REVIEW what it published
-          (co-sign or un-verify) and triage the weak drafts. This
-          card + the default 'Auto-published' filter make that queue
-          the front-and-center thing. */}
+      {/* Automation report card. */}
       <div style={{
-        display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
-        padding: '10px 12px', borderRadius: 8,
-        background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+        padding: '12px 14px', borderRadius: 8,
+        background: T.parchmentDeep,
+        border: `1px solid ${autoRun ? T.cardEdge : T.warn}`,
+        display: 'grid', gap: 8,
       }}>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700, marginBottom: 4 }}>
-            Auto-updater pipeline
-          </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase',
+                         fontWeight: 800, color: autoRun ? T.open : T.warn }}>
+            {autoRun ? '● Automation running' : '○ Automation not running yet'}
+          </span>
           {autoRun ? (
-            <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
-              Last run {new Date(autoRun.ran_at).toLocaleString()} ·
-              {' '}<strong style={{ color: T.ink }}>{autoRun.checked}</strong> checked ·
-              {' '}<strong style={{ color: T.open }}>{autoRun.published}</strong> published ·
-              {' '}<strong style={{ color: T.brass }}>{autoRun.drafted}</strong> drafted ·
-              {' '}<strong style={{ color: T.inkMute }}>{autoRun.unchanged}</strong> unchanged
-              {autoRun.failed > 0 && <> · <strong style={{ color: T.warn }}>{autoRun.failed}</strong> failed</>}
-              . Runs hourly via cron.
-            </div>
+            <span style={{ fontSize: 11, color: T.inkMute }}>
+              Last run {relativeTime(autoRun.ran_at)} — checked {autoRun.checked},
+              published {autoRun.published}, drafted {autoRun.drafted}
+              {autoRun.failed ? `, ${autoRun.failed} failed` : ''}. Runs hourly.
+            </span>
           ) : (
-            <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
-              No auto-updater runs recorded yet. The pipeline runs hourly and publishes
-              high-confidence rows directly to mobile users; you review + co-sign here.
-            </div>
+            <span style={{ fontSize: 11, color: T.inkSoft }}>
+              The hourly researcher hasn't logged a run yet. If this persists past the
+              next hour, check the cron setup (regulations-auto-update-schema.sql).
+            </span>
           )}
         </div>
         {staleDraftCount > 0 && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: T.inkSoft, flex: 1, minWidth: 200 }}>
-              {staleDraftCount} old drafts from the pre-automation era are still stored
-              (made without web search — many are low quality). Safe to purge; the
-              updater re-researches every pair on rotation.
+              {staleDraftCount} old drafts from the pre-automation era are still stored.
+              Safe to purge — the updater re-researches every pair on rotation.
             </span>
             <GhostButton
               onClick={doPurgeStaleDrafts}
@@ -2347,70 +2137,56 @@ function RegulationsTab() {
         )}
       </div>
 
-      {/* Filter chips — narrow the render to a single status class. */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {(() => {
-          const bucket = { verified_admin: 0, verified_auto: 0, draft: 0, stale: 0 };
-          for (const r of rows) {
-            if (r.status === 'verified')      bucket[isAutoVerified(r) ? 'verified_auto' : 'verified_admin']++;
-            else if (r.status === 'draft')    bucket.draft++;
-            else if (r.status === 'stale')    bucket.stale++;
-          }
-          const chips = [
-            { id: 'verified_auto',   label: 'To review (auto-published)', count: bucket.verified_auto },
-            { id: 'draft',           label: 'Drafts',                     count: bucket.draft },
-            { id: 'stale',           label: 'Stale',                      count: bucket.stale },
-            { id: 'verified_admin',  label: 'Signed off',                 count: bucket.verified_admin },
-            { id: 'all',             label: 'All',                        count: rows.length },
-          ];
-          return chips.map(f => {
-            const active = filterMode === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilterMode(f.id)}
-                style={{
-                  background: active ? T.brass : 'transparent',
-                  color:      active ? T.oceanDeep : T.brass,
-                  border:    `1.5px solid ${T.brass}`,
-                  padding: '5px 12px', borderRadius: 999,
-                  fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
-                  cursor: 'pointer',
-                }}
-              >
-                {f.label} ({f.count})
-              </button>
-            );
-          });
-        })()}
-      </div>
-
-      <div style={{
-        display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
-        padding: '8px 10px', borderRadius: 8, background: T.parchmentDeep,
-        border: `1px solid ${T.cardEdge}`,
-      }}>
-        <div style={{ flex: 1, minWidth: 220, fontSize: 12, color: T.inkSoft, lineHeight: 1.4 }}>
-          <strong style={{ color: T.ink }}>Refresh cycle helper</strong> — annual FWC / NOAA rewrite pass.
-          Flips verified rows older than 1 year to <strong>stale</strong> so they show up as needing re-draft.
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: 2, minWidth: 220 }}>
+          <SectionLabel style={{ marginBottom: 4 }}>Jurisdiction</SectionLabel>
+          <select value={jurId} onChange={e => setJurId(e.target.value)} style={inputStyle}>
+            {JURISDICTIONS.map(j => (
+              <option key={j.id} value={j.id}>{j.name} · {j.agency}</option>
+            ))}
+          </select>
         </div>
-        <GhostButton
-          onClick={doMarkAllStale}
-          disabled={stalableCount === 0 || markingStale}
-          style={{ padding: '8px 12px', fontSize: 12, color: T.warn, borderColor: T.warn }}
-        >
-          {markingStale
-            ? 'Marking…'
-            : `Mark all verified > 1yr as stale (${stalableCount})`}
+        <GhostButton onClick={refresh} disabled={loading} style={{ padding: '10px 14px' }}>
+          {loading ? 'Loading…' : 'Refresh'}
         </GhostButton>
       </div>
 
-      <div style={{ fontSize: 11, color: T.inkMute, padding: '4px 4px', lineHeight: 1.5 }}>
-        Your workflow: use <strong style={{ color: T.ink }}>To review</strong> to co-sign or un-verify
-        anything the auto-updater published; use <strong style={{ color: T.ink }}>Drafts</strong> to
-        triage weak-confidence rows the pipeline held back for a human. The per-row
-        <em> Re-run AI </em> button is a manual override — the pipeline already re-checks every row on rotation.
+      {/* Coverage summary + report filters (read-only slices). */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {[
+          { id: 'all',      label: `All (${counts.total})` },
+          { id: 'verified', label: `Live (${counts.verified})` },
+          { id: 'draft',    label: `Unproven (${counts.draft})` },
+          { id: 'stale',    label: `Stale (${counts.stale})` },
+          { id: 'none',     label: `Not yet checked (${counts.none})` },
+        ].map(f => {
+          const active = filterMode === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilterMode(f.id)}
+              style={{
+                background: active ? T.brass : 'transparent',
+                color:      active ? T.oceanDeep : T.brass,
+                border:    `1.5px solid ${T.brass}`,
+                padding: '5px 12px', borderRadius: 999,
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                cursor: 'pointer',
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 11, color: T.inkMute, padding: '2px 4px', lineHeight: 1.5 }}>
+        <strong style={{ color: T.open }}>Live</strong> rows are what anglers see.
+        <strong style={{ color: T.brass }}> Unproven</strong> = the researcher couldn't
+        confirm against an agency page yet — it retries automatically on rotation, and
+        the app falls back to bundled/federal data meanwhile. Tap Edit on any row to
+        hand-correct it; manual entries are kept verbatim.
       </div>
 
       {error && (
@@ -2419,174 +2195,55 @@ function RegulationsTab() {
         </div>
       )}
 
-      {/* Select-all header — counts every species currently rendered,
-          not just the ones with existing regulation rows, so bulk
-          Draft-with-AI can hit species that have no row yet. Wrapped
-          in a <label> so the whole strip is tappable — a bare 14x14
-          checkbox was under Apple's 44px min tap target on iPad. */}
-      {sortedSpecies.length > 0 && (
-        <label style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 8px', minHeight: 40,
-          fontSize: 12, color: T.ink, fontWeight: 700,
-          cursor: 'pointer', userSelect: 'none',
-          borderRadius: 6,
-          background: selectedIds.size === sortedSpecies.length && selectedIds.size > 0
-            ? T.parchmentDeep : 'transparent',
-        }}>
-          <input
-            type="checkbox"
-            aria-label="Select all species in view"
-            checked={selectedIds.size > 0 && selectedIds.size === sortedSpecies.length}
-            onChange={(e) => e.target.checked ? selectAllInView() : clearSelection()}
-            style={{ accentColor: T.brass, width: 20, height: 20, cursor: 'pointer' }}
-          />
-          Select all in view ({sortedSpecies.length})
-          {selectedIds.size > 0 && selectedIds.size < sortedSpecies.length && (
-            <span style={{ color: T.brass, fontWeight: 600, fontSize: 11 }}>
-              ({selectedIds.size} selected)
-            </span>
-          )}
-        </label>
-      )}
-
-      <div style={{ display: 'grid', gap: 6, paddingBottom: selectedIds.size > 0 ? 80 : 0 }}>
-        {sortedSpecies.filter(sp => {
-          // Filter chip narrows the render. Every filter EXCEPT 'all'
-          // requires a regulation row (rowless species are only shown
-          // in the 'all' view because they have no status to match).
-          if (filterMode === 'all') return true;
+      <div style={{ display: 'grid', gap: 6 }}>
+        {activeSpecies.filter(sp => {
           const row = rowsBySpecies.get(sp.id);
+          if (filterMode === 'all')      return true;
+          if (filterMode === 'none')     return !row;
           if (!row) return false;
-          if (filterMode === 'verified_admin') return row.status === 'verified' && !isAutoVerified(row);
-          if (filterMode === 'verified_auto')  return row.status === 'verified' &&  isAutoVerified(row);
-          if (filterMode === 'draft')          return row.status === 'draft';
-          if (filterMode === 'stale')          return row.status === 'stale';
-          return true;
+          return row.status === filterMode;
         }).map(sp => {
           const row = rowsBySpecies.get(sp.id) || null;
           const status = row?.status || 'none';
-          const isAuto = isAutoVerified(row);
-          // Verified → brass "Auto-verified" if auto-published, else
-          // green "Verified" (admin-signed). Keeps the flag visible
-          // so admin knows what still needs a human pass.
+          const isAuto = !!row?.auto_published;
           const badge =
-            status === 'verified' && isAuto
-                                    ? { bg: T.brass,  fg: T.oceanDeep, label: 'Auto-verified' }
-          : status === 'verified'   ? { bg: T.open,   fg: T.oceanDeep, label: 'Verified' }
-          : status === 'draft'      ? { bg: T.brass,  fg: T.oceanDeep, label: 'Draft' }
-          : status === 'stale'      ? { bg: T.warn,   fg: T.oceanDeep, label: 'Stale' }
-          : status === 'disputed'   ? { bg: T.closed, fg: '#fff',      label: 'Disputed' }
-          :                           { bg: T.parchmentDeep, fg: T.inkMute, label: 'None' };
-          const isDrafting = drafting === sp.id;
-          const short = (row) => {
-            if (!row) return '';
-            const parts = [];
-            if (row.season_text)  parts.push(row.season_text);
-            if (row.min_size_in != null) parts.push(`min ${row.min_size_in}"`);
-            if (row.max_size_in != null) parts.push(`max ${row.max_size_in}"`);
-            if (row.bag_limit   != null) parts.push(`bag ${row.bag_limit}`);
-            if (row.boat_limit  != null) parts.push(`boat ${row.boat_limit}`);
-            return parts.join(' · ');
-          };
-          // Age line + colour: default/subtle-brass/warn based on tier.
-          const age = row ? regulationAge(row) : null;
-          const ageColor = !age                 ? T.inkMute
-                         : age.tier === 'fresh' ? T.inkMute
-                         : age.tier === 'aging' ? T.brass
-                         :                        T.warn;
+            status === 'verified' ? (isAuto
+              ? { bg: T.open,   fg: T.oceanDeep, label: 'Live · auto' }
+              : { bg: T.open,   fg: T.oceanDeep, label: 'Live · manual' })
+          : status === 'draft'    ? { bg: T.brass,  fg: T.oceanDeep, label: 'Unproven' }
+          : status === 'stale'    ? { bg: T.warn,   fg: T.oceanDeep, label: 'Stale' }
+          : status === 'disputed' ? { bg: T.closed, fg: '#fff',      label: 'Disputed' }
+          :                         { bg: T.parchmentDeep, fg: T.inkMute, label: 'Queued' };
           const ageLine = row ? regulationAgePhrase(row) : null;
-          const lastCheckedLine = row ? regulationLastCheckedPhrase(row) : null;
-          const isSelected = selectedIds.has(sp.id);
           return (
-            <Card key={sp.id} style={{
-              padding: 10,
-              border: isSelected ? `2px solid ${T.brass}` : undefined,
-            }}>
+            <Card key={sp.id} style={{ padding: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Species-level checkbox — every row is selectable so
-                    bulk Draft-with-AI can hit species that don't have a
-                    regulation row yet. Wrapped in a <label> for a bigger
-                    tap target than the bare 20px checkbox. */}
-                <label
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    minWidth: 32, minHeight: 32, flexShrink: 0, cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${sp.commonName}`}
-                    checked={isSelected}
-                    onChange={() => toggleSelect(sp.id)}
-                    style={{ accentColor: T.brass, width: 20, height: 20, cursor: 'pointer' }}
-                  />
-                </label>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{sp.commonName}</div>
                   <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
-                    {short(row) || <em style={{ color: T.inkMute }}>no regulation on file</em>}
+                    {short(row) || <em>waiting for the researcher's rotation</em>}
                   </div>
-                  {ageLine && (
-                    <div style={{ fontSize: 10, color: ageColor, marginTop: 3, fontWeight: 600 }}>
-                      {ageLine}
-                    </div>
-                  )}
-                  {lastCheckedLine && (
-                    <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2 }}>
-                      auto-updater {lastCheckedLine}
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginTop: 3, flexWrap: 'wrap' }}>
+                    {ageLine && (
+                      <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 600 }}>{ageLine}</span>
+                    )}
+                    {row?.source_url && (
+                      <a href={row.source_url} target="_blank" rel="noopener noreferrer"
+                         style={{ fontSize: 10, color: T.brass, fontWeight: 700 }}>
+                        source ↗
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <span style={{
                   fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 800,
-                  padding: '3px 8px', borderRadius: 999,
+                  padding: '3px 8px', borderRadius: 999, flexShrink: 0,
                   background: badge.bg, color: badge.fg,
                 }}>{badge.label}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                <GhostButton
-                  onClick={() => doDraft(sp)}
-                  disabled={isDrafting}
-                  style={{ padding: '6px 10px', fontSize: 11 }}
-                >
-                  {isDrafting ? 'Re-running…' : (row ? 'Re-run AI' : 'Draft with AI')}
-                </GhostButton>
                 {row && (
-                  <GhostButton onClick={() => setEditRow(row)} style={{ padding: '6px 10px', fontSize: 11 }}>
+                  <GhostButton onClick={() => setEditRow(row)}
+                               style={{ padding: '6px 10px', fontSize: 11, flexShrink: 0 }}>
                     Edit
-                  </GhostButton>
-                )}
-                {row && row.status !== 'verified' && (
-                  <GhostButton
-                    onClick={() => setVerifyRow(row)}
-                    style={{ padding: '6px 10px', fontSize: 11, color: T.open, borderColor: T.open }}
-                  >
-                    Verify
-                  </GhostButton>
-                )}
-                {row && row.status === 'verified' && isAuto && (
-                  <GhostButton
-                    onClick={() => setVerifyRow(row)}
-                    style={{ padding: '6px 10px', fontSize: 11, color: T.open, borderColor: T.open }}
-                    title="Review the auto-updater's source and co-sign so this stops showing as auto-published"
-                  >
-                    Review &amp; co-sign
-                  </GhostButton>
-                )}
-                {row && row.status === 'verified' && (
-                  <GhostButton
-                    onClick={async () => {
-                      const reason = window.prompt('Un-verify reason (visible in source_note):', '');
-                      if (reason == null) return;
-                      const r = await adminUnverifyRegulation(row.id, reason);
-                      if (!r.ok) setError(r.error || 'un-verify failed');
-                      else refresh();
-                    }}
-                    style={{ padding: '6px 10px', fontSize: 11, color: T.warn, borderColor: T.warn }}
-                  >
-                    Un-verify
                   </GhostButton>
                 )}
               </div>
@@ -2607,78 +2264,6 @@ function RegulationsTab() {
             setEditRow(null);
             refresh();
           }}
-        />
-      )}
-
-      {verifyRow && (
-        <RegulationVerifyModal
-          row={verifyRow}
-          jurisdiction={jur}
-          species={SPECIES.find(s => s.id === verifyRow.species_id)}
-          onCancel={() => setVerifyRow(null)}
-          onVerified={async (sourceUrl) => {
-            const email = (typeof window !== 'undefined' && window.__kycAdminEmail) || null;
-            const r = await adminVerifyRegulation(verifyRow.id, {
-              sourceUrl, sessionEmail: email,
-            });
-            if (!r.ok) { setError(r.error || 'verify failed'); return; }
-            setVerifyRow(null);
-            refresh();
-          }}
-        />
-      )}
-
-      {/* Floating bulk action bar. Bulk VERIFY is intentionally
-          absent — verification requires per-row source_url + attest
-          checkbox per the compliance spec. */}
-      {selectedIds.size > 0 && (
-        <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 400,
-          padding: '10px 14px',
-          background: T.card, borderTop: `1px solid ${T.brass}`,
-          display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
-          boxShadow: '0 -6px 22px rgba(0,0,0,0.35)',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginRight: 8 }}>
-            {selectedIds.size} selected
-          </div>
-          <div style={{ flex: 1 }} />
-          <GhostButton
-            onClick={doBulkDraftAI}
-            disabled={bulkBusy}
-            style={{ padding: '8px 12px', fontSize: 12 }}
-          >
-            Draft with AI
-          </GhostButton>
-          <GhostButton
-            onClick={doBulkMarkStale}
-            disabled={bulkBusy}
-            style={{ padding: '8px 12px', fontSize: 12, color: T.warn, borderColor: T.warn }}
-          >
-            Mark stale
-          </GhostButton>
-          <GhostButton
-            onClick={doBulkDeleteDrafts}
-            disabled={bulkBusy}
-            style={{ padding: '8px 12px', fontSize: 12, color: T.closed, borderColor: T.closed }}
-          >
-            Delete drafts
-          </GhostButton>
-          <GhostButton
-            onClick={clearSelection}
-            style={{ padding: '8px 12px', fontSize: 12 }}
-          >
-            Clear selection
-          </GhostButton>
-        </div>
-      )}
-
-      {bulkCascadeRunner && (
-        <RegsCascadeProgressModal
-          runner={bulkCascadeRunner}
-          onCancel={() => { bulkCascadeRunner.cancelToken.cancelled = true; }}
-          onClose={() => { setBulkCascadeRunner(null); clearSelection(); refresh(); }}
-          onRetryFailed={() => setBulkCascadeRunner(null)}
         />
       )}
     </div>
@@ -2759,60 +2344,3 @@ function RegulationEditModal({ row, jurisdiction, species, onCancel, onSaved }) 
   );
 }
 
-function RegulationVerifyModal({ row, jurisdiction, species, onCancel, onVerified }) {
-  const [sourceUrl, setSourceUrl] = useState(row.source_url || jurisdiction?.regsUrl || '');
-  const [confirmed, setConfirmed] = useState(false);
-  const canVerify = !!sourceUrl.trim() && confirmed;
-  const today = new Date().toLocaleDateString();
-  return (
-    <div onClick={onCancel} style={{
-      position: 'fixed', inset: 0, zIndex: 500,
-      background: 'rgba(3,27,51,0.75)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 12,
-        padding: 18, maxWidth: 500, width: '100%',
-      }}>
-        <H1 size={17} style={{ marginBottom: 4 }}>Verify regulation</H1>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
-          <strong style={{ color: T.ink }}>{species?.commonName || row.species_id}</strong> in <strong style={{ color: T.ink }}>{jurisdiction?.name}</strong>.
-          Verifying makes this regulation visible to mobile app users. Requires a citable source.
-        </div>
-        {!String(row.season_text || '').trim() && (
-          <div style={{
-            padding: '8px 10px', borderRadius: 8, marginBottom: 12,
-            background: T.warnBg, border: `1px solid ${T.warn}`,
-            fontSize: 12, color: T.warn, fontWeight: 700, lineHeight: 1.5,
-          }}>
-            No season text on this row. The app will fall back to the bundled
-            season (which may be a stale placeholder). Strongly consider adding
-            the current season via Edit before verifying — season is the #1
-            thing anglers look for.
-          </div>
-        )}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <Field
-            label="Source URL (required)"
-            value={sourceUrl} onChange={setSourceUrl}
-            placeholder={jurisdiction?.regsUrl || 'https://…'}
-          />
-          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: T.ink, cursor: 'pointer', lineHeight: 1.5 }}>
-            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} style={{ accentColor: T.brass, marginTop: 2 }} />
-            <span>I verified these regulations against the source above on {today}.</span>
-          </label>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-            <GhostButton onClick={onCancel}>Cancel</GhostButton>
-            <PrimaryButton
-              onClick={() => onVerified(sourceUrl.trim())}
-              disabled={!canVerify}
-              style={{ padding: '8px 16px', opacity: canVerify ? 1 : 0.5 }}
-            >
-              Verify &amp; publish
-            </PrimaryButton>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
