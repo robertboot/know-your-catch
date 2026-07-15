@@ -270,7 +270,9 @@ export async function adminUpsertRegulation(row, { sessionEmail = null } = {}) {
   return { ok: true, row: data };
 }
 
-/** Admin-only verify — REQUIRES a non-empty source_url. */
+/** Admin-only verify — REQUIRES a non-empty source_url. When an admin
+    co-signs an auto-published row this also clears auto_published so
+    the badge flips from "Auto-verified" to plain "Verified". */
 export async function adminVerifyRegulation(id, { sourceUrl, sessionEmail }) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
@@ -280,6 +282,7 @@ export async function adminVerifyRegulation(id, { sourceUrl, sessionEmail }) {
       status: 'verified',
       verified_by: sessionEmail || 'admin',
       verified_at: new Date().toISOString(),
+      auto_published: false,
       source_url: sourceUrl.trim(),
     })
     .eq('id', id);
@@ -369,6 +372,33 @@ function daysAgoPhrase(days) {
   if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
   const years = Math.round(days / 365);
   return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+/** True if a verified row was published by the auto-updater rather
+    than co-signed by a human admin. Two signals: auto_published flag
+    (canonical since the auto-updater added it) OR verified_by set
+    to the sentinel string 'auto-updater'. Belt + suspenders in case
+    a row got flipped one way but not the other during the migration. */
+export function isAutoVerified(row) {
+  if (!row) return false;
+  if (row.status !== 'verified') return false;
+  return row.auto_published === true || row.verified_by === 'auto-updater';
+}
+
+/** "checked 3h ago" phrasing for the last_checked_at column. Written
+    in hours-resolution up to a day so the ongoing auto-update
+    rotation reads at a glance. Falls back to daysAgoPhrase past 24h. */
+export function regulationLastCheckedPhrase(row) {
+  if (!row?.last_checked_at) return null;
+  const ms = Date.now() - new Date(row.last_checked_at).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1)   return 'checked just now';
+  if (minutes < 60)  return `checked ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)    return `checked ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `checked ${daysAgoPhrase(days)}`;
 }
 
 /** Admin-only bulk-mark-stale — takes any status='verified' row with

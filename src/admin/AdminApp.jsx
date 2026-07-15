@@ -46,6 +46,7 @@ import {
   adminMarkAllStale, adminCountStalable,
   adminBulkMarkStale, adminBulkDeleteDrafts, runRegsCascade,
   getAutoDraftRegsPref, setAutoDraftRegsPref,
+  isAutoVerified, regulationLastCheckedPhrase,
 } from '../regulations-store.js';
 import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
@@ -2017,6 +2018,10 @@ function RegulationsTab() {
   // Sort control — 'species' (alphabetical, default) or 'age' (oldest
   // verified first so admin can knock out the most-stale first).
   const [sortMode, setSortMode] = useState('species');
+  // Filter chip — 'all' | 'verified_admin' | 'verified_auto' | 'draft' | 'stale'.
+  // 'verified_admin' = human-verified (auto_published=false).
+  // 'verified_auto'  = auto-updater published, not yet co-signed.
+  const [filterMode, setFilterMode] = useState('all');
   // Count of verified-and-older-than-a-year rows for the bulk button
   // label. Recomputed on refresh via adminCountStalable.
   const [stalableCount, setStalableCount] = useState(0);
@@ -2251,6 +2256,38 @@ function RegulationsTab() {
         </GhostButton>
       </div>
 
+      {/* Filter chips — narrow the render to a single status class so
+          the admin can eyeball "what has the auto-updater published
+          that I haven't co-signed yet?" without scrolling every row. */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {[
+          { id: 'all',             label: 'All' },
+          { id: 'verified_admin',  label: 'Verified by admin' },
+          { id: 'verified_auto',   label: 'Auto-published' },
+          { id: 'draft',           label: 'Drafts' },
+          { id: 'stale',           label: 'Stale' },
+        ].map(f => {
+          const active = filterMode === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilterMode(f.id)}
+              style={{
+                background: active ? T.brass : 'transparent',
+                color:      active ? T.oceanDeep : T.brass,
+                border:    `1.5px solid ${T.brass}`,
+                padding: '5px 12px', borderRadius: 999,
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                cursor: 'pointer',
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div style={{
         display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
         padding: '8px 10px', borderRadius: 8, background: T.parchmentDeep,
@@ -2315,15 +2352,33 @@ function RegulationsTab() {
       )}
 
       <div style={{ display: 'grid', gap: 6, paddingBottom: selectedIds.size > 0 ? 80 : 0 }}>
-        {sortedSpecies.map(sp => {
+        {sortedSpecies.filter(sp => {
+          // Filter chip narrows the render. Every filter EXCEPT 'all'
+          // requires a regulation row (rowless species are only shown
+          // in the 'all' view because they have no status to match).
+          if (filterMode === 'all') return true;
+          const row = rowsBySpecies.get(sp.id);
+          if (!row) return false;
+          if (filterMode === 'verified_admin') return row.status === 'verified' && !isAutoVerified(row);
+          if (filterMode === 'verified_auto')  return row.status === 'verified' &&  isAutoVerified(row);
+          if (filterMode === 'draft')          return row.status === 'draft';
+          if (filterMode === 'stale')          return row.status === 'stale';
+          return true;
+        }).map(sp => {
           const row = rowsBySpecies.get(sp.id) || null;
           const status = row?.status || 'none';
+          const isAuto = isAutoVerified(row);
+          // Verified → brass "Auto-verified" if auto-published, else
+          // green "Verified" (admin-signed). Keeps the flag visible
+          // so admin knows what still needs a human pass.
           const badge =
-            status === 'verified' ? { bg: T.open,   fg: T.oceanDeep, label: 'Verified' }
-          : status === 'draft'    ? { bg: T.brass,  fg: T.oceanDeep, label: 'Draft' }
-          : status === 'stale'    ? { bg: T.warn,   fg: T.oceanDeep, label: 'Stale' }
-          : status === 'disputed' ? { bg: T.closed, fg: '#fff',      label: 'Disputed' }
-          :                         { bg: T.parchmentDeep, fg: T.inkMute, label: 'None' };
+            status === 'verified' && isAuto
+                                    ? { bg: T.brass,  fg: T.oceanDeep, label: 'Auto-verified' }
+          : status === 'verified'   ? { bg: T.open,   fg: T.oceanDeep, label: 'Verified' }
+          : status === 'draft'      ? { bg: T.brass,  fg: T.oceanDeep, label: 'Draft' }
+          : status === 'stale'      ? { bg: T.warn,   fg: T.oceanDeep, label: 'Stale' }
+          : status === 'disputed'   ? { bg: T.closed, fg: '#fff',      label: 'Disputed' }
+          :                           { bg: T.parchmentDeep, fg: T.inkMute, label: 'None' };
           const isDrafting = drafting === sp.id;
           const short = (row) => {
             if (!row) return '';
@@ -2342,6 +2397,7 @@ function RegulationsTab() {
                          : age.tier === 'aging' ? T.brass
                          :                        T.warn;
           const ageLine = row ? regulationAgePhrase(row) : null;
+          const lastCheckedLine = row ? regulationLastCheckedPhrase(row) : null;
           const isSelected = selectedIds.has(sp.id);
           return (
             <Card key={sp.id} style={{
@@ -2378,6 +2434,11 @@ function RegulationsTab() {
                       {ageLine}
                     </div>
                   )}
+                  {lastCheckedLine && (
+                    <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2 }}>
+                      auto-updater {lastCheckedLine}
+                    </div>
+                  )}
                 </div>
                 <span style={{
                   fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 800,
@@ -2404,6 +2465,15 @@ function RegulationsTab() {
                     style={{ padding: '6px 10px', fontSize: 11, color: T.open, borderColor: T.open }}
                   >
                     Verify
+                  </GhostButton>
+                )}
+                {row && row.status === 'verified' && isAuto && (
+                  <GhostButton
+                    onClick={() => setVerifyRow(row)}
+                    style={{ padding: '6px 10px', fontSize: 11, color: T.open, borderColor: T.open }}
+                    title="Review the auto-updater's source and co-sign so this stops showing as auto-published"
+                  >
+                    Review &amp; co-sign
                   </GhostButton>
                 )}
                 {row && row.status === 'verified' && (
