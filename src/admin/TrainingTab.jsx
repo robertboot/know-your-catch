@@ -444,6 +444,16 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
             {doneCount > 0 && (
               <GhostButton onClick={clearDone} style={{ fontSize: 12, padding: '6px 10px' }}>Clear done</GhostButton>
             )}
+            {errorCount > 0 && !uploading && (
+              <GhostButton
+                onClick={() => setQueue(q => q.map(r => r.status === 'error'
+                  ? { ...r, status: 'queued', error: null, stage: null, statusCode: null, code: null }
+                  : r))}
+                style={{ fontSize: 12, padding: '6px 10px', color: T.warn, borderColor: T.warn }}
+              >
+                Retry {errorCount} failed
+              </GhostButton>
+            )}
             <PrimaryButton
               onClick={uploadAll}
               disabled={uploading || readyCount === 0}
