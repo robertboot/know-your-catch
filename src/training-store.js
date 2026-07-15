@@ -338,12 +338,12 @@ export async function uploadTrainingImage(file, speciesId, opts = {}) {
   // Shape the parity object for the DB-insert branch below.
   const up = { data: { path: storagePath }, error: null };
 
-  // Owner-uploaded photos land as VERIFIED. Rationale: the admin
-  // (owner) is also the reviewer, so an upload from the admin console
-  // IS the review — leaving these at 'pending' just parks them in a
-  // queue that never gets processed and silently starves Coverage /
-  // export. Model-feedback rows (model_confirmation / model_correction)
-  // already land verified via saveModelFeedback below.
+  // Default status is 'verified' for backwards compatibility, but the
+  // admin Upload panel now ALWAYS passes status:'pending' — scraped
+  // batches routinely contain wrong-species shots, so Review is the
+  // quality gate before anything counts for training. Model-feedback
+  // rows (model_confirmation / model_correction) still land verified
+  // via saveModelFeedback below.
   const nowIso = new Date().toISOString();
   const status = opts.status === 'pending' ? 'pending' : 'verified';
   const { data, error } = await c.from('training_images').insert({

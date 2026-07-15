@@ -34,7 +34,6 @@ import {
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
   planExport,
-  countMyPendingOwnerUploads, verifyAllMyOwnerUploads,
   restoreTrainingRows,
   saveCropRecover,
 } from '../training-store.js';
@@ -310,10 +309,13 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
       while (next < readyRows.length) {
         const row = readyRows[next++];
         setQueue(q => q.map(r => r.id === row.id ? { ...r, status: 'uploading' } : r));
-        const res = await uploadTrainingImage(row.file, row.speciesId,
-          row.pending
-            ? { status: 'pending', stableId: await stableTrainingId(row.stableKey) }
-            : {});
+        // EVERY admin upload lands pending — Review is the quality
+        // gate. Scraped batches routinely contain wrong-species
+        // shots; auto-verifying them poisons the training data.
+        const res = await uploadTrainingImage(row.file, row.speciesId, {
+          status: 'pending',
+          ...(row.stableKey ? { stableId: await stableTrainingId(row.stableKey) } : {}),
+        });
         setQueue(q => q.map(r => r.id === row.id
           ? { ...r,
               status: res.ok ? 'done' : 'error',
@@ -413,6 +415,8 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
         </div>
         <div style={{ fontSize: 12, color: T.inkMute, marginTop: 6 }}>
           JPG or PNG. Multiple files supported. Photos stay private — admin only.
+          Everything lands as <strong>pending</strong> and counts for training only
+          after you approve it in Review.
         </div>
         <input
           ref={inputRef} type="file" accept="image/*" multiple hidden
@@ -603,11 +607,6 @@ function ReviewPanel() {
   const [rejectPickerOpen, setRejectPickerOpen] = useState(false);
   const [error, setError] = useState('');
   const [counts, setCounts] = useState({});
-  // Backlog of the admin's own owner_upload=pending rows from before
-  // uploads became auto-verified. Kept fresh so the button label
-  // shows the current gap and disappears when there's nothing left.
-  const [myPendingCount, setMyPendingCount] = useState(0);
-  const [verifyingBacklog, setVerifyingBacklog] = useState(false);
   // Crop-to-recover state — the row currently being cropped + its
   // resolved image URL (signed) for the CropStep component.
   const [cropRow, setCropRow] = useState(null);
@@ -624,11 +623,6 @@ function ReviewPanel() {
   );
 
   const refresh = useCallback(async () => {
-    // Always refresh the backlog count — it drives the button label
-    // and stays visible even when no species is selected.
-    countMyPendingOwnerUploads().then((r) => {
-      if (r?.ok) setMyPendingCount(r.count);
-    });
     if (!speciesId) { setRows([]); return; }
     // '__all__' means "no species filter" — pull rows for every
     // species at the chosen status. Everything else stays a normal
@@ -649,19 +643,6 @@ function ReviewPanel() {
   }, [speciesId, statusFilter]);
 
   useEffect(() => { refresh(); }, [refresh]);
-
-  const verifyBacklog = async () => {
-    if (myPendingCount === 0) return;
-    if (!window.confirm(`Verify all ${myPendingCount} of your pending owner uploads? They'll go straight into the training set and count toward Coverage immediately.`)) return;
-    setVerifyingBacklog(true);
-    const r = await verifyAllMyOwnerUploads();
-    setVerifyingBacklog(false);
-    if (!r.ok) { setError(r.error || 'backlog verify failed'); return; }
-    setMyPendingCount(0);
-    // Also re-refresh the list — if the user was viewing 'pending',
-    // those rows have just moved to 'verified'.
-    refresh();
-  };
 
   /* Keyboard shortcuts. Guard so text inputs / modals don't hijack. */
   useEffect(() => {
@@ -912,29 +893,11 @@ function ReviewPanel() {
           )}
         </div>
 
-        {/* Backlog cleanup — visible whenever the admin has legacy
-            pending owner-uploads. Auto-verify happens on new uploads
-            from now on; this drains what already exists. */}
-        {myPendingCount > 0 && (
-          <div style={{
-            marginTop: 12, padding: '10px 12px',
-            background: T.parchmentDeep, border: `1px solid ${T.brass}`, borderRadius: 6,
-            display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-          }}>
-            <div style={{ flex: 1, minWidth: 220, fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
-              <strong style={{ color: T.ink }}>{myPendingCount.toLocaleString()}</strong> of your uploads are still pending
-              — leftover from before uploads auto-verified. These don't count
-              toward Coverage or exports until you flip them.
-            </div>
-            <GhostButton
-              onClick={verifyBacklog}
-              disabled={verifyingBacklog}
-              style={{ padding: '8px 12px', fontSize: 12, color: T.brass, borderColor: T.brass }}
-            >
-              {verifyingBacklog ? 'Verifying…' : `Verify all my uploads (${myPendingCount})`}
-            </GhostButton>
-          </div>
-        )}
+        {/* The old "Verify all my uploads" bulk backlog button lived
+            here — removed deliberately. Every upload now lands pending
+            and Review IS the quality gate (scraped batches carry
+            wrong-species shots); a one-tap mass-verify would defeat
+            it. Approve photos through the review flow below. */}
 
         {speciesId && (
           <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 10, lineHeight: 1.5 }}>
