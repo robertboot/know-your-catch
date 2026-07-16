@@ -116,7 +116,10 @@ export async function deleteExport(id, storagePath) {
 
 /* Signed UPLOAD URL for the model bundle Colab produces at the end of
    training. Colab PUTs the bundle ZIP directly to this URL, no client
-   library needed. TTL matches the export URL (6 hours). Path scheme:
+   library needed. NOTE: unlike download URLs, createSignedUploadUrl
+   does not take a TTL — Supabase fixes the token lifetime at ~2 hours.
+   A long training run can outlive it; Colab then gets a 403 and a
+   fresh URL must be minted from the Models/Export UI. Path scheme:
      pending/{yyyy-mm-dd}/{uuid}.zip
    The "pending/" prefix flags the bundle as not-yet-imported so the
    Models tab can list it and offer one-click import. */

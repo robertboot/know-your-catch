@@ -81,43 +81,85 @@ print(f"[colab_run] Manifest v{version}: {len(photos)} photos across "
 #      /content/dataset/val/{species_id}/{filename}
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+FETCH_ATTEMPTS = 3
+
+def _image_problem(path):
+    # Supabase Storage sometimes serves an empty 200 body, and
+    # urlretrieve happily writes it as a 0-byte file. Anything that
+    # doesn't decode crashes train_fish_id.py at its decode_image node
+    # ("INVALID_ARGUMENT: Input is empty"), so reject it here.
+    from PIL import Image
+    try:
+        if path.stat().st_size == 0:
+            return "empty file (0 bytes)"
+        with Image.open(path) as im:
+            im.verify()
+        return None
+    except Exception as e:
+        return f"undecodable image: {e}"
+
 def _fetch(p):
     dest = DATA_DIR / p["path"]  # train/red_snapper/foo.jpg
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists() and dest.stat().st_size > 0:
-        return "cached"
-    try:
-        crop = p.get("crop_bbox") or None
-        if crop:
-            # Fetch to a scratch path, apply the normalized crop, save
-            # the cropped result at dest. The training script reads
-            # whatever's on disk under train/{species}/ — cropping is
-            # transparent to it.
-            import tempfile
-            from PIL import Image
-            scratch = Path(tempfile.mkdtemp()) / dest.name
-            urlretrieve(p["url"], str(scratch))
-            with Image.open(scratch) as im:
-                w, h = im.size
-                x = max(0, int(round(float(crop.get("x", 0)) * w)))
-                y = max(0, int(round(float(crop.get("y", 0)) * h)))
-                cw = max(1, int(round(float(crop.get("w", 1)) * w)))
-                ch = max(1, int(round(float(crop.get("h", 1)) * h)))
-                cw = min(cw, w - x); ch = min(ch, h - y)
-                cropped = im.crop((x, y, x + cw, y + ch))
-                # Convert to RGB in case source is RGBA — train_fish_id
-                # expects standard image tensors and JPEG doesn't
-                # support alpha.
-                if cropped.mode != "RGB":
-                    cropped = cropped.convert("RGB")
-                cropped.save(dest, format="JPEG", quality=92)
-            try: scratch.unlink()
-            except Exception: pass
-            return "cropped"
-        urlretrieve(p["url"], str(dest))
-        return "ok"
-    except Exception as e:
-        return f"fail:{e}"
+    if dest.exists():
+        if _image_problem(dest) is None:
+            return "cached"
+        # Broken leftover from an earlier run — re-download it.
+        try: dest.unlink()
+        except Exception: pass
+    crop = p.get("crop_bbox") or None
+    last_err = None
+    for attempt in range(FETCH_ATTEMPTS):
+        if attempt:
+            time.sleep(attempt)
+        try:
+            if crop:
+                # Fetch to a scratch path, apply the normalized crop, save
+                # the cropped result at dest. The training script reads
+                # whatever's on disk under train/{species}/ — cropping is
+                # transparent to it.
+                import tempfile
+                from PIL import Image
+                scratch = Path(tempfile.mkdtemp()) / dest.name
+                try:
+                    urlretrieve(p["url"], str(scratch))
+                    problem = _image_problem(scratch)
+                    if problem:
+                        last_err = problem
+                        continue
+                    with Image.open(scratch) as im:
+                        w, h = im.size
+                        x = max(0, int(round(float(crop.get("x", 0)) * w)))
+                        y = max(0, int(round(float(crop.get("y", 0)) * h)))
+                        cw = max(1, int(round(float(crop.get("w", 1)) * w)))
+                        ch = max(1, int(round(float(crop.get("h", 1)) * h)))
+                        cw = min(cw, w - x); ch = min(ch, h - y)
+                        cropped = im.crop((x, y, x + cw, y + ch))
+                        # Convert to RGB in case source is RGBA — train_fish_id
+                        # expects standard image tensors and JPEG doesn't
+                        # support alpha.
+                        if cropped.mode != "RGB":
+                            cropped = cropped.convert("RGB")
+                        cropped.save(dest, format="JPEG", quality=92)
+                finally:
+                    try: scratch.unlink()
+                    except Exception: pass
+            else:
+                urlretrieve(p["url"], str(dest))
+            problem = _image_problem(dest)
+            if problem is None:
+                return "cropped" if crop else "ok"
+            last_err = problem
+        except Exception as e:
+            last_err = e
+        finally:
+            # Never leave a broken file behind: the zip step would pack
+            # it, and a later run's cached fast-path must re-download it.
+            if last_err is not None and dest.exists():
+                if _image_problem(dest) is not None:
+                    try: dest.unlink()
+                    except Exception: pass
+    return f"fail:{last_err}"
 
 print(f"[colab_run] Downloading {len(photos)} photos in parallel...")
 start = time.time()
@@ -296,6 +338,12 @@ if upload_url and upload_token:
     except Exception as e:
         print(f"[colab_run] WARNING: bundle upload failed: {e}. Bundle "
               f"still at {BUNDLE_ZIP} - download manually.")
+        if getattr(e, "code", None) == 403:
+            print("[colab_run] A 403 usually means the signed upload URL "
+                  "expired - Supabase upload tokens last ~2 hours, which a "
+                  "long training run can outlive. Mint a fresh URL from the "
+                  "admin Models/Export UI and re-run just the upload, or "
+                  "import the bundle manually.")
 else:
     print("[colab_run] No REELINTEL_BUNDLE_UPLOAD env var - leaving bundle "
           f"at {BUNDLE_ZIP} for manual pickup.")
