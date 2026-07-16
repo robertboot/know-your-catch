@@ -189,6 +189,68 @@ if failed > len(photos) * 0.05:
     die(f"too many download failures ({failed}/{len(photos)}) - aborting.")
 
 
+# 2b. Validate every image on disk. A single zero-byte or corrupt
+#     file kills training mid-epoch with an opaque
+#     "INVALID_ARGUMENT: Input is empty" from DecodeImage — some
+#     browser uploads (iCloud files not materialized locally) PUT
+#     empty bodies to storage successfully, so bad objects exist at
+#     the source. Bad files get one re-download, then are removed
+#     from the dataset so the run survives.
+print("[colab_run] Validating images on disk...")
+from PIL import Image
+
+def _validate(p):
+    dest = DATA_DIR / p["path"]
+    try:
+        if not dest.exists() or dest.stat().st_size == 0:
+            return (p, "missing/empty")
+        with Image.open(dest) as im:
+            im.verify()
+        return None
+    except Exception as e:
+        return (p, f"corrupt: {e}")
+
+bad = []
+with ThreadPoolExecutor(max_workers=16) as pool:
+    for res in pool.map(_validate, photos):
+        if res:
+            bad.append(res)
+
+removed = 0
+if bad:
+    print(f"[colab_run] {len(bad)} invalid images — retrying once...")
+    still_bad = []
+    for p, reason in bad:
+        dest = DATA_DIR / p["path"]
+        try:
+            if dest.exists():
+                dest.unlink()
+            urlretrieve(p["url"], str(dest))
+            if dest.stat().st_size > 0:
+                with Image.open(dest) as im:
+                    im.verify()
+            else:
+                raise ValueError("zero bytes")
+        except Exception as e:
+            still_bad.append((p, f"{reason} / retry: {e}"))
+            try:
+                if dest.exists():
+                    dest.unlink()
+            except Exception:
+                pass
+    removed = len(still_bad)
+    if removed:
+        print(f"[colab_run] Removed {removed} unrecoverable images from the dataset:")
+        for p, reason in still_bad[:10]:
+            print(f"  - {p['path']}: {reason}")
+        if removed > 10:
+            print(f"  ... and {removed - 10} more")
+        print("[colab_run] NOTE: these photos are broken at the SOURCE (zero-byte")
+        print("[colab_run] uploads). Re-upload them via the admin, or leave them —")
+        print("[colab_run] every run will skip them the same way.")
+print(f"[colab_run] Validation done. {len(photos) - removed} usable images.")
+
+
 # 3. Fetch the training script from the working branch.
 print(f"[colab_run] Fetching train_fish_id.py from {BRANCH}...")
 try:
