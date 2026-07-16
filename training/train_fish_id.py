@@ -328,7 +328,24 @@ def main():
     labels = list(manifest["species"])
     excluded = list(manifest.get("excluded", []))
     print(f"Manifest: {len(labels)} species, {len(excluded)} excluded, "
-          f"{len(manifest['images'])} images")
+          f"{len(manifest['images'])} images", flush=True)
+
+    # Guard: image_dataset_from_directory crashes outright when a
+    # class_names entry has no folder in a split (a species with very
+    # few photos can land 0 in val/). Drop those labels with a loud
+    # warning instead of dying — they join the excluded list so the
+    # app knows the model can't recognize them.
+    def has_images(split, label):
+        d = data_root / split / label
+        return d.is_dir() and any(d.iterdir())
+    droppable = [l for l in labels if not (has_images("train", l) and has_images("val", l))]
+    if droppable:
+        print(f"WARNING: dropping {len(droppable)} species with an empty "
+              f"train/ or val/ split: {', '.join(droppable)}", flush=True)
+        labels = [l for l in labels if l not in droppable]
+        excluded = excluded + droppable
+    if len(labels) < 2:
+        raise SystemExit("fewer than 2 trainable species after split check — nothing to train")
 
     train_ds, val_ds = build_datasets(data_root, labels, args.seed)
     model, base = build_model(num_classes=len(labels))

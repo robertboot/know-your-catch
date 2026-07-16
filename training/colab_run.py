@@ -226,17 +226,28 @@ if not gpus:
 
 # 7. Run training.
 cmd = [
-    sys.executable, SCRIPT_PATH,
+    sys.executable, "-u", SCRIPT_PATH,
     "--export", str(STUB_ZIP),
     "--out",    str(OUT_DIR),
     "--epochs", "20",
 ]
 print(f"[colab_run] Running: {' '.join(cmd)}")
 print("[colab_run] ---- train_fish_id.py output begins ----")
-result = subprocess.run(cmd)
+# Stream the child's stdout+stderr line-by-line through the notebook's
+# own stdout. A bare subprocess.run(cmd) inherits the kernel's file
+# descriptors, and in Colab the child's stderr (i.e. the Python
+# traceback when training crashes) never renders in the cell — the
+# script "fails silently" with an empty output block.
+proc = subprocess.Popen(
+    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    text=True, bufsize=1,
+)
+for line in proc.stdout:
+    print(line, end="", flush=True)
+proc.wait()
 print("[colab_run] ---- train_fish_id.py output ends ----")
-if result.returncode != 0:
-    die(f"train_fish_id.py exited with code {result.returncode}.")
+if proc.returncode != 0:
+    die(f"train_fish_id.py exited with code {proc.returncode}.")
 
 
 # 8. Verify artifacts.
