@@ -732,6 +732,36 @@ export async function classifyTrainingPhoto(file) {
   };
 }
 
+/* iNaturalist second opinion for a pending photo. The edge function
+   pulls the image from storage and forwards it to iNat's CV endpoint,
+   using the admin's short-lived iNat token (stored in localStorage).
+   Returns { ok, results:[{speciesId, commonName, score, taxonName}] }.
+   ok:false with error 'inat_auth' means the token expired. */
+export const INAT_TOKEN_KEY = 'kyc_inat_token';
+
+export async function inatIdentifyPhoto(storagePath) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const token = (typeof localStorage !== 'undefined' && localStorage.getItem(INAT_TOKEN_KEY)) || '';
+  if (!token) return { ok: false, error: 'no_token' };
+  const speciesList = SPECIES
+    .filter(s => s.active !== false && s.scientific)
+    .map(s => ({ id: s.id, commonName: s.commonName, scientific: s.scientific }));
+  const { data, error } = await c.functions.invoke('inat-identify', {
+    body: { storagePath, inatToken: token, speciesList },
+  });
+  if (error) {
+    let detail = error.message || 'edge function error';
+    try {
+      const ctx = await error.context?.json?.();
+      if (ctx?.error) detail = ctx.error;
+    } catch { /* keep default */ }
+    return { ok: false, error: detail };
+  }
+  if (data?.error) return { ok: false, error: String(data.error) };
+  return { ok: true, results: Array.isArray(data?.results) ? data.results : [] };
+}
+
 /* ============================================================
    Phase 3 — Export
    ============================================================

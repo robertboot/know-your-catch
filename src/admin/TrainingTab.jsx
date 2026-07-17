@@ -30,7 +30,7 @@ import {
 import {
   uploadTrainingImage, stableTrainingId, listTrainingImages,
   approve, reject, correctSpecies, deleteTrainingImage,
-  classifyTrainingPhoto,
+  classifyTrainingPhoto, inatIdentifyPhoto, INAT_TOKEN_KEY,
   signedUrl, countsBySpecies,
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
@@ -718,6 +718,13 @@ function ReviewPanel() {
   const [aiRuntime, setAiRuntime] = useState(null);
   const [aiStatus, setAiStatus]   = useState(''); // '' | 'loading' | in-strip error text
   const [aiPreds, setAiPreds]     = useState({}); // row.id → [{ speciesId, score }]
+  // iNaturalist second opinion — free cross-check via the admin's
+  // short-lived iNat token (stored in localStorage).
+  const [inatToken, setInatToken] = useState(
+    (typeof localStorage !== 'undefined' && localStorage.getItem(INAT_TOKEN_KEY)) || ''
+  );
+  const [inatTokenOpen, setInatTokenOpen] = useState(false);
+  const [inatPreds, setInatPreds] = useState({}); // row.id → { results } | { error }
 
   const speciesOptions = useMemo(
     () => [...SPECIES].filter(s => s.active !== false)
@@ -789,6 +796,31 @@ function ReviewPanel() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRuntime, aiRow?.id]);
+
+  // iNaturalist second opinion for the focused row — runs alongside
+  // the Big Red predict whenever AI assist is on and a token is set.
+  // Cached per row id. A stale/expired token surfaces inline so the
+  // reviewer knows to refresh it.
+  useEffect(() => {
+    if (!aiOn || !aiRow || !inatToken || inatPreds[aiRow.id]) return undefined;
+    let alive = true;
+    (async () => {
+      const res = await inatIdentifyPhoto(aiRow.storage_path);
+      if (alive) setInatPreds(p => ({ ...p, [aiRow.id]: res }));
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiOn, aiRow?.id, inatToken]);
+
+  const saveInatToken = (val) => {
+    const t = (val || '').trim();
+    setInatToken(t);
+    setInatPreds({}); // re-query with the new token
+    try {
+      if (t) localStorage.setItem(INAT_TOKEN_KEY, t);
+      else localStorage.removeItem(INAT_TOKEN_KEY);
+    } catch { /* private mode — in-memory only */ }
+  };
 
   // Chip tap: the chip matching the row's current label approves it;
   // any other chip moves the photo to that species (verified, with
@@ -1052,6 +1084,15 @@ function ReviewPanel() {
           >
             {aiOn ? (aiStatus === 'loading' ? 'AI assist: loading…' : 'AI assist: ON') : 'AI assist'}
           </GhostButton>
+          {aiOn && (
+            <GhostButton
+              onClick={() => setInatTokenOpen(v => !v)}
+              style={{ padding: '10px 14px', ...(inatToken ? { color: T.open, borderColor: T.open } : {}) }}
+              title="iNaturalist gives a free second opinion. Paste a token from inaturalist.org/users/api_token (expires ~24h)."
+            >
+              {inatToken ? 'iNat: on' : 'iNat: add token'}
+            </GhostButton>
+          )}
           {undoStack.length > 0 && (
             <GhostButton
               onClick={undoLast}
@@ -1063,6 +1104,38 @@ function ReviewPanel() {
             </GhostButton>
           )}
         </div>
+
+        {aiOn && inatTokenOpen && (
+          <div style={{
+            marginTop: 10, padding: '10px 12px', borderRadius: 8,
+            background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+          }}>
+            <SectionLabel style={{ marginBottom: 6 }}>iNaturalist token</SectionLabel>
+            <div style={{ fontSize: 11, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
+              A free second opinion from iNaturalist's fish model. Sign in to iNaturalist,
+              open <span style={{ color: T.brass }}>inaturalist.org/users/api_token</span>,
+              copy the token, and paste it here. It expires about every 24 hours — re-paste
+              when iNat says the token's stale.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="password"
+                value={inatToken}
+                onChange={e => setInatToken(e.target.value)}
+                placeholder="Paste iNat API token…"
+                style={{ ...inputStyle, flex: 1, fontFamily: 'monospace', fontSize: 11 }}
+              />
+              <GhostButton onClick={() => { saveInatToken(inatToken); setInatTokenOpen(false); }} style={{ padding: '8px 14px' }}>
+                Save
+              </GhostButton>
+              {inatToken && (
+                <GhostButton onClick={() => saveInatToken('')} style={{ padding: '8px 14px', color: T.closed, borderColor: T.closed }}>
+                  Clear
+                </GhostButton>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* The old "Verify all my uploads" bulk backlog button lived
             here — removed deliberately. Every upload now lands pending
@@ -1180,6 +1253,60 @@ function ReviewPanel() {
                       chip to recategorize the photo to that species. Keys <b>1–5</b> pick a chip.
                     </div>
                   </>
+                );
+              })()}
+
+              {/* iNaturalist second opinion — a free cross-check. When
+                  its top pick agrees with Big Red's or the row label,
+                  that's a strong confirm signal. */}
+              {inatToken && (() => {
+                const ip = inatPreds[aiRow.id];
+                if (!ip) {
+                  return <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10 }}>iNaturalist: checking…</div>;
+                }
+                if (!ip.ok) {
+                  const stale = ip.error === 'inat_auth';
+                  return (
+                    <div style={{ fontSize: 11, color: stale ? T.warn : T.inkMute, marginTop: 10 }}>
+                      {stale
+                        ? 'iNaturalist token expired — tap "iNat: on" above to paste a fresh one.'
+                        : `iNaturalist: no read (${ip.error}).`}
+                    </div>
+                  );
+                }
+                if (ip.results.length === 0) {
+                  return <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10 }}>iNaturalist: no match in our species list.</div>;
+                }
+                const top = ip.results[0];
+                const agreesLabel = top.speciesId === aiRow.species_id;
+                return (
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.cardEdge}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: agreesLabel ? T.open : T.inkSoft }}>
+                      iNaturalist: {top.commonName} ({Math.round(top.score * 100)}%)
+                      {agreesLabel && ' — agrees ✓'}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      {ip.results.map(r => {
+                        const isLabel = r.speciesId === aiRow.species_id;
+                        return (
+                          <button
+                            key={r.speciesId}
+                            onClick={() => aiPickChip({ speciesId: r.speciesId })}
+                            title={isLabel ? 'Approve this photo as-is' : `Move this photo to ${r.commonName}`}
+                            style={{
+                              background: isLabel ? T.openBg : T.parchmentDeep,
+                              color: T.ink, border: `1px solid ${isLabel ? T.open : T.cardEdge}`,
+                              borderRadius: 999, padding: '5px 10px',
+                              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >
+                            {r.commonName}
+                            <span style={{ opacity: 0.7, marginLeft: 4 }}>{Math.round(r.score * 100)}%</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })()}
             </Card>
