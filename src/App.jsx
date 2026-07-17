@@ -641,6 +641,7 @@ export default function App() {
       body = <IdentifyScreen
         state={state}
         jurisdiction={jurisdiction}
+        autoScan={screen.autoScan}
         onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
         onCategory={(catId) => push({ name: 'category', catId })}
@@ -805,8 +806,8 @@ export default function App() {
           push({ name: 'catch_entry', preselectSpeciesId: topPickSpeciesId, prefilledPhoto: screen.originalDataUrl || screen.imageDataUrl });
         }}
         onConfirmFeedbackOnly={(topPickSpeciesId) => {
-          // Feedback strip's "Yes, correct" — fire model_confirmation
-          // but don't navigate; the user stays on the result screen.
+          // CONFIRM — fire model_confirmation but don't navigate; the
+          // user stays on the result screen.
           dataUrlToFile(screen.imageDataUrl, 'confirmation.jpg').then((file) => {
             if (file) saveModelFeedback({
               file, speciesId: topPickSpeciesId,
@@ -814,6 +815,22 @@ export default function App() {
               source: 'model_confirmation',
             }).catch(() => {});
           });
+        }}
+        onCorrectFeedbackOnly={(correctSpeciesId, originalSpeciesId) => {
+          // CONFIRM after a correction — bank the corrected label as
+          // model_correction training data, stay on the result screen.
+          dataUrlToFile(screen.imageDataUrl, 'correction.jpg').then((file) => {
+            if (file) saveModelFeedback({
+              file, speciesId: correctSpeciesId,
+              originalSpeciesId,
+              source: 'model_correction',
+            }).catch(() => {});
+          });
+        }}
+        onScanAnother={() => {
+          // Discard this ID (nothing logged/saved) and jump straight
+          // back to the scanner with the photo picker auto-opening.
+          reset([{ name: 'home' }, { name: 'identify', autoScan: true }]);
         }}
         onSaveWithoutFeedback={(topPickSpeciesId) => {
           // Save tapped after the strip already banked the confirmation

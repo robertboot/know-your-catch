@@ -779,13 +779,23 @@ export function HomeScreen({
    Offline-first: search, category nav, quiz, and species status all
    read from bundled data. No fetch anywhere on this screen. */
 export function IdentifyScreen({
-  state, jurisdiction,
+  state, jurisdiction, autoScan,
   onPhoto, onBrowse, onCategory, onSearch, onQuiz, onSpecies,
 }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const fileRef = useRef(null);
   const [q, setQ] = useState('');
+
+  // "Scan Another" from the results page lands here and opens the photo
+  // picker immediately so the angler can shoot the next fish.
+  const autoScanRef = useRef(false);
+  useEffect(() => {
+    if (autoScan && !autoScanRef.current) {
+      autoScanRef.current = true;
+      setTimeout(() => fileRef.current?.click(), 150);
+    }
+  }, [autoScan]);
 
   // When user picks/captures a photo, read it as base64 and hand to
   // onPhoto. Same behaviour as the old hero — only the presentation
@@ -1631,16 +1641,19 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
   );
 }
 
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onSaveWithoutFeedback, onRetake, onManual, onSuggestNew }) {
+export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew }) {
   const { confidence, candidates } = result || {};
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const [modal, setModal] = useState(null);
-  // Explicit feedback state — 'unset' at first render; when the user
-  // taps "Yes, correct" it flips to 'confirmed' and Save & Continue
-  // stops re-firing the confirmation. Wrong-ID immediately routes
-  // via the picker so we don't need a 'flagged' terminal state here.
+  // feedbackState: 'unset' until the angler taps CONFIRM (banks the
+  // training feedback for the displayed species). Report wrong ID
+  // corrects the displayed species in place and resets this to 'unset'.
   const [feedbackState, setFeedbackState] = useState('unset');
+  // overrideId: set when the angler corrects via Report wrong ID — the
+  // result page then shows THIS species instead of the model's pick,
+  // without leaving the page. Nothing is saved until CONFIRM / Save.
+  const [overrideId, setOverrideId] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const lookalikesRef = useRef(null);
 
@@ -1703,12 +1716,32 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   }
 
   const top = candidates[0];
-  const topSpecies = speciesById(top.speciesId);
+  const isCorrected = !!overrideId;
+  const displayedId = overrideId || top.speciesId;
+  // topSpecies drives the whole page — point it at the corrected
+  // species so the name, ID cues, and lookalikes all update in place.
+  const topSpecies = speciesById(displayedId);
   const scorePct = Math.round((top.score || 0) * 100);
-  const pillTier =
-    top.score >= 0.85 ? { label: 'CONFIRMED MATCH', bg: '#5ecdf2', ink: '#062330' }
-  : top.score >= 0.60 ? { label: 'LIKELY MATCH',    bg: '#5ecdf2', ink: '#062330' }
-  :                     { label: 'LOW CONFIDENCE',  bg: '#8ea3ba', ink: '#062330' };
+  const pillTier = isCorrected
+    ? { label: 'YOUR PICK', bg: T.warn, ink: '#062330' }
+    : top.score >= 0.85 ? { label: 'CONFIRMED MATCH', bg: '#5ecdf2', ink: '#062330' }
+    : top.score >= 0.60 ? { label: 'LIKELY MATCH',    bg: '#5ecdf2', ink: '#062330' }
+    :                     { label: 'LOW CONFIDENCE',  bg: '#8ea3ba', ink: '#062330' };
+
+  // CONFIRM: bank feedback for the displayed species (correction if the
+  // angler overrode the pick, otherwise a confirmation), stay on page.
+  const doConfirm = () => {
+    setFeedbackState('confirmed');
+    if (isCorrected) { if (onCorrectFeedbackOnly) onCorrectFeedbackOnly(displayedId, top.speciesId); }
+    else { if (onConfirmFeedbackOnly) onConfirmFeedbackOnly(displayedId); }
+  };
+  // SAVE TO LOGBOOK: navigate to catch entry with the displayed species.
+  // Skip the feedback double-fire if CONFIRM already banked it.
+  const doSave = () => {
+    if (feedbackState === 'confirmed') { if (onSaveWithoutFeedback) onSaveWithoutFeedback(displayedId); }
+    else if (isCorrected) { if (onCorrectSave) onCorrectSave(displayedId, top.speciesId); }
+    else { if (onConfirmSave) onConfirmSave(displayedId); }
+  };
 
   const keyIds = (topSpecies?.keyIds || []).slice(0, 3);
   const lookalikeIds = (topSpecies?.lookalikes || []).slice(0, 3);
@@ -1780,22 +1813,35 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               {topSpecies.scientific}
             </div>
           )}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            marginTop: 12,
-          }}>
-            <ConfidenceRing pct={scorePct} size={ringSize} />
+          {!isCorrected && (
             <div style={{
-              fontSize: 12, fontWeight: 800, letterSpacing: '0.15em',
-              color: '#ffffff',
+              display: 'flex', alignItems: 'center', gap: 10,
+              marginTop: 12,
             }}>
-              CONFIDENCE
+              <ConfidenceRing pct={scorePct} size={ringSize} />
+              <div style={{
+                fontSize: 12, fontWeight: 800, letterSpacing: '0.15em',
+                color: '#ffffff',
+              }}>
+                CONFIDENCE
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       <style>{`@keyframes kycFeedbackIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }`}</style>
+
+      {/* Logbook actions — sit right under the photo. Save logs the
+          catch; Scan Another discards this ID and re-opens the camera. */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+        <PrimaryButton onClick={doSave} style={{ flex: 2, minHeight: 50, fontSize: 16, fontWeight: 800 }}>
+          Save to Logbook
+        </PrimaryButton>
+        <GhostButton onClick={onScanAnother || onRetake} style={{ flex: 1, minHeight: 50, fontSize: 15, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <RotateCcw size={16} /> Scan Another
+        </GhostButton>
+      </div>
 
       {/* WHY THIS MATCH FITS — species-authored ID cues */}
       {keyIds.length > 0 && (
@@ -1827,50 +1873,6 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           }} />
         </div>
       )}
-
-      {/* CONFIRM / REPORT — two equal buttons below the ID reasoning.
-          Confirm ID banks a model_confirmation (helps training). Report
-          wrong opens the species picker to correct it. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-        {feedbackState === 'confirmed' ? (
-          <div style={{
-            flex: 1, minWidth: 150, animation: 'kycFeedbackIn 220ms ease-out',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            background: 'rgba(50,209,123,0.14)', border: `1.5px solid ${T.open}`,
-            color: T.open, borderRadius: 10, padding: '13px 12px',
-            fontSize: 15, fontWeight: 800,
-          }}>
-            <Check size={18} strokeWidth={3} /> ID confirmed
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => { setFeedbackState('confirmed'); if (onConfirmFeedbackOnly) onConfirmFeedbackOnly(top.speciesId); }}
-            style={{
-              flex: 1, minWidth: 150,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: 'transparent', border: `1.5px solid ${T.open}`,
-              color: T.open, borderRadius: 10, padding: '13px 12px',
-              fontSize: 15, fontWeight: 800, cursor: 'pointer',
-            }}
-          >
-            <Check size={18} strokeWidth={3} /> Confirm ID
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setShowPicker(true)}
-          style={{
-            flex: 1, minWidth: 150,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            background: 'transparent', border: `1.5px solid ${T.warn}`,
-            color: T.warn, borderRadius: 10, padding: '13px 12px',
-            fontSize: 15, fontWeight: 800, cursor: 'pointer',
-          }}
-        >
-          <Flag size={16} strokeWidth={2.5} /> Report wrong fish ID
-        </button>
-      </div>
 
       {/* COMPARE LOOKALIKES */}
       {lookalikes.length > 0 && (
@@ -1934,39 +1936,50 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         borderTop: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', gap: 10,
       }}>
-        <PrimaryButton
-          onClick={() => { if (onConfirmSave) onConfirmSave(top.speciesId); }}
-          style={{
-            flex: 2, minHeight: 52, fontSize: 18, fontWeight: 800,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          SAVE CATCH
-        </PrimaryButton>
+        {feedbackState === 'confirmed' ? (
+          <div style={{
+            flex: 2, minHeight: 52, animation: 'kycFeedbackIn 220ms ease-out',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            background: 'rgba(50,209,123,0.14)', border: `1.5px solid ${T.open}`,
+            color: T.open, borderRadius: 10, fontSize: 16, fontWeight: 800,
+          }}>
+            <Check size={18} strokeWidth={3} /> ID confirmed
+          </div>
+        ) : (
+          <PrimaryButton
+            onClick={doConfirm}
+            style={{
+              flex: 2, minHeight: 52, fontSize: 18, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            <Check size={20} strokeWidth={3} /> CONFIRM
+          </PrimaryButton>
+        )}
         <GhostButton
-          onClick={onRetake}
+          onClick={() => setShowPicker(true)}
           style={{
-            flex: 1, minHeight: 52, fontSize: 16, fontWeight: 800,
+            flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            color: T.warn, borderColor: T.warn,
           }}
         >
-          <RotateCcw size={16} />
-          Re-Scan
+          <Flag size={15} /> Report Wrong ID
         </GhostButton>
       </div>
 
-      {/* Species picker opened from the strip's "Report wrong ID" —
-          picking a species fires model_correction (via onCorrectSave)
-          which the parent wires to navigate to catch entry preselected
-          to the correction. */}
+      {/* Report wrong ID picker — updates the displayed species IN
+          PLACE (overrideId) and stays on the results page. Nothing is
+          saved until CONFIRM or Save to Logbook. */}
       {showPicker && (
         <SpeciesPickerModal
-          speciesOptions={SPECIES.filter(s => s.active !== false && s.id !== top.speciesId)}
-          currentSpeciesId={top.speciesId}
+          speciesOptions={SPECIES.filter(s => s.active !== false && s.id !== displayedId)}
+          currentSpeciesId={displayedId}
           onCancel={() => setShowPicker(false)}
           onPick={(newSpeciesId) => {
             setShowPicker(false);
-            onCorrectSave && onCorrectSave(newSpeciesId, top.speciesId);
+            setOverrideId(newSpeciesId);
+            setFeedbackState('unset'); // ID changed — re-confirm needed
           }}
           title="What species is it?"
         />
