@@ -3725,14 +3725,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
               : T.cardEdge
             }`,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: legalityChips.length ? 8 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: legalityChips.length ? 10 : 0 }}>
               {effectiveLegality === 'open'
-                ? <ShieldCheck    size={18} color={fedSoftOpen ? T.warn : T.open} />
+                ? <ShieldCheck    size={28} strokeWidth={2.4} color={fedSoftOpen ? T.warn : T.open} style={{ flexShrink: 0 }} />
                 : effectiveLegality === 'closed'
-                ? <ShieldAlert    size={18} color={T.closed} />
-                : <ShieldQuestion size={18} color={T.inkSoft} />}
+                ? <ShieldAlert    size={28} strokeWidth={2.4} color={T.closed} style={{ flexShrink: 0 }} />
+                : <ShieldQuestion size={28} strokeWidth={2.4} color={T.inkSoft} style={{ flexShrink: 0 }} />}
               <div style={{
-                fontSize: 15, fontWeight: 800, letterSpacing: 0.4,
+                fontSize: 19, fontWeight: 800, letterSpacing: 0.3,
                 color: effectiveLegality === 'open' ? (fedSoftOpen ? T.warn : T.open)
                      : effectiveLegality === 'closed' ? T.closed
                      : T.inkSoft,
@@ -3741,11 +3741,11 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
               </div>
             </div>
             {legalityChips.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                 {legalityChips.map((chip, i) => (
                   <span key={i} style={{
-                    fontSize: 12, color: T.inkSoft, background: T.parchmentDeep,
-                    border: `1px solid ${T.cardEdge}`, padding: '3px 8px', borderRadius: 999,
+                    fontSize: 15, color: T.ink, background: T.parchmentDeep,
+                    border: `1px solid ${T.cardEdge}`, padding: '6px 11px', borderRadius: 999,
                   }}>{chip}</span>
                 ))}
               </div>
@@ -3757,8 +3757,8 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
               <a href={jurisdiction.regsUrl} target="_blank" rel="noopener noreferrer"
                  onClick={(e) => e.stopPropagation()}
                  style={{
-                   display: 'inline-block', marginTop: 8,
-                   fontSize: 14, fontWeight: 700, color: T.brass,
+                   display: 'inline-block', marginTop: 10,
+                   fontSize: 16, fontWeight: 700, color: T.brass,
                    textDecoration: 'underline',
                  }}>
                 Current {jurisdiction.agency || 'agency'} season →
