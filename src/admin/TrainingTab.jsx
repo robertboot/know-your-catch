@@ -136,6 +136,7 @@ export default function TrainingTab() {
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}` }}>
         <SubTabBtn active={panel === 'upload'} onClick={() => setPanel('upload')}>Upload</SubTabBtn>
         <SubTabBtn active={panel === 'review'} onClick={() => setPanel('review')}>Review</SubTabBtn>
+        <SubTabBtn active={panel === 'swipe'} onClick={() => setPanel('swipe')}>Swipe</SubTabBtn>
         <SubTabBtn active={panel === 'coverage'} onClick={() => setPanel('coverage')}>Coverage</SubTabBtn>
         <SubTabBtn active={panel === 'export'} onClick={() => setPanel('export')}>Export</SubTabBtn>
         <SubTabBtn active={panel === 'models'} onClick={() => setPanel('models')}>Models</SubTabBtn>
@@ -148,6 +149,7 @@ export default function TrainingTab() {
         />
       )}
       {panel === 'review' && <ReviewPanel />}
+      {panel === 'swipe' && <SwipeReviewPanel />}
       {panel === 'coverage' && <CoveragePanel onUploadSpecies={jumpToUpload} />}
       {panel === 'export' && <ExportPanel />}
       {panel === 'models' && <ModelsPanel onOpenTestTool={() => setPanel('test')} />}
@@ -1496,6 +1498,296 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, onCrop, showSpe
       )}
     </div>
   );
+}
+
+/* ============================================================
+   Swipe review — gamified, mobile-first mass verification.
+   One pending photo at a time as a card:
+     swipe RIGHT  → approve (verified)
+     swipe LEFT   → reject
+     "Correct the species" button → picker → recategorize + verify
+   Built for fast thumb-driven passes over big folder imports.
+   ============================================================ */
+function SwipeReviewPanel() {
+  const [speciesId, setSpeciesId] = useState('__all__');
+  // 'pending' = verify new imports; 'verified' = audit already-approved
+  // photos (catch mislabels — a wrong label hurts training).
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [rows, setRows] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [done, setDone] = useState({ approved: 0, rejected: 0, corrected: 0, kept: 0 });
+  const [undo, setUndo] = useState(null); // { row, action } for one-level undo
+  // Drag state for the top card.
+  const [drag, setDrag] = useState({ x: 0, active: false });
+  const startX = useRef(0);
+  const cardUrl = useRef(new Map()); // row.id → signed url cache
+
+  const speciesOptions = useMemo(
+    () => [...SPECIES].filter(s => s.active !== false)
+      .sort((a, b) => a.commonName.localeCompare(b.commonName)),
+    []
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    const arg = speciesId === '__all__' ? null : speciesId;
+    const res = await listTrainingImages({ speciesId: arg, status: statusFilter });
+    setLoading(false);
+    if (!res.ok) { setError(res.error || 'load failed'); return; }
+    setRows(res.rows);
+    setIdx(0);
+    setDone({ approved: 0, rejected: 0, corrected: 0, kept: 0 });
+    setUndo(null);
+  }, [speciesId, statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const current = rows[idx] || null;
+  const next = rows[idx + 1] || null;
+
+  // Resolve signed URLs for the current + next card (prefetch next so
+  // it's ready the instant the top card flies off).
+  const [urls, setUrls] = useState({});
+  useEffect(() => {
+    let alive = true;
+    const want = [current, next].filter(Boolean);
+    (async () => {
+      for (const r of want) {
+        if (cardUrl.current.has(r.id)) continue;
+        const u = await signedUrl(r.storage_path);
+        if (!alive) return;
+        if (u) { cardUrl.current.set(r.id, u); setUrls(m => ({ ...m, [r.id]: u })); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [current?.id, next?.id]);
+
+  // Optimistic: advance the UI immediately, fire the DB write in the
+  // background so a fast pass never waits on the network.
+  const bg = (p) => { p.then(r => { if (!r || !r.ok) setError((r && r.error) || 'save failed — reload to re-check'); }, () => setError('save failed — reload to re-check')); };
+  const record = (row, action) => {
+    setUndo({ row, action });
+    setDone(d => ({
+      approved:  d.approved  + (action === 'approve'  ? 1 : 0),
+      rejected:  d.rejected  + (action === 'reject'   ? 1 : 0),
+      corrected: d.corrected + (action === 'correct'  ? 1 : 0),
+      kept:      d.kept      + (action === 'keep'     ? 1 : 0),
+    }));
+    setDrag({ x: 0, active: false });
+    setIdx(i => i + 1);
+  };
+
+  const doApprove = (row) => {
+    if (!row) return;
+    // In audit mode the row is already verified — right swipe just
+    // "keeps" it (no write, fastest path).
+    if (statusFilter === 'verified') { record(row, 'keep'); return; }
+    record(row, 'approve');
+    bg(approve([row.id]));
+  };
+  const doReject = (row) => {
+    if (!row) return;
+    record(row, 'reject');
+    bg(reject([row.id], 'swipe_reject'));
+  };
+  const doCorrect = (newId) => {
+    setPickerOpen(false);
+    const row = current;
+    if (!row || !newId) return;
+    record(row, 'correct');
+    bg(correctSpecies([row.id], newId, row.species_id));
+  };
+  const doUndo = () => {
+    if (!undo) return;
+    const { row, action } = undo;
+    setUndo(null);
+    setIdx(i => Math.max(0, i - 1));
+    setDrag({ x: 0, active: false });
+    setDone(d => ({
+      approved:  d.approved  - (action === 'approve'  ? 1 : 0),
+      rejected:  d.rejected  - (action === 'reject'   ? 1 : 0),
+      corrected: d.corrected - (action === 'correct'  ? 1 : 0),
+      kept:      d.kept      - (action === 'keep'     ? 1 : 0),
+    }));
+    if (action === 'keep') return; // nothing was written
+    // Restore to the batch's original status + species.
+    bg(restoreTrainingRows([{ id: row.id, status: statusFilter, species_id: row.species_id, rejection_reason: null }]));
+  };
+
+  // Pointer drag on the top card.
+  const THRESHOLD = 90;
+  const onDown = (e) => { if (busy) return; startX.current = e.clientX; setDrag({ x: 0, active: true }); e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const onMove = (e) => { if (!drag.active) return; setDrag(d => ({ ...d, x: e.clientX - startX.current })); };
+  const onUp = () => {
+    if (!drag.active) return;
+    const x = drag.x;
+    if (x > THRESHOLD) doApprove(current);
+    else if (x < -THRESHOLD) doReject(current);
+    else setDrag({ x: 0, active: false });
+  };
+
+  // Keyboard: ← reject, → approve, c correct, u undo.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (pickerOpen) return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); doApprove(current); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); doReject(current); }
+      else if (e.key.toLowerCase() === 'c') { e.preventDefault(); if (current) setPickerOpen(true); }
+      else if (e.key.toLowerCase() === 'u') { e.preventDefault(); doUndo(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, busy, pickerOpen, undo]);
+
+  const remaining = rows.length - idx;
+  const curSpecies = current ? SPECIES.find(s => s.id === current.species_id) : null;
+  const rot = drag.x / 18; // deg
+
+  return (
+    <div style={{ display: 'grid', gap: 12, maxWidth: 460, margin: '0 auto' }}>
+      <Card>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 150 }}>
+            <SectionLabel style={{ marginBottom: 6 }}>Mode</SectionLabel>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={inputStyle}>
+              <option value="pending">Verify pending</option>
+              <option value="verified">Audit verified</option>
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
+            <select value={speciesId} onChange={e => setSpeciesId(e.target.value)} style={inputStyle}>
+              <option value="__all__">All species</option>
+              {speciesOptions.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
+            </select>
+          </div>
+          <GhostButton onClick={load} disabled={loading} style={{ padding: '10px 14px' }}>
+            {loading ? 'Loading…' : 'Reload'}
+          </GhostButton>
+        </div>
+        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8 }}>
+          {statusFilter === 'verified'
+            ? <span style={{ color: T.open }}>✓ {done.kept} kept</span>
+            : <span style={{ color: T.open }}>✓ {done.approved} approved</span>}
+          <span style={{ color: T.closed }}> · ✕ {done.rejected}</span>
+          <span style={{ color: T.brass }}> · ✎ {done.corrected}</span>
+          <span style={{ color: T.inkMute }}> · {Math.max(0, remaining)} left</span>
+          {undo && <button onClick={doUndo} style={{ marginLeft: 10, background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Undo</button>}
+        </div>
+        {statusFilter === 'verified' && (
+          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.5 }}>
+            Audit pass — swipe right to keep as-is, left to reject a bad one, or correct a mislabel. A wrong label hurts training, so this cleans the set.
+          </div>
+        )}
+      </Card>
+
+      {error && (
+        <div role="alert" style={{ padding: 10, background: T.closedBg, color: T.closed, borderRadius: 8, fontSize: 12 }}>{error}</div>
+      )}
+
+      {!current && !loading && (
+        <Card style={{ textAlign: 'center', padding: 28, fontSize: 14, color: T.inkMute }}>
+          {rows.length === 0 ? `No ${statusFilter} photos to review.` : 'All done — nothing left in this batch.'}
+          {rows.length > 0 && <div style={{ marginTop: 10 }}><GhostButton onClick={load}>Reload for more</GhostButton></div>}
+        </Card>
+      )}
+
+      {current && (
+        <>
+          {/* Card stack — next card peeks behind the draggable top card. */}
+          <div style={{ position: 'relative', height: 420, userSelect: 'none' }}>
+            {next && (
+              <div style={{
+                position: 'absolute', inset: 0, transform: 'scale(0.96) translateY(8px)',
+                borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}`, background: T.parchmentDeep,
+              }}>
+                {urls[next.id] && <img src={urls[next.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} />}
+              </div>
+            )}
+            <div
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              style={{
+                position: 'absolute', inset: 0,
+                borderRadius: 16, overflow: 'hidden',
+                border: `1px solid ${T.cardEdge}`, background: '#000',
+                transform: `translateX(${drag.x}px) rotate(${rot}deg)`,
+                transition: drag.active ? 'none' : 'transform 200ms ease-out',
+                cursor: 'grab', touchAction: 'pan-y',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
+              }}
+            >
+              {urls[current.id]
+                ? <img src={urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>Loading photo…</div>}
+
+              {/* Species label chip */}
+              <div style={{
+                position: 'absolute', left: 12, bottom: 12, right: 12,
+                background: 'rgba(3,27,51,0.8)', color: T.ink,
+                padding: '8px 12px', borderRadius: 10, fontSize: 15, fontWeight: 800,
+              }}>
+                {curSpecies?.commonName || current.species_id}
+              </div>
+
+              {/* Swipe intent overlays */}
+              <div aria-hidden style={{
+                position: 'absolute', top: 16, left: 16,
+                border: `3px solid ${T.open}`, color: T.open,
+                padding: '4px 12px', borderRadius: 8, fontWeight: 900, fontSize: 22, letterSpacing: 1,
+                transform: 'rotate(-12deg)', opacity: Math.max(0, Math.min(1, drag.x / THRESHOLD)),
+              }}>KEEP</div>
+              <div aria-hidden style={{
+                position: 'absolute', top: 16, right: 16,
+                border: `3px solid ${T.closed}`, color: T.closed,
+                padding: '4px 12px', borderRadius: 8, fontWeight: 900, fontSize: 22, letterSpacing: 1,
+                transform: 'rotate(12deg)', opacity: Math.max(0, Math.min(1, -drag.x / THRESHOLD)),
+              }}>NOPE</div>
+            </div>
+          </div>
+
+          {/* Action buttons — reject / correct / approve */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={() => doReject(current)} disabled={busy} aria-label="Reject" style={circleBtn(T.closed)}>✕</button>
+            <button onClick={() => setPickerOpen(true)} disabled={busy} style={{
+              flex: 1, maxWidth: 200, background: 'transparent', border: `1.5px solid ${T.brass}`,
+              color: T.brass, borderRadius: 12, padding: '13px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
+            }}>Correct the species</button>
+            <button onClick={() => doApprove(current)} disabled={busy} aria-label="Approve" style={circleBtn(T.open)}>✓</button>
+          </div>
+          <div style={{ fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
+            Swipe right to keep, left to reject · keys ← ✕ · → ✓ · C correct · U undo
+          </div>
+        </>
+      )}
+
+      {pickerOpen && current && (
+        <SpeciesPickerModal
+          speciesOptions={speciesOptions}
+          currentSpeciesId={current.species_id}
+          onCancel={() => setPickerOpen(false)}
+          onPick={doCorrect}
+          title="Correct the species"
+        />
+      )}
+    </div>
+  );
+}
+
+function circleBtn(color) {
+  return {
+    width: 56, height: 56, borderRadius: 999, flexShrink: 0,
+    background: 'transparent', border: `2px solid ${color}`, color,
+    fontSize: 24, fontWeight: 900, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
 }
 
 /* ============================================================
