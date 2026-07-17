@@ -4333,20 +4333,23 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
    Then shuffled so tier order isn't predictable to the angler. */
 function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   const candidates = SPECIES.filter(s =>
-    !seenAnchorIds.has(s.id)
+    s.active !== false
+    && !seenAnchorIds.has(s.id)
     && Array.isArray(s.lookalikes)
     && s.lookalikes.some(id => speciesById(id))
   );
   if (candidates.length === 0) return null;
   const anchor = candidates[Math.floor(Math.random() * candidates.length)];
 
-  // Primary lookalike = first resolvable entry in anchor.lookalikes.
-  // That's the "canonical" pairing the seed data authors prioritized.
-  const primary = anchor.lookalikes.map(id => speciesById(id)).find(Boolean);
+  // Primary lookalike = first resolvable ACTIVE entry in
+  // anchor.lookalikes. That's the "canonical" pairing the seed data
+  // authors prioritized.
+  const primary = anchor.lookalikes.map(id => speciesById(id)).find(s => s && s.active !== false);
   if (!primary) return null;
 
   const sameCatPool = SPECIES.filter(s =>
-    s.id !== anchor.id
+    s.active !== false
+    && s.id !== anchor.id
     && s.id !== primary.id
     && s.category === anchor.category
     && !anchor.lookalikes.includes(s.id)
@@ -4354,7 +4357,8 @@ function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   const sameCatDistractor = _shuffle(sameCatPool)[0];
 
   const otherCatPool = SPECIES.filter(s =>
-    s.id !== anchor.id
+    s.active !== false
+    && s.id !== anchor.id
     && s.id !== primary.id
     && s.category !== anchor.category
     && !anchor.lookalikes.includes(s.id)
@@ -4370,7 +4374,7 @@ function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   seed.push(...otherCatDistractors);
   if (seed.length < 4) {
     const backup = _shuffle(SPECIES.filter(s =>
-      s.id !== anchor.id && !seed.some(x => x.id === s.id) && !anchor.lookalikes.includes(s.id)
+      s.active !== false && s.id !== anchor.id && !seed.some(x => x.id === s.id) && !anchor.lookalikes.includes(s.id)
     ));
     for (const s of backup) {
       if (seed.length >= 4) break;
