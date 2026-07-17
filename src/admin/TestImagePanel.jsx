@@ -438,34 +438,61 @@ export default function TestImagePanel() {
                         thresholds={predictions.thresholds}
                       />
                       <div style={{ marginTop: 10 }}>
-                        <SectionLabel style={{ marginBottom: 6 }}>Top 5</SectionLabel>
+                        <SectionLabel style={{ marginBottom: 6 }}>Top 5 — tap the right one</SectionLabel>
+                        {/* Each row IS the action: tapping the top row
+                            saves as a confirmation, tapping any runner-up
+                            saves the photo as that species (correction).
+                            The type-to-search picker below covers fish
+                            outside the top five. */}
                         <div style={{ display: 'grid', gap: 4 }}>
-                          {predictions.ranked.map((r) => {
+                          {predictions.ranked.map((r, i) => {
                             const sp = SPECIES.find(s => s.id === r.speciesId);
+                            const name = sp?.commonName || r.speciesId;
                             const pct = r.score * 100;
+                            const isTop = i === 0;
                             return (
-                              <div key={r.speciesId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ fontSize: 12, color: T.ink, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {sp?.commonName || r.speciesId}
+                              <button
+                                key={r.speciesId}
+                                disabled={saving}
+                                onClick={() => saveFeedback({
+                                  speciesId: r.speciesId,
+                                  source: isTop ? 'model_confirmation' : 'model_correction',
+                                })}
+                                title={isTop ? `Confirm — this is a ${name}` : `Save this photo as ${name} instead`}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                  background: T.parchmentDeep,
+                                  border: `1px solid ${isTop ? T.open : T.cardEdge}`,
+                                  borderRadius: 6, padding: '9px 10px',
+                                  cursor: saving ? 'not-allowed' : 'pointer',
+                                  textAlign: 'left', opacity: saving ? 0.6 : 1,
+                                }}
+                              >
+                                <div style={{ fontSize: 12, color: T.ink, fontWeight: isTop ? 800 : 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {name}
                                   {r.excluded && <span style={{ marginLeft: 6, fontSize: 9, color: T.closed, fontWeight: 800 }}>EXCLUDED</span>}
                                 </div>
-                                <div style={{ width: 120, height: 5, background: T.parchmentDeep, borderRadius: 3, overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: `${pct}%`, background: T.brass }} />
+                                <div style={{ width: 120, height: 5, background: T.card, borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+                                  <div style={{ height: '100%', width: `${pct}%`, background: isTop ? T.open : T.brass }} />
                                 </div>
-                                <div style={{ fontSize: 11, color: T.ink, width: 50, textAlign: 'right', fontWeight: 700 }}>
+                                <div style={{ fontSize: 11, color: T.ink, width: 50, textAlign: 'right', fontWeight: 700, flexShrink: 0 }}>
                                   {pct.toFixed(1)}%
                                 </div>
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
+                        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.4 }}>
+                          Tap a row to save the photo to training data as that species.
+                        </div>
                       </div>
 
-                      {/* Correct-and-save flow. Both Confirm and Wrong
-                          land the image in training_images with
-                          status='verified' — the only difference is
-                          the source flag and, for corrections, the
-                          species_id vs original_species_id split. */}
+                      {/* Correct-and-save flow. Confirm, a Top-5 row
+                          tap, and the search picker all land the image
+                          in training_images with status='verified' —
+                          the only difference is the source flag and,
+                          for corrections, the species_id vs
+                          original_species_id split. */}
                       <FeedbackButtons
                         top={predictions.top}
                         saving={saving}
@@ -548,7 +575,7 @@ function FeedbackButtons({ top, saving, onConfirm, onWrong, onDiscard }) {
           color: saving ? T.inkMute : T.oceanDeep,
         }}
       >
-        Wrong — pick the correct species
+        Not in the top 5 — type to search
       </button>
       <button
         onClick={onDiscard}
