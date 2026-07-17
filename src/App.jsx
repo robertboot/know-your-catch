@@ -715,19 +715,11 @@ export default function App() {
             // the original for display, so prefilledPhoto uses it when
             // available.
             const originalForLog = screen.originalDataUrl || screen.imageDataUrl;
-            if (!aiIdentifiedSpeciesId) {
-              setStack(st => [...st.slice(0, -1), {
-                name: 'catch_entry',
-                prefilledPhoto: originalForLog,
-                aiConfidence,
-                aiIdentifiedSpeciesId: null,
-                aiWasConfirmed: false,
-              }]);
-              return;
-            }
-            // Unified photo-confirm page: catch entry opens with the
-            // overlay (photo + metadata verdict + species confirm) —
-            // replaces the old separate identify_confirm card.
+            // ALWAYS open the Review catch overlay — even with no
+            // confident ID. The overlay handles the no-species case
+            // (shows a "pick the species" button), so the angler gets
+            // the same review page every time instead of being dumped
+            // into the bare editing form when the model is unsure.
             setStack(st => [...st.slice(0, -1), {
               name: 'catch_entry',
               aiIdentifiedSpeciesId,
