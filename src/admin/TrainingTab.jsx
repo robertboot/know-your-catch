@@ -20,7 +20,7 @@
    Crop tool is deferred per spec — export step (Phase 3) will use the
    full image when crop_bbox is null. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon, Menu as MenuIcon, Crop as CropIcon } from 'lucide-react';
 import { T } from '../theme.js';
 import { SPECIES } from '../data.js';
 import {
@@ -31,6 +31,7 @@ import {
   uploadTrainingImage, stableTrainingId, listTrainingImages,
   approve, reject, correctSpecies, deleteTrainingImage,
   classifyTrainingPhoto, inatIdentifyPhoto, INAT_TOKEN_KEY,
+  saveCropBbox,
   signedUrl, countsBySpecies,
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
@@ -1521,6 +1522,9 @@ function SwipeReviewPanel() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [done, setDone] = useState({ approved: 0, rejected: 0, corrected: 0, kept: 0 });
   const [undo, setUndo] = useState(null); // { row, action } for one-level undo
+  const [menuOpen, setMenuOpen] = useState(false); // collapse controls on mobile
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropPreview, setCropPreview] = useState({}); // row.id → cropped dataUrl
   // Drag state for the top card.
   const [drag, setDrag] = useState({ x: 0, active: false });
   const startX = useRef(0);
@@ -1650,38 +1654,64 @@ function SwipeReviewPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 12, maxWidth: 460, margin: '0 auto' }}>
-      <Card>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 150 }}>
-            <SectionLabel style={{ marginBottom: 6 }}>Mode</SectionLabel>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={inputStyle}>
-              <option value="pending">Verify pending</option>
-              <option value="verified">Audit verified</option>
-            </select>
+      <Card style={{ padding: '10px 12px' }}>
+        {/* Compact bar: live status + counts on the left, a single
+            hamburger on the right. Keeps the card on-screen on phones. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
+            <div style={{ color: T.ink, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {statusFilter === 'verified' ? 'Audit verified' : 'Verify pending'}
+              {' · '}{speciesId === '__all__' ? 'All species' : (speciesOptions.find(s => s.id === speciesId)?.commonName || speciesId)}
+            </div>
+            <div style={{ marginTop: 2, color: T.inkSoft }}>
+              {statusFilter === 'verified'
+                ? <span style={{ color: T.open }}>✓ {done.kept}</span>
+                : <span style={{ color: T.open }}>✓ {done.approved}</span>}
+              <span style={{ color: T.closed }}> · ✕ {done.rejected}</span>
+              <span style={{ color: T.brass }}> · ✎ {done.corrected}</span>
+              <span style={{ color: T.inkMute }}> · {Math.max(0, remaining)} left</span>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
-            <select value={speciesId} onChange={e => setSpeciesId(e.target.value)} style={inputStyle}>
-              <option value="__all__">All species</option>
-              {speciesOptions.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
-            </select>
-          </div>
-          <GhostButton onClick={load} disabled={loading} style={{ padding: '10px 14px' }}>
-            {loading ? 'Loading…' : 'Reload'}
-          </GhostButton>
+          {undo && <button onClick={doUndo} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Undo</button>}
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            aria-label="Menu"
+            style={{
+              flexShrink: 0, width: 40, height: 40, borderRadius: 8,
+              background: menuOpen ? T.brass : 'transparent',
+              border: `1px solid ${menuOpen ? T.brass : T.cardEdge}`,
+              color: menuOpen ? T.oceanDeep : T.ink, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <MenuIcon size={20} />
+          </button>
         </div>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8 }}>
-          {statusFilter === 'verified'
-            ? <span style={{ color: T.open }}>✓ {done.kept} kept</span>
-            : <span style={{ color: T.open }}>✓ {done.approved} approved</span>}
-          <span style={{ color: T.closed }}> · ✕ {done.rejected}</span>
-          <span style={{ color: T.brass }}> · ✎ {done.corrected}</span>
-          <span style={{ color: T.inkMute }}> · {Math.max(0, remaining)} left</span>
-          {undo && <button onClick={doUndo} style={{ marginLeft: 10, background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Undo</button>}
-        </div>
-        {statusFilter === 'verified' && (
-          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.5 }}>
-            Audit pass — swipe right to keep as-is, left to reject a bad one, or correct a mislabel. A wrong label hurts training, so this cleans the set.
+
+        {menuOpen && (
+          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+            <div>
+              <SectionLabel style={{ marginBottom: 6 }}>Mode</SectionLabel>
+              <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); }} style={inputStyle}>
+                <option value="pending">Verify pending</option>
+                <option value="verified">Audit verified</option>
+              </select>
+            </div>
+            <div>
+              <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
+              <select value={speciesId} onChange={e => setSpeciesId(e.target.value)} style={inputStyle}>
+                <option value="__all__">All species</option>
+                {speciesOptions.map(s => <option key={s.id} value={s.id}>{s.commonName}</option>)}
+              </select>
+            </div>
+            <GhostButton onClick={() => { load(); setMenuOpen(false); }} disabled={loading} style={{ padding: '10px 14px' }}>
+              {loading ? 'Loading…' : 'Reload'}
+            </GhostButton>
+            {statusFilter === 'verified' && (
+              <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
+                Audit pass — swipe right to keep, left to reject a bad one, or correct a mislabel.
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -1724,9 +1754,27 @@ function SwipeReviewPanel() {
                 boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
               }}
             >
-              {urls[current.id]
-                ? <img src={urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+              {(cropPreview[current.id] || urls[current.id])
+                ? <img src={cropPreview[current.id] || urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>Loading photo…</div>}
+
+              {/* Crop button — top-right. stopPropagation so grabbing it
+                  doesn't start a swipe. */}
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); if (urls[current.id]) setCropOpen(true); }}
+                aria-label="Crop photo"
+                style={{
+                  position: 'absolute', top: 12, right: 12,
+                  width: 42, height: 42, borderRadius: 999,
+                  background: cropPreview[current.id] ? T.brass : 'rgba(3,27,51,0.7)',
+                  color: cropPreview[current.id] ? T.oceanDeep : T.ink,
+                  border: `1px solid ${cropPreview[current.id] ? T.brass : 'rgba(255,255,255,0.25)'}`,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <CropIcon size={18} />
+              </button>
 
               {/* Species label chip */}
               <div style={{
@@ -1775,6 +1823,24 @@ function SwipeReviewPanel() {
           onCancel={() => setPickerOpen(false)}
           onPick={doCorrect}
           title="Correct the species"
+        />
+      )}
+
+      {cropOpen && current && urls[current.id] && (
+        <CropStep
+          imageSrc={urls[current.id]}
+          title="Crop this photo"
+          primaryLabel="Use crop"
+          cancelLabel="Cancel"
+          onCancel={() => setCropOpen(false)}
+          onConfirm={({ dataUrl, bbox }) => {
+            setCropOpen(false);
+            const id = current.id;
+            // Show the cropped view immediately; persist the bbox so the
+            // export applies it. Status stays put — still swipe to decide.
+            if (dataUrl) setCropPreview(m => ({ ...m, [id]: dataUrl }));
+            if (bbox) saveCropBbox(id, bbox).then(r => { if (!r.ok) setError(r.error || 'crop save failed'); });
+          }}
         />
       )}
     </div>

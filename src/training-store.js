@@ -478,6 +478,24 @@ export async function countMyPendingOwnerUploads() {
    don't need to re-upload cropped bytes. Companion change in
    training/colab_run.py reads manifest.photos[].crop_bbox and
    crops during _fetch. */
+/* Crop WITHOUT changing status — used by the Swipe reviewer so a photo
+   can be cropped and then still be approved/rejected by swipe. The
+   export pipeline reads crop_bbox regardless of status. */
+export async function saveCropBbox(id, bbox) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  if (!id || !bbox) return { ok: false, error: 'missing id or bbox' };
+  const clamp = (n) => Math.max(0, Math.min(1, Number(n) || 0));
+  const cx = clamp(bbox.x), cy = clamp(bbox.y);
+  const cw = Math.max(0.02, Math.min(1 - cx, Number(bbox.w) || 0));
+  const ch = Math.max(0.02, Math.min(1 - cy, Number(bbox.h) || 0));
+  const { error } = await c.from('training_images')
+    .update({ crop_bbox: { x: cx, y: cy, w: cw, h: ch } })
+    .eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function saveCropRecover(id, bbox) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
