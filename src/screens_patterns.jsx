@@ -35,7 +35,7 @@ const THRESHOLD_MOON    = 15;
 function Bar({ label, count, ratio, peak, sublabel }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-      <div style={{ width: 76, fontSize: 11, color: T.inkSoft, textAlign: 'right' }}>{label}</div>
+      <div style={{ width: 76, fontSize: 12, color: T.inkSoft, textAlign: 'right' }}>{label}</div>
       <div style={{ flex: 1, height: 12, background: T.parchmentDeep, borderRadius: 4, overflow: 'hidden' }}>
         <div style={{
           width: `${Math.max(2, Math.round(ratio * 100))}%`, height: '100%',
@@ -43,7 +43,7 @@ function Bar({ label, count, ratio, peak, sublabel }) {
           borderRadius: 4,
         }} />
       </div>
-      <div style={{ width: 40, fontSize: 11, color: T.inkMute, textAlign: 'left' }}>
+      <div style={{ width: 40, fontSize: 12, color: T.inkMute, textAlign: 'left' }}>
         {count}{sublabel ? <span style={{ color: T.inkMute }}> {sublabel}</span> : null}
       </div>
     </div>
@@ -58,7 +58,7 @@ function StatCard({ title, n, icon, children }) {
           {icon && <span style={{ color: T.brass, display: 'inline-flex' }}>{icon}</span>}
           <SectionLabel style={{ margin: 0 }}>{title}</SectionLabel>
         </div>
-        {n != null && <div style={{ fontSize: 10, color: T.inkMute, fontWeight: 600 }}>n = {n}</div>}
+        {n != null && <div style={{ fontSize: 11, color: T.inkMute, fontWeight: 600 }}>n = {n}</div>}
       </div>
       {children}
     </Card>
@@ -71,14 +71,14 @@ function UnlockRow({ current, target, label }) {
   const pct = Math.max(0, Math.min(1, current / target));
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 4, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 14, color: T.inkSoft, marginBottom: 4, lineHeight: 1.4 }}>
         {label}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ flex: 1, height: 6, background: T.parchmentDeep, borderRadius: 3, overflow: 'hidden' }}>
           <div style={{ width: `${Math.round(pct * 100)}%`, height: '100%', background: T.brass, borderRadius: 3 }} />
         </div>
-        <div style={{ fontSize: 10, color: T.inkMute, minWidth: 44, textAlign: 'right' }}>
+        <div style={{ fontSize: 11, color: T.inkMute, minWidth: 44, textAlign: 'right' }}>
           {current} / {target}
         </div>
       </div>
@@ -323,7 +323,7 @@ export function PatternsScreen({ state, onPickSpecies }) {
                 cursor: enough ? 'pointer' : 'default', textAlign: 'left',
               }}
             >
-              <div style={{ width: 76, fontSize: 12, color: T.ink, fontWeight: 700, textAlign: 'right' }}>{label}</div>
+              <div style={{ width: 76, fontSize: 14, color: T.ink, fontWeight: 700, textAlign: 'right' }}>{label}</div>
               <div style={{ flex: 1, height: 12, background: T.parchmentDeep, borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{
                   width: `${Math.round((row.count / speciesMix.top5[0].count) * 100)}%`, height: '100%',
@@ -332,7 +332,7 @@ export function PatternsScreen({ state, onPickSpecies }) {
                 }} />
               </div>
               <div style={{ width: 82, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-                <span style={{ fontSize: 11, color: T.inkMute }}>{row.count} · {share}%</span>
+                <span style={{ fontSize: 12, color: T.inkMute }}>{row.count} · {share}%</span>
                 {enough && <ChevronRight size={14} color={T.brass} />}
               </div>
             </button>
@@ -361,11 +361,11 @@ export function PatternsScreen({ state, onPickSpecies }) {
         <StatCard title="Personal Best progression" n={pbTimeline.length} icon={<Trophy size={14} />}>
           {pbTimeline.map((p, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: i > 0 ? `1px solid ${T.cardEdge}55` : 'none' }}>
-              <div style={{ width: 86, fontSize: 11, color: T.inkSoft }}>{p.date}</div>
-              <div style={{ flex: 1, fontSize: 12, color: T.ink, fontWeight: p.current ? 800 : 500 }}>
+              <div style={{ width: 86, fontSize: 12, color: T.inkSoft }}>{p.date}</div>
+              <div style={{ flex: 1, fontSize: 14, color: T.ink, fontWeight: p.current ? 800 : 500 }}>
                 {p.name}
               </div>
-              <div style={{ fontSize: 12, color: p.current ? T.brass : T.inkSoft, fontWeight: 700 }}>
+              <div style={{ fontSize: 14, color: p.current ? T.brass : T.inkSoft, fontWeight: 700 }}>
                 {p.metric === 'weight' ? formatWeight(p.val, state.units) : formatSize(p.val, state.units)}
                 {p.current && ' ★'}
               </div>
@@ -374,7 +374,7 @@ export function PatternsScreen({ state, onPickSpecies }) {
         </StatCard>
       ) : (
         <StatCard title="Personal Best progression" icon={<Trophy size={14} />}>
-          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 14, color: T.inkMute, lineHeight: 1.5 }}>
             Log at least two personal bests (or one with history) to see progression.
           </div>
         </StatCard>
@@ -391,7 +391,7 @@ export function PatternsScreen({ state, onPickSpecies }) {
             <Download size={14} /> JSON
           </GhostButton>
         </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
           Your catch data is yours. Export any time.
         </div>
       </div>
@@ -445,8 +445,8 @@ function SpeciesPatterns({ speciesId, state, onBack, onPickSpecies }) {
 
       {summary && (
         <Card style={{ marginBottom: 10, background: 'linear-gradient(140deg, rgba(25,212,242,0.12), rgba(25,212,242,0))', borderColor: T.brass }}>
-          <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>{summary}</div>
-          <div style={{ fontSize: 10, color: T.inkMute, marginTop: 6 }}>Based on {rows.length} logged catch{rows.length === 1 ? '' : 'es'}.</div>
+          <div style={{ fontSize: 15, color: T.ink, lineHeight: 1.5 }}>{summary}</div>
+          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6 }}>Based on {rows.length} logged catch{rows.length === 1 ? '' : 'es'}.</div>
         </Card>
       )}
 
@@ -515,7 +515,7 @@ function SpeciesPatterns({ speciesId, state, onBack, onPickSpecies }) {
 function BackHeader({ label, onBack }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: T.brass, cursor: 'pointer', padding: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 700 }}>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: T.brass, cursor: 'pointer', padding: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 15, fontWeight: 700 }}>
         <ChevronLeft size={16} /> All patterns
       </button>
       <H1 size={20}>{label}</H1>

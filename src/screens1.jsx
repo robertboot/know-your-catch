@@ -86,14 +86,14 @@ export function SplashScreen({
             Create an account
           </GhostButton>
           <div style={{
-            fontSize: 11, color: T.inkMute, textAlign: 'center', lineHeight: 1.5,
+            fontSize: 12, color: T.inkMute, textAlign: 'center', lineHeight: 1.5,
             marginTop: 10, padding: '0 12px',
           }}>
             Sign in syncs your catches, PBs, and photos across your iPhone and iPad.
           </div>
         </div>
       ) : (
-        <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>
+        <div style={{ position: 'absolute', bottom: 30, color: T.inkMute, fontSize: 12, letterSpacing: 2, textTransform: 'uppercase' }}>
           Loading…
         </div>
       )}
@@ -264,8 +264,8 @@ function QuickTile({ icon, titleA, titleB, subtitle, onClick, bgImage, alt, isTa
 function ConditionStat({ label, value }) {
   return (
     <div>
-      <div style={{ fontSize: 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 14, color: T.ink, fontWeight: 700, marginTop: 3 }}>{value}</div>
+      <div style={{ fontSize: 11, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 16, color: T.ink, fontWeight: 700, marginTop: 3 }}>{value}</div>
     </div>
   );
 }
@@ -275,7 +275,7 @@ function SectionHead({ children, action, onAction }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '22px 2px 10px' }}>
       <SectionLabel style={{ color: T.inkSoft }}>{children}</SectionLabel>
       {action && (
-        <button onClick={onAction} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1, cursor: 'pointer', padding: 0 }}>
+        <button onClick={onAction} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 12, fontWeight: 800, letterSpacing: 1, cursor: 'pointer', padding: 0 }}>
           {action}
         </button>
       )}
@@ -299,11 +299,11 @@ function FeaturedCard({ species, status, bag, onClick }) {
       }}>
         <SpeciesImage species={species} size={150} />
       </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ fontSize: 17, fontWeight: 800, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {species.commonName}
       </div>
-      <div style={{ fontSize: 12.5, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
-      <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>{bagLabel}</div>
+      <div style={{ fontSize: 14.5, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
+      <div style={{ fontSize: 14, color: T.inkMute, marginTop: 2 }}>{bagLabel}</div>
     </button>
   );
 }
@@ -371,7 +371,7 @@ export function HomeScreen({
       {stale && (
         <Card style={{ background: T.warnBg, borderColor: T.warn, marginTop: 12, display: 'flex', gap: 10, alignItems: 'flex-start', borderRadius: 12 }}>
           <AlertTriangle size={20} color={T.warn} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 13, color: T.ink }}>
+          <div style={{ fontSize: 15, color: T.ink }}>
             <strong>Regulations data is more than 7 days old.</strong> Connect to internet when possible to refresh.
           </div>
         </Card>
@@ -392,10 +392,10 @@ export function HomeScreen({
             <Sparkles size={18} strokeWidth={2.2} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: T.ink }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink }}>
               Finish setting up
             </div>
-            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 14, color: T.inkMute, marginTop: 2, lineHeight: 1.4 }}>
               {!jurisdiction ? 'Pick your fishing waters to see regulations.'
                              : 'Tell us a bit about how you fish (optional).'}
             </div>
@@ -405,7 +405,7 @@ export function HomeScreen({
             style={{
               background: T.brass, color: T.oceanDeep, border: 'none',
               padding: '7px 12px', borderRadius: 6,
-              fontSize: 12, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+              fontSize: 14, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
           >
@@ -645,12 +645,12 @@ export function HomeScreen({
                   </div>
                   <div style={{ padding: '8px 10px 10px' }}>
                     <div style={{
-                      fontSize: 12, fontWeight: 800, color: T.ink,
+                      fontSize: 14, fontWeight: 800, color: T.ink,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       {s ? s.commonName : 'Unknown'}
                     </div>
-                    <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {sizeLabel ? `${sizeLabel} · ` : ''}{dateLabel}
                     </div>
                   </div>
@@ -684,16 +684,16 @@ export function HomeScreen({
           display: 'flex', flexDirection: 'column', scrollSnapAlign: 'start',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-            <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>TODAY'S CONDITIONS</span>
+            <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>TODAY'S CONDITIONS</span>
             {onForecast && (
-              <button onClick={onForecast} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW FORECAST</button>
+              <button onClick={onForecast} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW FORECAST</button>
             )}
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ textAlign: 'center', flexShrink: 0 }}>
               <CloudSun size={32} color={T.warn} strokeWidth={1.8} />
-              <div style={{ fontSize: 26, fontWeight: 900, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
-              <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4, whiteSpace: 'nowrap' }}>Partly Cloudy</div>
+              <div style={{ fontSize: 29, fontWeight: 900, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
+              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4, whiteSpace: 'nowrap' }}>Partly Cloudy</div>
             </div>
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <ConditionStat label="WIND"     value="SE 14 mph" />
@@ -711,21 +711,21 @@ export function HomeScreen({
           display: 'flex', flexDirection: 'column', scrollSnapAlign: 'start',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-            <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
-            <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
+            <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
+            <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <ShieldCheck size={36} color={anyClosed ? T.warn : T.open} strokeWidth={1.6} style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: T.ink, fontWeight: 800, lineHeight: 1.25 }}>
+              <div style={{ fontSize: 16, color: T.ink, fontWeight: 800, lineHeight: 1.25 }}>
                 {anyClosed ? 'Active closure' : 'No Active Closures'}
               </div>
-              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
                 {anyClosed
                   ? 'A featured species is closed in these waters.'
                   : `All clear in ${jurisdiction ? jurisdiction.name : 'these waters'}.`}
               </div>
-              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 8, lineHeight: 1.4 }}>
                 Always check before you head out.
               </div>
             </div>
@@ -736,8 +736,8 @@ export function HomeScreen({
       {/* Featured Species */}
       <Card style={{ marginTop: 14, padding: 14, borderRadius: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 11, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>FEATURED SPECIES</span>
-          <button onClick={onSpeciesList} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
+          <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>FEATURED SPECIES</span>
+          <button onClick={onSpeciesList} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
         </div>
         <div className="kyc-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, margin: '0 -14px', padding: '0 14px 4px' }}>
           {featured.map(f => (
@@ -758,7 +758,7 @@ export function HomeScreen({
         isTablet={isTablet}
       />
 
-      <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
+      <div style={{ marginTop: 22, padding: '14px 12px', borderTop: `1px solid ${T.cardEdge}`, fontSize: 12, color: T.inkMute, textAlign: 'center' }}>
         ReelIntel · Built for the Gulf of America · v{DATA_VERSION}
       </div>
     </div>
@@ -953,7 +953,7 @@ export function IdentifyScreen({
       {q.trim() && (
         <div style={{ display: 'grid', gap: 8 }}>
           {searchResults.length === 0 && (
-            <div style={{ fontSize: 13, color: mutedText, padding: '6px 4px' }}>
+            <div style={{ fontSize: 15, color: mutedText, padding: '6px 4px' }}>
               No matches for &ldquo;{q.trim()}&rdquo;. Try common name, scientific, or a regional name.
             </div>
           )}
@@ -970,14 +970,14 @@ export function IdentifyScreen({
             >
               <SpeciesImage species={s} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: '#e5edf5' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: '#e5edf5' }}>
                   {s.commonName}
                 </div>
-                <div style={{ fontSize: 11, color: secondaryText, fontStyle: 'italic', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: secondaryText, fontStyle: 'italic', marginTop: 2 }}>
                   {s.scientific}
                 </div>
                 {matchedAlt && (
-                  <div style={{ fontSize: 11, color: '#b7935a', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: '#b7935a', marginTop: 2 }}>
                     also: {matchedAlt}
                   </div>
                 )}
@@ -1014,7 +1014,7 @@ export function IdentifyScreen({
                 background: searchBg,
                 border: '1px solid rgba(255,255,255,0.07)',
                 color: chipText,
-                fontSize: 12.5, fontWeight: 600,
+                fontSize: 14.5, fontWeight: 600,
                 padding: '8px 12px', borderRadius: 9,
                 cursor: 'pointer', whiteSpace: 'nowrap',
                 scrollSnapAlign: 'start',
@@ -1033,7 +1033,7 @@ export function IdentifyScreen({
                 background: 'transparent',
                 border: `1px solid ${accent}`,
                 color: accent,
-                fontSize: 12.5, fontWeight: 700,
+                fontSize: 14.5, fontWeight: 700,
                 padding: '8px 12px', borderRadius: 9,
                 cursor: 'pointer', whiteSpace: 'nowrap',
                 scrollSnapAlign: 'start',
@@ -1173,7 +1173,7 @@ export function IdentifyScreen({
       {!q.trim() && (
         <div>
           <div style={{
-            fontSize: 10.5, fontWeight: 600, color: mutedText,
+            fontSize: 11.5, fontWeight: 600, color: mutedText,
             letterSpacing: '0.13em', textTransform: 'uppercase',
             padding: '0 2px 8px',
           }}>
@@ -1210,7 +1210,7 @@ export function IdentifyScreen({
             </div>
             <span style={{
               background: accent, color: accentText,
-              fontSize: 13, fontWeight: 800,
+              fontSize: 15, fontWeight: 800,
               padding: '8px 14px', borderRadius: 8,
               flexShrink: 0,
             }}>
@@ -1224,7 +1224,7 @@ export function IdentifyScreen({
       {!q.trim() && (
         <div>
           <div style={{
-            fontSize: 10.5, fontWeight: 600, color: mutedText,
+            fontSize: 11.5, fontWeight: 600, color: mutedText,
             letterSpacing: '0.13em', textTransform: 'uppercase',
             padding: '0 2px 8px',
           }}>
@@ -1234,7 +1234,7 @@ export function IdentifyScreen({
             <div style={{
               background: cardBg, border: '1px solid rgba(255,255,255,0.06)',
               borderRadius: 12, padding: 14, textAlign: 'center',
-              color: secondaryText, fontSize: 13, lineHeight: 1.55,
+              color: secondaryText, fontSize: 15, lineHeight: 1.55,
             }}>
               Search a species or tap a category above to build up your list.
             </div>
@@ -1258,16 +1258,16 @@ export function IdentifyScreen({
                   >
                     <SpeciesImage species={s} size={38} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: '#e5edf5' }}>
+                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: '#e5edf5' }}>
                         {s.commonName}
                       </div>
-                      <div style={{ fontSize: 11, color: '#7f95ad', fontStyle: 'italic', marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: '#7f95ad', fontStyle: 'italic', marginTop: 2 }}>
                         {s.scientific}
                       </div>
                     </div>
                     <span style={{
                       background: st.bg, color: st.fg,
-                      fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+                      fontSize: 12, fontWeight: 800, letterSpacing: 0.6,
                       padding: '4px 8px', borderRadius: 6,
                       textTransform: 'uppercase',
                       flexShrink: 0,
@@ -1374,18 +1374,18 @@ export function QuickLogScreen({ state, jurisdiction, update, onDone, onCancel }
       alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center',
     }}>
       <div>
-        <div style={{ fontSize: 13, letterSpacing: 2, color: T.brass, fontWeight: 800, marginBottom: 12 }}>
+        <div style={{ fontSize: 15, letterSpacing: 2, color: T.brass, fontWeight: 800, marginBottom: 12 }}>
           {phase === 'opening' ? 'OPENING CAMERA…'
             : phase === 'saving' ? 'SAVING CATCH…'
             : phase === 'done' ? 'LOGGED' : 'CANCELLED'}
         </div>
-        <div style={{ fontSize: 13, color: T.inkSoft, maxWidth: 320, margin: '0 auto', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 15, color: T.inkSoft, maxWidth: 320, margin: '0 auto', lineHeight: 1.5 }}>
           {phase === 'saving' ? 'Fetching GPS, sun, and weather in the background — this only takes a moment.'
             : phase === 'done' ? 'Back to fishing.'
             : phase === 'cancelled' ? 'No photo taken.'
             : 'Point the camera at your fish and shoot.'}
         </div>
-        {err && <div role="alert" style={{ marginTop: 12, fontSize: 12, color: T.closed }}>{err}</div>}
+        {err && <div role="alert" style={{ marginTop: 12, fontSize: 14, color: T.closed }}>{err}</div>}
       </div>
     </div>
   );
@@ -1424,7 +1424,7 @@ export function PhotoAnalyzingScreen({ imageDataUrl, jurisdictionId, onResult })
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {ANALYSIS_FEATURES.map((f, i) => (
             <div key={i} style={{
-              fontSize: 13, color: i <= step ? T.parchment : '#7A8B96',
+              fontSize: 15, color: i <= step ? T.parchment : '#7A8B96',
               transition: 'color 0.3s',
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
@@ -1437,7 +1437,7 @@ export function PhotoAnalyzingScreen({ imageDataUrl, jurisdictionId, onResult })
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 18, fontSize: 11, color: '#7A8B96', fontStyle: 'italic', textAlign: 'center' }}>
+        <div style={{ marginTop: 18, fontSize: 12, color: '#7A8B96', fontStyle: 'italic', textAlign: 'center' }}>
           On-device analysis · no internet required
         </div>
       </div>
@@ -1554,10 +1554,10 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
                   width: '100%', height: '100%', objectFit: 'cover', display: 'block',
                 }} />
               </div>
-              <div style={{ fontSize: 10, color: '#5ecdf2', fontWeight: 800, letterSpacing: '0.15em', marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: '#5ecdf2', fontWeight: 800, letterSpacing: '0.15em', marginTop: 6 }}>
                 MODEL SAYS
               </div>
-              <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 18, color: T.ink, marginTop: 2 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 20, color: T.ink, marginTop: 2 }}>
                 {topSpecies?.commonName || '—'}
               </div>
             </div>
@@ -1569,10 +1569,10 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
                 <SpeciesImage species={lookalikeSpecies} size={400}
                   style={{ width: '100%', height: '100%', borderRadius: 0 }} />
               </div>
-              <div style={{ fontSize: 10, color: T.inkMute, fontWeight: 800, letterSpacing: '0.15em', marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: T.inkMute, fontWeight: 800, letterSpacing: '0.15em', marginTop: 6 }}>
                 LOOKALIKE
               </div>
-              <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 18, color: T.ink, marginTop: 2 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 20, color: T.ink, marginTop: 2 }}>
                 {lookalikeSpecies.commonName}
               </div>
             </div>
@@ -1581,14 +1581,14 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <SectionLabel style={{ color: '#5ecdf2', marginBottom: 6 }}>Marks of {topSpecies?.commonName || 'match'}</SectionLabel>
-              <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 12, lineHeight: 1.5 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 14, lineHeight: 1.5 }}>
                 {topCues.map((c, i) => <li key={i}>{c}</li>)}
                 {topCues.length === 0 && <li style={{ color: T.inkMute }}>No cues on file.</li>}
               </ul>
             </div>
             <div>
               <SectionLabel style={{ color: T.inkMute, marginBottom: 6 }}>Marks of {lookalikeSpecies.commonName}</SectionLabel>
-              <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 12, lineHeight: 1.5 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 14, lineHeight: 1.5 }}>
                 {otherCues.map((c, i) => <li key={i}>{c}</li>)}
                 {otherCues.length === 0 && <li style={{ color: T.inkMute }}>No cues on file.</li>}
               </ul>
@@ -1602,12 +1602,12 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
           display: 'flex', flexDirection: 'column', gap: 8,
           flexShrink: 0,
         }}>
-          <PrimaryButton onClick={onPickLookalike} style={{ width: '100%', minHeight: 52, fontSize: 15, fontWeight: 800 }}>
+          <PrimaryButton onClick={onPickLookalike} style={{ width: '100%', minHeight: 52, fontSize: 17, fontWeight: 800 }}>
             Actually, this is the {lookalikeSpecies.commonName}
           </PrimaryButton>
           <button type="button" onClick={onNoneMatch} style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: T.inkMute, fontSize: 12, fontWeight: 700, padding: '8px 4px',
+            color: T.inkMute, fontSize: 14, fontWeight: 700, padding: '8px 4px',
             textAlign: 'center',
           }}>
             None of these — pick a different species
@@ -1646,8 +1646,8 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <AlertTriangle size={22} color="#c66" />
             <div>
-              <div style={{ fontWeight: 700, color: T.ink, fontSize: 14 }}>Couldn't identify confidently</div>
-              <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
+              <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Couldn't identify confidently</div>
+              <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
                 The image was too uncertain to commit to a species. Try a clearer photo, or identify manually.
               </div>
             </div>
@@ -1662,7 +1662,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           {onSuggestNew && (
             <button onClick={onSuggestNew} style={{
               background: 'transparent', border: 'none', color: T.brass,
-              fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              fontSize: 15, fontWeight: 700, cursor: 'pointer',
               padding: 8, textDecoration: 'underline',
             }}>
               Fish not in the app? Add it to the database
@@ -1726,7 +1726,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             display: 'inline-flex', alignItems: 'center', gap: 6,
             background: pillTier.bg, color: pillTier.ink,
             padding: '5px 10px', borderRadius: 999,
-            fontSize: 11, fontWeight: 800, letterSpacing: '0.15em',
+            fontSize: 12, fontWeight: 800, letterSpacing: '0.15em',
             marginBottom: 10,
           }}>
             <Check size={12} strokeWidth={3} />
@@ -1757,7 +1757,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           }}>
             <ConfidenceRing pct={scorePct} size={ringSize} />
             <div style={{
-              fontSize: 11, fontWeight: 800, letterSpacing: '0.15em',
+              fontSize: 12, fontWeight: 800, letterSpacing: '0.15em',
               color: '#ffffff',
             }}>
               CONFIDENCE
@@ -1780,7 +1780,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         }}>
           <div style={{
             flex: 1, minWidth: 0,
-            fontSize: 12, color: '#8ea3ba', fontWeight: 600,
+            fontSize: 14, color: '#8ea3ba', fontWeight: 600,
           }}>
             Was this right?
           </div>
@@ -1801,7 +1801,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               display: 'inline-flex', alignItems: 'center', gap: 6,
               background: 'transparent', border: `1px solid ${T.brass}`,
               color: T.brass, borderRadius: 8,
-              padding: '6px 12px', fontSize: 12, fontWeight: 700,
+              padding: '6px 12px', fontSize: 14, fontWeight: 700,
               cursor: 'pointer',
             }}
           >
@@ -1816,7 +1816,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               display: 'inline-flex', alignItems: 'center', gap: 6,
               background: 'transparent', border: `1px solid ${T.warn}`,
               color: T.warn, borderRadius: 8,
-              padding: '6px 12px', fontSize: 12, fontWeight: 700,
+              padding: '6px 12px', fontSize: 14, fontWeight: 700,
               cursor: 'pointer',
             }}
           >
@@ -1844,7 +1844,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           </div>
           <div style={{
             flex: 1, minWidth: 0,
-            fontSize: 13, color: T.open, fontWeight: 700,
+            fontSize: 15, color: T.open, fontWeight: 700,
           }}>
             Thanks — added to training data
           </div>
@@ -1872,7 +1872,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
                 }}>
                   <Check size={13} color="#5ecdf2" strokeWidth={3} />
                 </div>
-                <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.4, flex: 1 }}>{cue}</div>
+                <div style={{ fontSize: 16, color: T.ink, lineHeight: 1.4, flex: 1 }}>{cue}</div>
               </div>
             ))}
           </div>
@@ -1902,10 +1902,10 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
                 }}>
                   <SpeciesImage species={s} size={42} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{s.commonName}</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: T.ink }}>{s.commonName}</div>
                     {distinguisher && (
                       <div style={{
-                        fontSize: 12, color: T.inkSoft, marginTop: 2,
+                        fontSize: 14, color: T.inkSoft, marginTop: 2,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
                         {distinguisher}
@@ -1918,7 +1918,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
                       flexShrink: 0,
                       background: 'transparent', border: '1px solid #5ecdf2',
                       color: '#5ecdf2', borderRadius: 8,
-                      padding: '6px 12px', fontSize: 12, fontWeight: 700,
+                      padding: '6px 12px', fontSize: 14, fontWeight: 700,
                       cursor: 'pointer',
                     }}
                   >
@@ -1957,7 +1957,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             }
           }}
           style={{
-            flex: 2, minHeight: 52, fontSize: 16, fontWeight: 800,
+            flex: 2, minHeight: 52, fontSize: 18, fontWeight: 800,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
             gap: 2,
@@ -1966,7 +1966,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           <span>{feedbackState === 'confirmed' ? 'Save' : 'Save & Continue'}</span>
           {feedbackState === 'confirmed' && (
             <span style={{
-              fontSize: 10, fontWeight: 600, opacity: 0.7,
+              fontSize: 11, fontWeight: 600, opacity: 0.7,
               letterSpacing: '0.05em',
             }}>
               already confirmed
@@ -1975,7 +1975,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         </PrimaryButton>
         <GhostButton
           onClick={scrollToLookalikesOrPicker}
-          style={{ flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800 }}
+          style={{ flex: 1, minHeight: 52, fontSize: 16, fontWeight: 800 }}
         >
           Compare
         </GhostButton>
@@ -2005,7 +2005,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
       {onSuggestNew && (
         <button onClick={onSuggestNew} style={{
           background: 'transparent', border: 'none', color: T.brass,
-          fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          fontSize: 15, fontWeight: 700, cursor: 'pointer',
           padding: '4px 8px 12px', textDecoration: 'underline',
           display: 'block', margin: '0 auto',
         }}>
@@ -2098,8 +2098,8 @@ export function CategoriesScreen({ onPick }) {
                 ) : null}
               </div>
               <div style={{ padding: '10px 12px 12px' }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 700, color: T.ink }}>{c.name}</div>
-                <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{counts[c.id] || 0} species</div>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: T.ink }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>{counts[c.id] || 0} species</div>
               </div>
             </Card>
           );
@@ -2126,7 +2126,7 @@ export function CategoryScreen({ catId, state, update, onPick }) {
   return (
     <div style={{ padding: '18px 16px' }}>
       <H1 size={22} style={{ marginBottom: 4 }}>{cat?.name || 'Category'}</H1>
-      <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 14 }}>{list.length} species</div>
+      <div style={{ fontSize: 14, color: T.inkMute, marginBottom: 14 }}>{list.length} species</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {list.map(s => <SpeciesRow key={s.id} species={s} onClick={() => onPick(s.id)} favorited={favSet.has(s.id)} onToggleFavorite={() => toggleFav(s.id)} />)}
       </div>
@@ -2163,25 +2163,25 @@ export function SearchScreen({ state, onPick }) {
         <input
           autoFocus value={q} onChange={e => setQ(e.target.value)}
           placeholder="Type a fish name…"
-          style={{ ...inputStyle, paddingLeft: 38, fontSize: 15, background: T.card }}
+          style={{ ...inputStyle, paddingLeft: 38, fontSize: 17, background: T.card }}
         />
       </div>
       {!q && (
-        <div style={{ fontSize: 13, color: T.inkMute, padding: '20px 12px', textAlign: 'center', background: T.parchmentDeep, borderRadius: 4 }}>
+        <div style={{ fontSize: 15, color: T.inkMute, padding: '20px 12px', textAlign: 'center', background: T.parchmentDeep, borderRadius: 4 }}>
           Try "snapper," "mahi," "kingfish," "mangrove," or any Gulf species name.
         </div>
       )}
       {q && results.length === 0 && (
-        <div style={{ fontSize: 13, color: T.inkMute, padding: 12 }}>No matches. Try a different spelling or category.</div>
+        <div style={{ fontSize: 15, color: T.inkMute, padding: 12 }}>No matches. Try a different spelling or category.</div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {results.map(r => (
           <Card key={r.s.id} onClick={() => onPick(r.s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <SpeciesImage species={r.s} size={44} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600 }}>{r.s.commonName}</div>
-              {r.matchedAlt && <div style={{ fontSize: 11, color: T.brassDeep }}>also: {r.matchedAlt}</div>}
-              <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{r.s.scientific}</div>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 600 }}>{r.s.commonName}</div>
+              {r.matchedAlt && <div style={{ fontSize: 12, color: T.brassDeep }}>also: {r.matchedAlt}</div>}
+              <div style={{ fontSize: 12, color: T.inkMute, fontStyle: 'italic' }}>{r.s.scientific}</div>
             </div>
             <ChevronRight size={18} color={T.brass} />
           </Card>
@@ -2230,8 +2230,8 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
       }}>
         <Trophy size={28} color={T.brass} strokeWidth={1.8} style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.ink, letterSpacing: 1.3 }}>MY PERSONAL BESTS</div>
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>Log a catch to earn your first PB</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, letterSpacing: 1.3 }}>MY PERSONAL BESTS</div>
+          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4 }}>Log a catch to earn your first PB</div>
         </div>
         <ChevronRight size={18} color={T.brass} />
       </button>
@@ -2689,7 +2689,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             <button onClick={dismissSpotsIntro} aria-label="Dismiss"
               style={{
                 background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
-                borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 800,
+                borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 800,
                 cursor: 'pointer', flexShrink: 0,
               }}>
               GOT IT
@@ -2709,7 +2709,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           background: selectedSpotId === 'current' ? T.brass : 'transparent',
           color: selectedSpotId === 'current' ? T.oceanDeep : T.brass,
           border: `1.5px solid ${T.brass}`, borderRadius: 999,
-          padding: '7px 14px', fontSize: 12, fontWeight: 800,
+          padding: '7px 14px', fontSize: 14, fontWeight: 800,
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
           whiteSpace: 'nowrap',
         }}>
@@ -2730,21 +2730,21 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                 title="Star = your main fishing spot"
                 style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '7px 4px 7px 12px', fontSize: 13, lineHeight: 1,
+                  padding: '7px 4px 7px 12px', fontSize: 15, lineHeight: 1,
                   color: sp.starred ? (active ? T.oceanDeep : '#FFC857') : (active ? 'rgba(3,27,51,0.45)' : T.inkMute),
                 }}>
                 {sp.starred ? '★' : '☆'}
               </button>
               <button onClick={() => selectSpot(sp)} style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '7px 6px', fontSize: 12, fontWeight: 800,
+                padding: '7px 6px', fontSize: 14, fontWeight: 800,
                 color: active ? T.oceanDeep : T.ink, whiteSpace: 'nowrap',
               }}>
                 {sp.name}
               </button>
               <button onClick={() => deleteSpot(sp.id)} aria-label={`Remove ${sp.name}`} style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '7px 12px 7px 4px', fontSize: 12, lineHeight: 1,
+                padding: '7px 12px 7px 4px', fontSize: 14, lineHeight: 1,
                 color: active ? 'rgba(3,27,51,0.55)' : T.inkMute,
               }}>
                 ×
@@ -2756,7 +2756,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           flexShrink: 0,
           background: 'transparent', color: T.inkSoft,
           border: `1.5px dashed ${T.cardEdge}`, borderRadius: 999,
-          padding: '7px 14px', fontSize: 12, fontWeight: 800,
+          padding: '7px 14px', fontSize: 14, fontWeight: 800,
           cursor: 'pointer', whiteSpace: 'nowrap',
         }}>
           + Add spot
@@ -2779,11 +2779,11 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           {coords && selectedSpotId === null && (
             <GhostButton
               onClick={() => { const sp = saveSpot(coords.lat, coords.lon, locLabel.split(',')[0]); if (sp) selectSpot(sp); }}
-              style={{ padding: '6px 12px', fontSize: 12, color: T.brass, borderColor: T.brass }}>
+              style={{ padding: '6px 12px', fontSize: 14, color: T.brass, borderColor: T.brass }}>
               Save spot
             </GhostButton>
           )}
-          <GhostButton onClick={() => setChanging(true)} style={{ padding: '6px 12px', fontSize: 12 }}>
+          <GhostButton onClick={() => setChanging(true)} style={{ padding: '6px 12px', fontSize: 14 }}>
             Change
           </GhostButton>
         </div>
@@ -2792,7 +2792,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <SectionLabel style={{ flex: 1 }}>Change location</SectionLabel>
             <button onClick={() => { setChanging(false); setSearchQ(''); setSearchResults([]); setSearchError(''); }}
-              style={{ background: 'transparent', border: 'none', color: T.inkSoft, fontSize: 12, cursor: 'pointer' }}>
+              style={{ background: 'transparent', border: 'none', color: T.inkSoft, fontSize: 14, cursor: 'pointer' }}>
               Cancel
             </button>
           </div>
@@ -2805,24 +2805,24 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               autoFocus
               style={{
                 flex: 1, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
-                borderRadius: 6, color: T.ink, padding: '10px 12px', fontSize: 14,
+                borderRadius: 6, color: T.ink, padding: '10px 12px', fontSize: 16,
               }}
             />
-            <PrimaryButton onClick={runSearch} disabled={searching || !searchQ.trim()} style={{ width: 'auto', padding: '10px 16px', fontSize: 13 }}>
+            <PrimaryButton onClick={runSearch} disabled={searching || !searchQ.trim()} style={{ width: 'auto', padding: '10px 16px', fontSize: 15 }}>
               {searching ? 'Searching…' : 'Search'}
             </PrimaryButton>
           </div>
           <div style={{ marginBottom: searchResults.length ? 8 : 0 }}>
             <button onClick={useMyLocation} style={{
               background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
-              borderRadius: 6, padding: '8px 12px', fontSize: 12, fontWeight: 700,
+              borderRadius: 6, padding: '8px 12px', fontSize: 14, fontWeight: 700,
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
               <MapPin size={14} /> Use my current location
             </button>
           </div>
           {searchError && (
-            <div style={{ fontSize: 12, color: T.closed, marginTop: 4 }}>{searchError}</div>
+            <div style={{ fontSize: 14, color: T.closed, marginTop: 4 }}>{searchError}</div>
           )}
           {searchResults.length > 0 && (
             <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
@@ -2834,7 +2834,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                 }}>
                   <button onClick={() => pickResult(r)} style={{
                     background: 'transparent', border: 'none', color: T.ink,
-                    fontSize: 13, textAlign: 'left', cursor: 'pointer',
+                    fontSize: 15, textAlign: 'left', cursor: 'pointer',
                     flex: 1, minWidth: 0, padding: 0,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
@@ -2842,7 +2842,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   </button>
                   <button onClick={() => pickAndSaveResult(r)} style={{
                     background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
-                    borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 800,
+                    borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 800,
                     cursor: 'pointer', flexShrink: 0,
                   }}>
                     SAVE AS SPOT
@@ -2855,13 +2855,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
       )}
 
       {loading && !current && (
-        <Card style={{ padding: 20, textAlign: 'center', color: T.inkMute, fontSize: 13 }}>
+        <Card style={{ padding: 20, textAlign: 'center', color: T.inkMute, fontSize: 15 }}>
           Loading forecast…
         </Card>
       )}
 
       {error && !loading && (
-        <Card style={{ padding: 14, borderColor: T.closed, fontSize: 13, color: T.closed }}>
+        <Card style={{ padding: 14, borderColor: T.closed, fontSize: 15, color: T.closed }}>
           {error}
         </Card>
       )}

@@ -62,22 +62,22 @@ export function AccountSection({ session: sessionFromProp, syncStatus, lastSynce
   return (
     <Card style={{ marginBottom: 10 }}>
       <SectionLabel style={{ marginBottom: 8 }}>Account</SectionLabel>
-      <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 2 }}>Signed in as</div>
-      <div style={{ fontSize: 15, color: T.ink, fontWeight: 700, wordBreak: 'break-all' }}>
+      <div style={{ fontSize: 14, color: T.inkMute, marginBottom: 2 }}>Signed in as</div>
+      <div style={{ fontSize: 17, color: T.ink, fontWeight: 700, wordBreak: 'break-all' }}>
         {session.user?.email || 'Signed in'}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: statusColor, marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: statusColor, marginTop: 6 }}>
         <span>{statusLabel}</span>
         <span style={{ color: T.inkMute }}>· Last sync: {lastSyncStr}</span>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         {onForceSync && (
-          <GhostButton onClick={onForceSync} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 12 }}>
+          <GhostButton onClick={onForceSync} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 14 }}>
             <RefreshCcw size={14} /> Sync now
           </GhostButton>
         )}
         <GhostButton onClick={doSignOut} disabled={signingOut}
-          style={{ flex: 1, color: T.closed, borderColor: T.closed, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 12 }}>
+          style={{ flex: 1, color: T.closed, borderColor: T.closed, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', fontSize: 14 }}>
           <LogOut size={14} /> Sign out
         </GhostButton>
       </div>
@@ -108,7 +108,7 @@ export function SyncPill({ status, onClick }) {
       title={isSignedOut ? 'Saved on this device only. Tap to sign in.' : undefined}
       style={{
         background: 'transparent', border: `1px solid ${border}`,
-        color, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+        color, fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
         padding: '3px 8px', borderRadius: 999, cursor: onClick ? 'pointer' : 'default',
         display: 'inline-flex', alignItems: 'center', gap: 4,
       }}

@@ -183,7 +183,7 @@ export function PrimaryButton({ children, onClick, disabled, style }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       width: '100%', background: disabled ? '#2A3E4D' : T.brass, color: disabled ? T.inkMute : T.oceanDeep, border: 'none',
-      padding: '14px 16px', borderRadius: 10, fontSize: 15, fontWeight: 800, letterSpacing: 0.4,
+      padding: '14px 16px', borderRadius: 10, fontSize: 17, fontWeight: 800, letterSpacing: 0.4,
       cursor: disabled ? 'not-allowed' : 'pointer',
       boxShadow: '0 4px 12px rgba(25, 212, 242, 0.18)', ...style,
     }}>{children}</button>
@@ -195,14 +195,14 @@ export function GhostButton({ children, onClick, style, disabled }) {
       background: 'transparent',
       color: disabled ? T.inkMute : T.brass,
       border: `1.5px solid ${disabled ? T.cardEdge : T.brass}`,
-      padding: '10px 14px', borderRadius: 6, fontSize: 14, fontWeight: 600,
+      padding: '10px 14px', borderRadius: 6, fontSize: 16, fontWeight: 600,
       cursor: disabled ? 'not-allowed' : 'pointer',
       ...style,
     }}>{children}</button>
   );
 }
 export function SectionLabel({ children, style }) {
-  return <div style={{ fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: T.brassDeep, fontWeight: 700, ...style }}>{children}</div>;
+  return <div style={{ fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase', color: T.brassDeep, fontWeight: 700, ...style }}>{children}</div>;
 }
 export function H1({ children, size = 28, style }) {
   return <h1 style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: size, fontWeight: 600, color: T.ink, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em', ...style }}>{children}</h1>;
@@ -211,14 +211,14 @@ export function H1({ children, size = 28, style }) {
 export function DetailRow({ label, value }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, padding: '6px 0', borderTop: `1px solid ${T.cardEdge}55` }}>
-      <span style={{ fontSize: 12, color: T.inkMute, fontWeight: 600, letterSpacing: 0.3 }}>{label}</span>
-      <span style={{ fontSize: 13, color: T.ink, textAlign: 'right', whiteSpace: 'pre-wrap' }}>{value}</span>
+      <span style={{ fontSize: 14, color: T.inkMute, fontWeight: 600, letterSpacing: 0.3 }}>{label}</span>
+      <span style={{ fontSize: 15, color: T.ink, textAlign: 'right', whiteSpace: 'pre-wrap' }}>{value}</span>
     </div>
   );
 }
 
 export const inputStyle = {
-  width: '100%', padding: '10px 12px', fontSize: 14, border: `1.5px solid ${T.cardEdge}`,
+  width: '100%', padding: '10px 12px', fontSize: 16, border: `1.5px solid ${T.cardEdge}`,
   borderRadius: 4, background: T.parchmentDeep, color: T.ink, outline: 'none', boxSizing: 'border-box',
 };
 export function Field({ label, value, onChange, type = 'text', placeholder }) {
@@ -234,7 +234,7 @@ export function PickButton({ active, onClick, children }) {
     <button onClick={onClick} style={{
       flex: 1, background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.ink,
       border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '10px 8px', borderRadius: 6,
-      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+      fontSize: 15, fontWeight: 600, cursor: 'pointer',
     }}>{children}</button>
   );
 }
@@ -266,30 +266,30 @@ export function WelcomeIntroModal({ onContinue }) {
         <div style={{ textAlign: 'center', marginBottom: 14 }}>
           <Anchor size={30} color={T.brass} style={{ margin: '0 auto 8px', display: 'block' }} />
           <H1 size={24}>Welcome to ReelIntel</H1>
-          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 13, marginTop: 6, letterSpacing: 0.3 }}>
+          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 15, marginTop: 6, letterSpacing: 0.3 }}>
             Identify it. Know the rules. Stay legal.
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <div style={{ fontSize: 18, lineHeight: 1 }}>📡</div>
-            <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 20, lineHeight: 1 }}>📡</div>
+            <div style={{ fontSize: 15, color: T.ink, lineHeight: 1.5 }}>
               <strong>Works with no signal.</strong> Everything you need offshore — species ID,
               regulations, your logbook, the quiz — runs on your device. No bars? No problem.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <div style={{ fontSize: 18, lineHeight: 1 }}>🎯</div>
-            <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 20, lineHeight: 1 }}>🎯</div>
+            <div style={{ fontSize: 15, color: T.ink, lineHeight: 1.5 }}>
               <strong>Fish ID is in beta.</strong> Snap a photo and we'll offer a best guess —
               but always confirm the species yourself before you keep or release. Legal decisions
               are yours.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <div style={{ fontSize: 18, lineHeight: 1 }}>🗺️</div>
-            <div style={{ fontSize: 13, color: T.ink, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 20, lineHeight: 1 }}>🗺️</div>
+            <div style={{ fontSize: 15, color: T.ink, lineHeight: 1.5 }}>
               <strong>Next: pick your waters.</strong> Every regulation you see is tied to the
               jurisdiction you fish. You can change it anytime.
             </div>
@@ -323,13 +323,13 @@ export function FishingProfileSetupModal({
     <div style={overlayStyle}>
       <div style={{ ...modalStyle, maxWidth: 440 }}>
         <H1 size={22} style={{ marginBottom: 4 }}>Tell us about your fishing</H1>
-        <p style={{ fontSize: 12.5, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
+        <p style={{ fontSize: 14.5, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
           Helps us tune the app to how you fish. All optional. <strong>Does not change which
           regulations you see.</strong>
         </p>
         {fields.map(f => (
           <div key={f.key} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 700, marginBottom: 6 }}>{f.label}</div>
+            <div style={{ fontSize: 14.5, color: T.ink, fontWeight: 700, marginBottom: 6 }}>{f.label}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {f.options.map(o => {
                 const active = values[f.key] === o.value;
@@ -342,7 +342,7 @@ export function FishingProfileSetupModal({
                       color: active ? T.oceanDeep : T.inkSoft,
                       border: `1px solid ${active ? T.brass : T.cardEdge}`,
                       padding: '6px 10px', borderRadius: 999,
-                      fontSize: 11.5, fontWeight: 700,
+                      fontSize: 12.5, fontWeight: 700,
                       cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >
@@ -357,7 +357,7 @@ export function FishingProfileSetupModal({
           <div style={{
             marginTop: 8, marginBottom: 12, padding: '10px 12px', borderRadius: 6,
             background: T.warnBg, color: T.brassDeep,
-            border: `1px solid ${T.warn}`, fontSize: 12, lineHeight: 1.5,
+            border: `1px solid ${T.warn}`, fontSize: 14, lineHeight: 1.5,
           }}>
             <strong>Heads up:</strong> ReelIntel currently covers recreational regulations.
             Commercial limits, permits, and reporting are governed separately — defer to
@@ -370,7 +370,7 @@ export function FishingProfileSetupModal({
             style={{
               flex: 1, background: 'transparent', color: T.inkSoft,
               border: `1px solid ${T.cardEdge}`, padding: '12px 14px', borderRadius: 8,
-              fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              fontSize: 15, fontWeight: 700, cursor: 'pointer',
             }}
           >
             Skip for now
@@ -394,17 +394,17 @@ export function DisclaimerModal({ onAccept, readOnly = false, onClose }) {
         <div style={{ textAlign: 'center', borderBottom: `1px solid ${T.cardEdge}`, paddingBottom: 14, marginBottom: 14 }}>
           <Anchor size={26} color={T.brass} style={{ margin: '0 auto 6px', display: 'block' }} />
           <H1 size={22}>ReelIntel</H1>
-          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 12, marginTop: 4, letterSpacing: 0.5 }}>Fish smarter. Catch more.</div>
+          <div style={{ color: T.brassDeep, fontStyle: 'italic', fontSize: 14, marginTop: 4, letterSpacing: 0.5 }}>Fish smarter. Catch more.</div>
         </div>
         <SectionLabel style={{ marginBottom: 8 }}>{readOnly ? 'Disclaimer' : 'Before you start'}</SectionLabel>
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: T.inkSoft, margin: '0 0 14px', maxHeight: 260, overflowY: 'auto' }}>{DISCLAIMER_TEXT}</p>
+        <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: '0 0 14px', maxHeight: 260, overflowY: 'auto' }}>{DISCLAIMER_TEXT}</p>
         {readOnly ? (
           <PrimaryButton onClick={onClose}>Close</PrimaryButton>
         ) : (
           <>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 12, background: T.parchmentDeep, borderRadius: 4, cursor: 'pointer', marginBottom: 14 }}>
               <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} style={{ marginTop: 2, width: 18, height: 18, accentColor: T.brass }} />
-              <span style={{ fontSize: 13, color: T.ink, fontWeight: 600 }}>I understand and accept.</span>
+              <span style={{ fontSize: 15, color: T.ink, fontWeight: 600 }}>I understand and accept.</span>
             </label>
             <PrimaryButton disabled={!checked} onClick={onAccept}>Accept & Continue</PrimaryButton>
           </>
@@ -422,9 +422,9 @@ export function JurisdictionPickerModal({ current, onPick, onClose, canCancel, o
           <H1 size={20}>Select fishing waters</H1>
           {canCancel && <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkMute, padding: 4 }}><X size={20} /></button>}
         </div>
-        <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
+        <p style={{ fontSize: 15, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5 }}>
           Pick the waters you'll be fishing in. You can change this anytime.
-          {' '}<button onClick={onShowBoundary} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13, textDecoration: 'underline' }}>
+          {' '}<button onClick={onShowBoundary} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 15, textDecoration: 'underline' }}>
             What's the boundary?
           </button>
         </p>
@@ -437,8 +437,8 @@ export function JurisdictionPickerModal({ current, onPick, onClose, canCancel, o
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{j.name}</div>
-                <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{j.agency}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{j.name}</div>
+                <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>{j.agency}</div>
               </div>
               {current === j.id && <CheckCircle2 size={18} color={T.brass} />}
             </button>
@@ -457,7 +457,7 @@ export function InfoModal({ title, children, onClose }) {
           <H1 size={20}>{title}</H1>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkMute, padding: 4 }}><X size={20} /></button>
         </div>
-        <div style={{ fontSize: 14, color: T.inkSoft }}>{children}</div>
+        <div style={{ fontSize: 16, color: T.inkSoft }}>{children}</div>
         <PrimaryButton onClick={onClose} style={{ marginTop: 16 }}>Got it</PrimaryButton>
       </div>
     </div>
@@ -577,7 +577,7 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
         alignSelf: 'flex-start',
         display: 'inline-flex', alignItems: 'center', gap: 6,
         background: T.parchmentDeep, border: `1px solid ${T.brass}`,
-        color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+        color: T.brass, fontSize: 12, fontWeight: 800, letterSpacing: 0.8,
         padding: '4px 10px', borderRadius: 999, marginBottom: 10,
       }}>
         <Sparkles size={12} strokeWidth={2.4} /> AI IDENTIFIED
@@ -588,16 +588,16 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
           <SpeciesImage species={species} size={80} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 700, color: T.ink, lineHeight: 1.15 }}>
+            <div style={{ fontFamily: 'Georgia, serif', fontSize: 29, fontWeight: 700, color: T.ink, lineHeight: 1.15 }}>
               {species.commonName}
             </div>
-            <div style={{ fontSize: 14, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
+            <div style={{ fontSize: 16, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
               {species.scientific}
             </div>
           </div>
         </div>
       ) : (
-        <div style={{ fontSize: 14, color: T.inkSoft, marginBottom: 14 }}>
+        <div style={{ fontSize: 16, color: T.inkSoft, marginBottom: 14 }}>
           No confident match — pick a species manually.
         </div>
       )}
@@ -608,7 +608,7 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
           alignSelf: 'flex-start',
           display: 'inline-flex', alignItems: 'center', gap: 6,
           background: tierBg, border: `1px solid ${tierColor}`, color: tierColor,
-          fontSize: 12, fontWeight: 700, letterSpacing: 0.4,
+          fontSize: 14, fontWeight: 700, letterSpacing: 0.4,
           padding: '5px 12px', borderRadius: 999, marginBottom: 18,
         }}>
           {tierLabel} · {pct}%
@@ -616,7 +616,7 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
       )}
 
       {tier === 'low' && (
-        <div style={{ fontSize: 12, color: T.warn, marginBottom: 14, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14, color: T.warn, marginBottom: 14, lineHeight: 1.5 }}>
           Low confidence — please verify.
         </div>
       )}
@@ -632,7 +632,7 @@ export function IdentificationConfirmCard({ imageDataUrl, aiIdentifiedSpeciesId,
         {onSuggestNew && (
           <button onClick={suggestNew} style={{
             background: 'transparent', border: 'none', color: T.brass,
-            fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            fontSize: 15, fontWeight: 700, cursor: 'pointer',
             padding: 8, textDecoration: 'underline',
           }}>
             Fish not in the app? Add it to the database
@@ -747,11 +747,11 @@ export function SignInModal({
         {/* post-signup: confirmation-required panel */}
         {postSignup && (
           <>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
+            <p style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
               We sent a confirmation email to <strong style={{ color: T.ink }}>{email}</strong>.
               Open it on any device and tap the link to activate your account.
             </p>
-            <p style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
+            <p style={{ fontSize: 14, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
               After confirming, come back here and sign in with your email and password.
             </p>
             <PrimaryButton onClick={onClose}>Close</PrimaryButton>
@@ -761,10 +761,10 @@ export function SignInModal({
         {/* reset-sent panel */}
         {!postSignup && mode === 'sent' && (
           <>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
+            <p style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 8px' }}>
               We sent a reset link to <strong style={{ color: T.ink }}>{email}</strong>.
             </p>
-            <p style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
+            <p style={{ fontSize: 14, color: T.inkMute, lineHeight: 1.55, margin: '0 0 16px' }}>
               Open it on any device — Safari on your phone works — set a new password, then come back here to sign in.
             </p>
             <PrimaryButton onClick={onClose}>Close</PrimaryButton>
@@ -785,7 +785,7 @@ export function SignInModal({
               autoComplete="email"
               style={inputWithErr(fieldErrors.email)}
             />
-            {fieldErrors.email && <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{fieldErrors.email}</div>}
+            {fieldErrors.email && <div style={{ fontSize: 12, color: T.closed, marginTop: 4 }}>{fieldErrors.email}</div>}
 
             {mode !== 'forgot' && (
               <>
@@ -799,7 +799,7 @@ export function SignInModal({
                   autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                   style={inputWithErr(fieldErrors.password)}
                 />
-                {fieldErrors.password && <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{fieldErrors.password}</div>}
+                {fieldErrors.password && <div style={{ fontSize: 12, color: T.closed, marginTop: 4 }}>{fieldErrors.password}</div>}
               </>
             )}
 
@@ -814,7 +814,7 @@ export function SignInModal({
                   autoComplete="new-password"
                   style={inputWithErr(fieldErrors.confirmPw)}
                 />
-                {fieldErrors.confirmPw && <div style={{ fontSize: 11, color: T.closed, marginTop: 4 }}>{fieldErrors.confirmPw}</div>}
+                {fieldErrors.confirmPw && <div style={{ fontSize: 12, color: T.closed, marginTop: 4 }}>{fieldErrors.confirmPw}</div>}
               </>
             )}
 
@@ -846,7 +846,7 @@ export function SignInModal({
         )}
 
         {error && (
-          <div role="alert" style={{ marginTop: 12, fontSize: 12, color: T.closed, lineHeight: 1.45 }}>
+          <div role="alert" style={{ marginTop: 12, fontSize: 14, color: T.closed, lineHeight: 1.45 }}>
             {error}
           </div>
         )}
@@ -857,7 +857,7 @@ export function SignInModal({
 
 const linkBtnStyle = {
   background: 'transparent', border: 'none', color: T.brass,
-  fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '4px 2px',
+  fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '4px 2px',
   textDecoration: 'underline',
 };
 
@@ -868,13 +868,13 @@ export function KeepConfirmModal({ species, onClose }) {
         <div style={{ background: T.warnBg, border: `2px solid ${T.warn}`, padding: 14, borderRadius: 6, marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <AlertTriangle size={22} color={T.warn} style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
-            <div style={{ fontWeight: 700, color: T.brassDeep, fontSize: 14, marginBottom: 4 }}>Before you keep this fish</div>
-            <div style={{ fontSize: 13, lineHeight: 1.5, color: T.inkSoft }}>
+            <div style={{ fontWeight: 700, color: T.brassDeep, fontSize: 16, marginBottom: 4 }}>Before you keep this fish</div>
+            <div style={{ fontSize: 15, lineHeight: 1.5, color: T.inkSoft }}>
               Regulations change frequently. Verify current rules with the appropriate agency before harvesting. The publisher accepts no liability for citations or fines.
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginBottom: 12 }}>
+        <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.55, marginBottom: 12 }}>
           You are responsible for: confirming the species, checking the current season, measuring length correctly (fork vs. total), counting against bag and vessel limits, and carrying required gear.
         </div>
         <PrimaryButton onClick={onClose}>I've verified — close</PrimaryButton>
@@ -928,17 +928,17 @@ export function ShareReportModal({
             overflow: 'hidden',
           }}>
             <div style={{ padding: '14px 16px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, letterSpacing: 2, color: T.brass, fontWeight: 800, textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 12, letterSpacing: 2, color: T.brass, fontWeight: 800, textTransform: 'uppercase' }}>
                 {displayName}
               </div>
-              <div style={{ fontSize: 10, letterSpacing: 1.5, color: '#B8C5CD', fontWeight: 600, marginTop: 2 }}>
+              <div style={{ fontSize: 11, letterSpacing: 1.5, color: '#B8C5CD', fontWeight: 600, marginTop: 2 }}>
                 {title}
               </div>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700, marginTop: 6, color: T.parchment, lineHeight: 1.2 }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 25, fontWeight: 700, marginTop: 6, color: T.parchment, lineHeight: 1.2 }}>
                 {species ? species.commonName : 'Unknown species'}
               </div>
               {species?.scientific && (
-                <div style={{ fontStyle: 'italic', fontSize: 12, color: '#B8C5CD', marginTop: 2 }}>{species.scientific}</div>
+                <div style={{ fontStyle: 'italic', fontSize: 14, color: '#B8C5CD', marginTop: 2 }}>{species.scientific}</div>
               )}
             </div>
 
@@ -948,14 +948,14 @@ export function ShareReportModal({
 
             <div style={{ padding: 14 }}>
               <div style={{ background: 'rgba(244, 227, 193, 0.1)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 10, letterSpacing: 1.6, color: T.brass, fontWeight: 800, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: 11, letterSpacing: 1.6, color: T.brass, fontWeight: 800, textTransform: 'uppercase' }}>
                   {primary?.label}
                 </div>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: 32, fontWeight: 700, color: T.parchment, marginTop: 4, lineHeight: 1 }}>
                   {primary?.value || '—'}
                 </div>
                 {secondary?.value && (
-                  <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 6 }}>
+                  <div style={{ fontSize: 14, color: '#B8C5CD', marginTop: 6 }}>
                     {secondary.label}: {secondary.value}
                   </div>
                 )}
@@ -964,7 +964,7 @@ export function ShareReportModal({
               {meta.length > 0 && (
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {meta.map((m, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '4px 0' }}>
                       <span style={{ color: '#B8C5CD' }}>{m.label}</span>
                       <span style={{ color: T.parchment, fontWeight: 600, textAlign: 'right', maxWidth: '65%' }}>{m.value}</span>
                     </div>
@@ -974,12 +974,12 @@ export function ShareReportModal({
 
               {conditions.length > 0 && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(244, 227, 193, 0.18)' }}>
-                  <div style={{ fontSize: 10, letterSpacing: 1.5, color: T.brass, fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, letterSpacing: 1.5, color: T.brass, fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
                     Conditions
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {conditions.map((c, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '3px 0' }}>
                         <span style={{ color: '#B8C5CD' }}>{c.label}</span>
                         <span style={{ color: T.parchment, fontWeight: 600, textAlign: 'right', maxWidth: '65%' }}>{c.value}</span>
                       </div>
@@ -989,30 +989,30 @@ export function ShareReportModal({
               )}
 
               {notes && (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(244, 227, 193, 0.18)', fontSize: 12, color: '#D8E0E4', lineHeight: 1.5, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(244, 227, 193, 0.18)', fontSize: 14, color: '#D8E0E4', lineHeight: 1.5, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>
                   "{notes}"
                 </div>
               )}
 
-              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(244, 227, 193, 0.18)', textAlign: 'center', fontSize: 10, letterSpacing: 1.8, color: T.brass, fontWeight: 800 }}>
+              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(244, 227, 193, 0.18)', textAlign: 'center', fontSize: 11, letterSpacing: 1.8, color: T.brass, fontWeight: 800 }}>
                 REELINTEL
               </div>
             </div>
           </div>
 
-          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.5, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 10, lineHeight: 1.5, textAlign: 'center' }}>
             Tip: long-press the card to screenshot, or tap Share to send the summary{photoEntry ? ' with the photo' : ''}.
           </div>
         </div>
 
         <div style={{ padding: '10px 16px 14px', borderTop: `1px solid ${T.cardEdge}` }}>
           {status === 'copied' && (
-            <div style={{ fontSize: 12, color: T.brassDeep, marginBottom: 8, textAlign: 'center' }}>
+            <div style={{ fontSize: 14, color: T.brassDeep, marginBottom: 8, textAlign: 'center' }}>
               Copied to clipboard — paste anywhere.
             </div>
           )}
           {status === 'failed' && (
-            <div style={{ fontSize: 12, color: T.closed, marginBottom: 8, textAlign: 'center' }}>
+            <div style={{ fontSize: 14, color: T.closed, marginBottom: 8, textAlign: 'center' }}>
               Couldn't share or copy. Take a screenshot instead.
             </div>
           )}
@@ -1225,7 +1225,7 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
         <div style={{
           position: 'absolute', bottom: 20, left: 20, right: 20,
           textAlign: 'center', color: T.parchment,
-          fontSize: 12, lineHeight: 1.4,
+          fontSize: 14, lineHeight: 1.4,
           textShadow: '0 1px 4px rgba(0,0,0,0.8)',
         }}>
           {hasMany && <span style={{ color: T.brass, fontWeight: 800, marginRight: 8 }}>{idx + 1} of {total}</span>}
@@ -1281,7 +1281,7 @@ export function AccountSetupModal({ initialName = '', initialEmail = '', onSave,
           <Anchor size={26} color={T.brass} style={{ margin: '0 auto 6px', display: 'block' }} />
           <H1 size={20}>Set up your angler profile</H1>
         </div>
-        <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5, textAlign: 'center' }}>
+        <p style={{ fontSize: 15, color: T.inkSoft, margin: '0 0 14px', lineHeight: 1.5, textAlign: 'center' }}>
           We use this to attach your catches and Personal Bests to you, and to keep you in the loop on ReelIntel updates. Your email stays private.
         </p>
 
@@ -1294,7 +1294,7 @@ export function AccountSetupModal({ initialName = '', initialEmail = '', onSave,
           style={{ ...inputStyle, background: T.card, marginBottom: 4 }}
         />
         {touched && !nameOk && (
-          <div style={{ fontSize: 11, color: T.closed, marginBottom: 8 }}>Name is required (at least 2 characters).</div>
+          <div style={{ fontSize: 12, color: T.closed, marginBottom: 8 }}>Name is required (at least 2 characters).</div>
         )}
 
         <SectionLabel style={{ marginTop: 10, marginBottom: 6 }}>Email</SectionLabel>
@@ -1307,10 +1307,10 @@ export function AccountSetupModal({ initialName = '', initialEmail = '', onSave,
           style={{ ...inputStyle, background: T.card, marginBottom: 4 }}
         />
         {touched && !emailOk && (
-          <div style={{ fontSize: 11, color: T.closed, marginBottom: 8 }}>Enter a valid email address.</div>
+          <div style={{ fontSize: 12, color: T.closed, marginBottom: 8 }}>Enter a valid email address.</div>
         )}
 
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 10, lineHeight: 1.45 }}>
           Stored on this device for now. When ReelIntel cloud sync goes live, this email becomes the magic-link login for your account — no password to remember.
         </div>
 
@@ -1355,9 +1355,9 @@ export function SpeciesRow({ species, onClick, favorited, onToggleFavorite }) {
     <Card onClick={onClick} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12 }}>
       <div style={{ flexShrink: 0 }}><SpeciesImage species={species} size={50} /></div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 600, color: T.ink }}>{species.commonName}</div>
-        <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{species.scientific}</div>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 4, lineHeight: 1.3 }}>{species.keyIds[0]}</div>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 600, color: T.ink }}>{species.commonName}</div>
+        <div style={{ fontSize: 12, color: T.inkMute, fontStyle: 'italic' }}>{species.scientific}</div>
+        <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 4, lineHeight: 1.3 }}>{species.keyIds[0]}</div>
       </div>
       {onToggleFavorite && (
         <StarButton favorited={!!favorited} onToggle={onToggleFavorite} />
@@ -1411,9 +1411,9 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
       <div style={{ ...modalStyle, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <H1 size={20}>{title}</H1>
-          <div style={{ fontSize: 11, color: T.brass, fontWeight: 700, letterSpacing: 1 }}>{picked.size} STARRED</div>
+          <div style={{ fontSize: 12, color: T.brass, fontWeight: 700, letterSpacing: 1 }}>{picked.size} STARRED</div>
         </div>
-        <p style={{ fontSize: 13, color: T.inkSoft, margin: '0 0 12px', lineHeight: 1.5 }}>
+        <p style={{ fontSize: 15, color: T.inkSoft, margin: '0 0 12px', lineHeight: 1.5 }}>
           Tap the species you target most. They'll pin to the top of every list so they're one tap away.
         </p>
         <div style={{ position: 'relative', marginBottom: 10 }}>
@@ -1422,11 +1422,11 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
         </div>
         <div style={{ overflowY: 'auto', flex: 1, paddingRight: 2, marginBottom: 12 }}>
           {filteredByCategory.length === 0 && (
-            <div style={{ fontSize: 13, color: T.inkMute, padding: 12, textAlign: 'center' }}>No matches.</div>
+            <div style={{ fontSize: 15, color: T.inkMute, padding: 12, textAlign: 'center' }}>No matches.</div>
           )}
           {filteredByCategory.map(({ cat, list }) => (
             <div key={cat.id} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '6px 4px 4px' }}>
+              <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '6px 4px 4px' }}>
                 {cat.name}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1441,8 +1441,8 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
                     }}>
                       <SpeciesImage species={s} size={44} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: T.ink, fontFamily: 'Georgia, serif' }}>{s.commonName}</div>
-                        <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{s.scientific}</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: T.ink, fontFamily: 'Georgia, serif' }}>{s.commonName}</div>
+                        <div style={{ fontSize: 12, color: T.inkMute, fontStyle: 'italic' }}>{s.scientific}</div>
                       </div>
                       <Star size={20} fill={on ? T.brass : 'transparent'} color={on ? T.brass : T.inkMute} strokeWidth={on ? 1.5 : 2} />
                     </button>
@@ -1457,7 +1457,7 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
             <button onClick={onSkip} style={{
               flex: 1, background: 'transparent', color: T.inkSoft,
               border: `1.5px solid ${T.cardEdge}`, padding: '12px', borderRadius: 6,
-              fontSize: 13, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
+              fontSize: 15, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
             }}>Skip for now</button>
           )}
           <PrimaryButton style={{ flex: 1 }} onClick={() => onDone(Array.from(picked))}>
@@ -1907,7 +1907,7 @@ export function CropStep({
     }}>
       <div style={{
         padding: `calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px`,
-        color: '#fff', fontSize: 14, fontWeight: 700,
+        color: '#fff', fontSize: 16, fontWeight: 700,
         display: 'flex', alignItems: 'center', gap: 8,
         background: 'rgba(0,0,0,0.55)',
       }}>
@@ -1918,7 +1918,7 @@ export function CropStep({
           aria-label="Reset zoom and pan"
           style={{
             background: 'transparent', border: '1px solid rgba(255,255,255,0.25)',
-            color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11,
+            color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12,
             fontWeight: 700, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
@@ -2048,7 +2048,7 @@ export function CropStep({
                       border: '1px solid ' + (active ? '#5ecdf2' : 'rgba(255,255,255,0.3)'),
                       background: active ? '#5ecdf2' : 'transparent',
                       color: active ? '#062330' : '#fff',
-                      fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                      fontSize: 12, fontWeight: 800, letterSpacing: 0.4,
                       cursor: 'pointer',
                       touchAction: 'manipulation',
                     }}
@@ -2074,7 +2074,7 @@ export function CropStep({
             style={{
               flex: 1, minHeight: 48,
               background: 'transparent', border: '1px solid rgba(255,255,255,0.35)',
-              color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 13,
+              color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 15,
               cursor: 'pointer',
             }}
           >
@@ -2088,7 +2088,7 @@ export function CropStep({
             style={{
               flex: 1, minHeight: 48,
               background: 'transparent', border: '1px solid rgba(255,255,255,0.35)',
-              color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 13,
+              color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 15,
               cursor: 'pointer',
             }}
           >
@@ -2103,7 +2103,7 @@ export function CropStep({
             flex: 2, minHeight: 48,
             background: busy || !natural ? '#3a5064' : '#5ecdf2',
             color: '#062330', border: 'none', borderRadius: 8,
-            fontWeight: 800, fontSize: 15, cursor: busy || !natural ? 'not-allowed' : 'pointer',
+            fontWeight: 800, fontSize: 17, cursor: busy || !natural ? 'not-allowed' : 'pointer',
           }}
         >
           {busy ? 'Cropping…' : primaryLabel}

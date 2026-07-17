@@ -480,8 +480,8 @@ export default function App() {
             background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
             padding: '28px 24px',
           }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, marginBottom: 10 }}>Sign in</div>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 16px' }}>
+            <div style={{ fontSize: 25, fontWeight: 800, color: T.ink, marginBottom: 10 }}>Sign in</div>
+            <p style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 16px' }}>
               Enter your email and password.
             </p>
             <SignInModal
@@ -533,8 +533,8 @@ export default function App() {
             background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
             padding: '28px 24px',
           }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.ink, marginBottom: 8 }}>Not authorized</div>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 20px' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: T.ink, marginBottom: 8 }}>Not authorized</div>
+            <p style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 20px' }}>
               This account doesn't have access.
             </p>
             <button
@@ -545,7 +545,7 @@ export default function App() {
               }}
               style={{
                 background: T.brass, color: T.oceanDeep, border: 'none',
-                padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+                padding: '10px 20px', borderRadius: 8, fontSize: 15, fontWeight: 800,
                 cursor: 'pointer',
               }}
             >
@@ -1070,7 +1070,7 @@ export default function App() {
                 background: 'transparent', color: T.brass,
                 border: `1px solid ${T.brass}`,
                 padding: '5px 10px', borderRadius: 999,
-                fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+                fontSize: 12, fontWeight: 800, letterSpacing: 0.8,
                 cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
@@ -1087,7 +1087,7 @@ export default function App() {
               {inboxUnread > 0 && (
                 <span style={{
                   position: 'absolute', top: -3, right: -4, background: T.brass, color: T.oceanDeep,
-                  fontSize: 11, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9,
+                  fontSize: 12, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
                   boxShadow: '0 0 10px rgba(25, 212, 242, 0.55)',
                 }}>{inboxUnread}</span>
@@ -1107,7 +1107,7 @@ export default function App() {
           zIndex: 60,
           background: '#3A0F12', borderBottom: `1px solid ${T.closed}`,
           color: T.parchment, padding: '10px 14px',
-          fontSize: 12, lineHeight: 1.45,
+          fontSize: 14, lineHeight: 1.45,
           display: 'flex', alignItems: 'flex-start', gap: 10,
         }}>
           <div style={{ flex: 1 }}>
@@ -1149,7 +1149,7 @@ export default function App() {
           background: toast.kind === 'nag' ? T.warnBg : T.openBg,
           border: `1px solid ${toast.kind === 'nag' ? T.warn : T.open}`,
           color: toast.kind === 'nag' ? T.warn : T.open,
-          padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+          padding: '10px 16px', borderRadius: 8, fontSize: 15, fontWeight: 700,
           boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
           zIndex: 200, maxWidth: 'calc(100% - 32px)',
         }}>
@@ -1269,7 +1269,7 @@ export default function App() {
             <li><strong>Florida & Texas:</strong> 9 nautical miles.</li>
             <li><strong>Alabama, Mississippi, Louisiana:</strong> 3 nautical miles.</li>
           </ul>
-          <p style={{ marginTop: 12, lineHeight: 1.55, color: T.inkMute, fontSize: 13 }}>
+          <p style={{ marginTop: 12, lineHeight: 1.55, color: T.inkMute, fontSize: 15 }}>
             If your trip crosses the line, rules in effect depend on where the fish was caught — not where you're heading.
           </p>
         </InfoModal>
@@ -1331,15 +1331,15 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: T.ink }}>Sign in</div>
+              <div style={{ fontSize: 23, fontWeight: 800, color: T.ink }}>Sign in</div>
               <button
                 onClick={() => setShowSignInModal(false)}
-                style={{ background: 'transparent', border: 'none', color: T.inkMute, fontSize: 12, cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: T.inkMute, fontSize: 14, cursor: 'pointer' }}
               >
                 Close
               </button>
             </div>
-            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: '0 0 14px' }}>
+            <p style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.5, margin: '0 0 14px' }}>
               Keeps your catches, PBs, and starred species backed up and synced across your devices. Sign out anytime — your local log stays.
             </p>
             <SignInModal

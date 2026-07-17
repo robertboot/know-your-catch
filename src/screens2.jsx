@@ -124,25 +124,25 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
               <div aria-hidden style={{
                 position: 'absolute', bottom: 6, right: 8,
                 background: 'rgba(3, 27, 51, 0.7)', color: T.brass,
-                fontSize: 10, fontWeight: 800, letterSpacing: 0.6,
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
                 padding: '3px 7px', borderRadius: 4,
               }}>TAP TO ENLARGE</div>
             </div>
-            {photo.credit && <div style={{ fontSize: 9, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
+            {photo.credit && <div style={{ fontSize: 10, color: '#8aa0ac', marginTop: 4 }}>{photo.credit} · {photo.license}</div>}
           </>
         ) : (
           <SpeciesImage species={s} size={fallbackSize} />
         )}
         <H1 size={type.h1} style={{ color: T.parchment, marginTop: 8 }}>{s.commonName}</H1>
-        <div style={{ fontStyle: 'italic', fontSize: 13, color: '#B8C5CD', marginTop: 4 }}>{s.scientific}</div>
+        <div style={{ fontStyle: 'italic', fontSize: 15, color: '#B8C5CD', marginTop: 4 }}>{s.scientific}</div>
         {s.altNames.length > 0 && (
-          <div style={{ fontSize: 11, color: T.brass, marginTop: 8, letterSpacing: 0.5 }}>
+          <div style={{ fontSize: 12, color: T.brass, marginTop: 8, letterSpacing: 0.5 }}>
             ALSO: {s.altNames.join(' · ')}
           </div>
         )}
         <div style={{ marginTop: 10 }}>
-          {s.hms && <span style={{ background: T.warnBg, color: T.brassDeep, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1, marginRight: 6 }}>HMS PERMIT</span>}
-          {s.reefFish && <span style={{ background: T.openBg, color: T.open, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>REEF FISH</span>}
+          {s.hms && <span style={{ background: T.warnBg, color: T.brassDeep, padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: 1, marginRight: 6 }}>HMS PERMIT</span>}
+          {s.reefFish && <span style={{ background: T.openBg, color: T.open, padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>REEF FISH</span>}
         </div>
         {pb ? (
           <div style={{
@@ -156,14 +156,14 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           }}>
             <Trophy size={26} color={T.brass} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>YOUR PERSONAL BEST</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: T.parchment, marginTop: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>YOUR PERSONAL BEST</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: T.parchment, marginTop: 2 }}>
                 {pb.weight != null && `${pb.weight} ${state.units === 'metric' ? 'kg' : 'lb'}`}
                 {pb.weight != null && pb.length != null && ' · '}
                 {pb.length != null && `${pb.length} ${state.units === 'metric' ? 'cm' : 'in'}`}
                 {pb.weight == null && pb.length == null && '—'}
               </div>
-              <div style={{ fontSize: 11, color: '#B8C5CD', marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 2 }}>
                 {pb.date || (pb.dateIso || '').slice(0, 10) || 'Date unknown'}
                 {pb.location ? ` · ${pb.location}` : ''}
               </div>
@@ -171,7 +171,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
             <button onClick={onAddPB} style={{
               background: 'transparent', color: T.brass,
               border: `1px solid ${T.brass}`,
-              padding: '6px 12px', borderRadius: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+              padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 800, letterSpacing: 0.6,
               cursor: 'pointer', flexShrink: 0,
             }}>
               <Pencil size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
@@ -181,7 +181,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
         ) : (
           <button onClick={onAddPB} style={{
             marginTop: 14, background: T.brass, color: T.oceanDeep, border: 'none',
-            padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+            padding: '10px 16px', borderRadius: 8, fontSize: 15, fontWeight: 800,
             letterSpacing: 0.5, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             <Trophy size={14} /> Add Personal Best
@@ -191,7 +191,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
 
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Key identifiers</SectionLabel>
-        <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 14, lineHeight: 1.6 }}>
+        <ul style={{ margin: 0, paddingLeft: 18, color: T.inkSoft, fontSize: 16, lineHeight: 1.6 }}>
           {s.keyIds.map((k, i) => <li key={i}>{k}</li>)}
         </ul>
       </Card>
@@ -199,7 +199,7 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       {s.lookalikes.length > 0 && (
         <Card style={{ marginBottom: 12 }}>
           <SectionLabel style={{ marginBottom: 4 }}>Often confused with</SectionLabel>
-          <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10 }}>Tap to view species details.</div>
+          <div style={{ fontSize: 14, color: T.inkMute, marginBottom: 10 }}>Tap to view species details.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {s.lookalikes.map(otherId => {
               const o = speciesById(otherId);
@@ -211,8 +211,8 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
                 }}>
                   <SpeciesImage species={o} size={36} />
                   <div style={{ flex: 1, textAlign: 'left' }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: T.ink }}>{o.commonName}</div>
-                    <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{o.scientific}</div>
+                    <div style={{ fontWeight: 600, fontSize: 16, color: T.ink }}>{o.commonName}</div>
+                    <div style={{ fontSize: 12, color: T.inkMute, fontStyle: 'italic' }}>{o.scientific}</div>
                   </div>
                   <ChevronRight size={18} color={T.brass} />
                 </button>
@@ -225,27 +225,27 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <SectionLabel>Regulations</SectionLabel>
-          {jurisdiction && <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 600 }}>{jurisdiction.short}</span>}
+          {jurisdiction && <span style={{ fontSize: 12, color: T.inkMute, fontWeight: 600 }}>{jurisdiction.short}</span>}
         </div>
         {!jurisdiction ? (
-          <div style={{ fontSize: 13, color: T.inkMute, padding: 8 }}>Set your fishing waters from the home screen to see rules.</div>
+          <div style={{ fontSize: 15, color: T.inkMute, padding: 8 }}>Set your fishing waters from the home screen to see rules.</div>
         ) : !reg ? (
-          <div style={{ fontSize: 13, color: T.inkMute, padding: 8 }}>No regulations on file for this species in this jurisdiction.</div>
+          <div style={{ fontSize: 15, color: T.inkMute, padding: 8 }}>No regulations on file for this species in this jurisdiction.</div>
         ) : (
           <>
             {stale && (
-              <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: '8px 10px', borderRadius: 4, fontSize: 12, color: T.brassDeep, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: '8px 10px', borderRadius: 4, fontSize: 14, color: T.brassDeep, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <AlertTriangle size={16} /> Data is stale — refresh when online.
               </div>
             )}
             <RegBlock reg={reg} units={state.units} jurisdiction={jurisdiction} fedColumn={showFedColumn ? fedReg : null} />
-            <button onClick={onFullRegs} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', fontSize: 13, marginTop: 10, padding: 0 }}>
+            <button onClick={onFullRegs} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, cursor: 'pointer', fontSize: 15, marginTop: 10, padding: 0 }}>
               View full regulation details →
             </button>
             {seasonState(reg.open).status === 'open' && (
               <button onClick={() => onKeep(s)} style={{
                 background: T.brass, color: T.oceanDeep, border: 'none', padding: '10px 14px',
-                borderRadius: 4, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
+                borderRadius: 4, fontSize: 15, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
                 width: '100%', marginTop: 12,
               }}>
                 I'm planning to keep one — show warnings
@@ -258,13 +258,13 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Habitat & size</SectionLabel>
         {s.habitat && (
-          <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, marginBottom: 6 }}>{s.habitat}</div>
+          <div style={{ fontSize: 16, color: T.inkSoft, lineHeight: 1.5, marginBottom: 6 }}>{s.habitat}</div>
         )}
         {s.typicalSize && (
-          <div style={{ fontSize: 12, color: T.inkMute }}>Typical size: {s.typicalSize}</div>
+          <div style={{ fontSize: 14, color: T.inkMute }}>Typical size: {s.typicalSize}</div>
         )}
         {(s.typicalLengthIn || s.typicalWeightLb || s.worldRecordLb) && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>
+          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4 }}>
             {s.typicalLengthIn && <>Length: {s.typicalLengthIn} in</>}
             {s.typicalLengthIn && s.typicalWeightLb && <> · </>}
             {s.typicalWeightLb && <>Weight: {s.typicalWeightLb} lb</>}
@@ -273,15 +273,15 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           </div>
         )}
         {s.geoRange && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>Range: {s.geoRange}</div>
+          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4 }}>Range: {s.geoRange}</div>
         )}
         {s.edibility && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4, textTransform: 'capitalize' }}>
+          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4, textTransform: 'capitalize' }}>
             Edibility: {s.edibility}
           </div>
         )}
         {s.seasonality && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4, fontStyle: 'italic' }}>
+          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4, fontStyle: 'italic' }}>
             {s.seasonality}
           </div>
         )}
@@ -290,21 +290,21 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 6 }}>My notes</SectionLabel>
         {!showNoteEdit && state.notes[id] && (
-          <div style={{ fontSize: 13, color: T.inkSoft, fontStyle: 'italic', whiteSpace: 'pre-wrap', marginBottom: 8 }}>{state.notes[id]}</div>
+          <div style={{ fontSize: 15, color: T.inkSoft, fontStyle: 'italic', whiteSpace: 'pre-wrap', marginBottom: 8 }}>{state.notes[id]}</div>
         )}
         {!showNoteEdit && !state.notes[id] && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 8 }}>Personal notes saved on this device.</div>
+          <div style={{ fontSize: 14, color: T.inkMute, marginBottom: 8 }}>Personal notes saved on this device.</div>
         )}
         {showNoteEdit ? (
           <>
             <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={3} placeholder="My favorite spots, gear that works…" style={{ ...inputStyle, resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <PrimaryButton onClick={saveNote} style={{ padding: '8px 12px', fontSize: 13 }}>Save</PrimaryButton>
-              <GhostButton onClick={() => { setShowNoteEdit(false); setNoteDraft(state.notes[id] || ''); }} style={{ padding: '8px 12px', fontSize: 13 }}>Cancel</GhostButton>
+              <PrimaryButton onClick={saveNote} style={{ padding: '8px 12px', fontSize: 15 }}>Save</PrimaryButton>
+              <GhostButton onClick={() => { setShowNoteEdit(false); setNoteDraft(state.notes[id] || ''); }} style={{ padding: '8px 12px', fontSize: 15 }}>Cancel</GhostButton>
             </div>
           </>
         ) : (
-          <GhostButton onClick={() => setShowNoteEdit(true)} style={{ padding: '8px 12px', fontSize: 13 }}>
+          <GhostButton onClick={() => setShowNoteEdit(true)} style={{ padding: '8px 12px', fontSize: 15 }}>
             <Pencil size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
             {state.notes[id] ? 'Edit note' : 'Add note'}
           </GhostButton>
@@ -316,19 +316,19 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           <div>
             <SectionLabel>Personal Best</SectionLabel>
             {pb ? (
-              <div style={{ marginTop: 6, fontFamily: 'Georgia, serif', fontSize: 17, color: T.ink, fontWeight: 600 }}>
+              <div style={{ marginTop: 6, fontFamily: 'Georgia, serif', fontSize: 19, color: T.ink, fontWeight: 600 }}>
                 {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)}
-                <span style={{ fontSize: 12, color: T.inkMute, marginLeft: 8, fontFamily: 'inherit', fontWeight: 400 }}>
+                <span style={{ fontSize: 14, color: T.inkMute, marginLeft: 8, fontFamily: 'inherit', fontWeight: 400 }}>
                   · {pb.date}
                 </span>
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>No PB recorded yet.</div>
+              <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4 }}>No PB recorded yet.</div>
             )}
           </div>
           <button onClick={onAddPB} style={{
             background: T.ocean, color: T.parchment, border: 'none', padding: '8px 12px',
-            borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+            borderRadius: 4, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
           }}>
             {pb ? <><Pencil size={12} /> Edit</> : <><Plus size={14} /> Save PB</>}
           </button>
@@ -412,12 +412,12 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
       <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <StatusPill status={status} />
         {ss.reason && !/^(open|closed)$/i.test(ss.reason.trim()) && (
-          <span style={{ fontSize: 14, fontWeight: 700, color: ssColor }}>{ss.reason}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: ssColor }}>{ss.reason}</span>
         )}
       </div>
       <div style={{ border: `1px solid ${T.cardEdge}`, borderRadius: 4, overflow: 'hidden' }}>
         {fedColumn && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: T.parchmentDeep, borderBottom: `1px solid ${T.cardEdge}`, fontSize: 11, fontWeight: 700, color: T.brassDeep, padding: '6px 10px', letterSpacing: 0.6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: T.parchmentDeep, borderBottom: `1px solid ${T.cardEdge}`, fontSize: 12, fontWeight: 700, color: T.brassDeep, padding: '6px 10px', letterSpacing: 0.6 }}>
             <span></span>
             <span style={{ textAlign: 'right' }}>{jurisdiction.short}</span>
             <span style={{ textAlign: 'right' }}>FED</span>
@@ -426,7 +426,7 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
         {rows.filter(r => r.val !== '—' || r.fed && r.fed !== '—').map((r, i) => (
           <div key={i} style={{
             display: 'grid', gridTemplateColumns: fedColumn ? '1fr 1fr 1fr' : '1fr 1fr',
-            padding: '8px 10px', fontSize: 13, borderTop: i > 0 ? `1px solid ${T.cardEdge}55` : 'none', gap: 8,
+            padding: '8px 10px', fontSize: 15, borderTop: i > 0 ? `1px solid ${T.cardEdge}55` : 'none', gap: 8,
           }}>
             <span style={{ color: T.inkMute, fontWeight: 600 }}>{r.label}</span>
             <span style={{ color: T.ink, textAlign: 'right' }}>{r.val}</span>
@@ -437,13 +437,13 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
       {reg.gear && (
         <div style={{ marginTop: 10, padding: 10, background: T.parchmentDeep, borderLeft: `3px solid ${T.brass}`, borderRadius: 4 }}>
           <SectionLabel style={{ marginBottom: 6 }}><Wrench size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Required gear</SectionLabel>
-          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: T.inkSoft, lineHeight: 1.55 }}>
+          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 14, color: T.inkSoft, lineHeight: 1.55 }}>
             {reg.gear.map((g, i) => <li key={i}>{g}</li>)}
           </ul>
         </div>
       )}
       {reg.hms && (
-        <div style={{ marginTop: 10, padding: 10, background: T.warnBg, border: `1.5px solid ${T.warn}`, borderRadius: 4, fontSize: 12, color: T.brassDeep, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ marginTop: 10, padding: 10, background: T.warnBg, border: `1.5px solid ${T.warn}`, borderRadius: 4, fontSize: 14, color: T.brassDeep, display: 'flex', gap: 8, alignItems: 'center' }}>
           <AlertTriangle size={16} /> <strong>HMS permit required</strong> — federal Atlantic HMS permit must be aboard.
         </div>
       )}
@@ -451,21 +451,21 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
         <div style={{ marginTop: 10, padding: 10, background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Sector-specific</SectionLabel>
           {Object.entries(reg.sectors).map(([sector, txt]) => (
-            <div key={sector} style={{ fontSize: 12, marginBottom: 4 }}>
+            <div key={sector} style={{ fontSize: 14, marginBottom: 4 }}>
               <strong style={{ color: T.ink }}>{sector}:</strong> <span style={{ color: T.inkSoft }}>{txt}</span>
             </div>
           ))}
         </div>
       )}
       {reg.notes && (
-        <div style={{ marginTop: 10, fontSize: 12, color: T.inkSoft, fontStyle: 'italic', lineHeight: 1.5 }}>{reg.notes}</div>
+        <div style={{ marginTop: 10, fontSize: 14, color: T.inkSoft, fontStyle: 'italic', lineHeight: 1.5 }}>{reg.notes}</div>
       )}
       <div style={{
         marginTop: 12, padding: 10, borderRadius: 4,
         background: reg.verified ? T.openBg : T.parchmentDeep,
         border: `1px solid ${reg.verified ? T.open : T.cardEdge}`,
       }}>
-        <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
+        <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
           {reg.verified ? (
             <><strong style={{ color: T.open }}>Verified — official.</strong> Confirmed against the agency for the current season. Rules can still change in-season; the official page is one tap away.</>
           ) : (
@@ -475,12 +475,12 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
         {jurisdiction?.regsUrl && (
           <a href={jurisdiction.regsUrl} target="_blank" rel="noopener noreferrer" style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, color: T.brass,
-            fontWeight: 700, fontSize: 13, textDecoration: 'none',
+            fontWeight: 700, fontSize: 15, textDecoration: 'none',
           }}>
             Open official {jurisdiction.agency} regulations <ChevronRight size={15} />
           </a>
         )}
-        <div style={{ marginTop: 8, fontSize: 11, color: T.inkMute, display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ marginTop: 8, fontSize: 12, color: T.inkMute, display: 'flex', justifyContent: 'space-between' }}>
           <span>Source: {reg.source}</span>
           <span>{reg.verified ? 'Verified' : 'Seed'} {reg.lastUpdated}</span>
         </div>
@@ -547,7 +547,7 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   const segBtn = (state, set, key, label) => (
     <button onClick={() => set(key)} style={{
       flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-      fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+      fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
       background: state === key ? T.brass : T.parchmentDeep,
       color: state === key ? T.oceanDeep : T.inkSoft,
       border: `1.5px solid ${state === key ? T.brass : T.cardEdge}`,
@@ -645,12 +645,12 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
     <div style={{ padding: '16px 16px 8px' }}>
       <H1 size={22} style={{ marginBottom: 4 }}>Measure Fish</H1>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
-        <div style={{ fontSize: 13, color: T.brassDeep, fontWeight: 600 }}>
+        <div style={{ fontSize: 15, color: T.brassDeep, fontWeight: 600 }}>
           {jurisdiction ? jurisdiction.name : 'No waters selected'}
         </div>
         <button onClick={onChangeJurisdiction} style={{
           background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
-          padding: '5px 10px', borderRadius: 8, fontSize: 10, fontWeight: 800,
+          padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 800,
           letterSpacing: 1, cursor: 'pointer', textTransform: 'uppercase',
         }}>Change</button>
       </div>
@@ -663,18 +663,18 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Total length</div>
-            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Total length</div>
+            <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
               Tip of the closed mouth to the tip of the tail, with the tail squeezed together for the longest measurement.
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Fork length</div>
-            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Fork length</div>
+            <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
               Tip of the mouth to the center of the fork in the tail. Used for many pelagics.
             </div>
           </div>
-          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, borderTop: `1px solid ${T.cardEdge}`, paddingTop: 8 }}>
+          <div style={{ fontSize: 14, color: T.inkMute, lineHeight: 1.5, borderTop: `1px solid ${T.cardEdge}`, paddingTop: 8 }}>
             Lay the fish flat on a measuring device, mouth closed. Which length is regulated
             varies by species — always confirm on the species' rule below.
           </div>
@@ -694,8 +694,8 @@ export function MeasureScreen({ state, jurisdiction, onChangeJurisdiction, onPic
             <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 10 }}>
               <SpeciesImage species={s} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                <div style={{ fontSize: 12, color: T.inkMute, marginTop: 2 }}>
                   {reg
                     ? `Min ${formatSize(reg.minSize, state.units)}`
                       + (reg.maxSize ? ` · Max ${formatSize(reg.maxSize, state.units)}` : '')
@@ -784,7 +784,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
                     background: 'transparent', color: T.brass,
                     border: `1px solid ${T.brass}`,
                     padding: '4px 10px', borderRadius: 6,
-                    fontSize: 10.5, fontWeight: 800, letterSpacing: 1,
+                    fontSize: 11.5, fontWeight: 800, letterSpacing: 1,
                     cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
                   }}>
                   <Pencil size={11} /> EDIT
@@ -855,14 +855,14 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 8px' }}>
                 <Star size={12} fill={T.brass} color={T.brass} />
-                <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800, flex: 1 }}>Your fish</span>
+                <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800, flex: 1 }}>Your fish</span>
                 {onEditFavorites && (
                   <button onClick={onEditFavorites} aria-label="Edit your starred fish"
                     style={{
                       background: 'transparent', color: T.brass,
                       border: `1px solid ${T.brass}`,
                       padding: '3px 8px', borderRadius: 6,
-                      fontSize: 9.5, fontWeight: 800, letterSpacing: 0.8,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8,
                       cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
                     }}>
                     <Pencil size={10} /> EDIT
@@ -877,7 +877,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
           {buckets.otherUnknown.length > 0 && (
             <>
               {buckets.yourUnknown.length > 0 && (
-                <span style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: T.inkMute, fontWeight: 800, display: 'block', margin: '4px 2px 8px' }}>All other species</span>
+                <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: T.inkMute, fontWeight: 800, display: 'block', margin: '4px 2px 8px' }}>All other species</span>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {buckets.otherUnknown.map(row => renderRow(row, { status: 'unknown' }))}
@@ -960,7 +960,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               marginBottom: isTablet ? 14 : 10,
-              fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              fontSize: 11, fontWeight: 800, letterSpacing: 1,
               color: T.brass, background: 'rgba(25, 212, 242, 0.08)',
               padding: '3px 10px', borderRadius: 999,
               border: `1px solid ${T.brass}55`,
@@ -975,7 +975,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
           {(regSource === 'bundled' || regSource === 'bundled-fed') && (
             <div style={{
               display: 'inline-block', marginBottom: isTablet ? 14 : 10,
-              fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              fontSize: 11, fontWeight: 800, letterSpacing: 1,
               color: T.inkMute, background: T.parchmentDeep,
               padding: '3px 8px', borderRadius: 999,
               border: `1px solid ${T.cardEdge}`,
@@ -987,7 +987,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
           {(regSource === 'verified' || regSource === 'verified-fed') && reg?._seasonFromBundled && (
             <div style={{
               display: 'inline-block', marginBottom: isTablet ? 14 : 10,
-              fontSize: 10, fontWeight: 800, letterSpacing: 1,
+              fontSize: 11, fontWeight: 800, letterSpacing: 1,
               color: T.warn, background: T.warnBg,
               padding: '3px 8px', borderRadius: 999,
               border: `1px solid ${T.warn}55`,
@@ -1059,7 +1059,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
   const segBtn = (key, label) => (
     <button onClick={() => setSort(key)} style={{
       flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-      fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+      fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
       background: sort === key ? T.brass : T.parchmentDeep,
       color: sort === key ? T.oceanDeep : T.inkSoft,
       border: `1.5px solid ${sort === key ? T.brass : T.cardEdge}`,
@@ -1076,7 +1076,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search…" style={{ ...inputStyle, paddingLeft: 32, background: T.card }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
+        <span style={{ fontSize: 12, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Sort</span>
         {segBtn('type', 'Type')}
         {segBtn('name', 'A–Z')}
         {segBtn('status', 'Status')}
@@ -1084,7 +1084,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
 
       {favRows.length > 0 && (
         <>
-          <div style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Star size={12} fill={T.brass} color={T.brass} /> Your fish
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
@@ -1101,7 +1101,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
               if (s.category !== lastGroup) {
                 lastGroup = s.category;
                 out.push(
-                  <div key={'h-' + s.category} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                  <div key={'h-' + s.category} style={{ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
                     {catName(s.category)}
                   </div>
                 );
@@ -1110,7 +1110,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
               if (status !== lastGroup) {
                 lastGroup = status;
                 out.push(
-                  <div key={'h-' + status} style={{ fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
+                  <div key={'h-' + status} style={{ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px' }}>
                     {statusLabel[status]}
                   </div>
                 );
@@ -1155,16 +1155,16 @@ export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }
     <div style={{ padding: '16px 16px' }}>
       <div style={{ marginBottom: 14 }}>
         <H1 size={22}>Personal Bests</H1>
-        <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>Your records, by species.</div>
+        <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4 }}>Your records, by species.</div>
       </div>
 
       {recorded.length === 0 ? (
         <Card style={{ padding: 18, textAlign: 'center' }}>
           <Trophy size={36} color={T.brass} style={{ display: 'block', margin: '0 auto 10px' }} />
-          <div style={{ fontWeight: 800, color: T.ink, fontSize: 15, marginBottom: 6 }}>
+          <div style={{ fontWeight: 800, color: T.ink, fontSize: 17, marginBottom: 6 }}>
             No personal bests recorded
           </div>
-          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 14 }}>
+          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.5, marginBottom: 14 }}>
             Personal bests come from your logged catches. Log a new fish, or
             promote one you've already logged in the Logbook.
           </div>
@@ -1225,8 +1225,8 @@ export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <Trophy size={18} color={T.brass} style={{ flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
-                      <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 600, color: T.ink }}>{s.commonName}</div>
+                      <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 2 }}>
                         {pb.primaryMetric === 'weight' ? formatWeight(pb.weight, state.units) : formatSize(pb.length, state.units)} · {pb.date}
                       </div>
                     </div>
@@ -1292,9 +1292,9 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
         <Trophy size={24} color={T.brass} style={{ margin: '0 auto 6px', display: 'block' }} />
         <H1 size={20} style={{ color: T.parchment }}>{s.commonName}</H1>
         <div style={{ marginTop: 12, padding: 12, background: 'rgba(244, 227, 193, 0.1)', borderRadius: 4 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.5, color: T.brass, fontWeight: 700, textTransform: 'uppercase' }}>{primary.label}</div>
+          <div style={{ fontSize: 12, letterSpacing: 1.5, color: T.brass, fontWeight: 700, textTransform: 'uppercase' }}>{primary.label}</div>
           <div style={{ fontFamily: 'Georgia, serif', fontSize: 36, fontWeight: 600, color: T.parchment, marginTop: 4 }}>{primary.val}</div>
-          <div style={{ fontSize: 12, color: '#B8C5CD', marginTop: 4 }}>{secondary.label}: {secondary.val}</div>
+          <div style={{ fontSize: 14, color: '#B8C5CD', marginTop: 4 }}>{secondary.label}: {secondary.val}</div>
         </div>
       </Card>
       {photos.length > 0 && (
@@ -1330,11 +1330,11 @@ export function PBDetailScreen({ speciesId, state, update, onEdit, onBack }) {
           <SectionLabel style={{ marginBottom: 8 }}>Previous bests ({pb.history.length})</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {pb.history.slice().reverse().map((h, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 0', borderBottom: i < pb.history.length - 1 ? `1px solid ${T.cardEdge}55` : 'none' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '6px 0', borderBottom: i < pb.history.length - 1 ? `1px solid ${T.cardEdge}55` : 'none' }}>
                 <span style={{ color: T.inkSoft }}>
                   {h.primaryMetric === 'weight' ? formatWeight(h.weight, state.units) : formatSize(h.length, state.units)}
                 </span>
-                <span style={{ color: T.inkMute, fontSize: 11 }}>{h.date} — beaten {h.beatenOn}</span>
+                <span style={{ color: T.inkMute, fontSize: 12 }}>{h.date} — beaten {h.beatenOn}</span>
               </div>
             ))}
           </div>
@@ -1448,13 +1448,13 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
         <SpeciesImage species={s} size={50} />
         <div>
           <H1 size={18}>{s.commonName}</H1>
-          <div style={{ fontSize: 12, color: T.inkMute }}>{edit ? 'Update PB' : 'New personal best'}</div>
+          <div style={{ fontSize: 14, color: T.inkMute }}>{edit ? 'Update PB' : 'New personal best'}</div>
         </div>
       </Card>
 
       {existing && beats && (
         <Card style={{ background: T.openBg, border: `1.5px solid ${T.open}`, marginBottom: 12 }}>
-          <div style={{ color: T.open, fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ color: T.open, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trophy size={16} /> New record! Beats previous {existing.primaryMetric === 'weight' ? formatWeight(existing.weight, state.units) : formatSize(existing.length, state.units)}
           </div>
         </Card>
@@ -1485,11 +1485,11 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
         </div>
         <Field label="Location (optional)" value={location} onChange={setLocation} placeholder="e.g. 30 mi south of Dauphin Island" />
         {(lat != null && lon != null) && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: -4, marginBottom: 6, fontSize: 11, color: T.brass }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: -4, marginBottom: 6, fontSize: 12, color: T.brass }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               📍 {lat.toFixed(5)}°, {lon.toFixed(5)}°{locFromPhoto && <span style={{ color: T.inkMute, marginLeft: 4 }}>— from photo</span>}
             </span>
-            <button onClick={clearLocation} style={{ background: 'transparent', border: 'none', color: T.inkMute, fontSize: 11, cursor: 'pointer', padding: 2 }}>Clear coords</button>
+            <button onClick={clearLocation} style={{ background: 'transparent', border: 'none', color: T.inkMute, fontSize: 12, cursor: 'pointer', padding: 2 }}>Clear coords</button>
           </div>
         )}
         <Field label="Gear / bait (optional)" value={gearBait} onChange={setGearBait} placeholder="e.g. live cigar minnow, 80 ft" />
@@ -1502,7 +1502,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <SectionLabel>Photos</SectionLabel>
-          <span style={{ fontSize: 11, color: T.inkMute }}>{photos.length} / 3</span>
+          <span style={{ fontSize: 12, color: T.inkMute }}>{photos.length} / 3</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           {[0, 1, 2].map(i => {
@@ -1540,7 +1540,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
                 }}
               >
                 <Camera size={20} />
-                <span style={{ fontSize: 10.5, letterSpacing: 0.8, fontWeight: 700 }}>
+                <span style={{ fontSize: 11.5, letterSpacing: 0.8, fontWeight: 700 }}>
                   {isNext ? 'ADD' : ''}
                 </span>
               </button>
@@ -1630,7 +1630,7 @@ function FishingProfileCard({ state, update, isTablet }) {
   return (
     <Card style={{ marginBottom: 10 }}>
       <SectionLabel style={{ marginBottom: 8 }}>Fishing profile</SectionLabel>
-      <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.45, marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.45, marginBottom: 10 }}>
         Optional — helps us tune the app. Does not change which regulations you see.
       </div>
       {PROFILE_FIELDS.map((f) => (
@@ -1721,23 +1721,23 @@ function FeatureEmailPrefsCard() {
     <Card style={{ marginBottom: 10 }}>
       <SectionLabel style={{ marginBottom: 6 }}>Feature launch emails</SectionLabel>
       {loading ? (
-        <div style={{ fontSize: 12, color: T.inkMute }}>Loading…</div>
+        <div style={{ fontSize: 14, color: T.inkMute }}>Loading…</div>
       ) : optedOut ? (
-        <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.45 }}>
           You're opted out. We won't email you when new ReelIntel features ship.
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1, fontSize: 12, color: T.inkSoft, lineHeight: 1.45 }}>
+          <div style={{ flex: 1, fontSize: 14, color: T.inkSoft, lineHeight: 1.45 }}>
             We'll email you once when new features go live (like Fish ID). One email per launch, not a newsletter.
           </div>
-          <GhostButton onClick={optOut} disabled={saving} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>
+          <GhostButton onClick={optOut} disabled={saving} style={{ padding: '6px 12px', fontSize: 14, flexShrink: 0 }}>
             {saving ? 'Turning off…' : 'Turn off'}
           </GhostButton>
         </div>
       )}
       {error && (
-        <div role="alert" style={{ marginTop: 8, fontSize: 12, color: T.closed }}>
+        <div role="alert" style={{ marginTop: 8, fontSize: 14, color: T.closed }}>
           {error}
         </div>
       )}
@@ -1833,28 +1833,28 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Waters / Jurisdiction</SectionLabel>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>{jurisdiction?.name || 'Not set'}</div>
-          <GhostButton onClick={onChangeJurisdiction} style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 16, color: T.ink, fontWeight: 700 }}>{jurisdiction?.name || 'Not set'}</div>
+          <GhostButton onClick={onChangeJurisdiction} style={{ padding: '6px 12px', fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>
             Change <ChevronRight size={14} />
           </GhostButton>
         </div>
         {jurisdiction?.agency && (
-          <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4 }}>{jurisdiction.agency}</div>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>{jurisdiction.agency}</div>
         )}
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Angler profile</SectionLabel>
-        <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>
+        <div style={{ fontSize: 16, color: T.ink, fontWeight: 700 }}>
           {state.anglerName || <span style={{ color: T.inkMute, fontWeight: 500 }}>No name set</span>}
         </div>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2, wordBreak: 'break-all' }}>
+        <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 2, wordBreak: 'break-all' }}>
           {state.anglerEmail || <span style={{ color: T.inkMute }}>No email set</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-          <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
+          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
             Name appears on your shared catch and Personal Best report cards.
           </div>
-          <GhostButton onClick={onEditAccount} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Edit</GhostButton>
+          <GhostButton onClick={onEditAccount} style={{ padding: '6px 12px', fontSize: 14, flexShrink: 0 }}>Edit</GhostButton>
         </div>
       </Card>
       <FishingProfileCard state={state} update={update} isTablet={isTablet} />
@@ -1866,22 +1866,22 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         <Card style={{ marginBottom: 10 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Admin</SectionLabel>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
+            <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.45, flex: 1, paddingRight: 10 }}>
               Species editor. Web-only; not shipped in the iOS bundle.
             </div>
-            <GhostButton onClick={() => { window.location.hash = '#/admin'; }} style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}>Open</GhostButton>
+            <GhostButton onClick={() => { window.location.hash = '#/admin'; }} style={{ padding: '6px 12px', fontSize: 14, flexShrink: 0 }}>Open</GhostButton>
           </div>
         </Card>
       )}
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Your fish</SectionLabel>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 14, color: T.ink, fontWeight: 600 }}>
+          <div style={{ fontSize: 16, color: T.ink, fontWeight: 600 }}>
             {(state.favorites || []).length} starred
           </div>
-          <GhostButton onClick={onEditFavorites} style={{ padding: '6px 12px', fontSize: 12 }}>Edit</GhostButton>
+          <GhostButton onClick={onEditFavorites} style={{ padding: '6px 12px', fontSize: 14 }}>Edit</GhostButton>
         </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 6, lineHeight: 1.45 }}>
           Starred species pin to the top of every species and regulation list.
         </div>
       </Card>
@@ -1901,27 +1901,27 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
       <FishIdModelCard />
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Your fishing data</SectionLabel>
-        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 10 }}>
+        <div style={{ fontSize: 15, color: T.inkSoft, marginBottom: 10 }}>
           {nCatches} catch{nCatches === 1 ? '' : 'es'} logged · {nPBs} personal best{nPBs === 1 ? '' : 's'}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <GhostButton onClick={exportData} style={{ flex: 1 }}>Export backup</GhostButton>
           <GhostButton onClick={importData} style={{ flex: 1 }}>Restore backup</GhostButton>
         </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
           Backup is a single JSON file with catches (photos included), personal bests, notes, and settings. Save it to Files / iCloud Drive so you don't lose your log if you reset the app or change phones.
         </div>
       </Card>
 
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Report or contact</SectionLabel>
-        <a href="mailto:robert@reelintel.ai?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <a href="mailto:robert@reelintel.ai?subject=Regulation%20correction" style={{ color: T.brass, fontWeight: 600, fontSize: 16, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Mail size={16} /> Email a regulation correction
         </a>
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Legal</SectionLabel>
-        <button onClick={onShowDisclaimer} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, fontSize: 14, cursor: 'pointer', padding: 0 }}>
+        <button onClick={onShowDisclaimer} style={{ background: 'transparent', border: 'none', color: T.brass, fontWeight: 600, fontSize: 16, cursor: 'pointer', padding: 0 }}>
           Re-read disclaimer
         </button>
       </Card>
@@ -1986,20 +1986,20 @@ function FishIdModelCard() {
       <SectionLabel style={{ marginBottom: 6 }}>Fish ID model</SectionLabel>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 14, color: T.ink, fontWeight: 700 }}>{label}</div>
+          <div style={{ fontSize: 16, color: T.ink, fontWeight: 700 }}>{label}</div>
           {status === 'ready' && info?.labels && (
-            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 3 }}>
+            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>
               {info.labels.length} species · updates over the air
             </div>
           )}
           {status === 'no-network' && (
-            <div style={{ fontSize: 11, color: T.inkMute, marginTop: 3 }}>
+            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>
               Open the app once online to download the current model.
             </div>
           )}
           {status === 'error' && errMsg && (
             <div style={{
-              fontSize: 11, color: T.warn || '#c66',
+              fontSize: 12, color: T.warn || '#c66',
               marginTop: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               maxWidth: 260,
@@ -2008,7 +2008,7 @@ function FishIdModelCard() {
             </div>
           )}
         </div>
-        <GhostButton onClick={check} disabled={checking} style={{ padding: '6px 12px', fontSize: 12 }}>
+        <GhostButton onClick={check} disabled={checking} style={{ padding: '6px 12px', fontSize: 14 }}>
           {checking ? 'Checking…' : 'Check for updates'}
         </GhostButton>
       </div>
@@ -2022,7 +2022,7 @@ function FishIdModelCard() {
             onClick={() => setShowLog(v => !v)}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: T.inkMute, fontSize: 11, padding: 0,
+              color: T.inkMute, fontSize: 12, padding: 0,
               textDecoration: 'underline',
             }}
           >
@@ -2032,7 +2032,7 @@ function FishIdModelCard() {
             <pre style={{
               marginTop: 6, padding: 8, background: '#0a1420', color: '#c9d5e1',
               border: `1px solid ${T.cardEdge}`, borderRadius: 6,
-              fontSize: 10, lineHeight: 1.4,
+              fontSize: 11, lineHeight: 1.4,
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               maxHeight: 260, overflow: 'auto',
@@ -2108,7 +2108,7 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
       <div style={{ padding: '12px 14px', background: T.oceanDeep, borderBottom: `1px solid ${T.cardEdge}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <H1 size={17} style={{ marginBottom: 2 }}>Pin catch location</H1>
-          <div style={{ fontSize: 11, color: T.inkSoft }}>
+          <div style={{ fontSize: 12, color: T.inkSoft }}>
             Tap the map to drop a pin, or drag an existing one. Pinch to zoom.
           </div>
         </div>
@@ -2123,13 +2123,13 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
       {/* Footer */}
       <div style={{ padding: '12px 14px', background: T.oceanDeep, borderTop: `1px solid ${T.cardEdge}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 10, color: T.brass, fontWeight: 800, letterSpacing: 1.4 }}>COORDS</span>
+          <span style={{ fontSize: 11, color: T.brass, fontWeight: 800, letterSpacing: 1.4 }}>COORDS</span>
           {placed ? (
-            <span style={{ fontSize: 13, color: T.ink, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+            <span style={{ fontSize: 15, color: T.ink, fontFamily: 'ui-monospace, Menlo, monospace' }}>
               {coords.lat.toFixed(5)}°, {coords.lon.toFixed(5)}°
             </span>
           ) : (
-            <span style={{ fontSize: 12, color: T.inkMute, fontStyle: 'italic' }}>Tap the map to place a pin</span>
+            <span style={{ fontSize: 14, color: T.inkMute, fontStyle: 'italic' }}>Tap the map to place a pin</span>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -2227,7 +2227,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
       <button onClick={() => clearGroup(group)} style={{
         background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
         border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
-        fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
+        fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
       }}>{label}</button>
     );
   };
@@ -2238,7 +2238,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
       <button onClick={() => toggleInGroup(group, key)} style={{
         background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
         border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
-        fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
+        fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
       }}>{label}</button>
     );
   };
@@ -2249,7 +2249,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
     <button onClick={onClick} style={{
       background: active ? T.brass : T.parchmentDeep, color: active ? T.oceanDeep : T.inkSoft,
       border: `1.5px solid ${active ? T.brass : T.cardEdge}`, padding: '5px 10px', borderRadius: 999,
-      fontSize: 11, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
+      fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', flex: 'none',
       display: 'inline-flex', alignItems: 'center', gap: 4,
     }}>{label}</button>
   );
@@ -2263,7 +2263,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
     <div style={{ padding: '16px 16px 8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
         <H1 size={22}>Logbook</H1>
-        <button onClick={onNew} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer' }}>
+        <button onClick={onNew} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 15, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer' }}>
           <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> NEW
         </button>
       </div>
@@ -2271,7 +2271,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
       {quickPending.length > 0 && (
         <Card style={{ background: T.warnBg, borderColor: T.warn, marginBottom: 12, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
           <AlertTriangle size={18} color={T.warn} style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1, fontSize: 13, color: T.ink, lineHeight: 1.4 }}>
+          <div style={{ flex: 1, fontSize: 15, color: T.ink, lineHeight: 1.4 }}>
             <strong>{quickPending.length}</strong> {quickPending.length === 1 ? 'catch needs' : 'catches need'} details — tap a row to add species & measurements.
           </div>
         </Card>
@@ -2284,7 +2284,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
             <div style={{ fontWeight: 700, color: T.ink, marginBottom: 6 }}>
               {pbList.length > 0 ? 'No catches logged yet' : 'Nothing logged yet'}
             </div>
-            <div style={{ fontSize: 13, lineHeight: 1.5 }}>Tap <b>NEW</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
+            <div style={{ fontSize: 15, lineHeight: 1.5 }}>Tap <b>NEW</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
           </div>
         </Card>
       ) : (
@@ -2298,7 +2298,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               aria-pressed={view === 'list'}
               style={{
                 flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
-                fontSize: 14, fontWeight: 800, letterSpacing: 0.8,
+                fontSize: 16, fontWeight: 800, letterSpacing: 0.8,
                 background: view === 'list' ? T.brass : T.parchmentDeep,
                 color: view === 'list' ? T.oceanDeep : T.parchment,
                 border: `2px solid ${view === 'list' ? T.brass : T.cardEdge}`,
@@ -2313,7 +2313,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               aria-pressed={view === 'map'}
               style={{
                 flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
-                fontSize: 14, fontWeight: 800, letterSpacing: 0.8,
+                fontSize: 16, fontWeight: 800, letterSpacing: 0.8,
                 background: view === 'map' ? T.brass : T.parchmentDeep,
                 color: view === 'map' ? T.oceanDeep : T.parchment,
                 border: `2px solid ${view === 'map' ? T.brass : T.cardEdge}`,
@@ -2329,7 +2329,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               aria-expanded={filtersOpen}
               style={{
                 padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
-                fontSize: 12, fontWeight: 700,
+                fontSize: 14, fontWeight: 700,
                 background: (filtersOpen || activeFilterCount > 0) ? T.brass : T.parchmentDeep,
                 color: (filtersOpen || activeFilterCount > 0) ? T.oceanDeep : T.inkSoft,
                 border: `1.5px solid ${(filtersOpen || activeFilterCount > 0) ? T.brass : T.cardEdge}`,
@@ -2340,7 +2340,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               {activeFilterCount > 0 && (
                 <span style={{
                   background: T.oceanDeep, color: T.brass,
-                  fontSize: 10, fontWeight: 800,
+                  fontSize: 11, fontWeight: 800,
                   minWidth: 16, height: 16, borderRadius: 8,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   padding: '0 4px',
@@ -2360,17 +2360,17 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
                 {activeFilterCount > 0 && (
                   <button onClick={clearFilters} style={{
                     background: 'transparent', border: 'none', color: T.brass,
-                    fontSize: 11, fontWeight: 800, letterSpacing: 0.6, cursor: 'pointer', padding: 0,
+                    fontSize: 12, fontWeight: 800, letterSpacing: 0.6, cursor: 'pointer', padding: 0,
                   }}>Clear all</button>
                 )}
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Species</span>
+                <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Species</span>
                 {allChip('speciesIds', 'All')}
                 {speciesInLog.map(s => chip(s.id, 'speciesIds', s.commonName))}
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Moon</span>
+                <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Moon</span>
                 {allChip('moonPhases', 'Any')}
                 {chip('new', 'moonPhases', 'New')}
                 {chip('waxing', 'moonPhases', 'Waxing')}
@@ -2378,7 +2378,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
                 {chip('waning', 'moonPhases', 'Waning')}
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
+                <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>Time</span>
                 {allChip('timesOfDay', 'Any')}
                 {chip('dawn', 'timesOfDay', 'Dawn')}
                 {chip('day', 'timesOfDay', 'Day')}
@@ -2386,7 +2386,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
                 {chip('night', 'timesOfDay', 'Night')}
               </div>
               <div className="kyc-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                <span style={{ fontSize: 10, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>PB</span>
+                <span style={{ fontSize: 11, color: T.inkMute, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', alignSelf: 'center', flex: 'none' }}>PB</span>
                 {pbChip(pbAllActive, 'All catches', () => setFilters(f => ({ ...f, pbOnly: false })))}
                 {pbChip(pbOnlyActive, <><Trophy size={11} /> Only PBs</>, () => setFilters(f => ({ ...f, pbOnly: true })))}
               </div>
@@ -2415,7 +2415,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
   const placeholderIcon = isTablet ? 34 : 26;
   const [lightbox, setLightbox] = useState(null); // { photos, index, caption } or null
   const isPB = (id) => pbCatchIds && pbCatchIds.has(id);
-  if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 13 }}>No catches match these filters.</div></Card>;
+  if (items.length === 0) return <Card><div style={{ textAlign: 'center', padding: 18, color: T.inkSoft, fontSize: 15 }}>No catches match these filters.</div></Card>;
   // Stop the row-level onClick (which navigates to the catch detail)
   // when the angler taps an individual photo thumbnail to enlarge it.
   const stop = (e) => { e.stopPropagation(); };
@@ -2498,7 +2498,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                     display: 'inline-flex', alignItems: 'center', gap: 3,
                     background: T.warnBg, color: T.warn,
                     border: `1px solid ${T.warn}`,
-                    fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+                    fontSize: 10, fontWeight: 800, letterSpacing: 0.8,
                     padding: '2px 6px', borderRadius: 4,
                   }}>
                     ! Details pending
@@ -2509,7 +2509,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                     display: 'inline-flex', alignItems: 'center', gap: 3,
                     background: T.warnBg, color: T.warn,
                     border: `1px solid ${T.warn}`,
-                    fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+                    fontSize: 10, fontWeight: 800, letterSpacing: 0.8,
                     padding: '2px 6px', borderRadius: 4,
                   }}>
                     ! Needs location &amp; time
@@ -2520,7 +2520,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                     display: 'inline-flex', alignItems: 'center', gap: 3,
                     background: T.parchmentDeep, color: T.brass,
                     border: `1px solid ${T.brass}`,
-                    fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+                    fontSize: 10, fontWeight: 800, letterSpacing: 0.8,
                     padding: '2px 6px', borderRadius: 4,
                   }}>
                     <Trophy size={10} /> PB
@@ -2787,7 +2787,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
             <div style={{
               width: '100%', background: T.parchmentDeep, color: T.brass,
               border: `1.5px solid ${T.brass}`,
-              padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+              padding: '10px 14px', borderRadius: 8, fontSize: 15, fontWeight: 800, letterSpacing: 0.5,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
               <Trophy size={14} /> This catch is your Personal Best
@@ -2802,7 +2802,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
               style={{
                 background: 'transparent', color: T.inkMute,
                 border: `1px solid ${T.cardEdge}`,
-                padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                padding: '6px 12px', borderRadius: 6, fontSize: 14, fontWeight: 700,
                 cursor: 'pointer', alignSelf: 'center',
               }}
             >Remove PB status</button>
@@ -2810,7 +2810,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
         ) : (
           <button onClick={promoteToPB} style={{
             width: '100%', marginBottom: 14, background: T.brass, color: T.oceanDeep, border: 'none',
-            padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+            padding: '10px 14px', borderRadius: 8, fontSize: 15, fontWeight: 800, letterSpacing: 0.5,
             cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
             <Trophy size={14} /> {currentPB ? 'Make this my Personal Best' : 'Mark as Personal Best'}
@@ -2857,7 +2857,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
               field predate the branch and show no pill. */}
           {c.weather && (c.weather.source === 'archive' || c.weather.source === 'forecast_past_days') && (
             <span style={{
-              fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase',
+              fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase',
               background: T.warnBg, color: T.warn,
               border: `1px solid ${T.warn}`,
               padding: '2px 6px', borderRadius: 4, fontWeight: 800,
@@ -2874,14 +2874,14 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
             {c.weather.pressureMb != null && <DetailRow label="Pressure" value={`${Math.round(c.weather.pressureMb)} mb`} />}
           </>
         ) : (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 6 }}>Weather wasn't captured (offline at the time).</div>
+          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 6 }}>Weather wasn't captured (offline at the time).</div>
         )}
       </Card>
 
       {c.notes && (
         <Card style={{ marginBottom: 12 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Notes</SectionLabel>
-          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.notes}</div>
+          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.notes}</div>
         </Card>
       )}
 
@@ -2896,7 +2896,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
           flex: 1, background: confirming ? T.closed : 'transparent',
           color: confirming ? '#fff' : T.closed,
           border: `1.5px solid ${T.closed}`, padding: '10px 14px', borderRadius: 6,
-          fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          fontSize: 16, fontWeight: 700, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
           <Trash2 size={14} /> {confirming ? 'Confirm' : 'Delete'}
@@ -3507,7 +3507,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           background: T.parchmentDeep, border: `1px solid ${T.brass}`,
-          color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+          color: T.brass, fontSize: 12, fontWeight: 800, letterSpacing: 0.8,
           padding: '4px 10px', borderRadius: 999, marginBottom: 12,
         }}>
           <Sparkles size={12} strokeWidth={2.4} />
@@ -3518,7 +3518,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <SectionLabel>Photos</SectionLabel>
-          <span style={{ fontSize: 11, color: T.inkMute }}>{photos.length} / 3</span>
+          <span style={{ fontSize: 12, color: T.inkMute }}>{photos.length} / 3</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
           {[0, 1, 2].map(i => {
@@ -3531,7 +3531,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                     <div style={{
                       position: 'absolute', bottom: 0, left: 0, right: 0,
                       background: 'rgba(25, 212, 242, 0.92)', color: T.oceanDeep,
-                      fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textAlign: 'center',
+                      fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textAlign: 'center',
                       padding: '3px 4px',
                     }}>
                       LOCATION + TIME
@@ -3542,7 +3542,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                     borderRadius: 6, padding: '3px 7px',
                     background: 'rgba(3, 27, 51, 0.85)', color: '#5ecdf2',
                     border: '1px solid #5ecdf2', cursor: 'pointer',
-                    fontSize: 9, fontWeight: 800, letterSpacing: 0.6,
+                    fontSize: 10, fontWeight: 800, letterSpacing: 0.6,
                   }}>
                     CROP
                   </button>
@@ -3578,19 +3578,19 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                 }}
               >
                 <Camera size={22} />
-                {isNext && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>ADD</span>}
+                {isNext && <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>ADD</span>}
               </button>
             );
           })}
         </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 10, lineHeight: 1.45, padding: '6px 8px', background: T.parchmentDeep, borderRadius: 6 }}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10, lineHeight: 1.45, padding: '6px 8px', background: T.parchmentDeep, borderRadius: 6 }}>
           <strong style={{ color: T.brass }}>Photo 1</strong> sets the catch's location &amp; time. If Photo 1 was taken away from the catch spot (e.g. at the dock), edit the location and time below.
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={takePhotoNow} disabled={photos.length >= 3} style={{
             flex: 1, background: photos.length >= 3 ? '#2A3E4D' : T.brass,
             color: photos.length >= 3 ? T.inkMute : T.oceanDeep, border: 'none',
-            padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+            padding: '10px 12px', borderRadius: 8, fontSize: 15, fontWeight: 800,
             letterSpacing: 0.4, cursor: photos.length >= 3 ? 'not-allowed' : 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
@@ -3600,14 +3600,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             flex: 1, background: 'transparent',
             color: photos.length >= 3 ? T.inkMute : T.brass,
             border: `1.5px solid ${photos.length >= 3 ? T.cardEdge : T.brass}`,
-            padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 800,
+            padding: '10px 12px', borderRadius: 8, fontSize: 15, fontWeight: 800,
             letterSpacing: 0.4, cursor: photos.length >= 3 ? 'not-allowed' : 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
             <ImageIcon size={16} /> Upload photo
           </button>
         </div>
-        <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
           {photos.length >= 3
             ? 'Maximum of 3 photos. Remove one to add a different photo.'
             : photoSource === 'upload'
@@ -3651,12 +3651,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           if (!s) return null;
           return (
             <div style={{ marginBottom: 10, fontFamily: 'Georgia, serif' }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
                 {s.commonName}
                 {s.custom && (
                   <span style={{
                     fontFamily: 'system-ui, -apple-system, sans-serif',
-                    fontSize: 10, letterSpacing: 1, textTransform: 'uppercase',
+                    fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
                     color: '#5ecdf2', fontWeight: 800, marginLeft: 8,
                     verticalAlign: 'middle',
                   }}>
@@ -3665,7 +3665,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                 )}
               </div>
               {s.scientific && (
-                <div style={{ fontSize: 13, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
+                <div style={{ fontSize: 15, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>
                   {s.scientific}
                 </div>
               )}
@@ -3714,7 +3714,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                 ? <ShieldAlert    size={18} color={T.closed} />
                 : <ShieldQuestion size={18} color={T.inkSoft} />}
               <div style={{
-                fontSize: 13, fontWeight: 800, letterSpacing: 0.4,
+                fontSize: 15, fontWeight: 800, letterSpacing: 0.4,
                 color: effectiveLegality === 'open' ? (fedSoftOpen ? T.warn : T.open)
                      : effectiveLegality === 'closed' ? T.closed
                      : T.inkSoft,
@@ -3726,7 +3726,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {legalityChips.map((chip, i) => (
                   <span key={i} style={{
-                    fontSize: 11, color: T.inkSoft, background: T.parchmentDeep,
+                    fontSize: 12, color: T.inkSoft, background: T.parchmentDeep,
                     border: `1px solid ${T.cardEdge}`, padding: '3px 8px', borderRadius: 999,
                   }}>{chip}</span>
                 ))}
@@ -3740,7 +3740,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                  onClick={(e) => e.stopPropagation()}
                  style={{
                    display: 'inline-block', marginTop: 8,
-                   fontSize: 12, fontWeight: 700, color: T.brass,
+                   fontSize: 14, fontWeight: 700, color: T.brass,
                    textDecoration: 'underline',
                  }}>
                 Current {jurisdiction.agency || 'agency'} season →
@@ -3792,10 +3792,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                 style={{ marginTop: 2, width: 18, height: 18, accentColor: T.brass, cursor: 'pointer' }}
               />
               <span style={{ flex: 1 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: T.ink }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: T.ink }}>
                   <Trophy size={14} color={T.brass} /> Personal Best for {sName}
                 </span>
-                <span style={{ display: 'block', fontSize: 11, color: T.inkMute, marginTop: 4, lineHeight: 1.4 }}>
+                <span style={{ display: 'block', fontSize: 12, color: T.inkMute, marginTop: 4, lineHeight: 1.4 }}>
                   {wouldReplace
                     ? `Saving will replace the current PB (${otherPB.primaryMetric === 'weight' ? formatWeight(otherPB.weight, state.units) : formatSize(otherPB.length, state.units)} on ${otherPB.date}) and move it to history.`
                     : isPB && otherPBIsThisCatch
@@ -3815,65 +3815,65 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Auto-captured</SectionLabel>
         {photoExifStatus === 'none' && (
-          <div style={{ fontSize: 11, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
             Photo 1 had no location or time metadata — set them manually below or use device GPS.
           </div>
         )}
         {photoExifStatus === 'gps' && (
-          <div style={{ fontSize: 11, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
             Photo 1 had location but no time — set the time manually below if needed.
           </div>
         )}
         {photoExifStatus === 'time' && (
-          <div style={{ fontSize: 11, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
             Photo 1 had time but no location — use device GPS or enter coordinates manually.
           </div>
         )}
         <DetailRow label="Time" value={
           editingWhen ? (
             <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <input type="datetime-local" value={whenInput} onChange={e => setWhenInput(e.target.value)} style={{ padding: '4px 6px', fontSize: 12, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
-              <button onClick={saveEditWhen} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>Save</button>
-              <button onClick={() => setEditingWhen(false)} style={{ background: 'transparent', color: T.inkMute, border: `1px solid ${T.cardEdge}`, padding: '3px 6px', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+              <input type="datetime-local" value={whenInput} onChange={e => setWhenInput(e.target.value)} style={{ padding: '4px 6px', fontSize: 14, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
+              <button onClick={saveEditWhen} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Save</button>
+              <button onClick={() => setEditingWhen(false)} style={{ background: 'transparent', color: T.inkMute, border: `1px solid ${T.cardEdge}`, padding: '3px 6px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
             </span>
           ) : (
             <span>
               {when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-              {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
-              {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· manual</span>}
-              <button onClick={startEditWhen} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Edit</button>
+              {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 12, marginLeft: 6 }}>· from Photo 1</span>}
+              {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 12, marginLeft: 6 }}>· manual</span>}
+              <button onClick={startEditWhen} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginLeft: 6, cursor: 'pointer' }}>Edit</button>
             </span>
           )
         } />
         <DetailRow label="Location" value={
           editingLoc ? (
             <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} placeholder="Lat" style={{ width: 80, padding: '4px 6px', fontSize: 12, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
-              <input type="number" step="any" value={lonInput} onChange={e => setLonInput(e.target.value)} placeholder="Lon" style={{ width: 90, padding: '4px 6px', fontSize: 12, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
-              <button onClick={saveEditLoc} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>Save</button>
-              <button onClick={() => setEditingLoc(false)} style={{ background: 'transparent', color: T.inkMute, border: `1px solid ${T.cardEdge}`, padding: '3px 6px', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+              <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} placeholder="Lat" style={{ width: 80, padding: '4px 6px', fontSize: 14, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
+              <input type="number" step="any" value={lonInput} onChange={e => setLonInput(e.target.value)} placeholder="Lon" style={{ width: 90, padding: '4px 6px', fontSize: 14, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
+              <button onClick={saveEditLoc} style={{ background: T.brass, color: T.oceanDeep, border: 'none', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Save</button>
+              <button onClick={() => setEditingLoc(false)} style={{ background: 'transparent', color: T.inkMute, border: `1px solid ${T.cardEdge}`, padding: '3px 6px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
             </span>
           ) : loc.loading ? (
-            <span>Acquiring GPS… <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
+            <span>Acquiring GPS… <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
           ) : loc.error ? (
-            <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button> <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
+            <span>Unavailable — {loc.error}. <button onClick={fetchGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Retry</button> <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, marginLeft: 4, cursor: 'pointer' }}>Enter manually</button></span>
           ) : (loc.lat == null || loc.lon == null) ? (
             <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
               <span style={{ color: T.inkMute }}>Not set —</span>
-              <button onClick={() => setPickerOpen(true)} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Pin on map</button>
-              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Use device GPS</button>
-              <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Enter manually</button>
+              <button onClick={() => setPickerOpen(true)} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Pin on map</button>
+              <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Use device GPS</button>
+              <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer' }}>Enter manually</button>
             </span>
           ) : (
             <span>
               {loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}°
-              {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· from Photo 1</span>}
-              {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· manual</span>}
-              {metaSource === 'pin' && <span style={{ color: T.brass, fontSize: 11, marginLeft: 6 }}>· pinned</span>}
+              {metaSource === 'photo' && <span style={{ color: T.brass, fontSize: 12, marginLeft: 6 }}>· from Photo 1</span>}
+              {metaSource === 'manual' && <span style={{ color: T.brass, fontSize: 12, marginLeft: 6 }}>· manual</span>}
+              {metaSource === 'pin' && <span style={{ color: T.brass, fontSize: 12, marginLeft: 6 }}>· pinned</span>}
               <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
-                <button onClick={() => setPickerOpen(true)} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Pin on map</button>
-                <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Edit</button>
-                <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Device GPS</button>
+                <button onClick={() => setPickerOpen(true)} style={{ background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass, fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Pin on map</button>
+                <button onClick={startEditLoc} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Edit</button>
+                <button onClick={useDeviceGps} style={{ background: 'transparent', border: `1px solid ${T.cardEdge}`, color: T.inkSoft, fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}>Device GPS</button>
               </div>
             </span>
           )
@@ -3975,10 +3975,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <div role="alert" onClick={() => setSuggestError('')} style={{
           position: 'fixed', bottom: 80, left: 16, right: 16, zIndex: 600,
           background: T.card, border: `1px solid #c66`, color: T.ink,
-          borderRadius: 10, padding: 12, fontSize: 13, cursor: 'pointer',
+          borderRadius: 10, padding: 12, fontSize: 15, cursor: 'pointer',
           boxShadow: '0 6px 22px rgba(0,0,0,0.4)',
         }}>
-          {suggestError} <span style={{ color: T.inkMute, fontSize: 11 }}>(tap to dismiss)</span>
+          {suggestError} <span style={{ color: T.inkMute, fontSize: 12 }}>(tap to dismiss)</span>
         </div>
       )}
     </div>
@@ -4070,7 +4070,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           borderRadius: 6, padding: '5px 10px',
           background: 'rgba(3, 27, 51, 0.85)', color: '#5ecdf2',
           border: '1px solid #5ecdf2', cursor: 'pointer',
-          fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+          fontSize: 12, fontWeight: 800, letterSpacing: 0.6,
         }}>
           CROP
         </button>
@@ -4084,7 +4084,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
       }}>
         <SectionLabel style={{ marginBottom: 6 }}>Photo data</SectionLabel>
         {pc.meta.source === 'photo' && (
-          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.6 }}>
             {pc.meta.lat != null
               ? <div><strong style={{ color: T.open }}>✓ Location found:</strong> {pc.meta.lat.toFixed(4)}°, {pc.meta.lon.toFixed(4)}°</div>
               : <div><strong style={{ color: T.warn }}>✗ No location</strong> in this photo</div>}
@@ -4094,13 +4094,13 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           </div>
         )}
         {pc.meta.source === 'device' && (
-          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.6 }}>
             <div><strong style={{ color: T.open }}>✓ Using device GPS</strong> (your location right now)</div>
             <div><strong style={{ color: T.open }}>✓ Time:</strong> {(pc.meta.time || new Date()).toLocaleString()}</div>
           </div>
         )}
         {pc.meta.source === 'none' && (
-          <div style={{ fontSize: 13, color: T.warn, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 15, color: T.warn, lineHeight: 1.6 }}>
             <strong>This photo carries no location or time data.</strong>
             <div style={{ color: T.inkSoft, marginTop: 4 }}>
               You can still add it — the catch will be marked
@@ -4115,30 +4115,30 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
       <Card style={{ marginBottom: 12, padding: 12 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
         {pc.idStatus === 'running' && !speciesPick && !suggestNew && (
-          <div style={{ fontSize: 13, color: T.inkMute }}>Identifying species…</div>
+          <div style={{ fontSize: 15, color: T.inkMute }}>Identifying species…</div>
         )}
         {suggestNew && (
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.brass }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.brass }}>
             New species — you'll name it on the next screen
           </div>
         )}
         {!suggestNew && chosen && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>{chosen.commonName}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>{chosen.commonName}</div>
               {!speciesPick && pct != null && (
-                <div style={{ fontSize: 11, color: pct >= 80 ? T.open : pct >= 60 ? T.warn : T.closed, fontWeight: 700, marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: pct >= 80 ? T.open : pct >= 60 ? T.warn : T.closed, fontWeight: 700, marginTop: 2 }}>
                   Fish ID · {pct}% confident
                 </div>
               )}
               {speciesPick && (
-                <div style={{ fontSize: 11, color: T.brass, fontWeight: 700, marginTop: 2 }}>Picked by you</div>
+                <div style={{ fontSize: 12, color: T.brass, fontWeight: 700, marginTop: 2 }}>Picked by you</div>
               )}
             </div>
           </div>
         )}
         {!suggestNew && !chosen && pc.idStatus === 'done' && (
-          <div style={{ fontSize: 13, color: T.inkMute }}>
+          <div style={{ fontSize: 15, color: T.inkMute }}>
             Couldn't identify this fish — pick the species below, or add it if it's not in the app.
           </div>
         )}
@@ -4160,14 +4160,14 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
                     color: active ? T.oceanDeep : T.ink,
                     border: `1.5px solid ${active ? T.brass : T.cardEdge}`,
                     borderRadius: 999, padding: '7px 12px',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                   }}
                 >
                   {sp.commonName}
                   {cand.score != null && (
                     <span style={{
-                      fontSize: 10, fontWeight: 800,
+                      fontSize: 11, fontWeight: 800,
                       color: active ? 'rgba(3,27,51,0.6)' : T.inkMute,
                     }}>
                       {Math.round(cand.score * 100)}%
@@ -4179,14 +4179,14 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           </div>
         )}
         <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          <GhostButton onClick={() => { setPickerOpen(true); }} style={{ padding: '7px 12px', fontSize: 12 }}>
+          <GhostButton onClick={() => { setPickerOpen(true); }} style={{ padding: '7px 12px', fontSize: 14 }}>
             {chosen ? 'Not listed — type to search' : 'Type to search species'}
           </GhostButton>
           <button onClick={() => setSuggestNew(v => !v)} style={{
             background: suggestNew ? T.brass : 'transparent',
             color: suggestNew ? T.oceanDeep : T.brass,
             border: `1px solid ${T.brass}`, borderRadius: 8,
-            padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            padding: '7px 12px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
           }}>
             {suggestNew ? '✓ Adding new species' : 'Not in the app? Add it'}
           </button>
@@ -4207,7 +4207,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
         </GhostButton>
         <button onClick={onCancel} style={{
           background: 'transparent', border: 'none', color: T.inkMute,
-          fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 8,
+          fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: 8,
         }}>
           Cancel — don't use this photo
         </button>
@@ -4738,15 +4738,15 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                 <div style={{ textAlign: 'center' }}>
                   <SpeciesImage species={sp} size={80} />
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{sp.commonName}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginTop: 6 }}>{sp.commonName}</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <SpeciesImage species={compareRight} size={80} />
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, marginTop: 6 }}>{compareRight.commonName}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginTop: 6 }}>{compareRight.commonName}</div>
                 </div>
               </div>
               {sp.keyIds?.[0] && (
-                <div style={{ background: T.parchmentDeep, borderRadius: 6, padding: '8px 10px', fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
+                <div style={{ background: T.parchmentDeep, borderRadius: 6, padding: '8px 10px', fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
                   <span style={{ color: T.brass, fontWeight: 700 }}>Key tell for {sp.commonName}:</span> {sp.keyIds[0]}
                 </div>
               )}
@@ -4756,26 +4756,26 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
             <SpeciesImage species={sp} size={64} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: T.ink }}>
+              <div style={{ fontFamily: 'Georgia, serif', fontSize: 19, fontWeight: 700, color: T.ink }}>
                 {sp.commonName}
               </div>
-              <div style={{ fontStyle: 'italic', fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+              <div style={{ fontStyle: 'italic', fontSize: 14, color: T.inkSoft, marginTop: 2 }}>
                 {sp.scientific}
               </div>
               {sp.altNames?.length > 0 && (
-                <div style={{ fontSize: 11, color: T.brass, marginTop: 4, letterSpacing: 0.5 }}>
+                <div style={{ fontSize: 12, color: T.brass, marginTop: 4, letterSpacing: 0.5 }}>
                   also: {sp.altNames.join(' · ')}
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 12 }}>
+          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.5, marginBottom: 12 }}>
             {sp.habitat}
           </div>
 
           <SectionLabel style={{ marginBottom: 6 }}>Key IDs</SectionLabel>
-          <ul style={{ margin: '0 0 12px', paddingLeft: 18, color: T.inkSoft, fontSize: 13, lineHeight: 1.55 }}>
+          <ul style={{ margin: '0 0 12px', paddingLeft: 18, color: T.inkSoft, fontSize: 15, lineHeight: 1.55 }}>
             {sp.keyIds.slice(0, 4).map((k, i) => <li key={i}>{k}</li>)}
           </ul>
 
@@ -4794,7 +4794,7 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
                   {reg.notes && <DetailRow label="Notes" value={reg.notes} />}
                 </>
               ) : (
-                <div style={{ fontSize: 12, color: T.inkMute, padding: 8 }}>
+                <div style={{ fontSize: 14, color: T.inkMute, padding: 8 }}>
                   No regulations on file for this species in {jurisdiction.name}.
                 </div>
               )}
@@ -4804,7 +4804,7 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
           {onPickSpecies && (
             <button onClick={() => onPickSpecies(sp.id)} style={{
               marginTop: 12, background: 'transparent', color: T.brass,
-              border: 'none', padding: 0, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              border: 'none', padding: 0, fontSize: 14, fontWeight: 700, cursor: 'pointer',
               textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4,
             }}>
               Full species page <ChevronRight size={12} />
@@ -4924,7 +4924,7 @@ function QuizResultPopup({ tier, streak, bestStreak, newBest, isTablet, onNext, 
               style={{
                 width: '100%', marginTop: 8,
                 background: 'transparent', color: T.inkSoft,
-                border: 'none', fontSize: 12, fontWeight: 700,
+                border: 'none', fontSize: 14, fontWeight: 700,
                 cursor: 'pointer', textDecoration: 'underline',
                 padding: '6px 8px',
               }}
