@@ -4194,25 +4194,29 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
         }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>
-            <CheckCircle2 size={24} color={T.open} strokeWidth={2.6} />
+            <CheckCircle2 size={24} color={T.oceanDeep} strokeWidth={2.6} />
             LOG CATCH
           </span>
           <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.85 }}>Details look good</span>
         </button>
-        <button
-          onClick={quickConfirm}
-          disabled={!chosenId}
-          style={{
-            display: 'block', width: '100%', marginTop: 14,
-            background: 'transparent', border: 'none',
-            color: chosenId ? T.brass : T.inkMute,
-            fontSize: 15, fontWeight: 700, textAlign: 'center',
-            textDecoration: 'underline', cursor: chosenId ? 'pointer' : 'not-allowed',
-            opacity: chosenId ? 1 : 0.6, padding: 4,
-          }}
-        >
-          Quick confirm — save now, we'll remind you
-        </button>
+        {/* Quiet secondary — a small yellow (BEST MATCH accent) pill so
+            LOG CATCH stays the dominant action. */}
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <button
+            onClick={quickConfirm}
+            disabled={!chosenId}
+            style={{
+              display: 'inline-block',
+              background: 'transparent', border: `1px solid ${T.warn}`,
+              color: chosenId ? T.warn : T.inkMute,
+              fontSize: 14, fontWeight: 700, borderRadius: 999,
+              padding: '9px 18px', cursor: chosenId ? 'pointer' : 'not-allowed',
+              opacity: chosenId ? 1 : 0.5,
+            }}
+          >
+            Quick confirm — save now, we'll remind you
+          </button>
+        </div>
       </div>
 
       {cropping && (
