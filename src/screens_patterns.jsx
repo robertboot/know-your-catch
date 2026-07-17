@@ -14,11 +14,14 @@
      - Weather-gated (temp/wind/pressure) needs n >= 12 in the pool
      - Moon needs n >= 15 (full lunar cycle is ~28 days)
 */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   ChevronRight, BarChart2, TrendingUp, Trophy, Clock, Calendar,
   Fish, Thermometer, Wind, Waves as WavesIcon, ChevronLeft, Download,
+  MapPin, CloudSun, Grid3x3,
 } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { T } from './theme.js';
 import { speciesById, formatSize, formatWeight, jurisdictionById } from './helpers.js';
 import { Card, PrimaryButton, GhostButton, SectionLabel, H1 } from './components.jsx';
@@ -117,6 +120,181 @@ function histogram(rows, bucket, opts = {}) {
   }
   const max = entries.reduce((m, e) => Math.max(m, e.count), 0);
   return { entries, max, total: rows.length };
+}
+
+const cloudBucket = (c) => c == null ? null
+  : c < 20 ? 'Clear' : c < 45 ? 'Partly cloudy' : c < 75 ? 'Mostly cloudy' : 'Overcast';
+
+/* ============================================================
+   Activity heat grid — month (columns) × 4-hour block (rows).
+   Cell color intensity scales with catch count. Pure divs, no map.
+   ============================================================ */
+const HOUR_BLOCKS = [
+  { label: '12–4a', lo: 0,  hi: 4  },
+  { label: '4–8a',  lo: 4,  hi: 8  },
+  { label: '8a–12p',lo: 8,  hi: 12 },
+  { label: '12–4p', lo: 12, hi: 16 },
+  { label: '4–8p',  lo: 16, hi: 20 },
+  { label: '8p–12a',lo: 20, hi: 24 },
+];
+function ActivityHeatGrid({ catchLog }) {
+  const { grid, max } = useMemo(() => {
+    const g = HOUR_BLOCKS.map(() => new Array(12).fill(0));
+    let mx = 0;
+    for (const c of catchLog) {
+      const d = new Date(c.dateIso);
+      if (isNaN(d)) continue;
+      const h = d.getHours(), m = d.getMonth();
+      const bi = HOUR_BLOCKS.findIndex(b => h >= b.lo && h < b.hi);
+      if (bi < 0) continue;
+      g[bi][m] += 1;
+      if (g[bi][m] > mx) mx = g[bi][m];
+    }
+    return { grid: g, max: mx };
+  }, [catchLog]);
+
+  const cellColor = (n) => {
+    if (!n) return T.parchmentDeep;
+    const t = max ? n / max : 0;               // 0..1
+    return `rgba(25, 212, 242, ${0.18 + t * 0.82})`; // brass, ramped
+  };
+
+  return (
+    <StatCard title="When you catch — month × time of day" n={catchLog.length} icon={<Grid3x3 size={14} />}>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: 340 }}>
+          {/* Month header */}
+          <div style={{ display: 'grid', gridTemplateColumns: `54px repeat(12, 1fr)`, gap: 2, marginBottom: 2 }}>
+            <div />
+            {MONTH_NAMES.map(m => (
+              <div key={m} style={{ fontSize: 9, color: T.inkMute, textAlign: 'center' }}>{m[0]}</div>
+            ))}
+          </div>
+          {HOUR_BLOCKS.map((b, ri) => (
+            <div key={b.label} style={{ display: 'grid', gridTemplateColumns: `54px repeat(12, 1fr)`, gap: 2, marginBottom: 2 }}>
+              <div style={{ fontSize: 10, color: T.inkSoft, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4 }}>{b.label}</div>
+              {grid[ri].map((n, ci) => (
+                <div key={ci} title={`${MONTH_NAMES[ci]} ${b.label}: ${n}`} style={{
+                  aspectRatio: '1 / 1', minHeight: 18, borderRadius: 3,
+                  background: cellColor(n),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 700, color: n && (n / (max || 1)) > 0.55 ? T.oceanDeep : T.inkMute,
+                }}>{n || ''}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
+        Brighter = more catches. Reads at a glance where your season and time-of-day sweet spots are.
+      </div>
+    </StatCard>
+  );
+}
+
+/* ============================================================
+   Best weather — aggregates the weather captured at each catch and
+   surfaces the conditions you catch most in. Feeds future AI reports.
+   ============================================================ */
+function BestWeatherCard({ catchLog }) {
+  const withWx = useMemo(() => catchLog.filter(c => c.weather && c.weather.tempF != null), [catchLog]);
+  const rows = useMemo(() => {
+    if (withWx.length < THRESHOLD_WEATHER) return null;
+    const peak = (bucket) => {
+      const h = histogram(withWx, bucket);
+      return h.entries.length ? h.entries[0] : null;
+    };
+    return {
+      temp:  peak(c => tempBucket(c.weather?.tempF)),
+      wind:  peak(c => windBucket(c.weather?.windMph)),
+      sky:   peak(c => cloudBucket(c.weather?.cloudPct)),
+      press: peak(c => pressBucket(c.weather?.pressureMb)),
+    };
+  }, [withWx]);
+
+  if (!rows) {
+    return (
+      <StatCard title="Best weather" icon={<CloudSun size={14} />}>
+        <UnlockRow current={withWx.length} target={THRESHOLD_WEATHER}
+          label={`Weather is saved with every catch. ${Math.max(0, THRESHOLD_WEATHER - withWx.length)} more catch${THRESHOLD_WEATHER - withWx.length === 1 ? '' : 'es'} with weather needed to spot your best conditions.`} />
+      </StatCard>
+    );
+  }
+
+  const Row = ({ icon, label, e }) => e ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid ${T.cardEdge}55` }}>
+      <span style={{ color: T.brass, display: 'inline-flex' }}>{icon}</span>
+      <div style={{ flex: 1, fontSize: 13, color: T.inkSoft }}>{label}</div>
+      <div style={{ fontSize: 15, color: T.ink, fontWeight: 800 }}>{e.key}</div>
+      <div style={{ fontSize: 11, color: T.inkMute, width: 42, textAlign: 'right' }}>{e.count}×</div>
+    </div>
+  ) : null;
+
+  return (
+    <StatCard title="Best weather — you catch most in" n={withWx.length} icon={<CloudSun size={14} />}>
+      <Row icon={<Thermometer size={16} />} label="Air temp" e={rows.temp} />
+      <Row icon={<Wind size={16} />}        label="Wind" e={rows.wind} />
+      <Row icon={<CloudSun size={16} />}    label="Sky" e={rows.sky} />
+      <Row icon={<WavesIcon size={16} />}   label="Pressure" e={rows.press} />
+      <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.4 }}>
+        Captured automatically at each catch. Builds the dataset behind future AI catch reports.
+      </div>
+    </StatCard>
+  );
+}
+
+/* ============================================================
+   Catch heat map — geographic hot spots. No heat plugin: overlapping
+   semi-transparent circle markers build up intensity where catches
+   cluster, giving a heat-glow effect from plain Leaflet.
+   ============================================================ */
+function CatchHeatMap({ catchLog }) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const layerRef = useRef(null);
+  const located = useMemo(() => catchLog.filter(c => c.lat != null && c.lon != null), [catchLog]);
+
+  useEffect(() => {
+    if (mapRef.current || !containerRef.current) return;
+    const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true }).setView([26.5, -88], 6);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> &middot; &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd', maxZoom: 19,
+    }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !layerRef.current) return;
+    layerRef.current.clearLayers();
+    for (const c of located) {
+      // Two stacked circles per catch: a soft wide glow + a bright
+      // core. Where catches overlap, the translucent glows sum into
+      // hotter areas — a heat map without a plugin.
+      L.circleMarker([c.lat, c.lon], {
+        radius: 22, stroke: false, fillColor: '#19D4F2', fillOpacity: 0.10,
+      }).addTo(layerRef.current);
+      L.circleMarker([c.lat, c.lon], {
+        radius: 6, stroke: false, fillColor: '#19D4F2', fillOpacity: 0.55,
+      }).addTo(layerRef.current);
+    }
+    if (located.length === 1) mapRef.current.setView([located[0].lat, located[0].lon], 9);
+    else if (located.length > 1) {
+      mapRef.current.fitBounds(L.latLngBounds(located.map(c => [c.lat, c.lon])), { padding: [40, 40], maxZoom: 11 });
+    }
+    setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 80);
+  }, [located]);
+
+  return (
+    <StatCard title="Catch hot spots" n={located.length} icon={<MapPin size={14} />}>
+      <div ref={containerRef} style={{ height: 300, borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }} />
+      <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, textAlign: 'center' }}>
+        {located.length} of {catchLog.length} catches have GPS · brighter clusters are your best water
+      </div>
+    </StatCard>
+  );
 }
 
 /* Build a "your best conditions" one-liner. Skips dimensions without
@@ -355,6 +533,15 @@ export function PatternsScreen({ state, onPickSpecies }) {
             ratio={e.count / monthly.max} peak={e.count === monthly.max} />
         ))}
       </StatCard>
+
+      {/* Activity heat grid — month × time of day */}
+      <ActivityHeatGrid catchLog={catchLog} />
+
+      {/* Best weather — conditions you catch most in */}
+      <BestWeatherCard catchLog={catchLog} />
+
+      {/* Catch hot-spot map */}
+      <CatchHeatMap catchLog={catchLog} />
 
       {/* PB progression */}
       {pbTimeline.length >= 2 ? (
