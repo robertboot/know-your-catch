@@ -4397,12 +4397,18 @@ function pickLookalikesQuestion(seenAnchorIds = new Set()) {
 }
 
 function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null, seenAnchorIds = new Set()) {
-  // Without a jurisdiction set we can't ask reg questions — fall back
-  // to species-ID or lookalikes only.
-  const types = jurisdiction
-    ? ['species', 'bag', 'size', 'lookalikes']
-    : ['species', 'lookalikes'];
-  const pick = types[Math.floor(Math.random() * types.length)];
+  // Weighted mix — identification is the bulk, regulations ~1/4,
+  // lookalikes ~1/8 (the "most confused with" question was too frequent).
+  // With jurisdiction: species 5/8, bag+size 2/8 (1/4), lookalikes 1/8.
+  // Without jurisdiction we can't ask reg questions — species 7/8,
+  // lookalikes 1/8.
+  const weighted = jurisdiction
+    ? [['species', 5], ['bag', 1], ['size', 1], ['lookalikes', 1]]
+    : [['species', 7], ['lookalikes', 1]];
+  const total = weighted.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  let pick = weighted[0][0];
+  for (const [type, w] of weighted) { r -= w; if (r <= 0) { pick = type; break; } }
   const q = pick === 'bag'        ? pickBagLimitQuestion(jurisdiction, prevSpeciesId)
           : pick === 'size'       ? pickSizeLimitQuestion(jurisdiction, state.units, prevSpeciesId)
           : pick === 'lookalikes' ? pickLookalikesQuestion(seenAnchorIds)
@@ -4663,7 +4669,7 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
       )}
 
       {/* Prompt */}
-      <div style={{ fontSize: isTablet ? 17 : 13, color: T.inkSoft, margin: '0 2px 10px', lineHeight: 1.5 }}>
+      <div style={{ fontSize: isTablet ? 28 : 21, fontWeight: 700, color: T.ink, margin: '0 2px 14px', lineHeight: 1.35 }}>
         {question.prompt}
       </div>
 
