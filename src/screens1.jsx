@@ -1782,32 +1782,8 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             flex: 1, minWidth: 0,
             fontSize: 14, color: '#8ea3ba', fontWeight: 600,
           }}>
-            Was this right?
+            Not a {topSpecies?.commonName || 'match'}?
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setFeedbackState('confirmed');
-              // Fire the model_confirmation feedback WITHOUT navigating.
-              // Save & Continue below stays available and, because
-              // feedbackState is now 'confirmed', it uses the "already
-              // confirmed" path that skips the double-fire.
-              if (onConfirmFeedbackOnly) {
-                onConfirmFeedbackOnly(top.speciesId);
-              }
-            }}
-            style={{
-              flexShrink: 0,
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'transparent', border: `1px solid ${T.brass}`,
-              color: T.brass, borderRadius: 8,
-              padding: '6px 12px', fontSize: 14, fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <Check size={14} strokeWidth={3} />
-            Yes, correct
-          </button>
           <button
             type="button"
             onClick={() => setShowPicker(true)}
@@ -1816,12 +1792,12 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               display: 'inline-flex', alignItems: 'center', gap: 6,
               background: 'transparent', border: `1px solid ${T.warn}`,
               color: T.warn, borderRadius: 8,
-              padding: '6px 12px', fontSize: 14, fontWeight: 700,
+              padding: '8px 14px', fontSize: 14, fontWeight: 700,
               cursor: 'pointer',
             }}
           >
             <Flag size={14} strokeWidth={2.5} />
-            Report wrong ID
+            Report wrong fish ID
           </button>
         </div>
       )}
@@ -1946,38 +1922,23 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         display: 'flex', gap: 10,
       }}>
         <PrimaryButton
-          onClick={() => {
-            // Feedback already banked from the strip's "Yes, correct":
-            // just navigate. Otherwise fire the implicit confirmation
-            // AND navigate — the pre-existing default behavior.
-            if (feedbackState === 'confirmed' && onSaveWithoutFeedback) {
-              onSaveWithoutFeedback(top.speciesId);
-            } else if (onConfirmSave) {
-              onConfirmSave(top.speciesId);
-            }
-          }}
+          onClick={() => { if (onConfirmSave) onConfirmSave(top.speciesId); }}
           style={{
             flex: 2, minHeight: 52, fontSize: 18, fontWeight: 800,
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            gap: 2,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <span>{feedbackState === 'confirmed' ? 'Save' : 'Save & Continue'}</span>
-          {feedbackState === 'confirmed' && (
-            <span style={{
-              fontSize: 11, fontWeight: 600, opacity: 0.7,
-              letterSpacing: '0.05em',
-            }}>
-              already confirmed
-            </span>
-          )}
+          SAVE CATCH
         </PrimaryButton>
         <GhostButton
-          onClick={scrollToLookalikesOrPicker}
-          style={{ flex: 1, minHeight: 52, fontSize: 16, fontWeight: 800 }}
+          onClick={onRetake}
+          style={{
+            flex: 1, minHeight: 52, fontSize: 16, fontWeight: 800,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
         >
-          Compare
+          <RotateCcw size={16} />
+          Re-Scan
         </GhostButton>
       </div>
 
