@@ -730,6 +730,7 @@ export default function App() {
                 imageDataUrl: originalForLog,
                 aiIdentifiedSpeciesId,
                 aiConfidence,
+                candidates: (result?.candidates || []).slice(0, 5),
               },
             }]);
             return;

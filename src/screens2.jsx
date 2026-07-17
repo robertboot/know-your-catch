@@ -2985,12 +2985,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const openPhotoConfirm = (dataUrl, meta) => {
     setPendingConfirm({ dataUrl, meta, idStatus: 'running', idSpeciesId: null, idConfidence: null });
     identifyPhoto(dataUrl, { jurisdictionId: jurisdiction?.id || null }).then((res) => {
-      const top = res?.candidates?.[0] || null;
+      const cands = (res?.candidates || []).slice(0, 5);
+      const top = cands[0] || null;
       setPendingConfirm(pc => pc && pc.dataUrl === dataUrl ? {
         ...pc,
         idStatus: 'done',
         idSpeciesId: top?.speciesId || null,
         idConfidence: typeof res?.confidenceScore === 'number' ? res.confidenceScore : (top?.score ?? null),
+        idCandidates: cands,
       } : pc);
     }).catch(() => {
       setPendingConfirm(pc => pc && pc.dataUrl === dataUrl ? { ...pc, idStatus: 'done' } : pc);
@@ -3086,6 +3088,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         idStatus: 'done',
         idSpeciesId: confirmPhoto.aiIdentifiedSpeciesId || null,
         idConfidence: confirmPhoto.aiConfidence ?? null,
+        idCandidates: confirmPhoto.candidates || [],
       });
     }
   }, [confirmPhoto]);
@@ -4139,9 +4142,45 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
             Couldn't identify this fish — pick the species below, or add it if it's not in the app.
           </div>
         )}
+        {/* Top-5 candidate chips — the model's runners-up are usually
+            where the right answer lives when the top pick is wrong.
+            One tap beats opening the full picker. */}
+        {!suggestNew && (pc.idCandidates || []).length > 1 && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+            {(pc.idCandidates || []).map((cand) => {
+              const sp = resolveSpecies(cand.speciesId);
+              if (!sp) return null;
+              const active = chosenId === cand.speciesId;
+              return (
+                <button
+                  key={cand.speciesId}
+                  onClick={() => { setSpeciesPick(cand.speciesId); setSuggestNew(false); }}
+                  style={{
+                    background: active ? T.brass : T.parchmentDeep,
+                    color: active ? T.oceanDeep : T.ink,
+                    border: `1.5px solid ${active ? T.brass : T.cardEdge}`,
+                    borderRadius: 999, padding: '7px 12px',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {sp.commonName}
+                  {cand.score != null && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800,
+                      color: active ? 'rgba(3,27,51,0.6)' : T.inkMute,
+                    }}>
+                      {Math.round(cand.score * 100)}%
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
           <GhostButton onClick={() => { setPickerOpen(true); }} style={{ padding: '7px 12px', fontSize: 12 }}>
-            {chosen ? 'Pick different species' : 'Pick species'}
+            {chosen ? 'Not listed — type to search' : 'Type to search species'}
           </GhostButton>
           <button onClick={() => setSuggestNew(v => !v)} style={{
             background: suggestNew ? T.brass : 'transparent',
