@@ -61,7 +61,7 @@ export const SPECIES = [
     keyIds: ['Yellow horizontal stripes', 'Dark spot on side below dorsal (key feature)', 'Yellow tail and fins'],
     lookalikes: ['red_snapper', 'vermilion_snapper'],
     habitat: 'Coastal reefs and grass beds, 20–130 ft.', typicalSize: '8–14 in', reefFish: true },
-  { id: 'mangrove_snapper', commonName: 'Gray Snapper', altNames: ['Mangrove Snapper', 'Black Snapper'], scientific: 'Lutjanus griseus', category: 'snapper',
+  { id: 'mangrove_snapper', commonName: 'Mangrove Snapper', altNames: ['Gray Snapper', 'Black Snapper'], scientific: 'Lutjanus griseus', category: 'snapper',
     keyIds: ['Gray to greenish-gray body', 'Dark stripe through eye in juveniles', 'Prominent canine teeth', 'Reddish tint to fins'],
     lookalikes: ['mutton_snapper'],
     habitat: 'Mangroves, reefs, wrecks. Inshore to 300 ft.', typicalSize: '10–18 in', reefFish: true },

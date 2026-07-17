@@ -50,7 +50,7 @@ BUNDLED = [
     ("Red Snapper", "Lutjanus campechanus"),
     ("Vermilion Snapper", "Rhomboplites aurorubens"),
     ("Lane Snapper", "Lutjanus synagris"),
-    ("Gray Snapper", "Lutjanus griseus"),
+    ("Mangrove Snapper", "Lutjanus griseus"),
     ("Mutton Snapper", "Lutjanus analis"),
     ("Yellowtail Snapper", "Ocyurus chrysurus"),
     ("Red Grouper", "Epinephelus morio"),
