@@ -132,17 +132,14 @@ export default function TrainingTab() {
     setPanel('upload');
   };
 
+  const subTabs = [
+    ['upload', 'Upload'], ['review', 'Review'], ['swipe', 'Swipe'],
+    ['coverage', 'Coverage'], ['export', 'Export'], ['models', 'Models'],
+    ['test', 'Test image'],
+  ];
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}` }}>
-        <SubTabBtn active={panel === 'upload'} onClick={() => setPanel('upload')}>Upload</SubTabBtn>
-        <SubTabBtn active={panel === 'review'} onClick={() => setPanel('review')}>Review</SubTabBtn>
-        <SubTabBtn active={panel === 'swipe'} onClick={() => setPanel('swipe')}>Swipe</SubTabBtn>
-        <SubTabBtn active={panel === 'coverage'} onClick={() => setPanel('coverage')}>Coverage</SubTabBtn>
-        <SubTabBtn active={panel === 'export'} onClick={() => setPanel('export')}>Export</SubTabBtn>
-        <SubTabBtn active={panel === 'models'} onClick={() => setPanel('models')}>Models</SubTabBtn>
-        <SubTabBtn active={panel === 'test'} onClick={() => setPanel('test')}>Test image</SubTabBtn>
-      </div>
+      <TrainingSubNav tabs={subTabs} panel={panel} onPanel={setPanel} />
       {panel === 'upload' && (
         <UploadPanel
           initialSpeciesId={pendingUploadSpecies}
@@ -168,6 +165,55 @@ function SubTabBtn({ active, onClick, children }) {
       borderBottom: `2px solid ${active ? T.brass : 'transparent'}`,
       marginBottom: -1,
     }}>{children}</button>
+  );
+}
+
+/* Training sub-nav — full row on desktop, hamburger on mobile so it
+   doesn't push the panel (e.g. the Swipe card) off screen. */
+function TrainingSubNav({ tabs, panel, onPanel }) {
+  const [narrow, setNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < 720);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < 720);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  const current = tabs.find(([id]) => id === panel);
+
+  if (narrow) {
+    return (
+      <div style={{ borderBottom: `1px solid ${T.cardEdge}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 2px 8px' }}>
+          <div style={{ flex: 1, color: T.brass, fontWeight: 800, fontSize: 15 }}>{current?.[1] || 'Training'}</div>
+          <button onClick={() => setOpen(o => !o)} aria-label="Training menu" style={{
+            width: 40, height: 40, borderRadius: 8, cursor: 'pointer',
+            background: open ? T.brass : 'transparent',
+            border: `1px solid ${open ? T.brass : T.cardEdge}`,
+            color: open ? T.oceanDeep : T.ink,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><MenuIcon size={20} /></button>
+        </div>
+        {open && (
+          <div style={{ display: 'grid', gap: 2, paddingBottom: 8 }}>
+            {tabs.map(([id, label]) => (
+              <button key={id} onClick={() => { onPanel(id); setOpen(false); }} style={{
+                textAlign: 'left', border: 'none', borderRadius: 6,
+                background: panel === id ? T.parchmentDeep : 'transparent',
+                color: panel === id ? T.brass : T.ink,
+                padding: '13px 12px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+              }}>{label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}` }}>
+      {tabs.map(([id, label]) => (
+        <SubTabBtn key={id} active={panel === id} onClick={() => onPanel(id)}>{label}</SubTabBtn>
+      ))}
+    </div>
   );
 }
 

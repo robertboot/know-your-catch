@@ -324,6 +324,16 @@ function SignedInShell({ email, onExit }) {
   );
 }
 
+function useIsNarrow(bp = 720) {
+  const [narrow, setNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < bp);
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < bp);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, [bp]);
+  return narrow;
+}
+
 function TabBar({ tab, onTab }) {
   const tabs = [
     { id: 'dashboard',     label: 'Dashboard' },
@@ -335,6 +345,44 @@ function TabBar({ tab, onTab }) {
     { id: 'branding',      label: 'Branding' },
     { id: 'legal',         label: 'Legal' },
   ];
+  const narrow = useIsNarrow();
+  const [open, setOpen] = useState(false);
+  const current = tabs.find(t => t.id === tab);
+
+  // Mobile: one hamburger. Keeps the nav from eating the whole screen.
+  if (narrow) {
+    return (
+      <div style={{ borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px 8px' }}>
+          <div style={{ flex: 1, color: T.brass, fontWeight: 800, fontSize: 16 }}>{current?.label || 'Menu'}</div>
+          <button onClick={() => setOpen(o => !o)} aria-label="Menu" style={{
+            width: 42, height: 42, borderRadius: 8, cursor: 'pointer',
+            background: open ? T.brass : 'transparent',
+            border: `1px solid ${open ? T.brass : T.cardEdge}`,
+            color: open ? T.oceanDeep : T.ink,
+            display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ width: 18, height: 2, background: 'currentColor', borderRadius: 2 }} />
+            <span style={{ width: 18, height: 2, background: 'currentColor', borderRadius: 2 }} />
+            <span style={{ width: 18, height: 2, background: 'currentColor', borderRadius: 2 }} />
+          </button>
+        </div>
+        {open && (
+          <div style={{ display: 'grid', gap: 2, paddingBottom: 8 }}>
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => { onTab(t.id); setOpen(false); }} style={{
+                textAlign: 'left', border: 'none', borderRadius: 6,
+                background: tab === t.id ? T.parchmentDeep : 'transparent',
+                color: tab === t.id ? T.brass : T.ink,
+                padding: '13px 12px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+              }}>{t.label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`,
                   marginBottom: 4, flexWrap: 'wrap' }}>
