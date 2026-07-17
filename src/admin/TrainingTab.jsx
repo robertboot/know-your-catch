@@ -1642,7 +1642,9 @@ function SwipeReviewPanel() {
   const doReject = (row) => {
     if (!row) return;
     record(row, 'reject');
-    bg(reject([row.id], 'swipe_reject'));
+    // 'other' is a valid training_reject_reason enum value — a swipe
+    // reject carries no extra detail by design.
+    bg(reject([row.id], 'other'));
   };
   const doCorrect = (newId) => {
     setPickerOpen(false);
