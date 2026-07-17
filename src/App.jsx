@@ -578,7 +578,10 @@ export default function App() {
       if (source === 'camera') push({ name: 'catch_entry' });
       return;
     }
-    push({ name: 'photo_crop', imageDataUrl: dataUrl, fromCapture: true });
+    // Straight to analyzing → catch-entry confirm. No forced crop page:
+    // the confirm page already offers an optional Crop button, so the
+    // angler is never blocked on framing before seeing the result.
+    push({ name: 'photo_analyzing', imageDataUrl: dataUrl, fromCapture: true });
   };
 
   // Legacy-user "Finish setup" nudge. Fires when the required step
@@ -601,7 +604,10 @@ export default function App() {
     onFinishSetup: startFinishSetup,
     onDismissFinishSetup: () => setFinishSetupDismissed(true),
     onIdentify:   () => push({ name: 'identify' }),
-    onUploadPhoto:(dataUrl) => push({ name: 'photo_crop', imageDataUrl: dataUrl }),
+    // Fish ID upload → straight to analyzing → results. No manual crop
+    // page: the angler wants the answer, not a framing chore. (Crop
+    // stays available on the catch-entry confirm page when logging.)
+    onUploadPhoto:(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl }),
     onBrowse:     () => push({ name: 'categories' }),
     onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
@@ -635,7 +641,7 @@ export default function App() {
       body = <IdentifyScreen
         state={state}
         jurisdiction={jurisdiction}
-        onPhoto={(dataUrl) => push({ name: 'photo_crop', imageDataUrl: dataUrl })}
+        onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
         onCategory={(catId) => push({ name: 'category', catId })}
         onSearch={() => push({ name: 'search' })}
