@@ -30,6 +30,7 @@ import {
 import {
   uploadTrainingImage, stableTrainingId, listTrainingImages,
   approve, reject, correctSpecies, deleteTrainingImage,
+  classifyTrainingPhoto,
   signedUrl, countsBySpecies,
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
@@ -171,12 +172,13 @@ function SubTabBtn({ active, onClick, children }) {
    Upload panel
    ============================================================ */
 function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
-  const [mode, setMode] = useState('batch'); // 'batch' | 'per-image'
+  const [mode, setMode] = useState('batch'); // 'batch' | 'per-image' | 'ai-sort'
   const [batchSpeciesId, setBatchSpeciesId] = useState(
     initialSpeciesId || SPECIES[0]?.id || ''
   );
   const [queue, setQueue] = useState([]); // [{ file, id, speciesId, status, error, path }]
   const [uploading, setUploading] = useState(false);
+  const [aiSorting, setAiSorting] = useState(false);
   const inputRef = useRef(null);
   // Fetch All (folders): hidden directory picker + import summary.
   const folderRef = useRef(null);
@@ -208,6 +210,7 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
       status: 'queued',
       error: null,
       path: null,
+      aiSort: mode === 'ai-sort',
     }));
     console.log('[training upload] queued', rows.length, 'files',
       { mode, batchSpeciesId, firstFile: rows[0]?.file?.name });
@@ -281,15 +284,58 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
   // When switching to batch mode (or changing the batch species) with
   // queued rows already present, retroactively tag every queued row
   // that has no species set. That way switching modes doesn't leave a
-  // queue full of orphans that can't be uploaded.
+  // queue full of orphans that can't be uploaded. AI-sort rows are
+  // exempt — the classifier (or a manual per-row pick) owns those.
   useEffect(() => {
     if (mode !== 'batch' || !batchSpeciesId) return;
     setQueue(q => q.map(r =>
-      r.status === 'queued' && !r.speciesId
+      r.status === 'queued' && !r.speciesId && !r.aiSort
         ? { ...r, speciesId: batchSpeciesId }
         : r
     ));
   }, [mode, batchSpeciesId]);
+
+  // AI sort: run every unclassified AI-sort row through the
+  // classify-fish-photo edge function (Claude vision). Two lanes —
+  // each call carries an image, so keep concurrency polite. Rows the
+  // AI can't place stay queued with no species for a manual per-row
+  // pick; everything else is ready for the normal Upload button.
+  const aiSortAll = async () => {
+    if (aiSorting || uploading) return;
+    const targets = queue.filter(r => r.status === 'queued' && r.aiSort && !r.speciesId);
+    if (targets.length === 0) return;
+    setAiSorting(true);
+    let next = 0;
+    const worker = async () => {
+      while (next < targets.length) {
+        const row = targets[next++];
+        setQueue(q => q.map(r => r.id === row.id ? { ...r, status: 'classifying' } : r));
+        const res = await classifyTrainingPhoto(row.file);
+        setQueue(q => q.map(r => {
+          if (r.id !== row.id) return r;
+          if (!res.ok) {
+            return { ...r, status: 'error', error: `AI sort failed: ${res.error}` };
+          }
+          if (!res.speciesId) {
+            return {
+              ...r, status: 'queued',
+              aiConfidence: 0,
+              aiNote: res.note || 'AI could not identify — pick the species manually.',
+            };
+          }
+          return {
+            ...r, status: 'queued',
+            speciesId: res.speciesId,
+            aiConfidence: res.confidence,
+            aiNote: res.note || '',
+            stableKey: `${res.speciesId}|${row.file.name}`,
+          };
+        }));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(2, targets.length) }, worker));
+    setAiSorting(false);
+  };
 
   const onPick = (e) => { addFiles(e.target.files); e.target.value = ''; };
   const onDrop = (e) => {
@@ -344,6 +390,7 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
   const doneCount  = queue.filter(r => r.status === 'done').length;
   const errorRows  = queue.filter(r => r.status === 'error');
   const errorCount = errorRows.length;
+  const aiPendingCount = queue.filter(r => r.status === 'queued' && r.aiSort && !r.speciesId).length;
 
   // Classify errors into a header banner category. First match wins;
   // any unmatched errors still show inline on their row so nothing is
@@ -357,6 +404,7 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <ModeBtn active={mode === 'batch'} onClick={() => setMode('batch')}>Batch (one species)</ModeBtn>
           <ModeBtn active={mode === 'per-image'} onClick={() => setMode('per-image')}>Per-image</ModeBtn>
+          <ModeBtn active={mode === 'ai-sort'} onClick={() => setMode('ai-sort')}>AI sort (misc)</ModeBtn>
           <ModeBtn active={false} onClick={() => folderRef.current?.click()}>Fetch All (folders)</ModeBtn>
         </div>
         <input
@@ -386,6 +434,20 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
               <> Could not match folders: <strong>{folderSummary.unmatched.join(', ')}</strong> —
               rename them to the species name in the app, or upload them via Batch mode.</>
             )}
+          </div>
+        )}
+        {mode === 'ai-sort' && (
+          <div style={{
+            marginTop: 10, padding: '8px 10px', borderRadius: 8,
+            background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+            fontSize: 12, color: T.inkSoft, lineHeight: 1.5,
+          }}>
+            <strong style={{ color: T.ink }}>AI sort</strong> — drop a misc folder of
+            unsorted fish photos. Each one is identified by AI (Claude vision, same brain
+            as the regulations research) and assigned its species automatically; then hit
+            Upload and they land in <strong>Review as pending</strong>, pre-categorized
+            with the AI's confidence shown. Photos it can't place stay in the queue for a
+            manual pick. Nothing enters training data until you approve it in Review.
           </div>
         )}
         {mode === 'batch' && (
@@ -455,9 +517,18 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
                 Retry {errorCount} failed
               </GhostButton>
             )}
+            {aiPendingCount > 0 && (
+              <PrimaryButton
+                onClick={aiSortAll}
+                disabled={aiSorting || uploading}
+                style={{ fontSize: 12, padding: '8px 14px', width: 'auto', flexShrink: 0 }}
+              >
+                {aiSorting ? `AI sorting… (${aiPendingCount} left)` : `AI sort ${aiPendingCount} photo${aiPendingCount === 1 ? '' : 's'}`}
+              </PrimaryButton>
+            )}
             <PrimaryButton
               onClick={uploadAll}
-              disabled={uploading || readyCount === 0}
+              disabled={uploading || aiSorting || readyCount === 0}
               style={{ fontSize: 12, padding: '8px 14px', width: 'auto', flexShrink: 0 }}
             >
               {uploading ? 'Uploading…' : `Upload ${readyCount} file${readyCount === 1 ? '' : 's'}`}
@@ -474,7 +545,9 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
             }}>
               {mode === 'batch'
                 ? 'Pick a batch species above — queued rows will inherit it.'
-                : 'Pick a species on each queued row before uploading.'}
+                : mode === 'ai-sort'
+                  ? 'Hit "AI sort" to identify the queued photos, or pick a species on each row manually.'
+                  : 'Pick a species on each queued row before uploading.'}
             </div>
           )}
 
@@ -485,7 +558,7 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
             {(queue.length <= 80
               ? queue
               : [
-                  ...queue.filter(r => r.status === 'uploading' || r.status === 'error').slice(0, 40),
+                  ...queue.filter(r => r.status === 'uploading' || r.status === 'classifying' || r.status === 'error').slice(0, 40),
                   ...queue.filter(r => r.status === 'queued').slice(0, 40),
                 ]
             ).map(row => (
@@ -537,14 +610,16 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
   // needed the preview to succeed.
 
   const statusColor =
-    row.status === 'done'      ? T.open :
-    row.status === 'error'     ? T.closed :
-    row.status === 'uploading' ? T.brass :
+    row.status === 'done'        ? T.open :
+    row.status === 'error'       ? T.closed :
+    row.status === 'uploading'   ? T.brass :
+    row.status === 'classifying' ? T.brass :
     T.inkMute;
   const statusLabel =
-    row.status === 'done'      ? 'Uploaded' :
-    row.status === 'error'     ? 'Error' :
-    row.status === 'uploading' ? 'Uploading…' :
+    row.status === 'done'        ? 'Uploaded' :
+    row.status === 'error'       ? 'Error' :
+    row.status === 'uploading'   ? 'Uploading…' :
+    row.status === 'classifying' ? 'AI sorting…' :
     'Queued';
 
   return (
@@ -566,7 +641,7 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
         <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2 }}>
           {row.file.type || 'unknown type'} · {formatBytes(row.file.size)}
         </div>
-        {mode === 'per-image' && row.status === 'queued' && (
+        {(mode === 'per-image' || row.aiSort) && row.status === 'queued' && (
           <select
             value={row.speciesId}
             onChange={(e) => onSpeciesChange(e.target.value)}
@@ -577,6 +652,17 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
               <option key={s.id} value={s.id}>{s.commonName} — {s.id}</option>
             ))}
           </select>
+        )}
+        {row.aiSort && row.aiConfidence != null && row.status !== 'error' && (
+          row.speciesId && row.aiConfidence > 0 ? (
+            <div style={{ fontSize: 11, marginTop: 3, color: row.aiConfidence >= 0.75 ? T.open : T.warn }}>
+              AI: {Math.round(row.aiConfidence * 100)}% confident{row.aiNote ? ` — ${row.aiNote}` : ''}
+            </div>
+          ) : !row.speciesId ? (
+            <div style={{ fontSize: 11, marginTop: 3, color: T.warn }}>
+              {row.aiNote || 'AI could not identify — pick the species manually.'}
+            </div>
+          ) : null
         )}
         {mode === 'batch' && (
           <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2 }}>{row.speciesId}</div>

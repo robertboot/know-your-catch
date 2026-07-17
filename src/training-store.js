@@ -10,6 +10,7 @@ import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { ensureSpeciesRow } from './species-store.js';
 import { SPECIES } from './data.js';
+import { downscaleImageDataUrl } from './storage.js';
 
 const BUCKET = 'training-photos';
 
@@ -673,6 +674,62 @@ export async function signedUrl(storagePath, ttlSeconds = 3600) {
   const { data, error } = await c.storage.from(BUCKET).createSignedUrl(storagePath, ttlSeconds);
   if (error) return null;
   return data?.signedUrl || null;
+}
+
+/* ============================================================
+   AI sort — classify one photo via the classify-fish-photo edge
+   function (Claude vision). Downscales client-side first so the
+   request stays small and the model gets a consistent input.
+   Returns { ok, speciesId|null, confidence, alternates, note } —
+   speciesId null means "couldn't identify / not in the list",
+   which is a valid answer, not an error.
+   ============================================================ */
+export async function classifyTrainingPhoto(file) {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  let base64, mediaType;
+  try {
+    // downscale can hand back the ORIGINAL data URL (when re-encoding
+    // wouldn't save bytes, or the image fails to decode) — so read the
+    // real media type off the prefix instead of assuming jpeg.
+    const dataUrl = await downscaleImageDataUrl(file, 1024, 0.8);
+    const m = dataUrl.match(/^data:(image\/[a-z0-9+.-]+);base64,/i);
+    if (!m) throw new Error('bad data url');
+    mediaType = m[1].toLowerCase();
+    base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    if (base64.length > 5_500_000) throw new Error('image too large after downscale');
+  } catch (e) {
+    return { ok: false, error: `image read failed: ${e?.message || e}` };
+  }
+  const speciesList = SPECIES
+    .filter(s => s.active !== false)
+    .map(s => ({ id: s.id, commonName: s.commonName, scientific: s.scientific || undefined }));
+  const { data, error } = await c.functions.invoke('classify-fish-photo', {
+    body: {
+      imageBase64: base64,
+      mediaType,
+      filename: file?.name || undefined,
+      speciesList,
+    },
+  });
+  if (error) {
+    // functions.invoke swallows the response body on non-2xx in some
+    // client versions; surface what we can.
+    let detail = error.message || 'edge function error';
+    try {
+      const ctx = await error.context?.json?.();
+      if (ctx?.error) detail = `${ctx.error}${ctx.detail ? `: ${ctx.detail}` : ''}`;
+    } catch { /* keep default detail */ }
+    return { ok: false, error: detail };
+  }
+  if (data?.error) return { ok: false, error: String(data.error) };
+  return {
+    ok: true,
+    speciesId: data?.speciesId || null,
+    confidence: Number(data?.confidence) || 0,
+    alternates: Array.isArray(data?.alternates) ? data.alternates : [],
+    note: data?.note || '',
+  };
 }
 
 /* ============================================================
