@@ -46,6 +46,7 @@ import { getCategories, subscribe as subscribeCategoriesStore } from '../categor
 import ModelsPanel from './ModelsPanel.jsx';
 import TestImagePanel from './TestImagePanel.jsx';
 import { SpeciesPickerModal, ModalShell } from './pickers.jsx';
+import { loadFishIdRuntime, predictTop5 } from './fishIdRuntime.js';
 
 const REJECT_REASONS = [
   { key: 'blurry',    label: 'Blurry / low quality' },
@@ -625,6 +626,12 @@ function ReviewPanel() {
   // enough info to reverse the mutation via a targeted UPDATE.
   const [undoStack, setUndoStack] = useState([]);
   const [undoing, setUndoing]     = useState(false);
+  // AI assist — runs the promoted Fish ID model on the focused photo
+  // and shows its top-5 guesses as one-tap approve/recategorize chips.
+  const [aiOn, setAiOn]           = useState(false);
+  const [aiRuntime, setAiRuntime] = useState(null);
+  const [aiStatus, setAiStatus]   = useState(''); // '' | 'loading' | in-strip error text
+  const [aiPreds, setAiPreds]     = useState({}); // row.id → [{ speciesId, score }]
 
   const speciesOptions = useMemo(
     () => [...SPECIES].filter(s => s.active !== false)
@@ -654,6 +661,58 @@ function ReviewPanel() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // AI assist: load the model runtime the first time it's switched on.
+  // Failures land in the panel's error banner and flip the toggle back
+  // off so it can be retried (loadFishIdRuntime clears its cache on
+  // failure).
+  useEffect(() => {
+    if (!aiOn || aiRuntime) return undefined;
+    let alive = true;
+    setAiStatus('loading');
+    loadFishIdRuntime()
+      .then(rt => { if (alive) { setAiRuntime(rt); setAiStatus(''); } })
+      .catch(e => {
+        if (!alive) return;
+        setError(`AI assist: ${e?.message || e}`);
+        setAiStatus('');
+        setAiOn(false);
+      });
+    return () => { alive = false; };
+  }, [aiOn, aiRuntime]);
+
+  // The row the AI strip operates on: the keyboard cursor, but only
+  // while no multi-selection is active (chips are single-photo).
+  const aiRow = aiOn && selected.size === 0 ? (rows[cursor] || null) : null;
+
+  // Predict the focused row once; results cache per row id for the
+  // panel's lifetime so arrowing back is instant.
+  useEffect(() => {
+    if (!aiRuntime || !aiRow || aiPreds[aiRow.id]) return undefined;
+    let alive = true;
+    setAiStatus('');
+    (async () => {
+      try {
+        const u = await signedUrl(aiRow.storage_path);
+        if (!u) throw new Error('signed url failed');
+        const top5 = await predictTop5(aiRuntime, u);
+        if (alive) setAiPreds(p => ({ ...p, [aiRow.id]: top5 }));
+      } catch (e) {
+        if (alive) setAiStatus(`AI check failed: ${e?.message || e}`);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiRuntime, aiRow?.id]);
+
+  // Chip tap: the chip matching the row's current label approves it;
+  // any other chip moves the photo to that species (verified, with
+  // original_species_id kept as the audit trail — see correctSpecies).
+  const aiPickChip = (cand) => {
+    if (!aiRow || !cand?.speciesId) return;
+    if (cand.speciesId === aiRow.species_id) doApprove([aiRow.id]);
+    else doCorrect([aiRow.id], cand.speciesId);
+  };
+
   /* Keyboard shortcuts. Guard so text inputs / modals don't hijack. */
   useEffect(() => {
     const onKey = (e) => {
@@ -674,12 +733,18 @@ function ReviewPanel() {
         e.preventDefault();
         setSelected(new Set(rows.map(r => r.id)));
       }
+      else if (/^[1-5]$/.test(key) && aiOn && selected.size === 0 && rows[cursor]) {
+        // AI assist: digits pick the Nth model guess for the focused
+        // photo — same action as tapping the chip.
+        const cand = (aiPreds[rows[cursor].id] || [])[Number(key) - 1];
+        if (cand) { e.preventDefault(); aiPickChip(cand); }
+      }
       else if (e.key === 'Escape') { setSelected(new Set()); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, cursor, selected, correctPickerOpen, rejectPickerOpen]);
+  }, [rows, cursor, selected, correctPickerOpen, rejectPickerOpen, aiOn, aiPreds]);
 
   // --- Safety rails around every bulk mutation ---
   //
@@ -891,6 +956,16 @@ function ReviewPanel() {
           <GhostButton onClick={refresh} disabled={loading} style={{ padding: '10px 14px' }}>
             {loading ? 'Loading…' : 'Refresh'}
           </GhostButton>
+          <GhostButton
+            onClick={() => setAiOn(v => !v)}
+            style={{
+              padding: '10px 14px',
+              ...(aiOn ? { color: T.brass, borderColor: T.brass } : {}),
+            }}
+            title="Run the promoted Fish ID model on the focused photo and show its top-5 guesses as one-tap chips"
+          >
+            {aiOn ? (aiStatus === 'loading' ? 'AI assist: loading…' : 'AI assist: ON') : 'AI assist'}
+          </GhostButton>
           {undoStack.length > 0 && (
             <GhostButton
               onClick={undoLast}
@@ -949,6 +1024,78 @@ function ReviewPanel() {
               <GhostButton onClick={() => setCorrectPickerOpen(true)} style={{ fontSize: 12 }}>
                 Correct species…
               </GhostButton>
+            </Card>
+          )}
+
+          {/* AI assist strip — the model's read on the focused photo.
+              One tap on the chip matching the label approves; a tap on
+              any other chip recategorizes the photo to that species.
+              Hidden while a multi-selection is active (chips are
+              strictly single-photo actions). */}
+          {aiRow && (
+            <Card>
+              <SectionLabel>
+                Model check{aiRuntime ? ` — ${aiRuntime.versionName}` : ''}
+              </SectionLabel>
+              {(() => {
+                const preds = aiPreds[aiRow.id];
+                const rowName = SPECIES.find(s => s.id === aiRow.species_id)?.commonName || aiRow.species_id;
+                if (!preds) {
+                  return (
+                    <div style={{ fontSize: 12, color: aiStatus.startsWith('AI check failed') ? T.closed : T.inkMute, marginTop: 6 }}>
+                      {aiStatus.startsWith('AI check failed') ? aiStatus
+                        : aiStatus === 'loading' ? 'Loading model…'
+                        : 'Checking photo…'}
+                    </div>
+                  );
+                }
+                const agrees = preds[0]?.speciesId === aiRow.species_id;
+                return (
+                  <>
+                    <div style={{ fontSize: 12, marginTop: 6, fontWeight: 700, color: agrees ? T.open : T.brass }}>
+                      {agrees
+                        ? `Model agrees this is a ${rowName} (${Math.round((preds[0]?.score || 0) * 100)}%)`
+                        : `Model's top pick differs from the label (${rowName})`}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {preds.map((cand, i) => {
+                        const sp = SPECIES.find(s => s.id === cand.speciesId);
+                        const isLabel = cand.speciesId === aiRow.species_id;
+                        return (
+                          <button
+                            key={cand.speciesId}
+                            onClick={() => aiPickChip(cand)}
+                            title={isLabel ? 'Approve this photo as-is' : `Move this photo to ${sp?.commonName || cand.speciesId} (verified)`}
+                            style={{
+                              background: isLabel ? T.open : T.parchmentDeep,
+                              color: isLabel ? T.oceanDeep : T.ink,
+                              border: `1px solid ${isLabel ? T.open : T.cardEdge}`,
+                              borderRadius: 999, padding: '7px 12px',
+                              fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                            }}
+                          >
+                            {i + 1}. {sp?.commonName || cand.speciesId}
+                            <span style={{ opacity: 0.7, marginLeft: 5, fontWeight: 600 }}>
+                              {Math.round(cand.score * 100)}%
+                            </span>
+                            {isLabel && ' ✓'}
+                          </button>
+                        );
+                      })}
+                      <GhostButton
+                        onClick={() => setCorrectPickerOpen(true)}
+                        style={{ fontSize: 12, padding: '7px 12px' }}
+                      >
+                        Not listed — search…
+                      </GhostButton>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
+                      Tap the ✓ chip (or its number key) to approve as {rowName}; tap another
+                      chip to recategorize the photo to that species. Keys <b>1–5</b> pick a chip.
+                    </div>
+                  </>
+                );
+              })()}
             </Card>
           )}
 
