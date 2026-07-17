@@ -4198,7 +4198,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
       </Card>
 
       {/* ---------- BOTTOM HALF: two large commit buttons ---------- */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4, paddingBottom: 8 }}>
         <button onClick={logCatch} style={{
           background: T.brass, color: T.oceanDeep, border: 'none',
           borderRadius: 14, padding: '16px', cursor: 'pointer', textAlign: 'left',
