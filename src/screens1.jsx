@@ -5,6 +5,7 @@ import {
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
+  Crosshair,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -1065,7 +1066,7 @@ export function IdentifyScreen({
             background: identifyBg,
             border: '1px solid rgba(94,205,242,0.35)', borderRadius: 18,
             padding: 0,
-            height: isTablet ? (size === 'tablet-landscape' ? 340 : 300) : 220,
+            height: isTablet ? (size === 'tablet-landscape' ? 460 : 400) : 320,
             overflow: 'hidden',
             boxShadow: '0 6px 22px rgba(0, 0, 0, 0.35)',
           }}
@@ -1113,6 +1114,18 @@ export function IdentifyScreen({
             background: 'linear-gradient(90deg, rgba(6,20,36,0.85) 0%, rgba(6,20,36,0.65) 35%, rgba(6,20,36,0.30) 60%, rgba(6,20,36,0.15) 100%)',
             zIndex: 1, pointerEvents: 'none',
           }} />
+
+          {/* Targeting reticle — centered over the photo, reinforces the
+              "line up the fish and tap" scan metaphor. */}
+          <div aria-hidden style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 1, pointerEvents: 'none',
+            color: 'rgba(94, 205, 242, 0.9)',
+            filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))',
+          }}>
+            <Crosshair size={isTablet ? 140 : 104} strokeWidth={1.4} />
+          </div>
 
           {/* Content — anchored left over the darkened side. */}
           <div style={{
@@ -1654,11 +1667,17 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           </div>
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <PrimaryButton onClick={onRetake}>
-            <RotateCcw size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-            Try another photo
+          {/* Manual ID: open the searchable species list (same picker as
+              the confirm flow). Picking one records a model_correction
+              (photo labeled with the true species → training signal)
+              and routes to catch entry. */}
+          <PrimaryButton onClick={() => setShowPicker(true)}>
+            <Search size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+            Pick the species
           </PrimaryButton>
-          <GhostButton onClick={onManual} style={{ width: '100%' }}>Identify manually instead</GhostButton>
+          <GhostButton onClick={onRetake} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <RotateCcw size={16} /> Try another photo
+          </GhostButton>
           {onSuggestNew && (
             <button onClick={onSuggestNew} style={{
               background: 'transparent', border: 'none', color: T.brass,
@@ -1669,6 +1688,16 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             </button>
           )}
         </div>
+
+        {showPicker && (
+          <SpeciesPickerModal
+            speciesOptions={SPECIES.filter(s => s.active !== false)}
+            currentSpeciesId={null}
+            onCancel={() => setShowPicker(false)}
+            onPick={(sid) => { setShowPicker(false); if (onCorrectSave) onCorrectSave(sid, null); }}
+            title="What species is it?"
+          />
+        )}
       </div>
     );
   }
@@ -1766,66 +1795,6 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         </div>
       </div>
 
-      {/* EXPLICIT TRAINING FEEDBACK STRIP — gentle offering, not a
-          form. Users get a visible, understandable way to help train
-          the model without navigating anywhere. Silent implicit
-          confirmation on Save & Continue is preserved as a fallback
-          for users who ignore this strip. */}
-      {feedbackState === 'unset' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: '#11233a', border: `1px solid ${T.brass}`,
-          borderRadius: 10, padding: '8px 12px',
-          minHeight: 44, marginBottom: 14,
-        }}>
-          <div style={{
-            flex: 1, minWidth: 0,
-            fontSize: 14, color: '#8ea3ba', fontWeight: 600,
-          }}>
-            Not a {topSpecies?.commonName || 'match'}?
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowPicker(true)}
-            style={{
-              flexShrink: 0,
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'transparent', border: `1px solid ${T.warn}`,
-              color: T.warn, borderRadius: 8,
-              padding: '8px 14px', fontSize: 14, fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <Flag size={14} strokeWidth={2.5} />
-            Report wrong fish ID
-          </button>
-        </div>
-      )}
-
-      {feedbackState === 'confirmed' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: 'rgba(94,224,172,0.14)', border: `1px solid ${T.open}`,
-          borderRadius: 10, padding: '10px 12px',
-          minHeight: 44, marginBottom: 14,
-          animation: 'kycFeedbackIn 220ms ease-out',
-        }}>
-          <div style={{
-            flexShrink: 0,
-            width: 22, height: 22, borderRadius: 999,
-            background: T.open,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Check size={14} color="#062330" strokeWidth={3} />
-          </div>
-          <div style={{
-            flex: 1, minWidth: 0,
-            fontSize: 15, color: T.open, fontWeight: 700,
-          }}>
-            Thanks — added to training data
-          </div>
-        </div>
-      )}
       <style>{`@keyframes kycFeedbackIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }`}</style>
 
       {/* WHY THIS MATCH FITS — species-authored ID cues */}
@@ -1858,6 +1827,50 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           }} />
         </div>
       )}
+
+      {/* CONFIRM / REPORT — two equal buttons below the ID reasoning.
+          Confirm ID banks a model_confirmation (helps training). Report
+          wrong opens the species picker to correct it. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+        {feedbackState === 'confirmed' ? (
+          <div style={{
+            flex: 1, minWidth: 150, animation: 'kycFeedbackIn 220ms ease-out',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            background: 'rgba(50,209,123,0.14)', border: `1.5px solid ${T.open}`,
+            color: T.open, borderRadius: 10, padding: '13px 12px',
+            fontSize: 15, fontWeight: 800,
+          }}>
+            <Check size={18} strokeWidth={3} /> ID confirmed
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { setFeedbackState('confirmed'); if (onConfirmFeedbackOnly) onConfirmFeedbackOnly(top.speciesId); }}
+            style={{
+              flex: 1, minWidth: 150,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: 'transparent', border: `1.5px solid ${T.open}`,
+              color: T.open, borderRadius: 10, padding: '13px 12px',
+              fontSize: 15, fontWeight: 800, cursor: 'pointer',
+            }}
+          >
+            <Check size={18} strokeWidth={3} /> Confirm ID
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowPicker(true)}
+          style={{
+            flex: 1, minWidth: 150,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            background: 'transparent', border: `1.5px solid ${T.warn}`,
+            color: T.warn, borderRadius: 10, padding: '13px 12px',
+            fontSize: 15, fontWeight: 800, cursor: 'pointer',
+          }}
+        >
+          <Flag size={16} strokeWidth={2.5} /> Report wrong fish ID
+        </button>
+      </div>
 
       {/* COMPARE LOOKALIKES */}
       {lookalikes.length > 0 && (

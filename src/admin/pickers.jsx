@@ -9,14 +9,19 @@ import { T } from '../theme.js';
 import { H1, GhostButton, PrimaryButton, inputStyle } from '../components.jsx';
 import { rankSpeciesSearch } from '../helpers.js';
 
-export function ModalShell({ onCancel, title, children }) {
+export function ModalShell({ onCancel, title, children, align = 'center' }) {
+  const top = align === 'top';
   return (
     <div
       onClick={onCancel}
       style={{
         position: 'fixed', inset: 0, zIndex: 500,
         background: 'rgba(3, 27, 51, 0.75)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        display: 'flex', alignItems: top ? 'flex-start' : 'center',
+        justifyContent: 'center', padding: 20,
+        // Top-align keeps the search input + results above the on-screen
+        // keyboard (which otherwise covers a centered modal's list).
+        paddingTop: top ? 'calc(env(safe-area-inset-top) + 16px)' : 20,
       }}
     >
       <div onClick={e => e.stopPropagation()} style={{
@@ -75,7 +80,7 @@ export function SpeciesPickerModal({
   const showSuggestCta = !!onRequestSuggest && query.length > 0 && items.length === 0;
 
   return (
-    <ModalShell onCancel={onCancel} title={title}>
+    <ModalShell onCancel={onCancel} title={title} align="top">
       <div style={{ position: 'relative', marginBottom: 10 }}>
         <Search
           size={16} color="#5ecdf2"

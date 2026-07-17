@@ -3603,35 +3603,18 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10, lineHeight: 1.45, padding: '6px 8px', background: T.parchmentDeep, borderRadius: 6 }}>
           <strong style={{ color: T.brass }}>Photo 1</strong> sets the catch's location &amp; time. If Photo 1 was taken away from the catch spot (e.g. at the dock), edit the location and time below.
         </div>
+        {/* Take/Upload buttons removed — you reach this page with a
+            photo already, and the dashed ADD tiles above add more.
+            These mirror the Cancel / Save catch actions at the bottom
+            so you can commit without scrolling. */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={takePhotoNow} disabled={photos.length >= 3} style={{
-            flex: 1, background: photos.length >= 3 ? '#2A3E4D' : T.brass,
-            color: photos.length >= 3 ? T.inkMute : T.oceanDeep, border: 'none',
-            padding: '10px 12px', borderRadius: 8, fontSize: 15, fontWeight: 800,
-            letterSpacing: 0.4, cursor: photos.length >= 3 ? 'not-allowed' : 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <Camera size={16} /> Take photo
-          </button>
-          <button onClick={() => uploadRef.current?.click()} disabled={photos.length >= 3} style={{
-            flex: 1, background: 'transparent',
-            color: photos.length >= 3 ? T.inkMute : T.brass,
-            border: `1.5px solid ${photos.length >= 3 ? T.cardEdge : T.brass}`,
-            padding: '10px 12px', borderRadius: 8, fontSize: 15, fontWeight: 800,
-            letterSpacing: 0.4, cursor: photos.length >= 3 ? 'not-allowed' : 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <ImageIcon size={16} /> Upload photo
-          </button>
+          <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
+          <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'SAVE CATCH'}</PrimaryButton>
         </div>
         <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
           {photos.length >= 3
             ? 'Maximum of 3 photos. Remove one to add a different photo.'
-            : photoSource === 'upload'
-              ? 'Location read from the most recently uploaded photo.'
-              : photoSource === 'camera'
-                ? 'Location set from your current GPS.'
-                : 'Take a photo to use your current location, or upload an existing photo to use the location from the file.'}
+            : 'Tap a dashed tile above to add another photo (up to 3).'}
         </div>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
         <input ref={uploadRef} type="file" accept="image/*" multiple onChange={handleUploadPick} style={{ display: 'none' }} />
@@ -3908,7 +3891,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
       <div style={{ display: 'flex', gap: 8 }}>
         <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
-        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'Save catch'}</PrimaryButton>
+        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'SAVE CATCH'}</PrimaryButton>
       </div>
 
       {pickerOpen && (
