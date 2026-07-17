@@ -3004,6 +3004,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const [lonInput, setLonInput] = useState('');
   const [editingWhen, setEditingWhen] = useState(false);
   const [whenInput, setWhenInput] = useState('');
+  // Scroll target: the Review page's location/date rows resolve here
+  // and jump the angler straight to the Auto-captured editors.
+  const autoCapRef = useRef(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   // Whether this catch should be / remain this species' Personal Best.
   // Defaults to whatever the PB currently is on disk; the angler can
@@ -3095,7 +3098,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   // Overlay resolution: apply the (possibly cropped) photo, the
   // metadata decision, and the species pick to the form in one shot.
-  const resolvePhotoConfirm = async ({ finalDataUrl, useMeta, speciesPick, suggestNew, quick }) => {
+  const resolvePhotoConfirm = async ({ finalDataUrl, useMeta, speciesPick, suggestNew, quick, editField }) => {
     const pc = pendingConfirm;
     setPendingConfirm(null);
     if (!pc) return;
@@ -3134,6 +3137,17 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     // species/loc/when via setState, so we can't save synchronously
     // here — the armed effect below fires once those have landed.
     if (quick && speciesPick && !suggestNew) setArmedQuickSave(true);
+
+    // Tapped the Location / Date row on the Review page: open that
+    // editor and scroll the Auto-captured card into view so it's ready
+    // to edit the moment the overlay closes.
+    if (editField) {
+      if (editField === 'loc') startEditLoc();
+      else if (editField === 'when') startEditWhen();
+      setTimeout(() => {
+        autoCapRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      }, 120);
+    }
   };
   const cancelPhotoConfirm = () => setPendingConfirm(null);
 
@@ -3808,6 +3822,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         })()}
       </Card>
 
+      <div ref={autoCapRef}>
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 8 }}>Auto-captured</SectionLabel>
         {photoExifStatus === 'none' && (
@@ -3883,6 +3898,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           : 'Waiting for GPS…'
         } />
       </Card>
+      </div>
 
       {/* Spacer so the last field clears the fixed action bar below. */}
       <div style={{ height: 84 }} />
@@ -4064,7 +4080,8 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
     + ' · ' + whenDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
   // LOG CATCH → into the full details form (species/loc/time prefilled).
-  const logCatch = () => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew });
+  // editField jumps straight to the Location or Date editor on the form.
+  const logCatch = (editField) => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew, editField });
   // QUICK CONFIRM → save immediately as a 'quick' catch + reminder.
   const quickConfirm = () => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew, quick: true });
 
@@ -4152,7 +4169,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           </div>
 
           {/* Location row — tap to adjust on the details step */}
-          <button onClick={logCatch} style={{ ...rowStyle, marginTop: 12 }}>
+          <button onClick={() => logCatch('loc')} style={{ ...rowStyle, marginTop: 12 }}>
             <MapPinIcon size={20} color={T.brass} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 700 }}>{locText}</div>
@@ -4162,7 +4179,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           </button>
 
           {/* Date & time row — tap to adjust on the details step */}
-          <button onClick={logCatch} style={rowStyle}>
+          <button onClick={() => logCatch('when')} style={rowStyle}>
             <CalendarIcon size={20} color={T.brass} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 700 }}>{whenText}</div>
@@ -4188,7 +4205,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
 
       {/* ---------- BOTTOM: primary LOG CATCH + quiet quick-confirm link ---------- */}
       <div style={{ marginTop: 14, paddingBottom: 8 }}>
-        <button onClick={logCatch} style={{
+        <button onClick={() => logCatch()} style={{
           width: '100%', background: T.brass, color: T.oceanDeep, border: 'none',
           borderRadius: 14, padding: '16px', cursor: 'pointer',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
