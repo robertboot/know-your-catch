@@ -3605,13 +3605,8 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         </div>
         {/* Take/Upload buttons removed — you reach this page with a
             photo already, and the dashed ADD tiles above add more.
-            These mirror the Cancel / Save catch actions at the bottom
-            so you can commit without scrolling. */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
-          <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'SAVE CATCH'}</PrimaryButton>
-        </div>
-        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
+            Cancel / SAVE CATCH live in the sticky bar at the bottom. */}
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4, lineHeight: 1.45 }}>
           {photos.length >= 3
             ? 'Maximum of 3 photos. Remove one to add a different photo.'
             : 'Tap a dashed tile above to add another photo (up to 3).'}
@@ -3889,9 +3884,21 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         } />
       </Card>
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <GhostButton onClick={onCancel} style={{ flex: 1 }}>Cancel</GhostButton>
-        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2 }}>{isEdit ? 'Save changes' : 'SAVE CATCH'}</PrimaryButton>
+      {/* Spacer so the last field clears the fixed action bar below. */}
+      <div style={{ height: 84 }} />
+      {/* Sticky action bar — always in view above the tab bar, same
+          pattern as the Fish ID results bar. */}
+      <div style={{
+        position: 'fixed', left: 0, right: 0,
+        bottom: `calc(env(safe-area-inset-bottom, 0px) + ${isTablet ? 76 : 60}px)`,
+        zIndex: 20,
+        padding: '12px 14px',
+        background: 'rgba(4,22,42,0.96)', backdropFilter: 'blur(6px)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', gap: 8,
+      }}>
+        <GhostButton onClick={onCancel} style={{ flex: 1, minHeight: 52 }}>Cancel</GhostButton>
+        <PrimaryButton onClick={save} disabled={!canSave} style={{ flex: 2, minHeight: 52, fontSize: 17, fontWeight: 800 }}>{isEdit ? 'Save changes' : 'SAVE CATCH'}</PrimaryButton>
       </div>
 
       {pickerOpen && (
