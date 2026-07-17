@@ -3,7 +3,7 @@ import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
   SlidersHorizontal, Sparkles, ShieldCheck, ShieldAlert, ShieldQuestion,
-  MapPin as MapPinIcon,
+  MapPin as MapPinIcon, Crop as CropIcon, Calendar as CalendarIcon, Fish as FishIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -2916,7 +2916,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   );
 }
 
-export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount, openSuggestOnMount, confirmPhoto }) {
+export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, onHome, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount, openSuggestOnMount, confirmPhoto }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
@@ -3095,7 +3095,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   // Overlay resolution: apply the (possibly cropped) photo, the
   // metadata decision, and the species pick to the form in one shot.
-  const resolvePhotoConfirm = async ({ finalDataUrl, useMeta, speciesPick, suggestNew }) => {
+  const resolvePhotoConfirm = async ({ finalDataUrl, useMeta, speciesPick, suggestNew, quick }) => {
     const pc = pendingConfirm;
     setPendingConfirm(null);
     if (!pc) return;
@@ -3130,8 +3130,22 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       setSuggestInitial('');
       setSuggestOpen(true);
     }
+    // Quick Confirm: arm a one-shot save. resolvePhotoConfirm sets
+    // species/loc/when via setState, so we can't save synchronously
+    // here — the armed effect below fires once those have landed.
+    if (quick && speciesPick && !suggestNew) setArmedQuickSave(true);
   };
   const cancelPhotoConfirm = () => setPendingConfirm(null);
+
+  // Quick Confirm one-shot: once resolvePhotoConfirm's species has
+  // landed in state, save as a 'quick' catch and leave to the Logbook.
+  const [armedQuickSave, setArmedQuickSave] = useState(false);
+  useEffect(() => {
+    if (!armedQuickSave || !speciesId) return;
+    setArmedQuickSave(false);
+    save({ quick: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [armedQuickSave, speciesId]);
 
   // Fish ID → "Add to database": land here with the scanned photo
   // already attached and the suggest modal open, so the angler can
@@ -3316,13 +3330,16 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   };
 
   const canSave = !!speciesId;
-  const save = () => {
+  const save = (opts = {}) => {
     const entry = {
       id: existing ? existing.id : 'c_' + Date.now(),
-      // Editing a Quick Log: speciesId is required to save (canSave
-      // above enforces), and saving flips the status back to 'complete'
-      // so the Logbook badge + nag banner clear for this row.
-      status: existing?.status === 'quick' ? 'complete' : (existing?.status || 'complete'),
+      // Quick Confirm from the Review page saves a 'quick' catch — the
+      // Logbook badge + nag banner become the "we'll remind you" nudge.
+      // Otherwise: editing a Quick Log flips it back to 'complete', and
+      // a normal save is 'complete'.
+      status: opts.quick ? 'quick'
+        : existing?.status === 'quick' ? 'complete'
+        : (existing?.status || 'complete'),
       speciesId,
       dateIso: when.toISOString(),
       lat: loc.lat, lon: loc.lon,
@@ -3628,6 +3645,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             units={state.units}
             onResolve={resolvePhotoConfirm}
             onCancel={cancelPhotoConfirm}
+            onHome={onHome}
           />
         )}
         {/* On-demand crop overlay (position:fixed). Catch photos keep
@@ -4027,28 +4045,46 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
    picks one of the explicit Confirm actions — so wrong metadata
    can never slip in silently and poison Patterns/analysis.
    ============================================================ */
-function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onResolve, onCancel }) {
+function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onResolve, onCancel, onHome }) {
   const [workingUrl, setWorkingUrl] = useState(pc.dataUrl); // cropped or original
   const [cropping, setCropping] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
   const [suggestNew, setSuggestNew] = useState(false);
 
-  const idSpecies = pc.idSpeciesId ? resolveSpecies(pc.idSpeciesId) : null;
   const chosenId = suggestNew ? null : (speciesPick ?? pc.idSpeciesId ?? null);
   const chosen = chosenId ? resolveSpecies(chosenId) : null;
   const pct = pc.idConfidence != null ? Math.round(pc.idConfidence * 100) : null;
+  const speciesName = chosen?.commonName || 'this fish';
 
   const hasMeta = pc.meta.source === 'photo'
     ? (pc.meta.lat != null || !!pc.meta.time)
     : pc.meta.source === 'device';
 
-  const confirm = (useMeta) => onResolve({
-    finalDataUrl: workingUrl,
-    useMeta,
-    speciesPick: chosenId,
-    suggestNew,
-  });
+  // Location + time preview strings for the two summary rows.
+  const locText = pc.meta.source === 'device' ? 'Current device location'
+    : pc.meta.source === 'photo' && pc.meta.lat != null
+      ? `${pc.meta.lat.toFixed(4)}°, ${pc.meta.lon.toFixed(4)}°`
+      : 'No location yet';
+  const locSub = pc.meta.source === 'device' ? 'Using device GPS'
+    : pc.meta.source === 'photo' && pc.meta.lat != null ? 'From this photo'
+      : 'Add it on the next step';
+  const whenDate = pc.meta.time || new Date();
+  const whenText = whenDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    + ' · ' + whenDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+  // LOG CATCH → into the full details form (species/loc/time prefilled).
+  const logCatch = () => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew });
+  // QUICK CONFIRM → save immediately as a 'quick' catch + reminder.
+  const quickConfirm = () => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew, quick: true });
+
+  const rowStyle = {
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: '12px 4px', width: '100%',
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    textAlign: 'left', color: T.ink,
+    borderTop: `1px solid ${T.cardEdge}`,
+  };
 
   return (
     <div style={{
@@ -4056,160 +4092,134 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
       background: T.bgDeep, color: T.ink,
       display: 'flex', flexDirection: 'column',
       overflowY: 'auto',
-      padding: '16px 16px 24px',
-      paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
-      paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)',
+      padding: '8px 16px 16px',
+      paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+      paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)',
     }}>
-      <H1 size={20} style={{ marginBottom: 12 }}>Confirm this photo</H1>
-
-      {/* Photo + crop affordance */}
-      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 12, border: `1px solid ${T.cardEdge}` }}>
-        <img src={workingUrl} alt="Your catch" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', background: '#000' }} />
-        <button onClick={() => setCropping(true)} style={{
-          position: 'absolute', top: 8, left: 8,
-          borderRadius: 6, padding: '5px 10px',
-          background: 'rgba(3, 27, 51, 0.85)', color: '#5ecdf2',
-          border: '1px solid #5ecdf2', cursor: 'pointer',
-          fontSize: 12, fontWeight: 800, letterSpacing: 0.6,
-        }}>
-          CROP
+      {/* Header — title + X close (discards the catch, back to Home). */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <H1 size={26}>Review catch</H1>
+        <button
+          onClick={onHome || onCancel}
+          aria-label="Close and discard"
+          style={{
+            background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+            color: T.inkSoft, borderRadius: 999, width: 38, height: 38,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}
+        >
+          <X size={20} />
         </button>
       </div>
 
-      {/* Metadata verdict — the point of this page: no ambiguity about
-          whether data was found. */}
-      <Card style={{
-        marginBottom: 10, padding: 12,
-        borderColor: pc.meta.source === 'none' ? T.warn : T.open,
-      }}>
-        <SectionLabel style={{ marginBottom: 6 }}>Photo data</SectionLabel>
-        {pc.meta.source === 'photo' && (
-          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.6 }}>
-            {pc.meta.lat != null
-              ? <div><strong style={{ color: T.open }}>✓ Location found:</strong> {pc.meta.lat.toFixed(4)}°, {pc.meta.lon.toFixed(4)}°</div>
-              : <div><strong style={{ color: T.warn }}>✗ No location</strong> in this photo</div>}
-            {pc.meta.time
-              ? <div><strong style={{ color: T.open }}>✓ Time found:</strong> {pc.meta.time.toLocaleString()}</div>
-              : <div><strong style={{ color: T.warn }}>✗ No time</strong> in this photo</div>}
-          </div>
-        )}
-        {pc.meta.source === 'device' && (
-          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.6 }}>
-            <div><strong style={{ color: T.open }}>✓ Using device GPS</strong> (your location right now)</div>
-            <div><strong style={{ color: T.open }}>✓ Time:</strong> {(pc.meta.time || new Date()).toLocaleString()}</div>
-          </div>
-        )}
-        {pc.meta.source === 'none' && (
-          <div style={{ fontSize: 15, color: T.warn, lineHeight: 1.6 }}>
-            <strong>This photo carries no location or time data.</strong>
-            <div style={{ color: T.inkSoft, marginTop: 4 }}>
-              You can still add it — the catch will be marked
-              <strong> needs details</strong> until you enter where and when,
-              so your fishing data stays accurate.
-            </div>
-          </div>
-        )}
-      </Card>
+      {/* ---------- TOP HALF: photo + identification + details ---------- */}
+      <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+        {/* Photo + circular crop-icon affordance */}
+        <div style={{ position: 'relative' }}>
+          <img src={workingUrl} alt="Your catch" style={{ width: '100%', maxHeight: 300, objectFit: 'cover', display: 'block', background: '#000' }} />
+          <button onClick={() => setCropping(true)} aria-label="Crop photo" style={{
+            position: 'absolute', top: 12, right: 12,
+            width: 42, height: 42, borderRadius: 999,
+            background: 'rgba(3, 27, 51, 0.7)', color: T.ink,
+            border: `1px solid rgba(255,255,255,0.25)`, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <CropIcon size={18} />
+          </button>
+        </div>
 
-      {/* Species confirm — Fish ID result with correct/add options. */}
-      <Card style={{ marginBottom: 12, padding: 12 }}>
-        <SectionLabel style={{ marginBottom: 6 }}>Species</SectionLabel>
-        {pc.idStatus === 'running' && !speciesPick && !suggestNew && (
-          <div style={{ fontSize: 15, color: T.inkMute }}>Identifying species…</div>
-        )}
-        {suggestNew && (
-          <div style={{ fontSize: 16, fontWeight: 700, color: T.brass }}>
-            New species — you'll name it on the next screen
-          </div>
-        )}
-        {!suggestNew && chosen && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: 14 }}>
+          {/* Identification */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 999, flexShrink: 0,
+              border: `1.5px solid ${T.brass}`, color: T.brass,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FishIcon size={24} />
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>{chosen.commonName}</div>
-              {!speciesPick && pct != null && (
-                <div style={{ fontSize: 12, color: pct >= 80 ? T.open : pct >= 60 ? T.warn : T.closed, fontWeight: 700, marginTop: 2 }}>
-                  Fish ID · {pct}% confident
+              <SectionLabel style={{ marginBottom: 2 }}>Identification</SectionLabel>
+              {suggestNew ? (
+                <div style={{ fontSize: 22, fontWeight: 800, color: T.brass, lineHeight: 1.15 }}>New species</div>
+              ) : chosen ? (
+                <div style={{ fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>{chosen.commonName}</div>
+              ) : pc.idStatus === 'running' ? (
+                <div style={{ fontSize: 18, color: T.inkMute }}>Identifying…</div>
+              ) : (
+                <div style={{ fontSize: 18, color: T.inkMute }}>Not identified — pick below</div>
+              )}
+              {!suggestNew && chosen && pct != null && (
+                <div style={{
+                  display: 'inline-block', marginTop: 6,
+                  background: T.parchmentDeep, borderRadius: 999,
+                  padding: '4px 12px', fontSize: 13, fontWeight: 700,
+                  color: pct >= 80 ? T.open : pct >= 60 ? T.brass : T.warn,
+                }}>
+                  {speciesPick ? 'Picked by you' : `Best match · ${pct}% confidence`}
                 </div>
               )}
-              {speciesPick && (
-                <div style={{ fontSize: 12, color: T.brass, fontWeight: 700, marginTop: 2 }}>Picked by you</div>
-              )}
             </div>
           </div>
-        )}
-        {!suggestNew && !chosen && pc.idStatus === 'done' && (
-          <div style={{ fontSize: 15, color: T.inkMute }}>
-            Couldn't identify this fish — pick the species below, or add it if it's not in the app.
-          </div>
-        )}
-        {/* Top-5 candidate chips — the model's runners-up are usually
-            where the right answer lives when the top pick is wrong.
-            One tap beats opening the full picker. */}
-        {!suggestNew && (pc.idCandidates || []).length > 1 && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-            {(pc.idCandidates || []).map((cand) => {
-              const sp = resolveSpecies(cand.speciesId);
-              if (!sp) return null;
-              const active = chosenId === cand.speciesId;
-              return (
-                <button
-                  key={cand.speciesId}
-                  onClick={() => { setSpeciesPick(cand.speciesId); setSuggestNew(false); }}
-                  style={{
-                    background: active ? T.brass : T.parchmentDeep,
-                    color: active ? T.oceanDeep : T.ink,
-                    border: `1.5px solid ${active ? T.brass : T.cardEdge}`,
-                    borderRadius: 999, padding: '7px 12px',
-                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}
-                >
-                  {sp.commonName}
-                  {cand.score != null && (
-                    <span style={{
-                      fontSize: 11, fontWeight: 800,
-                      color: active ? 'rgba(3,27,51,0.6)' : T.inkMute,
-                    }}>
-                      {Math.round(cand.score * 100)}%
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          <GhostButton onClick={() => { setPickerOpen(true); }} style={{ padding: '7px 12px', fontSize: 14 }}>
-            {chosen ? 'Not listed — type to search' : 'Type to search species'}
-          </GhostButton>
-          <button onClick={() => setSuggestNew(v => !v)} style={{
-            background: suggestNew ? T.brass : 'transparent',
-            color: suggestNew ? T.oceanDeep : T.brass,
-            border: `1px solid ${T.brass}`, borderRadius: 8,
-            padding: '7px 12px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-          }}>
-            {suggestNew ? '✓ Adding new species' : 'Not in the app? Add it'}
+
+          {/* Location row — tap to adjust on the details step */}
+          <button onClick={logCatch} style={{ ...rowStyle, marginTop: 12 }}>
+            <MapPinIcon size={20} color={T.brass} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{locText}</div>
+              <div style={{ fontSize: 13, color: T.inkMute }}>{locSub}</div>
+            </div>
+            <ChevronRight size={20} color={T.inkMute} />
+          </button>
+
+          {/* Date & time row — tap to adjust on the details step */}
+          <button onClick={logCatch} style={rowStyle}>
+            <CalendarIcon size={20} color={T.brass} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{whenText}</div>
+              <div style={{ fontSize: 13, color: T.inkMute }}>Date &amp; time</div>
+            </div>
+            <ChevronRight size={20} color={T.inkMute} />
+          </button>
+
+          {/* Not-a-[species] → picker (search or add) → back here */}
+          <button
+            onClick={() => setPickerOpen(true)}
+            style={{
+              width: '100%', marginTop: 14,
+              background: 'transparent', border: `1.5px solid ${T.brass}`,
+              color: T.brass, borderRadius: 10, padding: '12px',
+              fontSize: 15, fontWeight: 800, cursor: 'pointer',
+            }}
+          >
+            {chosen ? `Not a ${speciesName}?` : 'Pick the species'}
           </button>
         </div>
       </Card>
 
-      {/* Confirm actions — explicit, blocking, no silent defaults. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
-        {hasMeta && (
-          <PrimaryButton onClick={() => confirm(true)}>
-            Confirm — use this location &amp; time
-          </PrimaryButton>
-        )}
-        <GhostButton onClick={() => confirm(false)} style={{ width: '100%' }}>
-          {hasMeta
-            ? "Confirm — I'll enter details manually"
-            : "Confirm — I'll enter location & time manually"}
-        </GhostButton>
-        <button onClick={onCancel} style={{
-          background: 'transparent', border: 'none', color: T.inkMute,
-          fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: 8,
+      {/* ---------- BOTTOM HALF: two large commit buttons ---------- */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
+        <button onClick={logCatch} style={{
+          background: T.brass, color: T.oceanDeep, border: 'none',
+          borderRadius: 14, padding: '16px', cursor: 'pointer', textAlign: 'left',
         }}>
-          Cancel — don't use this photo
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>LOG CATCH</div>
+          <div style={{ fontSize: 14, fontWeight: 600, opacity: 0.85, marginTop: 2 }}>Details look good</div>
+        </button>
+        <button
+          onClick={quickConfirm}
+          disabled={!chosenId}
+          style={{
+            background: 'transparent', color: chosenId ? T.ink : T.inkMute,
+            border: `1.5px solid ${chosenId ? T.brass : T.cardEdge}`,
+            borderRadius: 14, padding: '16px', cursor: chosenId ? 'pointer' : 'not-allowed',
+            textAlign: 'left', opacity: chosenId ? 1 : 0.6,
+          }}
+        >
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>QUICK CONFIRM</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.inkSoft, marginTop: 2 }}>
+            Save now and confirm or edit details later. We'll remind you.
+          </div>
         </button>
       </div>
 
@@ -4233,6 +4243,7 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           currentSpeciesId={chosenId}
           onCancel={() => setPickerOpen(false)}
           onPick={(sid) => { setSpeciesPick(sid); setSuggestNew(false); setPickerOpen(false); }}
+          onRequestSuggest={() => { setSuggestNew(true); setSpeciesPick(null); setPickerOpen(false); }}
           title="What species is it?"
         />
       )}

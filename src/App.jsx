@@ -909,6 +909,7 @@ export default function App() {
         confirmPhoto={screen.confirmPhoto}
         onDone={() => reset([{ name: 'catch_log' }])}
         onCancel={pop}
+        onHome={() => reset([{ name: 'home' }])}
       />;
       break;
     case 'catch_detail':
