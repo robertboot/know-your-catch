@@ -15,9 +15,14 @@
                                    surface at low confidence)
      6. Rank, band, and shape into the public contract
 
-   FULLY OFFLINE: no fetch / XHR / remote URLs anywhere in this
-   file OR the adapter. The model, when bundled, loads from a
-   packaged static asset only — never downloaded at runtime.
+   ONLINE-FIRST, OFFLINE-CAPABLE: when the phone has network AND the
+   angler is signed in, Stage 3 first asks the cloud (Claude vision,
+   via the identify-fish edge function) for a much stronger ID — and
+   that call also feeds the photo back into the training queue so the
+   on-device model keeps improving. On any failure — offline, signed
+   out, rate-limited, or a network hiccup — it silently falls back to
+   the fully-offline on-device pipeline below. The on-device model,
+   when bundled, loads from a packaged static asset only.
 
    CONTRACT — must remain identical to the original stub so the
    rest of the app doesn't change:
@@ -38,6 +43,9 @@
 
 import { SPECIES, REGULATIONS } from './data.js';
 import { classify, LABEL_TO_SPECIES_ID } from './identify/adapter.js';
+import { client } from './supabase-client.js';
+import { getLastSession } from './auth.js';
+import { downscaleImageDataUrl } from './storage.js';
 
 /* Confidence-band thresholds. Computed from a numeric top-1 score +
    the margin over #2, then translated to the string bands the rest of
@@ -150,6 +158,72 @@ function rankAndBand(candidates) {
   return { confidence: 'low', candidates: [] };
 }
 
+/* Map a raw 0..1 cloud confidence to the app's string band. Slightly
+   more forgiving than the on-device thresholds because Claude's
+   confidence is calibrated and it always returns alternates for the
+   confirm page to show. */
+function bandForCloudConfidence(conf) {
+  if (conf >= 0.8) return 'high';
+  if (conf >= 0.45) return 'medium';
+  return 'low';
+}
+
+/* Online ID via the identify-fish edge function (Claude vision).
+   Returns the app's standard { confidence, candidates } contract, or
+   null to signal "fall back to the on-device pipeline" — for offline,
+   signed-out, rate-limited, or any error case. Never throws. */
+async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
+  try {
+    // Fast bail before any work: no network, or the app can't reach a
+    // signed-in session to authenticate the call.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+    const c = client();
+    if (!c) return null;
+    const session = getLastSession();
+    if (!session?.access_token) return null; // signed-out → on-device only
+
+    const dataUrl = await downscaleImageDataUrl(imageDataUrl, 1024, 0.8);
+    const m = dataUrl.match(/^data:(image\/[a-z0-9+.-]+);base64,/i);
+    if (!m) return null;
+    const mediaType = m[1].toLowerCase();
+    const imageBase64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+
+    const speciesList = SPECIES
+      .filter(s => s.active !== false)
+      .map(s => ({ id: s.id, commonName: s.commonName, scientific: s.scientific || undefined }));
+
+    const { data, error } = await c.functions.invoke('identify-fish', {
+      body: { imageBase64, mediaType, speciesList },
+    });
+    if (error || !data || data.error) return null;
+
+    const topId = (typeof data.speciesId === 'string' && SPECIES_BY_ID[data.speciesId])
+      ? data.speciesId : null;
+    if (!topId) {
+      // Cloud saw no confident match — route to manual picker, same as
+      // an on-device 'low'. Returning a valid (empty) contract here
+      // means we DON'T fall back and re-run the weaker on-device model.
+      return { confidence: 'low', candidates: [], _source: 'ai' };
+    }
+
+    // Build candidates: the top pick, then the alternates, with gently
+    // decreasing pseudo-scores so the confirm page ranks them in order.
+    const conf = Math.max(0, Math.min(1, Number(data.confidence) || 0));
+    const alts = (Array.isArray(data.alternates) ? data.alternates : [])
+      .filter(id => SPECIES_BY_ID[id] && SPECIES_BY_ID[id].active !== false && id !== topId);
+    const ordered = [topId, ...alts];
+    const candidates = ordered.map((id, i) => ({
+      speciesId: id,
+      score: i === 0 ? conf : Math.max(0.05, conf * Math.pow(0.5, i)),
+      evidence: evidenceFor(id, !REGULATIONS[id]?.[jurisdictionId] && !!jurisdictionId),
+    }));
+
+    return { confidence: bandForCloudConfidence(conf), candidates, _source: 'ai' };
+  } catch {
+    return null;
+  }
+}
+
 /* ============================================================
    PUBLIC API — signature and return shape unchanged from the stub.
 
@@ -161,6 +235,12 @@ function rankAndBand(candidates) {
    ============================================================ */
 export async function identifyPhoto(imageDataUrl, options = {}) {
   const { jurisdictionId = null } = options;
+
+  // Online-first: ask the cloud (Claude vision) for a strong ID. This
+  // also feeds the photo back into training so the on-device model
+  // improves. null = offline / signed-out / error → use on-device.
+  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
+  if (cloud) return cloud;
 
   // Stages 1–3: detect / preprocess / classify happen inside the
   // adapter so runtime specifics stay behind the seam.
