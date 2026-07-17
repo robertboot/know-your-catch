@@ -4090,11 +4090,10 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
     <div style={{
       position: 'fixed', inset: 0, zIndex: 400,
       background: T.bgDeep, color: T.ink,
-      display: 'flex', flexDirection: 'column',
-      overflowY: 'auto',
+      overflowY: 'auto', WebkitOverflowScrolling: 'touch',
       padding: '8px 16px 16px',
       paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
-      paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)',
+      paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)',
     }}>
       {/* Header — title + X close (discards the catch, back to Home). */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -4197,29 +4196,32 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
         </div>
       </Card>
 
-      {/* ---------- BOTTOM HALF: two large commit buttons ---------- */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4, paddingBottom: 8 }}>
+      {/* ---------- BOTTOM: primary LOG CATCH + quiet quick-confirm link ---------- */}
+      <div style={{ marginTop: 14, paddingBottom: 8 }}>
         <button onClick={logCatch} style={{
-          background: T.brass, color: T.oceanDeep, border: 'none',
-          borderRadius: 14, padding: '16px', cursor: 'pointer', textAlign: 'left',
+          width: '100%', background: T.brass, color: T.oceanDeep, border: 'none',
+          borderRadius: 14, padding: '16px', cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
         }}>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>LOG CATCH</div>
-          <div style={{ fontSize: 14, fontWeight: 600, opacity: 0.85, marginTop: 2 }}>Details look good</div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>
+            <CheckCircle2 size={24} color={T.open} strokeWidth={2.6} />
+            LOG CATCH
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.85 }}>Details look good</span>
         </button>
         <button
           onClick={quickConfirm}
           disabled={!chosenId}
           style={{
-            background: 'transparent', color: chosenId ? T.ink : T.inkMute,
-            border: `1.5px solid ${chosenId ? T.brass : T.cardEdge}`,
-            borderRadius: 14, padding: '16px', cursor: chosenId ? 'pointer' : 'not-allowed',
-            textAlign: 'left', opacity: chosenId ? 1 : 0.6,
+            display: 'block', width: '100%', marginTop: 14,
+            background: 'transparent', border: 'none',
+            color: chosenId ? T.brass : T.inkMute,
+            fontSize: 15, fontWeight: 700, textAlign: 'center',
+            textDecoration: 'underline', cursor: chosenId ? 'pointer' : 'not-allowed',
+            opacity: chosenId ? 1 : 0.6, padding: 4,
           }}
         >
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>QUICK CONFIRM</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: T.inkSoft, marginTop: 2 }}>
-            Save now and confirm or edit details later. We'll remind you.
-          </div>
+          Quick confirm — save now, we'll remind you
         </button>
       </div>
 
