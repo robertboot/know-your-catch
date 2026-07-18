@@ -2010,7 +2010,10 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           onPickLookalike={() => {
             const chosen = modal.lookalikeId;
             setModal(null);
-            onCorrectSave && onCorrectSave(chosen, top.speciesId);
+            // Same as Report Wrong ID: correct the species IN PLACE and
+            // stay on the results page so the angler can CONFIRM / Save.
+            setOverrideId(chosen);
+            setFeedbackState('unset');
           }}
           onNoneMatch={() => {
             setModal(null);
