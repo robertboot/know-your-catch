@@ -45,9 +45,22 @@ input[type=number] { -moz-appearance: textfield; }
 /* Slow Ken Burns drift for hero / scan background images. Applied to a
    wrapper so a child img can still carry a tilt-parallax transform.
    Runs regardless of prefers-reduced-motion — it's a deliberate brand
-   ambiance, kept slow + subtle enough to be comfortable. */
-.kyc-kenburns { animation: kyc-kenburns 18s ease-in-out infinite alternate; will-change: transform; }
+   ambiance, kept slow + subtle enough to be comfortable.
+   -webkit- prefixes + translateZ layer promotion so iOS WKWebView
+   (the Capacitor app) actually runs it. */
+.kyc-kenburns {
+  -webkit-animation: kyc-kenburns 18s ease-in-out infinite alternate;
+  animation: kyc-kenburns 18s ease-in-out infinite alternate;
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+@-webkit-keyframes kyc-kenburns {
+  0%   { -webkit-transform: scale(1.02) translate3d(2%, 1%, 0); }
+  100% { -webkit-transform: scale(1.16) translate3d(-3%, -2%, 0); }
+}
 @keyframes kyc-kenburns {
-  0%   { transform: scale(1.02) translate(2%, 1%); }
-  100% { transform: scale(1.16) translate(-3%, -2%); }
+  0%   { transform: scale(1.02) translate3d(2%, 1%, 0); }
+  100% { transform: scale(1.16) translate3d(-3%, -2%, 0); }
 }
