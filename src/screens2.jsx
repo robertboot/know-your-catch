@@ -912,9 +912,24 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   const pb = state.pbs?.[id];
   return (
     <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
-      <Card style={{ marginBottom: isTablet ? 16 : 10, display: 'flex', alignItems: 'center', gap: isTablet ? 18 : 12, padding: isTablet ? 18 : undefined }} onClick={onSpecies}>
-        <SpeciesImage species={s} size={isTablet ? (isLandscape ? 120 : 96) : 56} />
-        <div style={{ flex: 1 }}>
+      {/* Header card: full-width species photo banner on top, name +
+          scientific + species-details link below. padding:0 + overflow
+          hidden so the photo bleeds edge-to-edge and follows the
+          card's rounded corners. The SpeciesImage style override
+          forces the image (or its no-photo fallback) to fill the card
+          width at a 16:9 aspect ratio via cover, ignoring the
+          component's default fixed size / contain behaviour. */}
+      <Card style={{ marginBottom: isTablet ? 16 : 10, padding: 0, overflow: 'hidden' }} onClick={onSpecies}>
+        <SpeciesImage
+          species={s}
+          size={200}
+          style={{
+            width: '100%', height: 'auto', aspectRatio: '16 / 9',
+            objectFit: 'cover', borderRadius: 0,
+            maxWidth: 'none', maxHeight: 'none',
+          }}
+        />
+        <div style={{ padding: isTablet ? 18 : 14 }}>
           <H1 size={isTablet ? (isLandscape ? 34 : 30) : 20}>{s.commonName}</H1>
           <div style={{ fontStyle: 'italic', fontSize: isTablet ? 16 : 12, color: T.inkMute, marginTop: isTablet ? 4 : 0 }}>{s.scientific}</div>
           <div style={{ fontSize: isTablet ? 14 : 11, color: T.brass, marginTop: isTablet ? 8 : 4, fontWeight: 600 }}>View species details →</div>
