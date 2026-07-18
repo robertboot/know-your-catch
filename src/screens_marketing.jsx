@@ -200,27 +200,23 @@ body { margin: 0; }
 }
 
 /* Hero — bg image + scrim + centered single-column text.
-   min-height is intentionally ~10% taller than the old 620px so the
-   center/cover of the landscape hero image (1672x941) reveals more
-   vertical scene on desktop before it gets cropped. Mobile is pinned
-   back at 620px in the max-width: 900px block below: at phone widths
-   the narrow container forces cover to zoom the wide image heavily,
-   so a taller container would crop MORE, not less. */
+   The scrim's top+mid opacities are dialled ~10% down from the
+   original 0.35 / 0.62 so more of the bg image shows through — text
+   still lands over enough dark for legibility since the ocean image
+   is already dark on its own. Bottom stop stays fully opaque (fades
+   to page bg color) to hide the seam into the next section. */
 .rl-hero {
   position: relative; overflow: hidden;
   padding: 20px 0 90px;
-  min-height: 682px;
+  min-height: 620px;
 }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
   background: center/cover no-repeat url("${A.heroBg}");
 }
-@media (max-width: 900px) {
-  .rl-hero { min-height: 620px; }
-}
 .rl-hero-scrim {
   position: absolute; inset: 0; z-index: 1;
-  background: linear-gradient(180deg, rgba(6,17,31,0.35) 0%, rgba(6,17,31,0.62) 45%, ${P.bg} 100%);
+  background: linear-gradient(180deg, rgba(6,17,31,0.32) 0%, rgba(6,17,31,0.56) 45%, ${P.bg} 100%);
 }
 .rl-hero-inner {
   position: relative; z-index: 2;
