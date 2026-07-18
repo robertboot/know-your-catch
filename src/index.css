@@ -43,10 +43,11 @@ input[type=number] { -moz-appearance: textfield; }
 .kyc-lightbox-enter { animation: kyc-fade-in 140ms ease-out; }
 @keyframes kyc-fade-in { from { opacity: 0; } to { opacity: 1; } }
 /* Slow Ken Burns drift for hero / scan background images. Applied to a
-   wrapper so a child img can still carry a tilt-parallax transform. */
-.kyc-kenburns { animation: kyc-kenburns 22s ease-in-out infinite alternate; will-change: transform; }
+   wrapper so a child img can still carry a tilt-parallax transform.
+   Runs regardless of prefers-reduced-motion — it's a deliberate brand
+   ambiance, kept slow + subtle enough to be comfortable. */
+.kyc-kenburns { animation: kyc-kenburns 18s ease-in-out infinite alternate; will-change: transform; }
 @keyframes kyc-kenburns {
-  0%   { transform: scale(1)    translate(0, 0); }
-  100% { transform: scale(1.12) translate(-1.5%, -1%); }
+  0%   { transform: scale(1.02) translate(2%, 1%); }
+  100% { transform: scale(1.16) translate(-3%, -2%); }
 }
-@media (prefers-reduced-motion: reduce) { .kyc-kenburns { animation: none; } }
