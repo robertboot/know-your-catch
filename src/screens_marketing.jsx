@@ -515,12 +515,11 @@ function KnowRules() {
           </p>
         </div>
         <div className="rl-split-media">
-          <img
-            className="rl-phone-shot"
-            src={A.screenshotRegs}
-            alt="ReelIntel Review catch screen — Mahi-Mahi confirmed, in season, ready to log."
-            loading="lazy"
-            decoding="async"
+          <ImageSlot
+            variant="phone"
+            src={A.screenshotFishId}
+            alt="ReelIntel fish ID result screen showing the identified species with confidence, key ID cues, and lookalikes."
+            label="screenshot-fishid.png"
           />
         </div>
       </div>
@@ -533,11 +532,12 @@ function IdentifyIt() {
     <section className="rl-section rl-section-alt">
       <div className="rl-container rl-split rl-split-reverse">
         <div className="rl-split-media">
-          <ImageSlot
-            variant="phone"
-            src={A.screenshotFishId}
-            alt="ReelIntel fish ID result screen showing the identified species with confidence, key ID cues, and lookalikes."
-            label="screenshot-fishid.png"
+          <img
+            className="rl-phone-shot"
+            src={A.screenshotRegs}
+            alt="ReelIntel Review catch screen — Mahi-Mahi confirmed, in season, ready to log."
+            loading="lazy"
+            decoding="async"
           />
         </div>
         <div className="rl-split-copy">
