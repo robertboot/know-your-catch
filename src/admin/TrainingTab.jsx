@@ -20,7 +20,7 @@
    Crop tool is deferred per spec — export step (Phase 3) will use the
    full image when crop_bbox is null. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon, Menu as MenuIcon, Crop as CropIcon } from 'lucide-react';
+import { Image as ImageIcon, Menu as MenuIcon, Crop as CropIcon, X as XIcon } from 'lucide-react';
 import { T } from '../theme.js';
 import { SPECIES } from '../data.js';
 import {
@@ -652,11 +652,34 @@ function ModeBtn({ active, onClick, children }) {
 }
 
 function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
-  // No preview thumbnail. Prior tries (blob URL + FileReader) both
-  // fell over at scale — Safari rejects blob-scheme URLs for many
-  // dropped Files, and running 62 FileReaders in parallel OOMs. The
-  // filename + size + type is enough for review; uploads never
-  // needed the preview to succeed.
+  // Lazy blob-URL thumbnail. The old FileReader approach OOM'd at
+  // scale because it loaded the whole file into memory as base64;
+  // URL.createObjectURL is a lightweight reference to the File that
+  // the browser already has in memory — 173 rows costs ~zero extra.
+  // loading="lazy" on the <img> keeps the browser from decoding
+  // every image at once. Fallback: if a specific blob URL fails to
+  // load (rare Safari edge case), swap to the ImageIcon placeholder.
+  const [thumbUrl, setThumbUrl] = useState(null);
+  const [thumbErr, setThumbErr] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
+
+  useEffect(() => {
+    if (!row.file) return;
+    const url = URL.createObjectURL(row.file);
+    setThumbUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [row.file]);
+
+  // Esc closes the lightbox — keeps keyboard users unstuck when the
+  // modal covers the whole viewport.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e) => { if (e.key === 'Escape') setLightbox(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
+
+  const canOpen = thumbUrl && !thumbErr;
 
   const statusColor =
     row.status === 'done'        ? T.open :
@@ -676,13 +699,31 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
       display: 'flex', alignItems: 'center', gap: 10, padding: 8,
       background: T.parchmentDeep, borderRadius: 8, border: `1px solid ${T.cardEdge}`,
     }}>
-      <div style={{
-        width: 56, height: 56, flexShrink: 0, borderRadius: 6,
-        background: T.card, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        border: `1px solid ${T.cardEdge}`,
-      }}>
-        <ImageIcon size={20} color={T.inkMute} />
-      </div>
+      <button
+        type="button"
+        onClick={() => { if (canOpen) setLightbox(true); }}
+        title={canOpen ? 'Open full size' : ''}
+        aria-label={canOpen ? `Open ${row.file.name} full size` : row.file.name}
+        style={{
+          width: 56, height: 56, flexShrink: 0, borderRadius: 6,
+          padding: 0, overflow: 'hidden',
+          background: T.card, border: `1px solid ${T.cardEdge}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: canOpen ? 'zoom-in' : 'default',
+        }}
+      >
+        {canOpen ? (
+          <img
+            src={thumbUrl}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbErr(true)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <ImageIcon size={20} color={T.inkMute} />
+        )}
+      </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {row.file.name}
@@ -734,6 +775,57 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
           background: 'transparent', border: 'none', color: T.inkMute, cursor: 'pointer',
           fontSize: 16, padding: '0 4px',
         }} title="Remove">×</button>
+      )}
+
+      {/* Full-size lightbox. Backdrop click OR X button OR Esc closes.
+          zIndex above the admin nav (which caps below 1000). */}
+      {lightbox && canOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${row.file.name} — full size`}
+          onClick={() => setLightbox(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 2000,
+            background: 'rgba(0,0,0,0.9)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLightbox(false); }}
+            aria-label="Close"
+            title="Close (Esc)"
+            style={{
+              position: 'absolute', top: 16, right: 16, zIndex: 2001,
+              width: 42, height: 42, borderRadius: 999,
+              background: 'rgba(0,0,0,0.7)', border: `1px solid ${T.cardEdge}`,
+              color: T.ink, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <XIcon size={20} />
+          </button>
+          <img
+            src={thumbUrl}
+            alt={row.file.name}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '95vw', maxHeight: '90vh',
+              objectFit: 'contain', display: 'block',
+              borderRadius: 6,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+            }}
+          />
+          <div style={{
+            position: 'absolute', bottom: 16, left: 0, right: 0,
+            textAlign: 'center', color: T.inkMute, fontSize: 12,
+            padding: '0 60px', wordBreak: 'break-all',
+          }}>
+            {row.file.name}
+          </div>
+        </div>
       )}
     </div>
   );
