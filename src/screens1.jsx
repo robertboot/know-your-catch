@@ -5,7 +5,7 @@ import {
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
-  Crosshair,
+  Crosshair, Save as SaveIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -1828,20 +1828,29 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             </div>
           )}
         </div>
+
+        {/* Save-catch action — floppy icon superimposed bottom-right of
+            the photo. Logs the catch with the displayed species. */}
+        <button
+          onClick={doSave}
+          aria-label="Save catch"
+          style={{
+            position: 'absolute', bottom: 12, right: 12, zIndex: 3,
+            display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+            background: 'rgba(6,20,36,0.72)', border: '1.5px solid #5ecdf2',
+            color: '#5ecdf2', borderRadius: 12, padding: '8px 12px',
+            cursor: 'pointer', backdropFilter: 'blur(4px)',
+          }}
+        >
+          <SaveIcon size={26} strokeWidth={2} />
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>SAVE CATCH</span>
+        </button>
       </div>
 
       <style>{`@keyframes kycFeedbackIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }`}</style>
 
-      {/* Logbook actions — sit right under the photo. Save logs the
-          catch; Scan Another discards this ID and re-opens the camera. */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-        <PrimaryButton onClick={doSave} style={{ flex: 2, minHeight: 50, fontSize: 16, fontWeight: 800 }}>
-          Save to Logbook
-        </PrimaryButton>
-        <GhostButton onClick={onScanAnother || onRetake} style={{ flex: 1, minHeight: 50, fontSize: 15, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <RotateCcw size={16} /> Scan Another
-        </GhostButton>
-      </div>
+      {/* Save to Logbook / Scan Another buttons removed — Save catch is
+          now the floppy icon superimposed on the photo above. */}
 
       {/* WHY THIS MATCH FITS — species-authored ID cues */}
       {keyIds.length > 0 && (
