@@ -35,6 +35,8 @@ const A = {
   patternsHeatmap:     `${M}patterns-heatmap.jpg`,
   screenshotRegs:      `${M}screenshot-regulations.png`,
   screenshotFishId:    `${M}screenshot-fishid.png`,
+  alertOutOfSeason:    `${M}alert-out-of-season.png`,
+  alertInSeason:       `${M}alert-in-season.png`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -341,6 +343,24 @@ body { margin: 0; }
 .rl-feature h3 { font-size: 18px; font-weight: 800; color: ${P.ink}; margin: 0 0 8px; }
 .rl-feature p  { font-size: 14px; line-height: 1.6; color: ${P.inkSoft}; margin: 0; }
 
+/* Alert-card pair — transparent PNGs sitting directly on the section
+   background, 2-up on desktop, stacked on phone. Each image caps at
+   440px so they don't balloon on wide viewports. No card / border /
+   fill — the images are meant to read as native app screenshots
+   floating on the dark scene. */
+.rl-alerts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  max-width: 940px; margin: 32px auto 0;
+  align-items: start;
+}
+.rl-alerts img {
+  display: block; width: 100%; max-width: 440px; height: auto;
+  margin: 0 auto;
+}
+@media (max-width: 720px) {
+  .rl-alerts { grid-template-columns: 1fr; gap: 18px; }
+}
+
 /* Two-card row for Data + Free — same card treatment as tiles but
    two per row on desktop, stack on phone. */
 .rl-two-card { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -452,6 +472,20 @@ function ProblemBridge() {
         <p className="rl-lead-2">
           You don't fish for a living. So when you land something you don't recognize, you might not know what it is — or the rules. A wrong call can cost you a fine, or worse. That's the moment ReelIntel was built for.
         </p>
+        <div className="rl-alerts">
+          <img
+            src={A.alertOutOfSeason}
+            alt="Out of season alert — species is currently out of season in your selected waters"
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            src={A.alertInSeason}
+            alt="In season alert — species is in season, with minimum legal length shown"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
       </div>
     </section>
   );
