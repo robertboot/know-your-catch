@@ -1657,11 +1657,12 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   const [showPicker, setShowPicker] = useState(false);
   const lookalikesRef = useRef(null);
 
-  // No confident pick at all — keep the couldn't-identify fallback.
-  // The redesign is for the result-with-top-pick flow; this branch is
-  // the "you should try again or pick manually" branch and doesn't
-  // benefit from the Save & Continue pattern.
-  if (!candidates || candidates.length === 0) {
+  // No confident pick AND no manual override yet — show the
+  // couldn't-identify fallback. Once the angler picks a species via
+  // "Pick the species", overrideId is set and we fall through to the
+  // main results view (labelled YOUR PICK) so they can CONFIRM / Save
+  // the same way Report Wrong ID lands them.
+  if ((!candidates || candidates.length === 0) && !overrideId) {
     return (
       <div style={{ padding: '18px 16px' }}>
         <img src={imageDataUrl} alt="Your catch" style={{
@@ -1707,7 +1708,14 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             speciesOptions={SPECIES.filter(s => s.active !== false)}
             currentSpeciesId={null}
             onCancel={() => setShowPicker(false)}
-            onPick={(sid) => { setShowPicker(false); if (onCorrectSave) onCorrectSave(sid, null); }}
+            onPick={(sid) => {
+              // Match Report Wrong ID: correct in place and re-render
+              // as the main results view so the angler can CONFIRM /
+              // Save. Don't jump straight to catch entry.
+              setShowPicker(false);
+              setOverrideId(sid);
+              setFeedbackState('unset');
+            }}
             title="What species is it?"
           />
         )}
@@ -1715,13 +1723,15 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
     );
   }
 
-  const top = candidates[0];
+  // top may be null when we fell through from the no-candidates
+  // branch after the angler picked a species manually. In that case
+  // isCorrected is always true (overrideId is set) and the model
+  // never had a pick to record as "wrong".
+  const top = (candidates && candidates.length > 0) ? candidates[0] : null;
   const isCorrected = !!overrideId;
   const displayedId = overrideId || top.speciesId;
-  // topSpecies drives the whole page — point it at the corrected
-  // species so the name, ID cues, and lookalikes all update in place.
   const topSpecies = speciesById(displayedId);
-  const scorePct = Math.round((top.score || 0) * 100);
+  const scorePct = top ? Math.round((top.score || 0) * 100) : 0;
   const pillTier = isCorrected
     ? { label: 'YOUR PICK', bg: T.warn, ink: '#062330' }
     : top.score >= 0.85 ? { label: 'CONFIRMED MATCH', bg: '#5ecdf2', ink: '#062330' }
@@ -1732,14 +1742,14 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   // angler overrode the pick, otherwise a confirmation), stay on page.
   const doConfirm = () => {
     setFeedbackState('confirmed');
-    if (isCorrected) { if (onCorrectFeedbackOnly) onCorrectFeedbackOnly(displayedId, top.speciesId); }
+    if (isCorrected) { if (onCorrectFeedbackOnly) onCorrectFeedbackOnly(displayedId, top?.speciesId ?? null); }
     else { if (onConfirmFeedbackOnly) onConfirmFeedbackOnly(displayedId); }
   };
   // SAVE TO LOGBOOK: navigate to catch entry with the displayed species.
   // Skip the feedback double-fire if CONFIRM already banked it.
   const doSave = () => {
     if (feedbackState === 'confirmed') { if (onSaveWithoutFeedback) onSaveWithoutFeedback(displayedId); }
-    else if (isCorrected) { if (onCorrectSave) onCorrectSave(displayedId, top.speciesId); }
+    else if (isCorrected) { if (onCorrectSave) onCorrectSave(displayedId, top?.speciesId ?? null); }
     else { if (onConfirmSave) onConfirmSave(displayedId); }
   };
 
