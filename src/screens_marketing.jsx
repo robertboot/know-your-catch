@@ -343,6 +343,15 @@ body { margin: 0; }
 .rl-feature h3 { font-size: 18px; font-weight: 800; color: ${P.ink}; margin: 0 0 8px; }
 .rl-feature p  { font-size: 14px; line-height: 1.6; color: ${P.inkSoft}; margin: 0; }
 
+/* Phone screenshot — transparent PNG (mockup with rounded corners
+   baked in), sits directly on the section background. Capped small on
+   desktop so the split feels balanced next to the copy; full width up
+   to the cap on mobile after the split collapses to one column. */
+.rl-phone-shot {
+  display: block; width: 100%; height: auto;
+  max-width: 250px; margin: 0 auto;
+}
+
 /* Alert-card pair — transparent PNGs sitting directly on the section
    background, 2-up on desktop, stacked on phone. Each image caps at
    440px so they don't balloon on wide viewports. No card / border /
@@ -506,11 +515,12 @@ function KnowRules() {
           </p>
         </div>
         <div className="rl-split-media">
-          <ImageSlot
-            variant="phone"
+          <img
+            className="rl-phone-shot"
             src={A.screenshotRegs}
-            alt="ReelIntel regulations screen showing season, size, and bag limits for the identified species."
-            label="screenshot-regulations.png"
+            alt="ReelIntel Review catch screen — Mahi-Mahi confirmed, in season, ready to log."
+            loading="lazy"
+            decoding="async"
           />
         </div>
       </div>
