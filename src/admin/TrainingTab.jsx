@@ -233,11 +233,18 @@ function UploadPanel({ initialSpeciesId = null, onConsumeInitial }) {
   const folderRef = useRef(null);
   const [folderSummary, setFolderSummary] = useState(null); // {matched, unmatched:[names], files}
 
-  const speciesOptions = useMemo(
-    () => [...SPECIES].filter(s => s.active !== false)
-      .sort((a, b) => a.commonName.localeCompare(b.commonName)),
-    []
-  );
+  // Misc bucket first, then active species A→Z. _unassigned is the
+  // synthetic "needs species assignment" row from data.js — filtered
+  // out of user-facing pickers by active:false but kept in the
+  // training tab so photos can be parked here (upload), filtered
+  // (review), and swipe-reviewed. Storage / DB / correctSpecies all
+  // handle it the same as any real species.
+  const speciesOptions = useMemo(() => {
+    const misc = SPECIES.find(s => s.id === '_unassigned');
+    const active = [...SPECIES].filter(s => s.active !== false && s.id !== '_unassigned')
+      .sort((a, b) => a.commonName.localeCompare(b.commonName));
+    return misc ? [misc, ...active] : active;
+  }, []);
 
   // Coverage → Upload jump: force batch mode with the target species
   // pre-selected. Consume the intent so the panel doesn't override
@@ -867,11 +874,18 @@ function ReviewPanel() {
   const [inatTokenOpen, setInatTokenOpen] = useState(false);
   const [inatPreds, setInatPreds] = useState({}); // row.id → { results } | { error }
 
-  const speciesOptions = useMemo(
-    () => [...SPECIES].filter(s => s.active !== false)
-      .sort((a, b) => a.commonName.localeCompare(b.commonName)),
-    []
-  );
+  // Misc bucket first, then active species A→Z. _unassigned is the
+  // synthetic "needs species assignment" row from data.js — filtered
+  // out of user-facing pickers by active:false but kept in the
+  // training tab so photos can be parked here (upload), filtered
+  // (review), and swipe-reviewed. Storage / DB / correctSpecies all
+  // handle it the same as any real species.
+  const speciesOptions = useMemo(() => {
+    const misc = SPECIES.find(s => s.id === '_unassigned');
+    const active = [...SPECIES].filter(s => s.active !== false && s.id !== '_unassigned')
+      .sort((a, b) => a.commonName.localeCompare(b.commonName));
+    return misc ? [misc, ...active] : active;
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!speciesId) { setRows([]); return; }
@@ -1669,11 +1683,18 @@ function SwipeReviewPanel() {
   const startX = useRef(0);
   const cardUrl = useRef(new Map()); // row.id → signed url cache
 
-  const speciesOptions = useMemo(
-    () => [...SPECIES].filter(s => s.active !== false)
-      .sort((a, b) => a.commonName.localeCompare(b.commonName)),
-    []
-  );
+  // Misc bucket first, then active species A→Z. _unassigned is the
+  // synthetic "needs species assignment" row from data.js — filtered
+  // out of user-facing pickers by active:false but kept in the
+  // training tab so photos can be parked here (upload), filtered
+  // (review), and swipe-reviewed. Storage / DB / correctSpecies all
+  // handle it the same as any real species.
+  const speciesOptions = useMemo(() => {
+    const misc = SPECIES.find(s => s.id === '_unassigned');
+    const active = [...SPECIES].filter(s => s.active !== false && s.id !== '_unassigned')
+      .sort((a, b) => a.commonName.localeCompare(b.commonName));
+    return misc ? [misc, ...active] : active;
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');

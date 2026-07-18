@@ -49,6 +49,14 @@ export const CATEGORIES = [
 ];
 
 export const SPECIES = [
+  // Synthetic "misc" bucket for the admin training pipeline — uploads
+  // that need a species assignment later land here so the file is
+  // stored + reviewable without blocking on identification. active:false
+  // + category:'_admin' keeps it out of every user-facing picker
+  // (regulations, categories, quiz, search) which all filter on
+  // active !== false and a real category slug.
+  { id: '_unassigned', commonName: '— Misc / needs species', altNames: [], scientific: null, category: '_admin',
+    keyIds: [], lookalikes: [], active: false },
   { id: 'red_snapper', commonName: 'Red Snapper', altNames: ['Sow Snapper', 'Genuine Red'], scientific: 'Lutjanus campechanus', category: 'snapper',
     keyIds: ['Pinkish-red body fading to pale belly', 'Distinctive red iris', 'Anal fin pointed and triangular', 'Sharp canine teeth', 'No dark spot on side in adults'],
     lookalikes: ['vermilion_snapper', 'lane_snapper', 'mutton_snapper'],
