@@ -452,7 +452,7 @@ export function HomeScreen({
             aria-hidden
             style={{
               width: '100%', height: '100%',
-              objectFit: 'cover', objectPosition: '62% center',
+              objectFit: 'cover', objectPosition: '52% center',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
