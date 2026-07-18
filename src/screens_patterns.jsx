@@ -289,7 +289,10 @@ function CatchHeatMap({ catchLog }) {
 
   return (
     <StatCard title="Catch hot spots" n={located.length} icon={<MapPin size={14} />}>
-      <div ref={containerRef} style={{ height: 300, borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }} />
+      {/* isolation: isolate confines Leaflet's high z-index panes to
+          this container's stacking context — otherwise the map tiles
+          / controls paint over the fixed tab bar (zIndex 50). */}
+      <div ref={containerRef} style={{ height: 300, borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.cardEdge}`, isolation: 'isolate' }} />
       <div style={{ fontSize: 11, color: T.inkMute, marginTop: 6, textAlign: 'center' }}>
         {located.length} of {catchLog.length} catches have GPS · brighter clusters are your best water
       </div>
