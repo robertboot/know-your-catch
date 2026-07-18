@@ -1111,7 +1111,7 @@ export function IdentifyScreen({
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
-              objectFit: 'cover', objectPosition: 'right center',
+              objectFit: 'cover', objectPosition: 'center center',
               display: 'block', userSelect: 'none', pointerEvents: 'none',
             }}
           />
@@ -1845,7 +1845,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           onClick={doSave}
           aria-label="Save catch"
           style={{
-            position: 'absolute', bottom: 12, right: 12, zIndex: 3,
+            position: 'absolute', top: 12, right: 12, zIndex: 3,
             display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3,
             background: 'rgba(6,20,36,0.72)', border: '1.5px solid #5ecdf2',
             color: '#5ecdf2', borderRadius: 12, padding: '8px 12px',
