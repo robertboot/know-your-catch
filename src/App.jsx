@@ -642,6 +642,7 @@ export default function App() {
         state={state}
         jurisdiction={jurisdiction}
         autoScan={screen.autoScan}
+        onExitHome={() => reset([{ name: 'home' }])}
         onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
         onCategory={(catId) => push({ name: 'category', catId })}

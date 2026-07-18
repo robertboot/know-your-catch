@@ -814,7 +814,7 @@ function useTilt(maxPx = 14) {
 }
 
 export function IdentifyScreen({
-  state, jurisdiction, autoScan,
+  state, jurisdiction, autoScan, onExitHome,
   onPhoto, onBrowse, onCategory, onSearch, onQuiz, onSpecies,
 }) {
   const tilt = useTilt(14);
@@ -832,6 +832,17 @@ export function IdentifyScreen({
       setTimeout(() => fileRef.current?.click(), 150);
     }
   }, [autoScan]);
+
+  // X-ing out of the photo picker (take-photo / library / file sheet)
+  // returns to Home. The file input fires a native 'cancel' event when
+  // dismissed without a selection (iOS 16.4+ / modern browsers).
+  useEffect(() => {
+    const el = fileRef.current;
+    if (!el || !onExitHome) return undefined;
+    const onCancel = () => onExitHome();
+    el.addEventListener('cancel', onCancel);
+    return () => el.removeEventListener('cancel', onCancel);
+  }, [onExitHome]);
 
   // When user picks/captures a photo, read it as base64 and hand to
   // onPhoto. Same behaviour as the old hero — only the presentation
@@ -1999,16 +2010,30 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             <Check size={20} strokeWidth={3} /> CONFIRM
           </PrimaryButton>
         )}
-        <GhostButton
-          onClick={() => setShowPicker(true)}
-          style={{
-            flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            color: T.warn, borderColor: T.warn,
-          }}
-        >
-          <Flag size={15} /> Report Wrong ID
-        </GhostButton>
+        {feedbackState === 'confirmed' ? (
+          // Once confirmed, "wrong ID" no longer applies — offer the next
+          // scan instead. Behaves like Click-to-Scan (photo/library/file).
+          <GhostButton
+            onClick={onScanAnother || onRetake}
+            style={{
+              flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            <RotateCcw size={15} /> Scan Another
+          </GhostButton>
+        ) : (
+          <GhostButton
+            onClick={() => setShowPicker(true)}
+            style={{
+              flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              color: T.warn, borderColor: T.warn,
+            }}
+          >
+            <Flag size={15} /> Report Wrong ID
+          </GhostButton>
+        )}
       </div>
 
       {/* Report wrong ID picker — updates the displayed species IN
