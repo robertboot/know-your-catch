@@ -199,15 +199,24 @@ body { margin: 0; }
   padding: 18px 30px; font-size: 15px; letter-spacing: 0.6px;
 }
 
-/* Hero — bg image + scrim + centered single-column text */
+/* Hero — bg image + scrim + centered single-column text.
+   min-height is intentionally ~10% taller than the old 620px so the
+   center/cover of the landscape hero image (1672x941) reveals more
+   vertical scene on desktop before it gets cropped. Mobile is pinned
+   back at 620px in the max-width: 900px block below: at phone widths
+   the narrow container forces cover to zoom the wide image heavily,
+   so a taller container would crop MORE, not less. */
 .rl-hero {
   position: relative; overflow: hidden;
   padding: 20px 0 90px;
-  min-height: 620px;
+  min-height: 682px;
 }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
   background: center/cover no-repeat url("${A.heroBg}");
+}
+@media (max-width: 900px) {
+  .rl-hero { min-height: 620px; }
 }
 .rl-hero-scrim {
   position: absolute; inset: 0; z-index: 1;
