@@ -778,10 +778,46 @@ export function HomeScreen({
 
    Offline-first: search, category nav, quiz, and species status all
    read from bundled data. No fetch anywhere on this screen. */
+/* Gyroscope tilt → small parallax offset {x,y} in px. On iOS 13+ the
+   motion sensor needs a one-time permission requested from a user
+   gesture, so we ask on the first tap anywhere; until then (and on
+   unsupported devices) the offset stays 0 and the Ken Burns drift
+   carries the motion on its own. */
+function useTilt(maxPx = 14) {
+  const [t, setT] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    let raf = 0, attached = false;
+    const onOrient = (e) => {
+      const gx = Math.max(-1, Math.min(1, (e.gamma || 0) / 28));      // left/right
+      const gy = Math.max(-1, Math.min(1, ((e.beta || 0) - 45) / 28)); // front/back
+      if (raf) return;
+      raf = requestAnimationFrame(() => { setT({ x: gx * maxPx, y: gy * maxPx }); raf = 0; });
+    };
+    const attach = () => { if (attached) return; attached = true; window.addEventListener('deviceorientation', onOrient, true); };
+    const DOE = typeof window !== 'undefined' ? window.DeviceOrientationEvent : null;
+    let onFirstTouch = null;
+    if (DOE && typeof DOE.requestPermission === 'function') {
+      onFirstTouch = () => {
+        DOE.requestPermission().then(res => { if (res === 'granted') attach(); }).catch(() => {});
+      };
+      window.addEventListener('pointerdown', onFirstTouch, { once: true });
+    } else if (DOE) {
+      attach();
+    }
+    return () => {
+      if (onFirstTouch) window.removeEventListener('pointerdown', onFirstTouch);
+      if (attached) window.removeEventListener('deviceorientation', onOrient, true);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [maxPx]);
+  return t;
+}
+
 export function IdentifyScreen({
   state, jurisdiction, autoScan,
   onPhoto, onBrowse, onCategory, onSearch, onQuiz, onSpecies,
 }) {
+  const tilt = useTilt(14);
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const fileRef = useRef(null);
@@ -1081,40 +1117,28 @@ export function IdentifyScreen({
             boxShadow: '0 6px 22px rgba(0, 0, 0, 0.35)',
           }}
         >
-          {/* Background image — right-anchored so the fish + reticle
-              stay visible when the card crops narrower on iPhone. */}
-          <img
-            src={`${import.meta.env.BASE_URL}brand/fish_scan_bg.jpg`}
-            alt=""
-            aria-hidden
-            onLoad={() => {
-              if (typeof console !== 'undefined') {
-                // eslint-disable-next-line no-console
-                console.log('[hero] tuna bg loaded');
-              }
-            }}
-            onError={(e) => {
-              // Log the failing URL so we can tell iOS-bundle-path
-              // problems from Vercel-cache problems from just-missing-
-              // asset problems.
-              if (typeof console !== 'undefined') {
-                // eslint-disable-next-line no-console
-                console.warn('[hero] tuna bg failed to load', {
-                  src: e.currentTarget?.src,
-                  baseUrl: import.meta.env.BASE_URL,
-                });
-              }
-              // Hide the broken img so the fallback gradient shows
-              // through cleanly instead of a broken glyph.
-              e.currentTarget.style.display = 'none';
-            }}
-            style={{
-              position: 'absolute', inset: 0,
-              width: '100%', height: '100%',
-              objectFit: 'cover', objectPosition: 'center center',
-              display: 'block', userSelect: 'none', pointerEvents: 'none',
-            }}
-          />
+          {/* Background image — centered, with a slow Ken Burns drift on
+              the wrapper and a gyroscope tilt-parallax on the img so it
+              feels alive. Overscan (inset -10%) hides the edges as it
+              scales / shifts. */}
+          <div aria-hidden className="kyc-kenburns" style={{
+            position: 'absolute', inset: '-10%', pointerEvents: 'none',
+          }}>
+            <img
+              src={`${import.meta.env.BASE_URL}brand/fish_scan_bg.jpg`}
+              alt=""
+              aria-hidden
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              style={{
+                width: '100%', height: '100%',
+                objectFit: 'cover', objectPosition: 'center center',
+                display: 'block', userSelect: 'none', pointerEvents: 'none',
+                transform: `translate(${tilt.x}px, ${tilt.y}px)`,
+                transition: 'transform 120ms ease-out',
+                willChange: 'transform',
+              }}
+            />
+          </div>
           {/* Scrim — LEFT-HEAVY so the copy on the left half stays
               readable while the fish on the right stays visually
               intact. Solid dark on the left → nearly transparent on

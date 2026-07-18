@@ -42,3 +42,11 @@ input[type=number] { -moz-appearance: textfield; }
 /* Lightbox backdrop animation */
 .kyc-lightbox-enter { animation: kyc-fade-in 140ms ease-out; }
 @keyframes kyc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Slow Ken Burns drift for hero / scan background images. Applied to a
+   wrapper so a child img can still carry a tilt-parallax transform. */
+.kyc-kenburns { animation: kyc-kenburns 22s ease-in-out infinite alternate; will-change: transform; }
+@keyframes kyc-kenburns {
+  0%   { transform: scale(1)    translate(0, 0); }
+  100% { transform: scale(1.12) translate(-1.5%, -1%); }
+}
+@media (prefers-reduced-motion: reduce) { .kyc-kenburns { animation: none; } }
