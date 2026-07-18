@@ -452,7 +452,7 @@ export function HomeScreen({
             aria-hidden
             style={{
               width: '100%', height: '100%',
-              objectFit: 'cover', objectPosition: 'left center',
+              objectFit: 'cover', objectPosition: '62% center',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
@@ -1150,7 +1150,7 @@ export function IdentifyScreen({
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
               style={{
                 width: '100%', height: '100%',
-                objectFit: 'cover', objectPosition: 'center center',
+                objectFit: 'cover', objectPosition: '66% center',
                 display: 'block', userSelect: 'none', pointerEvents: 'none',
                 transform: `translate(${tilt.x}px, ${tilt.y}px)`,
                 transition: 'transform 120ms ease-out',
