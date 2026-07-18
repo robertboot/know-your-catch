@@ -332,6 +332,7 @@ export function HomeScreen({
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   const isLandscape = screenSize === 'tablet-landscape';
+  const heroTilt = useTilt(12);
   // Recent catches strip below the quick-actions row. Show the 10
   // newest; hidden if the angler hasn't logged anything yet.
   const recentCatches = useMemo(() => {
@@ -440,17 +441,24 @@ export function HomeScreen({
         background: '#031B33',
         minHeight: isTablet ? (isLandscape ? 520 : 460) : undefined,
       }}>
-        <img
-          src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
-          alt=""
-          aria-hidden
-          style={{
-            position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
-            width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: 'left center',
-            pointerEvents: 'none', display: 'block',
-          }}
-        />
+        {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
+            the tuna feels alive. Overscan hides the edges as it moves. */}
+        <div aria-hidden className="kyc-kenburns" style={{
+          position: 'absolute', inset: '-10%', pointerEvents: 'none',
+        }}>
+          <img
+            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
+            alt=""
+            aria-hidden
+            style={{
+              width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: 'left center',
+              pointerEvents: 'none', display: 'block',
+              transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
+              transition: 'transform 120ms ease-out', willChange: 'transform',
+            }}
+          />
+        </div>
         <div aria-hidden style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
           background: isTablet
