@@ -1568,6 +1568,7 @@ function SwipeReviewPanel() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [done, setDone] = useState({ approved: 0, rejected: 0, corrected: 0, kept: 0 });
   const [undo, setUndo] = useState(null); // { row, action } for one-level undo
+  const [flash, setFlash] = useState(null); // { text, color } quick confirmation
   const [menuOpen, setMenuOpen] = useState(false); // collapse controls on mobile
   const [cropOpen, setCropOpen] = useState(false);
   const [cropPreview, setCropPreview] = useState({}); // row.id → cropped dataUrl
@@ -1616,6 +1617,13 @@ function SwipeReviewPanel() {
     return () => { alive = false; };
   }, [current?.id, next?.id]);
 
+  // Auto-dismiss the confirmation flash after a beat.
+  useEffect(() => {
+    if (!flash) return undefined;
+    const t = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(t);
+  }, [flash]);
+
   // Optimistic: advance the UI immediately, fire the DB write in the
   // background so a fast pass never waits on the network.
   const bg = (p) => { p.then(r => { if (!r || !r.ok) setError((r && r.error) || 'save failed — reload to re-check'); }, () => setError('save failed — reload to re-check')); };
@@ -1627,6 +1635,12 @@ function SwipeReviewPanel() {
       corrected: d.corrected + (action === 'correct'  ? 1 : 0),
       kept:      d.kept      + (action === 'keep'     ? 1 : 0),
     }));
+    setFlash(
+      (action === 'approve' || action === 'keep') ? { text: 'Kept', color: T.open }
+      : action === 'reject'  ? { text: 'Rejected', color: T.closed }
+      : action === 'correct' ? { text: 'Recategorized', color: T.brass }
+      : null
+    );
     setDrag({ x: 0, active: false });
     setIdx(i => i + 1);
   };
@@ -1677,8 +1691,9 @@ function SwipeReviewPanel() {
   const onUp = () => {
     if (!drag.active) return;
     const x = drag.x;
-    if (x > THRESHOLD) doApprove(current);
-    else if (x < -THRESHOLD) doReject(current);
+    // Swipe LEFT = keep/approve, swipe RIGHT = reject.
+    if (x < -THRESHOLD) doApprove(current);
+    else if (x > THRESHOLD) doReject(current);
     else setDrag({ x: 0, active: false });
   };
 
@@ -1686,8 +1701,8 @@ function SwipeReviewPanel() {
   useEffect(() => {
     const onKey = (e) => {
       if (pickerOpen) return;
-      if (e.key === 'ArrowRight') { e.preventDefault(); doApprove(current); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); doReject(current); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); doApprove(current); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); doReject(current); }
       else if (e.key.toLowerCase() === 'c') { e.preventDefault(); if (current) setPickerOpen(true); }
       else if (e.key.toLowerCase() === 'u') { e.preventDefault(); doUndo(); }
     };
@@ -1833,35 +1848,56 @@ function SwipeReviewPanel() {
                 {curSpecies?.commonName || current.species_id}
               </div>
 
-              {/* Swipe intent overlays */}
+              {/* Swipe intent overlays — LEFT = keep, RIGHT = reject. */}
               <div aria-hidden style={{
                 position: 'absolute', top: 16, left: 16,
                 border: `3px solid ${T.open}`, color: T.open,
                 padding: '4px 12px', borderRadius: 8, fontWeight: 900, fontSize: 22, letterSpacing: 1,
-                transform: 'rotate(-12deg)', opacity: Math.max(0, Math.min(1, drag.x / THRESHOLD)),
+                transform: 'rotate(-12deg)', opacity: Math.max(0, Math.min(1, -drag.x / THRESHOLD)),
               }}>KEEP</div>
               <div aria-hidden style={{
                 position: 'absolute', top: 16, right: 16,
                 border: `3px solid ${T.closed}`, color: T.closed,
                 padding: '4px 12px', borderRadius: 8, fontWeight: 900, fontSize: 22, letterSpacing: 1,
-                transform: 'rotate(12deg)', opacity: Math.max(0, Math.min(1, -drag.x / THRESHOLD)),
+                transform: 'rotate(12deg)', opacity: Math.max(0, Math.min(1, drag.x / THRESHOLD)),
               }}>NOPE</div>
             </div>
           </div>
 
-          {/* Action buttons — reject / correct / approve */}
+          {/* Action buttons — keep (left) / correct / reject (right) so
+              they line up with the swipe directions. */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
-            <button onClick={() => doReject(current)} disabled={busy} aria-label="Reject" style={circleBtn(T.closed)}>✕</button>
+            <button onClick={() => doApprove(current)} disabled={busy} aria-label="Keep" style={circleBtn(T.open)}>✓</button>
             <button onClick={() => setPickerOpen(true)} disabled={busy} style={{
               flex: 1, maxWidth: 200, background: 'transparent', border: `1.5px solid ${T.brass}`,
               color: T.brass, borderRadius: 12, padding: '13px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
             }}>Correct the species</button>
-            <button onClick={() => doApprove(current)} disabled={busy} aria-label="Approve" style={circleBtn(T.open)}>✓</button>
+            <button onClick={() => doReject(current)} disabled={busy} aria-label="Reject" style={circleBtn(T.closed)}>✕</button>
           </div>
           <div style={{ fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
-            Swipe right to keep, left to reject · keys ← ✕ · → ✓ · C correct · U undo
+            Swipe LEFT to keep, RIGHT to reject · keys ← ✓ · → ✕ · C correct · U undo
           </div>
         </>
+      )}
+
+      {/* Quick confirmation flash with an inline Undo. */}
+      {flash && (
+        <div style={{
+          position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+          transform: 'translateX(-50%)', zIndex: 300,
+          display: 'inline-flex', alignItems: 'center', gap: 12,
+          background: T.card, border: `1.5px solid ${flash.color}`,
+          borderRadius: 999, padding: '10px 16px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        }}>
+          <span style={{ color: flash.color, fontWeight: 800, fontSize: 14 }}>{flash.text}</span>
+          {undo && (
+            <button onClick={() => { doUndo(); setFlash(null); }} style={{
+              background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
+              borderRadius: 999, padding: '5px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+            }}>Undo</button>
+          )}
+        </div>
       )}
 
       {pickerOpen && current && (
