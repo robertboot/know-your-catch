@@ -356,12 +356,17 @@ body { margin: 0; }
 /* Free-height variant — fixed height matching the old phone-slot
    frame, natural width. Use when the image isn't a strict 9:19.5
    phone aspect and would otherwise get cropped by a fixed-aspect
-   container. max-width:100% guards against overflow on narrow
-   viewports. */
+   container. Same dashed cyan border + dark backing used by the
+   rl-img-slot placeholder cards (patterns-heatmap etc.) so the
+   frame reads as the same design element. max-width:100% guards
+   against overflow on narrow viewports. */
 .rl-phone-shot-free {
   display: block; margin: 0 auto;
   height: 620px; width: auto;
   max-width: 100%;
+  border: 2px dashed rgba(25,212,242,0.35);
+  border-radius: 20px;
+  background: #06182b;
 }
 @media (max-width: 900px) {
   .rl-phone-shot-free { height: 520px; }
