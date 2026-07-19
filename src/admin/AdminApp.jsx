@@ -411,6 +411,9 @@ function SpeciesTab({ detailView, setDetailView }) {
   // (in categories-store sort_order) and orders by common name within
   // each group. Alpha is a flat A-Z.
   const [sortMode, setSortMode] = useState('alpha');
+  // Category filter — 'all' or a specific category id, so you can view
+  // just one category's species.
+  const [categoryFilter, setCategoryFilter] = useState('all');
   // Species tab now has two sub-panels: the existing species list and
   // the new suggestion queue where user-submitted custom species land.
   const [panel, setPanel] = useState('list');
@@ -461,14 +464,17 @@ function SpeciesTab({ detailView, setDetailView }) {
     if (statusFilter === 'deactivated')  return s.active === false;
     return true;
   });
+  const byCategory = categoryFilter === 'all'
+    ? byStatus
+    : byStatus.filter(s => s.category === categoryFilter);
   const filtered = filter.trim()
-    ? byStatus.filter(s => {
+    ? byCategory.filter(s => {
         const q = filter.toLowerCase();
         return s.commonName.toLowerCase().includes(q)
           || (s.scientific || '').toLowerCase().includes(q)
           || s.id.toLowerCase().includes(q);
       })
-    : byStatus;
+    : byCategory;
 
   if (detailView?.kind === 'species-edit') {
     const editing = detailView.id ? SPECIES.find(s => s.id === detailView.id) : null;
@@ -507,6 +513,15 @@ function SpeciesTab({ detailView, setDetailView }) {
           value={filter} onChange={e => setFilter(e.target.value)}
           style={{ ...inputStyle, flex: 1, minWidth: 200 }}
         />
+        <select
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value)}
+          style={{ ...inputStyle, padding: '10px 12px', fontSize: 12, flexShrink: 0 }}
+          title="Filter by category"
+        >
+          <option value="all">All categories</option>
+          {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <select
           value={sortMode}
           onChange={e => setSortMode(e.target.value)}
