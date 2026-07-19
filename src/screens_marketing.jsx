@@ -366,6 +366,10 @@ body { margin: 0; }
   overflow: hidden;
   aspect-ratio: 4 / 5;
   display: flex; flex-direction: column; justify-content: flex-end;
+  /* Kill the base card's 1px border — the tile art has its own
+     frame baked in and doubling looked wrong. Hover border-color
+     rule from .rl-feature is a no-op on none. */
+  border: none;
 }
 .rl-feature-tile::before {
   content: '';
@@ -377,6 +381,10 @@ body { margin: 0; }
   pointer-events: none;
 }
 .rl-feature-tile > * { position: relative; z-index: 1; }
+/* Hide the JSX icon — the tile art already has its own icon baked
+   into the top-left. Display:none removes it from layout so the
+   heading rises to sit against the bottom padding. */
+.rl-feature-tile .rl-feature-icon { display: none; }
 
 /* Phone screenshot — transparent PNG (mockup with rounded corners
    baked in), sits directly on the section background. Capped small on
