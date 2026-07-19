@@ -8,7 +8,8 @@
    Real launch assets:
      public/marketing/hero-underwater-bg.png    (hero background — DO NOT swap)
      public/marketing/patterns-heatmap.jpg      (wide banner — placeholder OK until real file lands)
-     public/marketing/screenshot-regulations.png (phone screenshot — placeholder OK)
+     public/marketing/regulations-phone.png     (transparent angled phone — Know the rules)
+     public/marketing/review-catch-phone.png    (transparent angled phone — Identify it)
      public/marketing/screenshot-fishid.png     (phone screenshot — placeholder OK)
      public/brand/reelintel-horizontal.png      (footer logo)
      public/brand/icon-horz.png                 (nav logo)
@@ -33,8 +34,8 @@ const LOGO_HEADER     = `${import.meta.env.BASE_URL}brand/icon-horz.png`;
 const A = {
   heroBg:              `${M}hero-underwater-bg.png`,
   patternsHeatmap:     `${M}patterns-heatmap.jpg`,
-  screenshotRegs:      `${M}screenshot-regulations.png`,
-  screenshotRegs2:     `${M}screenshot-regulations2.png`,
+  regulationsPhone:    `${M}regulations-phone.png`,
+  reviewCatchPhone:    `${M}review-catch-phone.png`,
   screenshotFishId:    `${M}screenshot-fishid.png`,
   alertOutOfSeason:    `${M}alert-out-of-season.png`,
   alertInSeason:       `${M}alert-in-season.png`,
@@ -397,28 +398,6 @@ body { margin: 0; }
   max-width: 250px; margin: 0 auto;
 }
 
-/* Free-height variant — fixed height matching the old phone-slot
-   frame, natural width. Use when the image isn't a strict 9:19.5
-   phone aspect and would otherwise get cropped by a fixed-aspect
-   container. Same dashed cyan border + dark backing used by the
-   rl-img-slot placeholder cards (patterns-heatmap etc.) so the
-   frame reads as the same design element. max-width:100% guards
-   against overflow on narrow viewports. */
-.rl-phone-shot-free {
-  display: block; margin: 0 auto;
-  height: 620px; width: auto;
-  max-width: 100%;
-  border: 2px dashed rgba(25,212,242,0.35);
-  border-radius: 20px;
-  background: #06182b;
-}
-@media (max-width: 900px) {
-  .rl-phone-shot-free { height: 520px; }
-}
-@media (max-width: 500px) {
-  .rl-phone-shot-free { height: 440px; }
-}
-
 /* Alert-card pair — transparent PNGs sitting directly on the section
    background, 2-up on desktop, stacked on phone. Each image caps at
    440px so they don't balloon on wide viewports. No card / border /
@@ -623,9 +602,9 @@ function KnowRules() {
         </div>
         <div className="rl-split-media">
           <img
-            className="rl-phone-shot-free"
-            src={A.screenshotRegs2}
-            alt="ReelIntel species regulations page — Queen Snapper, season, size and bag limits, required gear."
+            className="rl-phone-shot"
+            src={A.regulationsPhone}
+            alt="ReelIntel species regulations page — Queen Snapper, seasons, size and bag limits, required gear."
             loading="lazy"
             decoding="async"
           />
@@ -642,7 +621,7 @@ function IdentifyIt() {
         <div className="rl-split-media">
           <img
             className="rl-phone-shot"
-            src={A.screenshotRegs}
+            src={A.reviewCatchPhone}
             alt="ReelIntel Review catch screen — Mahi-Mahi confirmed, in season, ready to log."
             loading="lazy"
             decoding="async"
