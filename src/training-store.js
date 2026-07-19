@@ -506,15 +506,20 @@ export async function saveCropRecover(id, bbox) {
   const cx = clamp(bbox.x), cy = clamp(bbox.y);
   const cw = Math.max(0.02, Math.min(1 - cx, Number(bbox.w) || 0));
   const ch = Math.max(0.02, Math.min(1 - cy, Number(bbox.h) || 0));
-  const sess = getLastSession();
-  const email = sess?.user?.email || null;
+  // Re-queue for review rather than auto-verify. Cropping usually
+  // means isolating one fish in a multi-fish photo, so the species
+  // label may no longer match the visible content — the admin still
+  // needs to confirm (or correct) species before verifying. Clearing
+  // rejection_reason drops the row out of the rejected bucket into
+  // pending. reviewed_by / reviewed_at are cleared so the stamp of
+  // whoever last verified it doesn't survive a change.
   const { error } = await c.from('training_images')
     .update({
       crop_bbox: { x: cx, y: cy, w: cw, h: ch },
-      status: 'verified',
+      status: 'pending',
       rejection_reason: null,
-      reviewed_by: email,
-      reviewed_at: new Date().toISOString(),
+      reviewed_by: null,
+      reviewed_at: null,
     })
     .eq('id', id);
   if (error) return { ok: false, error: error.message };
