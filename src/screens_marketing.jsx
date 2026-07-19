@@ -38,6 +38,10 @@ const A = {
   screenshotFishId:    `${M}screenshot-fishid.png`,
   alertOutOfSeason:    `${M}alert-out-of-season.png`,
   alertInSeason:       `${M}alert-in-season.png`,
+  tileCheckRegs:       `${M}tile-check-regs.jpg`,
+  tileFishId:          `${M}tile-fish-id.jpg`,
+  tileFishQuiz:        `${M}tile-fish-quiz.jpg`,
+  tilePatterns:        `${M}tile-patterns.jpg`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -344,6 +348,27 @@ body { margin: 0; }
 .rl-feature h3 { font-size: 18px; font-weight: 800; color: ${P.ink}; margin: 0 0 8px; }
 .rl-feature p  { font-size: 14px; line-height: 1.6; color: ${P.inkSoft}; margin: 0; }
 
+/* Tile variant — full-bleed blueprint art behind the icon + copy,
+   with a subtle dark scrim (via ::before) so the existing heading /
+   body / icon stay legible. overflow:hidden keeps the scrim inside
+   the rounded corners; direct children get z-index:1 so they render
+   above the scrim. */
+.rl-feature-tile {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: ${P.card};
+  overflow: hidden;
+}
+.rl-feature-tile::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(10, 22, 36, 0.45);
+  pointer-events: none;
+}
+.rl-feature-tile > * { position: relative; z-index: 1; }
+
 /* Phone screenshot — transparent PNG (mockup with rounded corners
    baked in), sits directly on the section background. Capped small on
    desktop so the split feels balanced next to the copy; full width up
@@ -585,21 +610,25 @@ const FEATURE_TILES = [
     icon: CloudIcon,
     title: 'Conditions that matter',
     body: 'Weather, wind, and surf for your fishing spots — know when to go and what to expect.',
+    bg: A.tilePatterns,
   },
   {
     icon: ShieldIcon,
     title: 'Alerts that keep you sharp',
     body: 'Regulation changes on your starred species, plus reminders for the best times to fish.',
+    bg: A.tileFishId,
   },
   {
     icon: TrophyIcon,
     title: 'Fish ID Quiz',
     body: 'Test your skills on species, seasons, and limits. We made it a game — challenge your buddies.',
+    bg: A.tileFishQuiz,
   },
   {
     icon: FishIcon,
     title: 'Research any fish',
     body: 'Look up regulations and species anytime, in season or out.',
+    bg: A.tileCheckRegs,
   },
 ];
 
@@ -612,7 +641,11 @@ function EverythingYouNeed() {
         </div>
         <div className="rl-features">
           {FEATURE_TILES.map((t, i) => (
-            <div key={i} className="rl-feature">
+            <div
+              key={i}
+              className="rl-feature rl-feature-tile"
+              style={{ backgroundImage: `url("${t.bg}")` }}
+            >
               <div className="rl-feature-icon"><t.icon size={22} /></div>
               <h3>{t.title}</h3>
               <p>{t.body}</p>
