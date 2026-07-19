@@ -42,6 +42,7 @@ const A = {
   tileFishId:          `${M}tile-fish-id.jpg`,
   tileFishQuiz:        `${M}tile-fish-quiz.jpg`,
   tilePatterns:        `${M}tile-patterns.jpg`,
+  comingSoonLidar:     `${M}coming-soon-lidar.jpg`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -450,6 +451,22 @@ body { margin: 0; }
   font-size: 11px; font-weight: 800; letter-spacing: 2px;
   border: 1px solid ${P.borderHi}; margin-bottom: 18px;
 }
+/* LiDAR banner frame — 1.5px dashed accent, ~14px radius, 8px inner
+   padding so the dashed line reads as a frame around (not touching)
+   the image. Image itself is responsive width, natural height. */
+.rl-coming-figure {
+  display: block;
+  margin: 32px auto 0;
+  max-width: 860px; width: 100%;
+  padding: 8px;
+  border: 1.5px dashed ${P.accent};
+  border-radius: 14px;
+  box-sizing: border-box;
+}
+.rl-coming-figure img {
+  display: block; width: 100%; height: auto;
+  border-radius: 8px;
+}
 
 /* Final CTA */
 .rl-cta-block {
@@ -702,6 +719,14 @@ function ComingSoon() {
         <p className="rl-lead-2">
           Built-in LiDAR, no tape, no scale. Just snap and know. ReelIntel's AI grows more accurate every day — and it's only the beginning.
         </p>
+        <figure className="rl-coming-figure">
+          <img
+            src={A.comingSoonLidar}
+            alt="ReelIntel LiDAR fish measurement — phone scanning a tuna with an AI length and weight estimate."
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
       </div>
     </section>
   );
