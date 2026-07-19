@@ -350,9 +350,13 @@ body { margin: 0; }
 
 /* Tile variant — full-bleed blueprint art behind the icon + copy,
    with a subtle dark scrim (via ::before) so the existing heading /
-   body / icon stay legible. overflow:hidden keeps the scrim inside
-   the rounded corners; direct children get z-index:1 so they render
-   above the scrim. */
+   body / icon stay legible. aspect-ratio: 4/5 matches the source
+   art so nothing gets cropped to a thin strip at the top. Content
+   flex-anchored to the bottom so the top-left icon of the art
+   (roughly the top third of the image) stays visible and our own
+   icon + text sit in the lower third where the scrim reads darkest.
+   overflow:hidden keeps the scrim inside the rounded corners;
+   direct children get z-index:1 so they render above the scrim. */
 .rl-feature-tile {
   position: relative;
   background-size: cover;
@@ -360,11 +364,16 @@ body { margin: 0; }
   background-repeat: no-repeat;
   background-color: ${P.card};
   overflow: hidden;
+  aspect-ratio: 4 / 5;
+  display: flex; flex-direction: column; justify-content: flex-end;
 }
 .rl-feature-tile::before {
   content: '';
   position: absolute; inset: 0;
-  background: rgba(10, 22, 36, 0.45);
+  background: linear-gradient(180deg,
+    rgba(10, 22, 36, 0.20) 0%,
+    rgba(10, 22, 36, 0.45) 55%,
+    rgba(10, 22, 36, 0.75) 100%);
   pointer-events: none;
 }
 .rl-feature-tile > * { position: relative; z-index: 1; }
