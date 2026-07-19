@@ -669,6 +669,11 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
   const [thumbUrl, setThumbUrl] = useState(null);
   const [thumbErr, setThumbErr] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const currentPick = row.speciesId
+    ? speciesOptions.find(s => s.id === row.speciesId)
+    : null;
 
   useEffect(() => {
     if (!row.file) return;
@@ -739,16 +744,22 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
           {row.file.type || 'unknown type'} · {formatBytes(row.file.size)}
         </div>
         {(mode === 'per-image' || row.aiSort) && row.status === 'queued' && (
-          <select
-            value={row.speciesId}
-            onChange={(e) => onSpeciesChange(e.target.value)}
-            style={{ ...inputStyle, padding: '6px 8px', fontSize: 12, marginTop: 4 }}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            style={{
+              ...inputStyle,
+              padding: '6px 10px', fontSize: 12, marginTop: 4,
+              textAlign: 'left', cursor: 'pointer',
+              background: T.parchmentDeep,
+              color: currentPick ? T.ink : T.inkMute,
+              display: 'block', width: '100%',
+            }}
           >
-            <option value="">— pick species —</option>
-            {speciesOptions.map(s => (
-              <option key={s.id} value={s.id}>{s.commonName} — {s.id}</option>
-            ))}
-          </select>
+            {currentPick
+              ? `${currentPick.commonName} — ${currentPick.id}`
+              : '— pick species (type to search) —'}
+          </button>
         )}
         {row.aiSort && row.aiConfidence != null && row.status !== 'error' && (
           row.speciesId && row.aiConfidence > 0 ? (
@@ -782,6 +793,19 @@ function UploadRow({ row, mode, speciesOptions, onSpeciesChange, onRemove }) {
           background: 'transparent', border: 'none', color: T.inkMute, cursor: 'pointer',
           fontSize: 16, padding: '0 4px',
         }} title="Remove">×</button>
+      )}
+
+      {/* Species picker — same searchable modal Review uses for
+          Correct-species. Type to filter, tap to assign to this row.
+          Replaces the old dropdown; scales to 100+ species and works
+          on mobile keyboards. */}
+      {pickerOpen && (
+        <SpeciesPickerModal
+          speciesOptions={speciesOptions}
+          currentSpeciesId={row.speciesId || null}
+          onPick={(newId) => { onSpeciesChange(newId); setPickerOpen(false); }}
+          onCancel={() => setPickerOpen(false)}
+        />
       )}
 
       {/* Full-size lightbox. Backdrop click OR X button OR Esc closes.
