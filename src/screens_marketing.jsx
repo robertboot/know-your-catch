@@ -353,6 +353,23 @@ body { margin: 0; }
   max-width: 250px; margin: 0 auto;
 }
 
+/* Free-height variant — fixed height matching the old phone-slot
+   frame, natural width. Use when the image isn't a strict 9:19.5
+   phone aspect and would otherwise get cropped by a fixed-aspect
+   container. max-width:100% guards against overflow on narrow
+   viewports. */
+.rl-phone-shot-free {
+  display: block; margin: 0 auto;
+  height: 620px; width: auto;
+  max-width: 100%;
+}
+@media (max-width: 900px) {
+  .rl-phone-shot-free { height: 520px; }
+}
+@media (max-width: 500px) {
+  .rl-phone-shot-free { height: 440px; }
+}
+
 /* Alert-card pair — transparent PNGs sitting directly on the section
    background, 2-up on desktop, stacked on phone. Each image caps at
    440px so they don't balloon on wide viewports. No card / border /
@@ -516,11 +533,12 @@ function KnowRules() {
           </p>
         </div>
         <div className="rl-split-media">
-          <ImageSlot
-            variant="phone"
+          <img
+            className="rl-phone-shot-free"
             src={A.screenshotRegs2}
             alt="ReelIntel species regulations page — Queen Snapper, season, size and bag limits, required gear."
-            label="screenshot-regulations2.png"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       </div>
