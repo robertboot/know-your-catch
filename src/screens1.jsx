@@ -2134,7 +2134,9 @@ export function CategoriesScreen({ onPick }) {
   // reflect immediately on the mobile app after the next boot pull.
   const [, bump] = useState(0);
   useEffect(() => subscribeCategories(() => bump(v => v + 1)), []);
-  const activeCategories = getCategories();
+  // Hide underscore-prefixed admin-only categories (e.g. _admin misc
+  // bucket) from the user-facing browse.
+  const activeCategories = getCategories().filter(c => !String(c.id).startsWith('_'));
   const counts = useMemo(() => {
     const map = {};
     SPECIES.forEach(s => { map[s.category] = (map[s.category] || 0) + 1; });

@@ -34,6 +34,11 @@ export const CATEGORIES = [
   { id: 'mackerels_barracuda', name: 'Mackerels & Barracuda' },
   { id: 'tuna', name: 'Tuna' },
   { id: 'billfish', name: 'Billfish' },
+  // Admin-only "misc" bucket. Underscore-prefixed ids are hidden from
+  // the user-facing browse (see CategoriesScreen filter) but remain a
+  // valid target for admin actions like category-delete reassignment
+  // and parking the _unassigned "needs species" placeholder.
+  { id: '_admin', name: '— Misc / needs category' },
 ];
 
 export const SPECIES = [
