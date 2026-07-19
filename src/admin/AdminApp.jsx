@@ -2086,7 +2086,7 @@ function RegulationsTab() {
   const activeSpecies = useMemo(
     () => SPECIES
       .filter(s => s.active !== false)
-      .filter(s => s.category !== 'bait')
+      .filter(s => s.category !== 'baitfish')
       .sort((a, b) => a.commonName.localeCompare(b.commonName)),
     []
   );

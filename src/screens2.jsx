@@ -516,7 +516,7 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
       // Bait fish are excluded from every Regulations surface — their
       // rules are cast-net/bait-harvest guidance, not keep/release
       // compliance. Matches the admin + auto-updater grid filter.
-      .filter(s => s.category !== 'bait')
+      .filter(s => s.category !== 'baitfish')
       .filter(s => !lower || s.commonName.toLowerCase().includes(lower) || s.altNames.some(a => a.toLowerCase().includes(lower)))
       .map(s => {
         const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
@@ -725,7 +725,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
     if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
     const yourClosed = [], otherClosed = [], yourUnknown = [], otherUnknown = [];
     for (const s of SPECIES) {
-      if (s.category === 'bait') continue; // no bait on regs surfaces
+      if (s.category === 'baitfish') continue; // no bait on regs surfaces
       const reg = regulationFor(s.id, jurisdiction.id).regulation;
       const status = reg ? seasonState(reg.open).status : 'unknown';
       const isFav = favSet.has(s.id);
@@ -1046,7 +1046,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
     const list = SPECIES
       .filter(s => s.active !== false)
-      .filter(s => s.category !== 'bait') // no bait on regs surfaces
+      .filter(s => s.category !== 'baitfish') // no bait on regs surfaces
       .map(s => {
         const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
         const status = reg ? seasonState(reg.open).status : 'unknown';
@@ -3475,18 +3475,28 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     (legalityReg.minSize != null && lengthIn < legalityReg.minSize) ? 'under' :
     (legalityReg.maxSize != null && lengthIn > legalityReg.maxSize) ? 'over'  : null
   );
-  // Retention prohibitions: bag limit 0 or prohibition vocabulary in
-  // the season/notes text mean "never keep", whatever the season
-  // parser thought.
-  const prohibited = legalityReg && (
+  // Federal status from the master species list (Gulf_Fish sheet):
+  // prohibited / ESA-protected / no-retention are a hard no-take that
+  // overrides any state season, even for species with no reg on file.
+  const fedStatus = speciesId ? (resolveSpecies(speciesId)?.federalStatus || null) : null;
+  const fedNoTake = fedStatus === 'prohibited' || fedStatus === 'protected' || fedStatus === 'no_retention';
+  if (fedStatus === 'prohibited')        legalityChips.unshift('Federally prohibited');
+  else if (fedStatus === 'protected')    legalityChips.unshift('ESA protected — no take');
+  else if (fedStatus === 'no_retention') legalityChips.unshift('No retention (federal)');
+  else if (fedStatus === 'restricted')   legalityChips.unshift('Federally restricted');
+  // Retention prohibitions: federal no-take, bag limit 0, or prohibition
+  // vocabulary in the season/notes text mean "never keep", whatever the
+  // season parser thought.
+  const prohibited = fedNoTake || (legalityReg && (
     legalityReg.bagLimit === 0
     || PROHIBITED_RE.test(String(legalityReg.open || ''))
     || PROHIBITED_RE.test(String(legalityReg.notes || ''))
-  );
-  // Verdict order: certain no-keep facts first (prohibition, size
-  // violation), then season state, then unknown.
+  ));
+  // Verdict order: certain no-keep facts first (federal no-take,
+  // prohibition, size violation), then season state, then unknown.
   const effectiveLegality =
     !speciesId ? null
+    : fedNoTake ? 'closed'
     : !legalityReg ? 'unknown'
     : prohibited ? 'closed'
     : sizeViolation ? 'closed'
@@ -4253,7 +4263,7 @@ function pickBagLimitQuestion(jurisdiction, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
-    if (s.category === 'bait') return false; // no bait regs questions
+    if (s.category === 'baitfish') return false; // no bait regs questions
     // Uses the same store precedence as the display path — verified
     // Supabase overlay first, bundled fallback second. Fed-fallback
     // regs are EXCLUDED: the prompt names the state, so grading a
@@ -4279,7 +4289,7 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
   const candidates = SPECIES.filter(s => {
     if (s.active === false) return false;
     if (s.id === prevSpeciesId) return false;
-    if (s.category === 'bait') return false; // no bait regs questions
+    if (s.category === 'baitfish') return false; // no bait regs questions
     // Same store precedence as bag-limit picker above; fed-fallback
     // regs excluded for the same reason.
     const reg = regulationFor(s.id, jurisdiction.id).regulation;
