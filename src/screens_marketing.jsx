@@ -34,6 +34,7 @@ const A = {
   heroBg:              `${M}hero-underwater-bg.png`,
   patternsHeatmap:     `${M}patterns-heatmap.jpg`,
   screenshotRegs:      `${M}screenshot-regulations.png`,
+  screenshotRegs2:     `${M}screenshot-regulations2.png`,
   screenshotFishId:    `${M}screenshot-fishid.png`,
   alertOutOfSeason:    `${M}alert-out-of-season.png`,
   alertInSeason:       `${M}alert-in-season.png`,
@@ -517,9 +518,9 @@ function KnowRules() {
         <div className="rl-split-media">
           <ImageSlot
             variant="phone"
-            src={A.screenshotFishId}
-            alt="ReelIntel fish ID result screen showing the identified species with confidence, key ID cues, and lookalikes."
-            label="screenshot-fishid.png"
+            src={A.screenshotRegs2}
+            alt="ReelIntel species regulations page — Queen Snapper, season, size and bag limits, required gear."
+            label="screenshot-regulations2.png"
           />
         </div>
       </div>
