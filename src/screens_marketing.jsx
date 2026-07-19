@@ -43,6 +43,7 @@ const A = {
   tileFishQuiz:        `${M}tile-fish-quiz.jpg`,
   tilePatterns:        `${M}tile-patterns.jpg`,
   comingSoonLidar:     `${M}coming-soon-lidar.jpg`,
+  ctaMakeEveryTrip:    `${M}cta-make-every-trip-count.jpg`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -468,16 +469,40 @@ body { margin: 0; }
   border-radius: 8px;
 }
 
-/* Final CTA */
-.rl-cta-block {
-  text-align: center; padding: 70px 30px; border-radius: 30px;
-  background:
-    radial-gradient(circle at 50% -20%, rgba(25,212,242,0.22), transparent 55%),
-    ${P.card};
-  border: 1px solid ${P.borderHi};
+/* Final CTA — full-bleed background image behind centered text.
+   Section itself carries the cover image; a linear-gradient scrim
+   via ::before sits between the image and the content for legibility
+   (photo center is already darkened, so scrim stays moderate).
+   Content sits above via z-index. Vertical padding bumped to ~90px
+   so it reads as a hero CTA rather than a tight banner. */
+.rl-final-cta {
+  position: relative; overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: ${P.bgAlt};
+  padding: 90px 0;
 }
-.rl-cta-block .rl-h2 { margin-bottom: 12px; }
-.rl-cta-block .rl-lead-2 { max-width: 620px; margin: 0 auto 26px; }
+.rl-final-cta::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg,
+    rgba(8, 16, 26, 0.50) 0%,
+    rgba(8, 16, 26, 0.68) 100%);
+  pointer-events: none;
+}
+.rl-final-cta-inner {
+  position: relative; z-index: 1;
+  text-align: center;
+}
+.rl-final-cta-inner .rl-h2 {
+  margin-bottom: 12px;
+  color: #ffffff;
+}
+.rl-final-cta-inner .rl-lead-2 {
+  max-width: 620px; margin: 0 auto 26px;
+  color: rgba(255, 255, 255, 0.88);
+}
 
 /* Footer */
 .rl-footer { padding: 40px 0 60px; border-top: 1px solid ${P.border}; }
@@ -485,7 +510,7 @@ body { margin: 0; }
   display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;
 }
 .rl-footer-links { display: flex; gap: 22px; flex-wrap: wrap; }
-.rl-footer-links a { color: ${P.inkMute}; font-size: 13px; text-decoration: none; }
+.rl-footer-links a { color: ${P.inkSoft}; font-size: 13px; text-decoration: none; }
 .rl-footer-links a:hover { color: ${P.accent}; }
 .rl-footer-legal { font-size: 12px; color: ${P.inkMute}; }
 `;
@@ -734,15 +759,16 @@ function ComingSoon() {
 
 function FinalCTA() {
   return (
-    <section className="rl-section">
-      <div className="rl-container">
-        <div className="rl-cta-block">
-          <h2 className="rl-h2">Make every trip count.</h2>
-          <p className="rl-lead-2">Know your catch. Keep it legal. Fish smarter.</p>
-          <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
-            Log Your Catch <ArrowRight size={16} />
-          </a>
-        </div>
+    <section
+      className="rl-final-cta"
+      style={{ backgroundImage: `url("${A.ctaMakeEveryTrip}")` }}
+    >
+      <div className="rl-container rl-final-cta-inner">
+        <h2 className="rl-h2">Make every trip count.</h2>
+        <p className="rl-lead-2">Know your catch. Keep it legal. Fish smarter.</p>
+        <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
+          Log Your Catch <ArrowRight size={16} />
+        </a>
       </div>
     </section>
   );
