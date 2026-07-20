@@ -48,6 +48,7 @@ delete from species where id in (
   'Pinfish',        -- floor: pinfish
   'Gulf Madhaden',  -- floor: gulf_menhaden
   'Pogies',         -- floor: gulf_menhaden (same fish, Brevoortia patronus)
+  'Sheepshead',     -- floor: sheepshead (inshore)
   'Squid'           -- stray, no floor, 0 refs
 );
 
