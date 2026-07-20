@@ -203,6 +203,63 @@ export async function stableTrainingId(key) {
 
 const DUP_RE = /already exists|duplicate/i;
 
+/* Upload one file's bytes to the training-photos bucket via the
+   two-step signed-upload flow (sign POST with auth → anonymous PUT).
+   This is the ONLY reliable path in Safari — the plain
+   supabase-js storage.upload() intermittently drops the body there
+   ("No content provided"). Shared by uploadTrainingImage and
+   saveModelFeedback so both behave identically.
+   Returns { ok:true } | { ok:true, skipped:true } | { ok:false, error, statusCode }. */
+async function uploadBytesSigned(storagePath, file, { allowSkip = false } = {}) {
+  const sessNow = getLastSession();
+  const accessToken = sessNow?.access_token;
+  if (!accessToken) {
+    return { ok: false, error: 'no access token — sign out and back in', statusCode: null };
+  }
+  const signUrl = `${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${storagePath}`;
+  const signResult = await xhrJson({
+    method: 'POST',
+    url: signUrl,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      apikey: SUPABASE_ANON_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
+  if (signResult.kind !== 'ok') {
+    if (allowSkip && DUP_RE.test(String(signResult.body || ''))) {
+      return { ok: true, skipped: true };
+    }
+    return {
+      ok: false,
+      error: signResult.body || signResult.statusText || `sign ${signResult.kind}`,
+      statusCode: signResult.status || null,
+    };
+  }
+  const signRelUrl = signResult.json?.url;
+  if (!signRelUrl) {
+    return { ok: false, error: 'signed upload URL missing from response', statusCode: null };
+  }
+  const putUrl = signRelUrl.startsWith('http')
+    ? signRelUrl
+    : `${SUPABASE_URL}/storage/v1${signRelUrl}`;
+  const putResult = await xhrBinary({
+    url: putUrl,
+    body: file,
+    contentType: file.type || 'image/jpeg',
+  });
+  if (putResult.kind === 'ok') return { ok: true };
+  if (putResult.kind === 'non_2xx' && allowSkip && DUP_RE.test(String(putResult.body || ''))) {
+    return { ok: true, skipped: true };
+  }
+  return {
+    ok: false,
+    error: putResult.body || putResult.statusText || `signed PUT ${putResult.kind}`,
+    statusCode: putResult.status || null,
+  };
+}
+
 export async function uploadTrainingImage(file, speciesId, opts = {}) {
   // opts.status:   'verified' (default — owner uploads ARE the review)
   //                or 'pending' (bulk folder imports awaiting review).
@@ -403,15 +460,17 @@ export async function saveModelFeedback({ file, speciesId, originalSpeciesId, so
   const seed = await ensureSpeciesRow(speciesId);
   if (!seed.ok) return { ok: false, error: seed.error };
 
+  if (!file.size) return { ok: false, error: 'image is empty (0 bytes) — re-pick the photo' };
+
   const id = crypto.randomUUID();
   const ext = (file.name?.match(/\.([a-z0-9]+)$/i)?.[1] || 'jpg').toLowerCase();
   const storagePath = `${speciesId}/${id}.${ext}`;
 
-  const up = await c.storage.from(BUCKET).upload(storagePath, file, {
-    contentType: file.type || 'image/jpeg',
-    upsert: false,
-  });
-  if (up.error) return { ok: false, error: up.error.message };
+  // Signed two-step upload — the plain storage.upload() drops the body
+  // in Safari and returns "No content provided". Shared helper matches
+  // the main uploadTrainingImage path.
+  const up = await uploadBytesSigned(storagePath, file);
+  if (!up.ok) return { ok: false, error: up.error };
 
   const { data, error } = await c.from('training_images').insert({
     id,
