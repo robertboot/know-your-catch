@@ -17,7 +17,7 @@
 
    Overrides only *change* rows the bundled seed already ships or
    *add* new ones. Overlay never deletes a bundled species. */
-import { SPECIES } from './data.js';
+import { SPECIES, CATEGORIES } from './data.js';
 import { client } from './supabase-client.js';
 
 const CACHE_KEY = 'kyc_species_overrides_v1';
@@ -111,14 +111,30 @@ export function speciesToRow(sp) {
    refresh. Returns the number of rows that changed. */
 export function applyOverrides(overrides) {
   if (!Array.isArray(overrides)) return 0;
+  const validCats = new Set(CATEGORIES.map(c => c.id));
+  const normSci = (t) => String(t || '').toLowerCase().replace(/[^a-z]/g, '');
+  // Snapshot bundled scientific names → index so a stale overlay row
+  // with a DIFFERENT id but the SAME fish (e.g. bally_hoo vs ballyhoo)
+  // merges onto the bundled entry instead of appending a duplicate.
+  const bundledSci = new Map();
+  SPECIES.forEach((s, i) => { if (s.scientific) bundledSci.set(normSci(s.scientific), i); });
   let changed = 0;
   for (const ov of overrides) {
     if (!ov?.id) continue;
-    const idx = SPECIES.findIndex(s => s.id === ov.id);
+    let idx = SPECIES.findIndex(s => s.id === ov.id);
+    if (idx < 0 && ov.scientific && bundledSci.has(normSci(ov.scientific))) {
+      idx = bundledSci.get(normSci(ov.scientific));
+    }
     if (idx >= 0) {
-      SPECIES[idx] = { ...SPECIES[idx], ...ov };
+      // Keep the bundled id, and never let a retired/old category (not in
+      // the current taxonomy) revert the clean bundled category.
+      const merged = { ...SPECIES[idx], ...ov, id: SPECIES[idx].id };
+      if (!validCats.has(merged.category)) merged.category = SPECIES[idx].category;
+      SPECIES[idx] = merged;
     } else {
-      SPECIES.push(ov);
+      // Genuinely new custom species. Coerce any old/unknown category
+      // into the admin-only misc bucket so retired categories can't reappear.
+      SPECIES.push({ ...ov, category: validCats.has(ov.category) ? ov.category : '_admin' });
     }
     changed++;
   }
