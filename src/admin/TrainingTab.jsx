@@ -1021,7 +1021,7 @@ function ReviewPanel() {
       const key = e.key.toLowerCase();
 
       if (key === 'a') { e.preventDefault(); doApprove(focusedIds); }
-      else if (key === 'r') { e.preventDefault(); setRejectPickerOpen(true); }
+      else if (key === 'r') { e.preventDefault(); doReject(focusedIds, 'other'); }
       else if (key === 'c') { e.preventDefault(); setCorrectPickerOpen(true); }
       else if (key === 'd') { e.preventDefault(); doReject(focusedIds, 'duplicate'); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); setCursor(i => Math.min(rows.length - 1, i + 1)); }
@@ -1332,7 +1332,7 @@ function ReviewPanel() {
             <span style={{ color: T.closed }}> {c.rejected} rejected</span> ·
             {c.corrected} corrected
             <div style={{ marginTop: 6, fontSize: 11, color: T.inkMute }}>
-              Keys: <b>A</b> approve · <b>R</b> reject (with reason) · <b>C</b> correct species · <b>D</b> duplicate ·
+              Keys: <b>A</b> approve · <b>R</b> reject · <b>C</b> correct species · <b>D</b> duplicate ·
               <b> ← →</b> navigate · <b>⌘/Ctrl+A</b> select all · <b>Esc</b> clear selection
             </div>
           </div>
@@ -1356,8 +1356,8 @@ function ReviewPanel() {
               <GhostButton onClick={() => doApprove(Array.from(selected))} style={{ fontSize: 12, color: T.open, borderColor: T.open }}>
                 Approve all
               </GhostButton>
-              <GhostButton onClick={() => setRejectPickerOpen(true)} style={{ fontSize: 12, color: T.closed, borderColor: T.closed }}>
-                Reject all…
+              <GhostButton onClick={() => doReject(Array.from(selected), 'other')} style={{ fontSize: 12, color: T.closed, borderColor: T.closed }}>
+                Reject all
               </GhostButton>
               <GhostButton onClick={() => setCorrectPickerOpen(true)} style={{ fontSize: 12 }}>
                 Correct species…
