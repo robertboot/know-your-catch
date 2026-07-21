@@ -1020,16 +1020,16 @@ function ReviewPanel() {
       const focusedIds = selected.size > 0 ? Array.from(selected) : [rows[cursor].id];
       const key = e.key.toLowerCase();
 
-      if (key === 'a') { e.preventDefault(); doApprove(focusedIds); }
+      if ((e.metaKey || e.ctrlKey) && key === 'a') {
+        e.preventDefault();
+        setSelected(new Set(rows.map(r => r.id)));
+      }
+      else if (key === 'a') { e.preventDefault(); doApprove(focusedIds); }
       else if (key === 'r') { e.preventDefault(); doReject(focusedIds, 'other'); }
       else if (key === 'c') { e.preventDefault(); setCorrectPickerOpen(true); }
       else if (key === 'd') { e.preventDefault(); doReject(focusedIds, 'duplicate'); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); setCursor(i => Math.min(rows.length - 1, i + 1)); }
       else if (e.key === 'ArrowLeft')  { e.preventDefault(); setCursor(i => Math.max(0, i - 1)); }
-      else if ((e.metaKey || e.ctrlKey) && key === 'a') {
-        e.preventDefault();
-        setSelected(new Set(rows.map(r => r.id)));
-      }
       else if (/^[1-5]$/.test(key) && aiOn && selected.size === 0 && rows[cursor]) {
         // AI assist: digits pick the Nth model guess for the focused
         // photo — same action as tapping the chip.
@@ -1331,6 +1331,19 @@ function ReviewPanel() {
             <span style={{ color: T.open }}> {c.verified} verified</span> ·
             <span style={{ color: T.closed }}> {c.rejected} rejected</span> ·
             {c.corrected} corrected
+            <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <GhostButton
+                onClick={() => setSelected(new Set(rows.map(r => r.id)))}
+                style={{ fontSize: 12 }}
+              >
+                Select all ({rows.length})
+              </GhostButton>
+              {selected.size > 0 && (
+                <GhostButton onClick={() => setSelected(new Set())} style={{ fontSize: 12, color: T.inkMute }}>
+                  Clear
+                </GhostButton>
+              )}
+            </div>
             <div style={{ marginTop: 6, fontSize: 11, color: T.inkMute }}>
               Keys: <b>A</b> approve · <b>R</b> reject · <b>C</b> correct species · <b>D</b> duplicate ·
               <b> ← →</b> navigate · <b>⌘/Ctrl+A</b> select all · <b>Esc</b> clear selection
