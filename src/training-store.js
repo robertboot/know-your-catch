@@ -491,18 +491,19 @@ export async function saveModelFeedback({ file, speciesId, originalSpeciesId, so
 }
 
 /* List training images, optionally filtered by species + status. */
-export async function listTrainingImages({ speciesId = null, status = null, limit = 500 } = {}) {
+export async function listTrainingImages({ speciesId = null, status = null, limit = 500, offset = 0 } = {}) {
   const c = client();
   if (!c) return { ok: false, rows: [], error: 'not-configured' };
   let q = c.from('training_images')
     .select('id, species_id, storage_path, source, status, rejection_reason, original_species_id, crop_bbox, uploaded_at, uploaded_by, reviewed_at, reviewed_by')
     .order('uploaded_at', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
   if (speciesId) q = q.eq('species_id', speciesId);
   if (status)    q = q.eq('status', status);
   const { data, error } = await q;
   if (error) return { ok: false, rows: [], error: error.message };
-  return { ok: true, rows: data || [] };
+  // hasMore: a full page came back, so there may be another page.
+  return { ok: true, rows: data || [], hasMore: (data?.length || 0) === limit };
 }
 
 /* Approve a batch of ids. Sets status='verified', stamps reviewer. */
@@ -756,6 +757,28 @@ export async function signedUrl(storagePath, ttlSeconds = 3600) {
   const { data, error } = await c.storage.from(BUCKET).createSignedUrl(storagePath, ttlSeconds);
   if (error) return null;
   return data?.signedUrl || null;
+}
+
+/* Batch-sign many storage paths in ONE request. The Review grid paints
+   hundreds of tiles; signing them individually fired hundreds of API
+   calls per page load. createSignedUrls does the whole page at once.
+   Returns { [storagePath]: signedUrl } — paths that fail are omitted. */
+export async function signedUrlMap(paths, ttlSeconds = 3600) {
+  const c = client();
+  if (!c || !paths?.length) return {};
+  const map = {};
+  // createSignedUrls tops out around a few hundred paths per call; chunk
+  // to stay well under any limit and keep each request small.
+  const CHUNK = 200;
+  for (let i = 0; i < paths.length; i += CHUNK) {
+    const slice = paths.slice(i, i + CHUNK);
+    const { data, error } = await c.storage.from(BUCKET).createSignedUrls(slice, ttlSeconds);
+    if (error || !data) continue;
+    for (const row of data) {
+      if (row?.path && row?.signedUrl) map[row.path] = row.signedUrl;
+    }
+  }
+  return map;
 }
 
 /* ============================================================

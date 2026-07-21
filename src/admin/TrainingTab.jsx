@@ -32,7 +32,7 @@ import {
   approve, reject, correctSpecies, deleteTrainingImage,
   classifyTrainingPhoto, inatIdentifyPhoto, INAT_TOKEN_KEY,
   saveCropBbox,
-  signedUrl, countsBySpecies,
+  signedUrl, signedUrlMap, countsBySpecies,
   MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
   buildLookalikeGroups, classifyCoverage,
   planExport,
@@ -869,6 +869,9 @@ function ReviewPanel() {
   const [speciesId, setSpeciesId] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
   const [rows, setRows] = useState([]);
+  const [urlMap, setUrlMap] = useState({}); // storage_path -> signed URL, batch-signed per page
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [cursor, setCursor] = useState(0);
@@ -911,25 +914,49 @@ function ReviewPanel() {
     return misc ? [misc, ...active] : active;
   }, []);
 
+  const PAGE_SIZE = 300;
+
   const refresh = useCallback(async () => {
-    if (!speciesId) { setRows([]); return; }
+    if (!speciesId) { setRows([]); setUrlMap({}); setHasMore(false); return; }
     // '__all__' means "no species filter" — pull rows for every
     // species at the chosen status. Everything else stays a normal
     // species-specific query.
     const speciesArg = speciesId === '__all__' ? null : speciesId;
     setLoading(true);
     const [imgRes, cRes] = await Promise.all([
-      listTrainingImages({ speciesId: speciesArg, status: statusFilter === 'all' ? null : statusFilter }),
+      listTrainingImages({ speciesId: speciesArg, status: statusFilter === 'all' ? null : statusFilter, limit: PAGE_SIZE, offset: 0 }),
       countsBySpecies(),
     ]);
     setLoading(false);
     if (!imgRes.ok) { setError(imgRes.error || 'load failed'); return; }
     setError('');
     setRows(imgRes.rows);
+    setHasMore(!!imgRes.hasMore);
     setSelected(new Set());
     setCursor(0);
     if (cRes.ok) setCounts(cRes.counts);
+    // Batch-sign this page's thumbnails in ONE request.
+    const map = await signedUrlMap(imgRes.rows.map(r => r.storage_path));
+    setUrlMap(map);
   }, [speciesId, statusFilter]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    const speciesArg = speciesId === '__all__' ? null : speciesId;
+    setLoadingMore(true);
+    const res = await listTrainingImages({
+      speciesId: speciesArg,
+      status: statusFilter === 'all' ? null : statusFilter,
+      limit: PAGE_SIZE,
+      offset: rows.length,
+    });
+    setLoadingMore(false);
+    if (!res.ok) { setError(res.error || 'load failed'); return; }
+    setRows(prev => [...prev, ...res.rows]);
+    setHasMore(!!res.hasMore);
+    const map = await signedUrlMap(res.rows.map(r => r.storage_path));
+    setUrlMap(prev => ({ ...prev, ...map }));
+  }, [loadingMore, hasMore, speciesId, statusFilter, rows.length]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -1512,6 +1539,7 @@ function ReviewPanel() {
               <ReviewTile
                 key={r.id}
                 row={r}
+                url={urlMap[r.storage_path]}
                 showSpecies={speciesId === '__all__'}
                 selected={selected.has(r.id)}
                 focused={i === cursor && selected.size === 0}
@@ -1521,6 +1549,13 @@ function ReviewPanel() {
               />
             ))}
           </div>
+          {hasMore && (
+            <div style={{ textAlign: 'center', marginTop: 14 }}>
+              <GhostButton onClick={loadMore} disabled={loadingMore} style={{ fontSize: 13 }}>
+                {loadingMore ? 'Loading…' : `Load more (showing ${rows.length})`}
+              </GhostButton>
+            </div>
+          )}
         </>
       )}
 
@@ -1579,13 +1614,18 @@ function ReviewPanel() {
   );
 }
 
-function ReviewTile({ row, selected, focused, onClick, onToggle, onCrop, showSpecies = false }) {
-  const [url, setUrl] = useState(null);
+function ReviewTile({ row, url: urlProp, selected, focused, onClick, onToggle, onCrop, showSpecies = false }) {
+  // Prefer the batch-signed URL passed from the parent (one API call for
+  // the whole page). Only fall back to a per-tile sign if the batch
+  // somehow missed this path.
+  const [urlFetched, setUrlFetched] = useState(null);
   useEffect(() => {
+    if (urlProp) { setUrlFetched(null); return undefined; }
     let alive = true;
-    signedUrl(row.storage_path).then(u => { if (alive) setUrl(u); });
+    signedUrl(row.storage_path).then(u => { if (alive) setUrlFetched(u); });
     return () => { alive = false; };
-  }, [row.storage_path]);
+  }, [row.storage_path, urlProp]);
+  const url = urlProp || urlFetched;
 
   // 'corrected' kept in the palette as a defensive fallback for any
   // legacy rows still tagged that way; new corrections land as
@@ -1622,7 +1662,7 @@ function ReviewTile({ row, selected, focused, onClick, onToggle, onCrop, showSpe
       }}
     >
       <div style={{ width: '100%', aspectRatio: '1 / 1', background: T.parchmentDeep, position: 'relative' }}>
-        {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+        {url && <img src={url} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
         {onCrop && (
           <button
             type="button"
