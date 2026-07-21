@@ -4,8 +4,9 @@
    network, the photo-confirm flow calls this instead of the small
    on-device model (Big Red): Claude vision gives a much stronger ID,
    AND every call feeds the photo back into the training queue as a
-   PENDING row — so Big Red keeps learning from real user photos and
-   gets better with every retrain. Offline, or for signed-out users,
+   PENDING row — confident IDs under their species, uncertain ones
+   under the misc bucket — so no paid call is wasted and Big Red keeps
+   learning from real user photos. Offline, or for signed-out users,
    the app silently falls back to the on-device model.
 
    Auth: any authenticated Supabase user (JWT verified server-side).
@@ -47,8 +48,9 @@ const MAX_TOKENS         = 400;
 // Per-user soft cap. Exceeding it returns 429 and the app falls back
 // to the on-device model — no hard failure for the user.
 const DAILY_CAP = 60;
-// Only feed a photo back into training when the ID is at least this
-// confident. Junk / unidentifiable photos never enter the queue.
+// At/above this confidence a photo is filed under the identified
+// species; below it the photo is still KEPT but filed under the misc
+// bucket for manual sorting. Every paid call keeps its photo either way.
 const INGEST_MIN_CONF = 0.55;
 const TRAINING_BUCKET = 'training-photos';
 
@@ -231,30 +233,50 @@ ${listText}`;
       );
     } catch { /* soft cap — a missed bump just allows one extra call */ }
 
-    // Feed Big Red: store confident IDs as PENDING training rows so
-    // the admin can approve them into the next retrain.
-    if (speciesId && confidence >= INGEST_MIN_CONF) {
-      try {
-        const bytes = base64ToBytes(imageBase64);
-        // Content-hash id → the same photo submitted twice is one row.
-        const hash = await sha256Hex(imageBase64);
-        const ext = mediaType === 'image/png' ? 'png'
-          : mediaType === 'image/webp' ? 'webp' : 'jpg';
-        const storagePath = `${speciesId}/appid_${hash.slice(0, 32)}.${ext}`;
-        const up = await admin.storage.from(TRAINING_BUCKET)
-          .upload(storagePath, bytes, { contentType: mediaType, upsert: false });
-        // 'already exists' → this photo is already queued; stop here.
-        if (up.error && !/exist/i.test(up.error.message || '')) return;
-        await admin.from('training_images').insert({
-          id: crypto.randomUUID(),
-          species_id: speciesId,
-          storage_path: storagePath,
-          source: 'app_identify',
-          status: 'pending',
-          uploaded_by: userEmail,
-        });
-      } catch { /* best-effort ingest */ }
-    }
+    // Feed Big Red: EVERY paid Claude ID keeps its photo. Since the
+    // angler is paying for each call, nothing is thrown away.
+    //   - confident, in-list species → filed under that species.
+    //   - uncertain / not-in-list     → filed under the misc bucket
+    //     (_unassigned) so it lands in Review for you to sort with the
+    //     AI-sort / swipe tools. It never counts toward a species'
+    //     verified training data until you categorize it.
+    // All land as PENDING; Review is the quality gate before any
+    // retrain. Content-hashed path → the same photo is one row.
+    try {
+      const confident = !!(speciesId && confidence >= INGEST_MIN_CONF);
+      const targetSpecies = confident ? speciesId! : '_unassigned';
+
+      // Make sure the FK target row exists (misc bucket may not have a
+      // species row yet on a fresh DB). Best-effort upsert; the real
+      // taxonomy row for a confident species already exists.
+      if (!confident) {
+        await admin.from('species').upsert(
+          { id: '_unassigned', common_name: '— Misc / needs species', category: '_admin' },
+          { onConflict: 'id', ignoreDuplicates: true },
+        );
+      }
+
+      const bytes = base64ToBytes(imageBase64);
+      const hash = await sha256Hex(imageBase64);
+      const ext = mediaType === 'image/png' ? 'png'
+        : mediaType === 'image/webp' ? 'webp' : 'jpg';
+      const storagePath = `${targetSpecies}/appid_${hash.slice(0, 32)}.${ext}`;
+      const up = await admin.storage.from(TRAINING_BUCKET)
+        .upload(storagePath, bytes, { contentType: mediaType, upsert: false });
+      // 'already exists' → this photo is already queued; stop here.
+      if (up.error && !/exist/i.test(up.error.message || '')) return;
+      await admin.from('training_images').insert({
+        id: crypto.randomUUID(),
+        species_id: targetSpecies,
+        storage_path: storagePath,
+        source: 'app_identify',
+        // Keep Claude's best guess even when we filed it under misc, so
+        // Review shows what the model thought.
+        original_species_id: confident ? null : (speciesId || null),
+        status: 'pending',
+        uploaded_by: userEmail,
+      });
+    } catch { /* best-effort ingest */ }
   })();
   // @ts-ignore — EdgeRuntime is a Supabase runtime global.
   if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(background);
