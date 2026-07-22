@@ -634,8 +634,8 @@ function SpeciesTab({ detailView, setDetailView }) {
                 </div>
                 <div style={{ fontSize: 12, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>{sp.scientific}</div>
                 <div style={{ fontSize: 11, marginTop: 3 }}>
-                  {sp.updatedAt
-                    ? <span style={{ color: T.open, fontWeight: 700 }}>✓ Researched · {fmtDate(sp.updatedAt)}</span>
+                  {(sp.edibility && String(sp.edibility).trim())
+                    ? <span style={{ color: T.open, fontWeight: 700 }}>✓ Researched{sp.updatedAt ? ` · ${fmtDate(sp.updatedAt)}` : ''}</span>
                     : <span style={{ color: T.warn, fontWeight: 700 }}>Not researched</span>}
                 </div>
               </div>
