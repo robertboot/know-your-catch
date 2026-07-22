@@ -510,6 +510,23 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     update({ favorites: Array.from(next) });
   };
+  // Category label. Prefer the live overlay; fall back to the bundled
+  // CATEGORIES name so a category the overlay has hidden/omitted still
+  // shows its real name instead of "Other". Only truly-unknown ids
+  // land on "Other".
+  const catName = (id) =>
+    categoryById(id)?.name ||
+    CATEGORIES.find(c => c.id === id)?.name ||
+    'Other';
+
+  // Collapsed category groups (Type view). Ids in the set are collapsed.
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const toggleCat = (id) => setCollapsed(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
     const list = SPECIES
@@ -526,15 +543,13 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
         const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
         return { s, reg, status: reg ? seasonState(reg.open).status : 'unknown' };
       });
-    // Sort: by-type groups by family (live-store category order, alpha
-    // within); by-status floats what you can keep right now to the top;
-    // by-name is A–Z. Categories come from the live overlay so any admin-
-    // added categories sort correctly against their sort_order.
+    // Sort: by-type groups categories ALPHABETICALLY by their display
+    // name (alpha within each group too); by-status floats what you can
+    // keep right now to the top; by-name is A–Z across everything.
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
-    const catOrder = Object.fromEntries(getCategories().map((c, i) => [c.id, i]));
     list.sort((a, b) => {
       if (sort === 'status') return (statusRank[a.status] - statusRank[b.status]) || a.s.commonName.localeCompare(b.s.commonName);
-      if (sort === 'type')   return ((catOrder[a.s.category] ?? 99) - (catOrder[b.s.category] ?? 99)) || a.s.commonName.localeCompare(b.s.commonName);
+      if (sort === 'type')   return catName(a.s.category).localeCompare(catName(b.s.category)) || a.s.commonName.localeCompare(b.s.commonName);
       return a.s.commonName.localeCompare(b.s.commonName);
     });
     return list;
@@ -542,15 +557,6 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
 
   const favRows = rows.filter(r => favSet.has(r.s.id));
   const otherRows = rows.filter(r => !favSet.has(r.s.id));
-
-  // Category label. Prefer the live overlay; fall back to the bundled
-  // CATEGORIES name so a category the overlay has hidden/omitted still
-  // shows its real name instead of "Other". Only truly-unknown ids
-  // land on "Other".
-  const catName = (id) =>
-    categoryById(id)?.name ||
-    CATEGORIES.find(c => c.id === id)?.name ||
-    'Other';
 
   const segBtn = (state, set, key, label) => (
     <button onClick={() => set(key)} style={{
@@ -593,16 +599,40 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
           </>
         )}
         {(() => {
+          // In Type view, count rows per category up-front so each
+          // collapsible header can show its size.
+          const catCounts = {};
+          if (sort === 'type') {
+            for (const { s } of otherRows) catCounts[s.category] = (catCounts[s.category] || 0) + 1;
+          }
           const out = []; let lastCat = null;
           for (const { s, reg, status } of otherRows) {
-            if (sort === 'type' && s.category !== lastCat) {
+            const isTypeView = sort === 'type';
+            if (isTypeView && s.category !== lastCat) {
               lastCat = s.category;
+              const isCollapsed = collapsed.has(s.category);
               out.push(
-                <div key={'h-' + s.category} style={{ fontSize: sectionHeaderSize, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: sectionHeaderPad }}>
+                <button
+                  key={'h-' + s.category}
+                  onClick={() => toggleCat(s.category)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+                    fontSize: sectionHeaderSize, letterSpacing: 1.6, textTransform: 'uppercase',
+                    color: T.brass, fontWeight: 800, padding: sectionHeaderPad,
+                  }}
+                >
+                  <ChevronRight
+                    size={isTablet ? 16 : 13}
+                    style={{ transform: isCollapsed ? 'none' : 'rotate(90deg)', transition: 'transform 0.15s' }}
+                  />
                   {catName(s.category)}
-                </div>
+                  <span style={{ color: T.inkMute, fontWeight: 700 }}>({catCounts[s.category]})</span>
+                </button>
               );
             }
+            // Skip rows whose category is collapsed (Type view only).
+            if (isTypeView && collapsed.has(s.category)) continue;
             out.push((
               <RegRow key={s.id} s={s} reg={reg} status={status} state={state}
                       favorited={false} onToggleFav={() => toggleFav(s.id)} onPick={onPick} isTablet={isTablet} />
