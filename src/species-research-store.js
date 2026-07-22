@@ -22,6 +22,12 @@ import { SPECIES } from './data.js';
  *     habitat: string,
  *     keyIds: string[],
  *     lookalikes: string[],
+ *     typicalLengthIn?: string,
+ *     typicalWeightLb?: string,
+ *     worldRecordLb?: string,
+ *     geoRange?: string,
+ *     edibility?: string,
+ *     seasonality?: string,
  *     sourceNote?: string,
  *   }
  * } | { ok: false, error: string }>}
