@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
-  JURISDICTIONS, SPECIES,
+  JURISDICTIONS, SPECIES, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
 import { saveState } from './storage.js';
@@ -543,10 +543,14 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   const favRows = rows.filter(r => favSet.has(r.s.id));
   const otherRows = rows.filter(r => !favSet.has(r.s.id));
 
-  // Unknown category (species with a category id not currently in the
-  // overlay OR the bundled seed) falls back to "Other" — better than
-  // dropping the species entirely.
-  const catName = (id) => (categoryById(id)?.name) || 'Other';
+  // Category label. Prefer the live overlay; fall back to the bundled
+  // CATEGORIES name so a category the overlay has hidden/omitted still
+  // shows its real name instead of "Other". Only truly-unknown ids
+  // land on "Other".
+  const catName = (id) =>
+    categoryById(id)?.name ||
+    CATEGORIES.find(c => c.id === id)?.name ||
+    'Other';
 
   const segBtn = (state, set, key, label) => (
     <button onClick={() => set(key)} style={{
