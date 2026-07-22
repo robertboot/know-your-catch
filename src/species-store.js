@@ -73,6 +73,7 @@ export function rowToSpecies(row) {
     // from pickers. Deactivated species are NOT removed from SPECIES
     // so existing catches referencing them still resolve.
     active:      row.is_active === false ? false : true,
+    updatedAt:   row.updated_at || null,
   };
 }
 
@@ -224,7 +225,7 @@ export async function refreshSpecies() {
   if (!c) return { ok: false, error: 'not-configured' };
   try {
     const [speciesRes, photosRes] = await Promise.all([
-      c.from('species').select('id, common_name, alt_names, scientific, category, key_ids, lookalikes, habitat, typical_size, typical_length_in, typical_weight_lb, world_record_lb, range_text, edibility, seasonality, reef_fish, hms, is_active'),
+      c.from('species').select('id, common_name, alt_names, scientific, category, key_ids, lookalikes, habitat, typical_size, typical_length_in, typical_weight_lb, world_record_lb, range_text, edibility, seasonality, reef_fish, hms, is_active, updated_at'),
       c.from('species_photos').select('id, species_id, url, credit, license, source, is_primary, sort_order').order('sort_order', { ascending: true }),
     ]);
     if (speciesRes.error) return { ok: false, error: speciesRes.error.message };

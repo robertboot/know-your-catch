@@ -422,6 +422,59 @@ function SpeciesTab({ detailView, setDetailView }) {
   const [cats, setCats] = useState(() => getCategories());
   useEffect(() => subscribeCategoriesStore(() => setCats(getCategories())), []);
 
+  // Quick research+save: one click runs the AI research for a species
+  // AND writes it to the DB — no opening the editor, no overwrite
+  // prompt. Fills any AI-provided scalar, unions list fields, and keeps
+  // the existing category (the AI shouldn't reshuffle taxonomy here).
+  const [quickBusy, setQuickBusy] = useState(null); // species id running
+  const [quickMsg, setQuickMsg]   = useState('');
+  const unionArr = (existing, incoming) => {
+    const out = Array.isArray(existing) ? [...existing] : [];
+    const seen = new Set(out.map(x => String(x).toLowerCase()));
+    for (const v of (Array.isArray(incoming) ? incoming : [])) {
+      const t = String(v || '').trim();
+      if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(t); }
+    }
+    return out;
+  };
+  const quickResearch = async (sp, e) => {
+    e.stopPropagation(); // don't open the editor
+    if (quickBusy) return;
+    setQuickBusy(sp.id);
+    setQuickMsg(`Researching ${sp.commonName}…`);
+    const r = await researchSpecies({ commonName: sp.commonName, scientificName: sp.scientific || '' });
+    if (!r.ok) { setQuickBusy(null); setQuickMsg(`${sp.commonName}: research failed — ${r.error || 'try again'}`); return; }
+    const d = r.data || {};
+    const payload = {
+      id: sp.id,
+      commonName: sp.commonName,
+      scientific: (d.scientific || sp.scientific || '').trim(),
+      category: sp.category, // keep taxonomy stable in the quick path
+      altNames: unionArr(sp.altNames, d.altNames),
+      keyIds: (Array.isArray(d.keyIds) && d.keyIds.length) ? d.keyIds : (sp.keyIds || []),
+      lookalikes: unionArr(sp.lookalikes, d.lookalikes),
+      habitat: (d.habitat || sp.habitat || '').trim(),
+      typicalSize: sp.typicalSize || '',
+      typicalLengthIn: d.typicalLengthIn || sp.typicalLengthIn || '',
+      typicalWeightLb: d.typicalWeightLb || sp.typicalWeightLb || '',
+      worldRecordLb:   d.worldRecordLb   || sp.worldRecordLb   || '',
+      geoRange:        d.geoRange        || sp.geoRange        || '',
+      edibility:       d.edibility       || sp.edibility       || '',
+      seasonality:     d.seasonality     || sp.seasonality     || '',
+      reefFish: !!sp.reefFish,
+      hms: !!sp.hms,
+    };
+    const { ok, error } = await upsertSpecies(payload);
+    setQuickBusy(null);
+    setQuickMsg(ok ? `${sp.commonName}: researched & saved ✓` : `${sp.commonName}: save failed — ${error || ''}`);
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return null;
+    try { return new Date(iso).toLocaleDateString(undefined, { year: '2-digit', month: 'numeric', day: 'numeric' }); }
+    catch { return null; }
+  };
+
   // Hoisted ABOVE the panel === 'suggestions' early return so hook
   // count stays constant across sub-tab switches. Previously this
   // useMemo sat below the early return and caused React #300
@@ -539,6 +592,13 @@ function SpeciesTab({ detailView, setDetailView }) {
       <div style={{ fontSize: 11, color: T.inkMute, margin: '0 4px 10px' }}>
         {filtered.length} shown · {activeCount} active · {deactivatedCount} deactivated.
       </div>
+      {quickMsg && (
+        <div style={{
+          fontSize: 12, fontWeight: 700, margin: '0 4px 10px', padding: '8px 10px',
+          borderRadius: 6, background: T.parchmentDeep, color: T.ink,
+          border: `1px solid ${T.cardEdge}`,
+        }}>{quickMsg}</div>
+      )}
       <div style={{ display: 'grid', gap: 6 }}>
         {filtered.map(sp => {
           const photo = speciesPhoto(sp.id);
@@ -573,7 +633,27 @@ function SpeciesTab({ detailView, setDetailView }) {
                   <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>{sp.id}</div>
                 </div>
                 <div style={{ fontSize: 12, color: T.inkSoft, fontStyle: 'italic', marginTop: 2 }}>{sp.scientific}</div>
+                <div style={{ fontSize: 11, marginTop: 3 }}>
+                  {sp.updatedAt
+                    ? <span style={{ color: T.open, fontWeight: 700 }}>✓ Researched · {fmtDate(sp.updatedAt)}</span>
+                    : <span style={{ color: T.warn, fontWeight: 700 }}>Not researched</span>}
+                </div>
               </div>
+              <button
+                onClick={(e) => quickResearch(sp, e)}
+                disabled={!!quickBusy}
+                title="Run AI research and save in one click"
+                style={{
+                  flexShrink: 0, alignSelf: 'center',
+                  background: quickBusy === sp.id ? T.brassDeep : T.brass, color: T.oceanDeep,
+                  border: 'none', borderRadius: 6, padding: '8px 10px',
+                  fontSize: 12, fontWeight: 800, cursor: quickBusy ? 'default' : 'pointer',
+                  opacity: quickBusy && quickBusy !== sp.id ? 0.4 : 1,
+                  display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+                }}
+              >
+                {quickBusy === sp.id ? '…' : '✨ Research'}
+              </button>
             </Card>
           );
         })}
