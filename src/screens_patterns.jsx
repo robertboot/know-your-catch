@@ -407,6 +407,30 @@ export function PatternsScreen({ state, onPickSpecies }) {
     return { top5: arr.slice(0, 5), all: arr, distinct: arr.length };
   }, [catchLog]);
 
+  // PB progression — flatten all pbs.history plus current PB into a
+  // chronologically-sorted timeline. Value is the primary metric.
+  // MUST stay above the early returns below (drill-down / not-enough-data)
+  // so hook order is identical on every render — a hook after a
+  // conditional return crashes React ("rendered fewer hooks").
+  const pbTimeline = useMemo(() => {
+    const out = [];
+    for (const [id, pb] of Object.entries(pbs)) {
+      const s = speciesById(id);
+      if (!s || !pb) continue;
+      const history = Array.isArray(pb.history) ? pb.history : [];
+      for (const h of history) {
+        const val = h.primaryMetric === 'weight' ? h.weight : h.length;
+        if (val == null || !h.date) continue;
+        out.push({ id, name: s.commonName, val, metric: h.primaryMetric, date: h.date, current: false });
+      }
+      const val = pb.primaryMetric === 'weight' ? pb.weight : pb.length;
+      if (val != null && pb.date) {
+        out.push({ id, name: s.commonName, val, metric: pb.primaryMetric, date: pb.date, current: true });
+      }
+    }
+    return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  }, [pbs]);
+
   if (drillId) {
     return <SpeciesPatterns
       speciesId={drillId}
@@ -436,27 +460,6 @@ export function PatternsScreen({ state, onPickSpecies }) {
   const hourly  = histogram(catchLog, (c) => hourOf(c.dateIso));
   const monthly = histogram(catchLog, (c) => monthOf(c.dateIso),
     { sortKey: 'natural', order: [0,1,2,3,4,5,6,7,8,9,10,11] });
-
-  // PB progression — flatten all pbs.history plus current PB into a
-  // chronologically-sorted timeline. Value is the primary metric.
-  const pbTimeline = useMemo(() => {
-    const out = [];
-    for (const [id, pb] of Object.entries(pbs)) {
-      const s = speciesById(id);
-      if (!s || !pb) continue;
-      const history = Array.isArray(pb.history) ? pb.history : [];
-      for (const h of history) {
-        const val = h.primaryMetric === 'weight' ? h.weight : h.length;
-        if (val == null || !h.date) continue;
-        out.push({ id, name: s.commonName, val, metric: h.primaryMetric, date: h.date, current: false });
-      }
-      const val = pb.primaryMetric === 'weight' ? pb.weight : pb.length;
-      if (val != null && pb.date) {
-        out.push({ id, name: s.commonName, val, metric: pb.primaryMetric, date: pb.date, current: true });
-      }
-    }
-    return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  }, [pbs]);
 
   const doExport = async (kind) => {
     const stamp = new Date().toISOString().slice(0, 10);
