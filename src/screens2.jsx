@@ -513,6 +513,10 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
   const rows = useMemo(() => {
     const lower = q.toLowerCase().trim();
     const list = SPECIES
+      // Admin-only rows never surface to anglers: the misc bucket
+      // (_unassigned) and anything on an underscore category (_admin),
+      // plus deactivated species.
+      .filter(s => s.active !== false && !String(s.id).startsWith('_') && !String(s.category).startsWith('_'))
       // Bait fish are excluded from every Regulations surface — their
       // rules are cast-net/bait-harvest guidance, not keep/release
       // compliance. Matches the admin + auto-updater grid filter.
@@ -725,6 +729,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
     if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
     const yourClosed = [], otherClosed = [], yourUnknown = [], otherUnknown = [];
     for (const s of SPECIES) {
+      if (s.active === false || String(s.id).startsWith('_') || String(s.category).startsWith('_')) continue; // admin-only rows never surface
       if (s.category === 'baitfish') continue; // no bait on regs surfaces
       const reg = regulationFor(s.id, jurisdiction.id).regulation;
       const status = reg ? seasonState(reg.open).status : 'unknown';
