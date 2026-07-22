@@ -46,16 +46,16 @@ export const TYPE = {
     sectionLabel: 11,
   },
   tablet: {
-    h1: 32, h2: 26, h3: 20,
-    body: 17, bodyStrong: 18,
-    small: 14, tiny: 12,
-    sectionLabel: 12,
+    h1: 34, h2: 28, h3: 22,
+    body: 19, bodyStrong: 21,
+    small: 16, tiny: 13,
+    sectionLabel: 13,
   },
   'tablet-landscape': {
-    h1: 36, h2: 28, h3: 22,
-    body: 18, bodyStrong: 19,
-    small: 15, tiny: 13,
-    sectionLabel: 13,
+    h1: 38, h2: 31, h3: 24,
+    body: 21, bodyStrong: 23,
+    small: 17, tiny: 14,
+    sectionLabel: 14,
   },
 };
 export function typeScale(size = screenSize()) {

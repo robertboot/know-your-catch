@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles, Crop, RotateCcw } from 'lucide-react';
 import { T } from './theme.js';
+import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
@@ -202,17 +203,20 @@ export function GhostButton({ children, onClick, style, disabled }) {
   );
 }
 export function SectionLabel({ children, style }) {
-  return <div style={{ fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase', color: T.brassDeep, fontWeight: 700, ...style }}>{children}</div>;
+  const { type } = useScreenSize();
+  return <div style={{ fontSize: type.sectionLabel, letterSpacing: 1.8, textTransform: 'uppercase', color: T.brassDeep, fontWeight: 700, ...style }}>{children}</div>;
 }
-export function H1({ children, size = 28, style }) {
-  return <h1 style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: size, fontWeight: 600, color: T.ink, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em', ...style }}>{children}</h1>;
+export function H1({ children, size, style }) {
+  const { type } = useScreenSize();
+  return <h1 style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: size ?? type.h1, fontWeight: 600, color: T.ink, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em', ...style }}>{children}</h1>;
 }
 
 export function DetailRow({ label, value }) {
+  const { type } = useScreenSize();
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, padding: '6px 0', borderTop: `1px solid ${T.cardEdge}55` }}>
-      <span style={{ fontSize: 14, color: T.inkMute, fontWeight: 600, letterSpacing: 0.3 }}>{label}</span>
-      <span style={{ fontSize: 15, color: T.ink, textAlign: 'right', whiteSpace: 'pre-wrap' }}>{value}</span>
+      <span style={{ fontSize: type.small, color: T.inkMute, fontWeight: 600, letterSpacing: 0.3 }}>{label}</span>
+      <span style={{ fontSize: type.body, color: T.ink, textAlign: 'right', whiteSpace: 'pre-wrap' }}>{value}</span>
     </div>
   );
 }

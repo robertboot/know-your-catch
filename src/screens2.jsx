@@ -258,13 +258,13 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
       <Card style={{ marginBottom: 12 }}>
         <SectionLabel style={{ marginBottom: 6 }}>Habitat & size</SectionLabel>
         {s.habitat && (
-          <div style={{ fontSize: 16, color: T.inkSoft, lineHeight: 1.5, marginBottom: 6 }}>{s.habitat}</div>
+          <div style={{ fontSize: type.bodyStrong, color: T.inkSoft, lineHeight: 1.5, marginBottom: 6 }}>{s.habitat}</div>
         )}
         {s.typicalSize && (
-          <div style={{ fontSize: 14, color: T.inkMute }}>Typical size: {s.typicalSize}</div>
+          <div style={{ fontSize: type.body, color: T.inkMute, marginTop: 4 }}>Typical size: {s.typicalSize}</div>
         )}
         {(s.typicalLengthIn || s.typicalWeightLb || s.worldRecordLb) && (
-          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4 }}>
+          <div style={{ fontSize: type.body, color: T.inkMute, marginTop: 4 }}>
             {s.typicalLengthIn && <>Length: {s.typicalLengthIn} in</>}
             {s.typicalLengthIn && s.typicalWeightLb && <> · </>}
             {s.typicalWeightLb && <>Weight: {s.typicalWeightLb} lb</>}
@@ -273,15 +273,15 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
           </div>
         )}
         {s.geoRange && (
-          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4 }}>Range: {s.geoRange}</div>
+          <div style={{ fontSize: type.body, color: T.inkMute, marginTop: 4 }}>Range: {s.geoRange}</div>
         )}
         {s.edibility && (
-          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4, textTransform: 'capitalize' }}>
+          <div style={{ fontSize: type.body, color: T.inkMute, marginTop: 4, textTransform: 'capitalize' }}>
             Edibility: {s.edibility}
           </div>
         )}
         {s.seasonality && (
-          <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4, fontStyle: 'italic' }}>
+          <div style={{ fontSize: type.body, color: T.inkMute, marginTop: 4, fontStyle: 'italic' }}>
             {s.seasonality}
           </div>
         )}
