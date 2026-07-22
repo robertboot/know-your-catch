@@ -893,6 +893,43 @@ function SpeciesForm({ initial, onDone, onCancel }) {
 
   const isNew = !initial;
 
+  // Re-sync the form when the underlying species record changes. On a
+  // fresh page load the cloud overlay lands a beat AFTER this form first
+  // mounts, so `initial` can start as the stale bundled row (or empty)
+  // and the researched values weren't there at first paint — which read
+  // as "my save didn't stick." This effect pulls the fresh record in.
+  // It fires ONLY when `initial`'s content changes (store refresh),
+  // never on keystrokes (typing updates local state, not `initial`), so
+  // it doesn't clobber in-progress edits.
+  const initialSig = initial ? JSON.stringify([
+    initial.id, initial.commonName, initial.scientific, initial.category,
+    initial.altNames, initial.keyIds, initial.lookalikes, initial.habitat,
+    initial.typicalSize, initial.typicalLengthIn, initial.typicalWeightLb,
+    initial.worldRecordLb, initial.geoRange, initial.edibility,
+    initial.seasonality, initial.reefFish, initial.hms,
+  ]) : '';
+  useEffect(() => {
+    if (!initial) return;
+    setId(initial.id || '');
+    setCommonName(initial.commonName || '');
+    setScientific(initial.scientific || '');
+    setCategory(initial.category || liveCategories[0]?.id || '');
+    setAltNames((initial.altNames || []).join(', '));
+    setKeyIds((initial.keyIds || []).join('\n'));
+    setLookalikes((initial.lookalikes || []).join(', '));
+    setHabitat(initial.habitat || '');
+    setTypicalSize(initial.typicalSize || '');
+    setTypicalLengthIn(initial.typicalLengthIn || '');
+    setTypicalWeightLb(initial.typicalWeightLb || '');
+    setWorldRecordLb(initial.worldRecordLb || '');
+    setGeoRange(initial.geoRange || '');
+    setEdibility(initial.edibility || '');
+    setSeasonality(initial.seasonality || '');
+    setReefFish(!!initial.reefFish);
+    setHms(!!initial.hms);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSig]);
+
   // Uniqueness-preserving union for comma-separated list fields.
   const unionCsv = (existingText, incomingArr) => {
     const cur = existingText.split(',').map(s => s.trim()).filter(Boolean);
