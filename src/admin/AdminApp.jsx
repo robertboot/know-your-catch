@@ -463,6 +463,10 @@ function SpeciesTab({ detailView, setDetailView }) {
       seasonality:     d.seasonality     || sp.seasonality     || '',
       reefFish: !!sp.reefFish,
       hms: !!sp.hms,
+      // Preserve active state — speciesToRow defaults is_active to true
+      // when omitted, which would silently reactivate a deactivated
+      // species on quick-research.
+      active: sp.active,
     };
     const { ok, error } = await upsertSpecies(payload);
     setQuickBusy(null);
