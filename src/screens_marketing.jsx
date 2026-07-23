@@ -48,6 +48,7 @@ const A = {
   appStoreBadge:       `${M}app-store-badge.svg`,
   googlePlayBadge:     `${M}google-play-badge.svg`,
   aiInsightsGraphic:   `${M}AI-powered.png`,
+  shield:              `${M}shield.png`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -178,6 +179,31 @@ function LockIcon({ size = 20, color = P.accent }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="5" y="11" width="14" height="9" rx="2"/>
       <path d="M8 11 V 8 a 4 4 0 0 1 8 0 v 3"/>
+    </svg>
+  );
+}
+function DownloadIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 4 v 10"/>
+      <polyline points="8 11 12 15 16 11"/>
+      <path d="M5 18 h 14"/>
+    </svg>
+  );
+}
+function ShieldXIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 l 8 3 v 6 c 0 5 -3 8 -8 9 c -5 -1 -8 -4 -8 -9 v -6 z"/>
+      <path d="M9.5 9.5 l 5 5 M14.5 9.5 l -5 5"/>
+    </svg>
+  );
+}
+function ShieldCheckIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 l 8 3 v 6 c 0 5 -3 8 -8 9 c -5 -1 -8 -4 -8 -9 v -6 z"/>
+      <polyline points="9 12 11.5 14.5 15.5 10"/>
     </svg>
   );
 }
@@ -743,6 +769,52 @@ body { margin: 0; }
 }
 .rl-phone-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* Your-data-your-rules privacy section */
+.rl-priv-top {
+  display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; margin-bottom: 40px;
+}
+@media (max-width: 900px) { .rl-priv-top { grid-template-columns: 1fr; text-align: center; } }
+.rl-priv-copy .rl-h2 span { color: ${P.accent}; }
+@media (max-width: 900px) {
+  .rl-priv-copy .rl-eyebrow-line { justify-content: center; }
+  .rl-priv-copy .rl-lead-2 { margin-left: auto; margin-right: auto; max-width: 580px; }
+}
+.rl-priv-shield { display: flex; justify-content: center; }
+.rl-priv-shield img { width: 100%; max-width: 420px; height: auto; display: block; }
+@media (max-width: 900px) { .rl-priv-shield { display: none; } }
+
+.rl-priv-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 22px; }
+@media (max-width: 1000px) { .rl-priv-cards { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .rl-priv-cards { grid-template-columns: 1fr; } }
+.rl-priv-card {
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 16px;
+  padding: 24px 18px; text-align: center;
+}
+.rl-priv-card-ico {
+  width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 16px;
+  background: ${P.accentDim}; border: 1px solid ${P.borderHi};
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rl-priv-card h4 { font-size: 16px; font-weight: 800; color: ${P.ink}; margin: 0 0 10px; line-height: 1.25; }
+.rl-priv-card p { font-size: 13.5px; line-height: 1.55; color: ${P.inkSoft}; margin: 0; }
+
+.rl-priv-banner {
+  display: flex; align-items: center; gap: 16px;
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 16px; padding: 18px 24px;
+}
+.rl-priv-banner-ico {
+  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+  background: ${P.accentDim}; border: 1px solid ${P.borderHi};
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rl-priv-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rl-priv-banner-text strong { font-size: 18px; font-weight: 800; color: ${P.ink}; }
+.rl-priv-banner-text span { font-size: 15px; color: ${P.accent}; }
+.rl-priv-banner-logo { height: 34px; width: auto; flex-shrink: 0; }
+@media (max-width: 640px) {
+  .rl-priv-banner { flex-direction: column; text-align: center; gap: 12px; }
+}
+
 /* AI-learns-your-waters section — copy left, supplied graphic right */
 .rl-ai-grid {
   display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center;
@@ -988,29 +1060,51 @@ const FEATURE_TILES = [
   },
 ];
 
-const FEATURES_5 = [
-  { icon: CameraIcon, title: 'Identify instantly', body: 'Snap a photo and our AI identifies your catch in seconds.' },
-  { icon: ShieldIcon, title: 'Rules you can trust', body: 'Up-to-date regulations for Gulf states, right when you need them.' },
-  { icon: MapPinIcon, title: 'Log every catch',    body: 'Track location, size, photos, and conditions on every trip.' },
-  { icon: ChartIcon,  title: 'Find patterns',      body: 'AI analyzes your logs to uncover your best times and spots.' },
-  { icon: TrophyIcon, title: 'Save your bests',    body: 'Celebrate Personal Bests and relive your favorite catches.' },
+const PRIVACY_CARDS = [
+  { icon: LockIcon,        title: 'Private by Default',      body: 'Every catch, waypoint, and note stays in your private log.' },
+  { icon: BrainIcon,       title: 'AI Learns Your History',  body: "Your patterns become smarter with every trip—not someone else's." },
+  { icon: CloudIcon,       title: 'Secure Cloud Sync',       body: 'Your data is encrypted and backed up so you can access it anywhere.' },
+  { icon: DownloadIcon,    title: 'Export Anytime',          body: 'Download your catches, photos, and logs whenever you want.' },
+  { icon: ShieldXIcon,     title: 'We Never Sell Your Spots', body: 'We use anonymous trends to improve insights—your exact locations stay private.' },
 ];
 
-function EverythingYouNeed() {
+function YourDataYourRules() {
   return (
     <section className="rl-section" id="features">
       <div className="rl-container">
-        <div className="rl-section-head" style={{ marginBottom: 20 }}>
-          <h2 className="rl-h2">Everything you need. One app.</h2>
+        {/* Top row — copy left, shield right */}
+        <div className="rl-priv-top">
+          <div className="rl-priv-copy">
+            <span className="rl-eyebrow rl-eyebrow-line"><LockIcon size={16} /> Your data is yours</span>
+            <h2 className="rl-h2" style={{ marginTop: 14 }}>Your data. Your spots.<br/><span>Your rules.</span></h2>
+            <p className="rl-lead-2">
+              Everything you log belongs to you. ReelIntel learns from your catches to build your personal fishing intelligence — but your exact fishing locations are never shared with anyone.
+            </p>
+          </div>
+          <div className="rl-priv-shield" aria-hidden="true">
+            <img src={A.shield} alt="" loading="lazy" decoding="async" />
+          </div>
         </div>
-        <div className="rl-feat5">
-          {FEATURES_5.map((f, i) => (
-            <div key={i} className="rl-feat5-col">
-              <div className="rl-feat5-ico"><f.icon size={26} /></div>
-              <h4>{f.title}</h4>
-              <p>{f.body}</p>
+
+        {/* 5 privacy cards */}
+        <div className="rl-priv-cards">
+          {PRIVACY_CARDS.map((c) => (
+            <div className="rl-priv-card" key={c.title}>
+              <div className="rl-priv-card-ico"><c.icon size={26} /></div>
+              <h4>{c.title}</h4>
+              <p>{c.body}</p>
             </div>
           ))}
+        </div>
+
+        {/* Bottom reassurance banner */}
+        <div className="rl-priv-banner">
+          <div className="rl-priv-banner-ico"><ShieldCheckIcon size={26} /></div>
+          <div className="rl-priv-banner-text">
+            <strong>Fish smarter with confidence.</strong>
+            <span>Your memories belong to you. Your data always goes where you go.</span>
+          </div>
+          <img className="rl-priv-banner-logo" src={LOGO_HORIZONTAL} alt="ReelIntel" />
         </div>
       </div>
     </section>
@@ -1169,7 +1263,7 @@ export function MarketingLanding() {
         <AnnouncementBanner />
       </div>
       <Hero />
-      <EverythingYouNeed />
+      <YourDataYourRules />
       <AiLearnsWaters />
       <ComingSoon />
       <FinalCTA />
