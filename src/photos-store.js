@@ -134,10 +134,52 @@ async function uploadToCloud(entry, fullDataUrl) {
       upsert: false,
     });
     if (error && !/already exists|Duplicate/i.test(error.message || '')) return;
-    const { data } = c.storage.from('catch-photos').getPublicUrl(key);
-    entry.cloudUrl = data?.publicUrl || null;
+    // Store the private storage PATH — NOT a public URL. The catch-photos
+    // bucket is private; cross-device display resolves a short-lived
+    // SIGNED url on demand (photoSignedUrl). Never persist a public,
+    // auth-free URL into the synced record.
+    entry.cloudPath = key;
   } catch {
     // silent — local save still counts as success
+  }
+}
+
+const CATCH_PHOTOS_BUCKET = 'catch-photos';
+// In-memory signed-URL cache (path -> { url, exp }). Signed URLs are
+// short-lived; re-sign lazily as they approach expiry.
+const _signedCache = new Map();
+
+/* Resolve the private storage path for a photo entry. Prefers the new
+   cloudPath; falls back to parsing a legacy public cloudUrl so old
+   synced records keep rendering once the bucket goes private. */
+function cloudPathOf(p) {
+  if (!p || typeof p !== 'object') return null;
+  if (p.cloudPath) return p.cloudPath;
+  if (typeof p.cloudUrl === 'string') {
+    const m = p.cloudUrl.match(/\/catch-photos\/(.+)$/);
+    if (m) return decodeURIComponent(m[1].split('?')[0]);
+  }
+  return null;
+}
+
+/* Async signed URL for a photo's private cloud copy. Returns null when
+   there's no cloud copy, no session, or the sign fails. Cached per path
+   so repeated renders don't re-sign. */
+export async function photoSignedUrl(p, ttlSeconds = 3600) {
+  const path = cloudPathOf(p);
+  if (!path) return null;
+  const now = Date.now();
+  const hit = _signedCache.get(path);
+  if (hit && hit.exp > now + 60_000) return hit.url;
+  try {
+    const c = client();
+    if (!c) return null;
+    const { data, error } = await c.storage.from(CATCH_PHOTOS_BUCKET).createSignedUrl(path, ttlSeconds);
+    if (error || !data?.signedUrl) return null;
+    _signedCache.set(path, { url: data.signedUrl, exp: now + ttlSeconds * 1000 });
+    return data.signedUrl;
+  } catch {
+    return null;
   }
 }
 

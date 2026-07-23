@@ -5,7 +5,7 @@ import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { speciesPhoto, shareReport, speciesById } from './helpers.js';
-import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl } from './photos-store.js';
+import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl } from './photos-store.js';
 
 /* ============================================================
    PHOTO IMG — shared img resolver with thumb-first render
@@ -56,30 +56,18 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
           primary: (primary || '').slice ? primary?.slice(0, 80) : primary,
         });
       }
-      // Before giving up on the thumb: try the cloudUrl if we have one
-      // and it differs from what already failed. This is the cross-
-      // device sync case — the entry pulled from another device carries
-      // THAT device's capacitor:// src which can never resolve here,
-      // but its cloudUrl (Supabase public URL) works from anywhere.
-      // Without this fallback the render stays stuck on the 240px thumb
-      // displayed at full size = user-visible pixelation.
-      const cloudUrl = (photo && typeof photo === 'object' && photo.cloudUrl) || null;
-      if (!cloudUrl || cloudUrl === primary || cancelled) return;
-      const cloudProbe = new Image();
-      cloudProbe.onload = () => {
-        if (!cancelled) setSrc(cloudUrl);
-        if (debugTag && typeof console !== 'undefined') {
-          // eslint-disable-next-line no-console
-          console.log(`[PhotoImg:${debugTag}] cloudUrl loaded, swapped in`);
-        }
-      };
-      cloudProbe.onerror = () => {
-        if (debugTag && typeof console !== 'undefined') {
-          // eslint-disable-next-line no-console
-          console.warn(`[PhotoImg:${debugTag}] cloudUrl also failed, staying on thumb`);
-        }
-      };
-      cloudProbe.src = cloudUrl;
+      // Before giving up on the thumb: fetch a short-lived SIGNED url for
+      // the private cloud copy. This is the cross-device sync case — the
+      // entry pulled from another device carries THAT device's
+      // capacitor:// src which can never resolve here, but the private
+      // Supabase copy renders from anywhere via a signed URL. (We never
+      // use a public, auth-free URL — the bucket is private.)
+      photoSignedUrl(photo).then((signed) => {
+        if (!signed || cancelled || signed === primary) return;
+        const cloudProbe = new Image();
+        cloudProbe.onload = () => { if (!cancelled) setSrc(signed); };
+        cloudProbe.src = signed;
+      });
     };
     probe.src = primary;
     return () => { cancelled = true; probe.onload = null; probe.onerror = null; };
