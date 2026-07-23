@@ -284,8 +284,8 @@ body { margin: 0; }
    to page bg color) to hide the seam into the next section. */
 .rl-hero {
   position: relative; overflow: hidden;
-  padding: 20px 0 90px;
-  min-height: 620px;
+  padding: 12px 0 48px;
+  min-height: 0;
 }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
@@ -601,11 +601,11 @@ body { margin: 0; }
 /* Hero split — copy left, phones right */
 .rl-hero-grid {
   position: relative; z-index: 2;
-  display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 36px; align-items: center;
+  display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 36px; align-items: start;
   /* top/bottom only — leave the horizontal padding from .rl-container
      intact. A left/right shorthand here would zero the side gutters and
      make the headline sit flush to the edge. */
-  padding-top: 40px; padding-bottom: 30px;
+  padding-top: 22px; padding-bottom: 20px;
 }
 .rl-hero-grid .rl-h1 { margin-top: 0; }
 .rl-hero-copy { max-width: 560px; }
