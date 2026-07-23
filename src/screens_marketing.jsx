@@ -771,7 +771,7 @@ body { margin: 0; }
 
 /* Your-data-your-rules privacy section */
 .rl-priv-top {
-  display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; margin-bottom: 40px;
+  display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 40px; align-items: center; margin-bottom: 40px;
 }
 @media (max-width: 900px) { .rl-priv-top { grid-template-columns: 1fr; text-align: center; } }
 .rl-priv-copy .rl-h2 span { color: ${P.accent}; }
@@ -853,8 +853,10 @@ body { margin: 0; }
 @media (max-width: 900px) { .rl-ai-media { max-width: 520px; margin: 0 auto; } }
 
 /* Coming-soon measurement diagram */
-.rl-measure { display: grid; grid-template-columns: 1fr 1.2fr; gap: 44px; align-items: center; }
+.rl-measure { display: grid; grid-template-columns: 1.2fr 1fr; gap: 44px; align-items: center; }
 @media (max-width: 900px) { .rl-measure { grid-template-columns: 1fr; gap: 30px; } }
+/* Image first in DOM but stacks BELOW the copy on mobile for reading order. */
+@media (max-width: 900px) { .rl-measure .rl-measure-fig { order: 2; } }
 .rl-measure-fig {
   position: relative; border: 1.5px dashed ${P.borderHi}; border-radius: 16px;
   background: transparent; padding: 12px;
@@ -1072,17 +1074,17 @@ function YourDataYourRules() {
   return (
     <section className="rl-section" id="features">
       <div className="rl-container">
-        {/* Top row — copy left, shield right */}
+        {/* Top row — shield left, copy right (alternates with adjacent sections) */}
         <div className="rl-priv-top">
+          <div className="rl-priv-shield" aria-hidden="true">
+            <img src={A.shield} alt="" loading="lazy" decoding="async" />
+          </div>
           <div className="rl-priv-copy">
             <span className="rl-eyebrow rl-eyebrow-line"><LockIcon size={16} /> Your data is yours</span>
             <h2 className="rl-h2" style={{ marginTop: 14 }}>Your data. Your spots.<br/><span>Your rules.</span></h2>
             <p className="rl-lead-2">
               Everything you log belongs to you. ReelIntel learns from your catches to build your personal fishing intelligence — but your exact fishing locations are never shared with anyone.
             </p>
-          </div>
-          <div className="rl-priv-shield" aria-hidden="true">
-            <img src={A.shield} alt="" loading="lazy" decoding="async" />
           </div>
         </div>
 
@@ -1104,7 +1106,6 @@ function YourDataYourRules() {
             <strong>Fish smarter with confidence.</strong>
             <span>Your memories belong to you. Your data always goes where you go.</span>
           </div>
-          <img className="rl-priv-banner-logo" src={LOGO_HORIZONTAL} alt="ReelIntel" />
         </div>
       </div>
     </section>
@@ -1187,13 +1188,6 @@ function ComingSoon() {
     <section className="rl-section" id="coming">
       <div className="rl-container">
         <div className="rl-measure">
-          <div>
-            <div className="rl-coming-badge">COMING SOON</div>
-            <h2 className="rl-h2" style={{ marginTop: 14 }}>Measure and weigh<br/>your fish from one photo.</h2>
-            <p className="rl-lead-2">
-              Built-in LiDAR, no tape, no scale. Just snap and know. ReelIntel's AI grows more accurate every day — and it's only the beginning.
-            </p>
-          </div>
           <div className="rl-measure-fig">
             <img
               src={A.comingSoonLidar}
@@ -1201,6 +1195,13 @@ function ComingSoon() {
               loading="lazy"
               decoding="async"
             />
+          </div>
+          <div>
+            <div className="rl-coming-badge">COMING SOON</div>
+            <h2 className="rl-h2" style={{ marginTop: 14 }}>Measure and weigh<br/>your fish from one photo.</h2>
+            <p className="rl-lead-2">
+              Built-in LiDAR, no tape, no scale. Just snap and know. ReelIntel's AI grows more accurate every day — and it's only the beginning.
+            </p>
           </div>
         </div>
       </div>
