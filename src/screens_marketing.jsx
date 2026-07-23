@@ -288,13 +288,13 @@ body { margin: 0; }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
   background-color: ${P.bg};
-  /* cover = fill the container with NO distortion (never skew). The
-     hero is close to the image's 2:1 shape, so cover only trims a thin
-     sliver top/bottom — showing as much of the scene as possible while
-     still covering the full width and height. */
+  /* Full WIDTH, natural proportional height (no skew). The image spans
+     the hero's full width and is as tall as its own 2:1 ratio makes it,
+     anchored to the top; any area below just fades into the page bg via
+     the scrim. */
   background-image: url("${A.heroBg}");
-  background-size: cover;
-  background-position: center;
+  background-size: 100% auto;
+  background-position: center top;
   background-repeat: no-repeat;
 }
 .rl-hero-scrim {
