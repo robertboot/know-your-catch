@@ -665,7 +665,7 @@ body { margin: 0; }
 .rl-hero-free {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
-  color: ${P.accent}; margin: 0 0 22px;
+  color: ${P.accent}; margin: 6px 0 26px; padding: 10px 0;
 }
 .rl-store-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .rl-store-row img { height: 52px; width: auto; display: block; }
