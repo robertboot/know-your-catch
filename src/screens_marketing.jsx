@@ -538,7 +538,7 @@ function Hero() {
         <p className="rl-free-line">100% free. No in-app purchases necessary.</p>
         <div className="rl-cta-row">
           <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
-            Log Your Catch <ArrowRight size={16} />
+            Download the App <ArrowRight size={16} />
           </a>
         </div>
       </div>
