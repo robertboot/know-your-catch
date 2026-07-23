@@ -69,6 +69,13 @@ function overlayToRenderShape(row) {
     bagLimit:  row.bag_limit   != null ? Number(row.bag_limit)   : null,
     boatLimit: row.boat_limit  != null ? Number(row.boat_limit)  : null,
     notes:     row.notes || null,
+    // Every row in the overlay is status:'verified' (indexRows filters
+    // to that), so mark it — otherwise the detail footer defaults to the
+    // "Seed data — not official" warning ON a verified reg, contradicting
+    // the VerifiedRegFooter shown right above it.
+    verified:   true,
+    source:     row.source_note || row.source_url || 'Agency-verified',
+    lastUpdated: row.verified_at ? new Date(row.verified_at).toISOString().slice(0, 10) : null,
     // Provenance markers so caller can render caveats.
     _verifiedAt:  row.verified_at || null,
     _sourceUrl:   row.source_url  || null,
@@ -424,6 +431,12 @@ export function regulationAge(row) {
              source: isVerified ? 'verified' : 'drafted' };
   }
   const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+  // A malformed timestamp yields NaN, which slips past the > comparisons
+  // below and would mis-bucket as 'fresh'. Treat it as unknown-age.
+  if (!Number.isFinite(days)) {
+    return { days: null, tier: isVerified ? 'aging' : 'stale', asOfIso: iso,
+             source: isVerified ? 'verified' : 'drafted' };
+  }
   // Non-verified rows are always 'stale' for the admin sort/filter
   // regardless of their draft age.
   const tier = !isVerified                ? 'stale'

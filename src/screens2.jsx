@@ -1050,11 +1050,22 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
               SEASON FROM LOCAL DATA — NOT IN VERIFIED SOURCE
             </div>
           )}
-          {stale && (
-            <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: isTablet ? 14 : 10, borderRadius: 4, fontSize: isTablet ? 14 : 12, color: T.brassDeep, marginBottom: isTablet ? 16 : 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AlertTriangle size={isTablet ? 20 : 16} /> Data is more than 7 days old. Refresh when online.
-            </div>
-          )}
+          {(() => {
+            // Banner triggers on EITHER a stale sync OR a regulation whose
+            // own verification is old — a >1yr-old reg was previously
+            // silent as long as the app had synced recently.
+            const regAge = regRow ? regulationAge(regRow) : null;
+            const regOld = regAge?.tier === 'stale';
+            if (!stale && !regOld) return null;
+            const msg = (!stale && regOld)
+              ? 'These regulations were last verified over a year ago — confirm with the agency before keeping fish.'
+              : 'Data is more than 7 days old. Refresh when online.';
+            return (
+              <div style={{ background: T.warnBg, border: `1.5px solid ${T.warn}`, padding: isTablet ? 14 : 10, borderRadius: 4, fontSize: isTablet ? 14 : 12, color: T.brassDeep, marginBottom: isTablet ? 16 : 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={isTablet ? 20 : 16} /> {msg}
+              </div>
+            );
+          })()}
           <RegBlock reg={reg} units={state.units} jurisdiction={jurisdiction} fedColumn={showFedColumn ? fedReg : null} />
           {(regSource === 'verified' || regSource === 'verified-fed') && regRow && (
             <VerifiedRegFooter row={regRow} jurisdiction={jurisdiction} isTablet={isTablet} />
