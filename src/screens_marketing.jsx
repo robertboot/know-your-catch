@@ -603,8 +603,8 @@ body { margin: 0; }
   position: relative; z-index: 2;
   display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 36px; align-items: center;
   /* top/bottom only — leave the horizontal padding from .rl-container
-     intact (a `padding: 40px 0 30px` shorthand here zeroed the side
-     gutters and made the headline sit flush to the edge). */
+     intact. A left/right shorthand here would zero the side gutters and
+     make the headline sit flush to the edge. */
   padding-top: 40px; padding-bottom: 30px;
 }
 .rl-hero-grid .rl-h1 { margin-top: 0; }
