@@ -281,12 +281,12 @@ body { margin: 0; }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
   background-color: ${P.bg};
-  /* Stretch to the full width AND full height of the hero container so
-     the whole image shows (no zoom-crop). 100% x 100% fits it edge to
-     edge; the source is close to the hero's aspect so distortion is
-     minimal. */
+  /* cover = fill the container with NO distortion (never skew). The
+     hero is close to the image's 2:1 shape, so cover only trims a thin
+     sliver top/bottom — showing as much of the scene as possible while
+     still covering the full width and height. */
   background-image: url("${A.heroBg}");
-  background-size: 100% 100%;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
