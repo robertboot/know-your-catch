@@ -242,14 +242,16 @@ body { margin: 0; }
   font-family: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.rl-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.rl-container { max-width: 1200px; margin: 0 auto; padding: 0 44px; }
+@media (max-width: 560px) { .rl-container { padding: 0 22px; } }
 
 /* Nav */
 .rl-nav {
   display: flex; align-items: center; gap: 20px;
-  padding: 22px 24px; max-width: 1200px; margin: 0 auto;
+  padding: 22px 44px; max-width: 1200px; margin: 0 auto;
   position: relative; z-index: 5;
 }
+@media (max-width: 560px) { .rl-nav { padding: 18px 22px; } }
 .rl-nav-links { display: flex; gap: 26px; flex: 1; justify-content: center; }
 .rl-nav-links a {
   color: ${P.inkSoft}; text-decoration: none; font-size: 14px; font-weight: 500;
@@ -313,12 +315,14 @@ body { margin: 0; }
   color: ${P.accent}; text-transform: uppercase;
 }
 .rl-h1 {
-  font-size: 60px; font-weight: 900; line-height: 1.03; letter-spacing: -0.9px;
-  margin: 14px 0 22px; color: ${P.ink};
+  /* Sized to keep each sentence on ONE line (3 lines total) as the copy
+     column narrows on tablet — scales with viewport, capped so it never
+     wraps a sentence. */
+  font-size: clamp(34px, 4vw, 56px);
+  font-weight: 900; line-height: 1.05; letter-spacing: -0.6px;
+  margin: 0 0 20px; color: ${P.ink};
 }
 .rl-h1 span { color: ${P.accent}; }
-@media (max-width: 900px) { .rl-h1 { font-size: 44px; } }
-@media (max-width: 500px) { .rl-h1 { font-size: 34px; } }
 
 .rl-lead {
   font-size: 18px; line-height: 1.6; color: ${P.inkSoft};
@@ -597,8 +601,11 @@ body { margin: 0; }
 /* Hero split — copy left, phones right */
 .rl-hero-grid {
   position: relative; z-index: 2;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center;
-  padding: 40px 0 30px;
+  display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 36px; align-items: center;
+  /* top/bottom only — leave the horizontal padding from .rl-container
+     intact (a `padding: 40px 0 30px` shorthand here zeroed the side
+     gutters and made the headline sit flush to the edge). */
+  padding-top: 40px; padding-bottom: 30px;
 }
 .rl-hero-grid .rl-h1 { margin-top: 0; }
 .rl-hero-copy { max-width: 560px; }
