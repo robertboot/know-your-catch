@@ -774,15 +774,18 @@ body { margin: 0; }
   font-size: 12.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: ${P.accent};
 }
 .rl-ai-privacy-body { font-size: 13px; color: ${P.inkSoft}; margin-top: 2px; }
-.rl-ai-media img { display: block; width: 100%; height: auto; }
+.rl-ai-media {
+  border: 1.5px dashed ${P.borderHi}; border-radius: 16px; padding: 12px;
+}
+.rl-ai-media img { display: block; width: 100%; height: auto; border-radius: 8px; }
 @media (max-width: 900px) { .rl-ai-media { max-width: 520px; margin: 0 auto; } }
 
 /* Coming-soon measurement diagram */
 .rl-measure { display: grid; grid-template-columns: 1fr 1.2fr; gap: 44px; align-items: center; }
 @media (max-width: 900px) { .rl-measure { grid-template-columns: 1fr; gap: 30px; } }
 .rl-measure-fig {
-  position: relative; border: 1px solid ${P.border}; border-radius: 16px;
-  background: radial-gradient(120% 100% at 50% 40%, ${P.cardHi}, ${P.card}); padding: 34px 26px;
+  position: relative; border: 1.5px dashed ${P.borderHi}; border-radius: 16px;
+  background: transparent; padding: 12px;
 }
 .rl-measure-fig img { width: 100%; height: auto; display: block; }
 .rl-measure-top, .rl-measure-bottom {
