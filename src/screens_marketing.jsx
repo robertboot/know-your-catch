@@ -47,6 +47,7 @@ const A = {
   ctaMakeEveryTrip:    `${M}cta-make-every-trip-count.jpg`,
   appStoreBadge:       `${M}app-store-badge.svg`,
   googlePlayBadge:     `${M}google-play-badge.svg`,
+  aiInsightsGraphic:   `${M}ai-insights-graphic.png`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -152,6 +153,31 @@ function ChartIcon({ size = 22, color = P.accent }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 17 9 11 13 15 21 6"/>
       <polyline points="16 6 21 6 21 11"/>
+    </svg>
+  );
+}
+function BrainIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 4 a 2.5 2.5 0 0 0 -2.5 2.5 a 2.5 2.5 0 0 0 -1.5 4.3 a 2.5 2.5 0 0 0 1 4.5 a 2.5 2.5 0 0 0 3 3 V 4 z"/>
+      <path d="M15 4 a 2.5 2.5 0 0 1 2.5 2.5 a 2.5 2.5 0 0 1 1.5 4.3 a 2.5 2.5 0 0 1 -1 4.5 a 2.5 2.5 0 0 1 -3 3 V 4 z"/>
+    </svg>
+  );
+}
+function TargetIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <circle cx="12" cy="12" r="5"/>
+      <circle cx="12" cy="12" r="1.4" fill={color}/>
+    </svg>
+  );
+}
+function LockIcon({ size = 20, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="11" width="14" height="9" rx="2"/>
+      <path d="M8 11 V 8 a 4 4 0 0 1 8 0 v 3"/>
     </svg>
   );
 }
@@ -717,6 +743,40 @@ body { margin: 0; }
 }
 .rl-phone-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* AI-learns-your-waters section — copy left, supplied graphic right */
+.rl-ai-grid {
+  display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center;
+}
+@media (max-width: 900px) { .rl-ai-grid { grid-template-columns: 1fr; gap: 32px; } }
+.rl-eyebrow-line { display: inline-flex; align-items: center; gap: 14px; }
+.rl-eyebrow-line::after {
+  content: ''; width: 54px; height: 1px;
+  background: linear-gradient(90deg, ${P.borderHi}, transparent);
+}
+.rl-ai-copy .rl-h2 span { color: ${P.accent}; }
+.rl-ai-feat { display: flex; gap: 16px; align-items: flex-start; margin-top: 22px; }
+.rl-ai-feat-ico {
+  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+  border: 1px solid ${P.borderHi}; background: ${P.accentDim};
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rl-ai-feat h4 {
+  font-size: 14px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  color: ${P.accent}; margin: 4px 0 6px;
+}
+.rl-ai-feat p { font-size: 14px; line-height: 1.55; color: ${P.inkSoft}; margin: 0; }
+.rl-ai-privacy {
+  display: flex; align-items: center; gap: 14px; margin-top: 30px;
+  padding: 15px 22px; border: 1px solid ${P.border}; border-radius: 999px;
+  background: rgba(25,212,242,0.05);
+}
+.rl-ai-privacy-title {
+  font-size: 12.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: ${P.accent};
+}
+.rl-ai-privacy-body { font-size: 13px; color: ${P.inkSoft}; margin-top: 2px; }
+.rl-ai-media img { display: block; width: 100%; height: auto; }
+@media (max-width: 900px) { .rl-ai-media { max-width: 520px; margin: 0 auto; } }
+
 /* Coming-soon measurement diagram */
 .rl-measure { display: grid; grid-template-columns: 1fr 1.2fr; gap: 44px; align-items: center; }
 @media (max-width: 900px) { .rl-measure { grid-template-columns: 1fr; gap: 30px; } }
@@ -954,82 +1014,51 @@ function EverythingYouNeed() {
   );
 }
 
-function SeePatterns() {
+const AI_FEATURES = [
+  { icon: BrainIcon,  title: 'Learns from you',              body: 'The more you log, the smarter it gets. Our AI adapts to your locations, targets, and preferences.' },
+  { icon: ChartIcon,  title: 'Finds what works',            body: 'Uncover trends in species, size, time, tide, lures, and more — so you can fish with confidence.' },
+  { icon: MapPinIcon, title: 'Personalized insights',       body: 'Get custom recommendations for your next trip based on proven patterns from your own data.' },
+  { icon: TargetIcon, title: 'Better trips. More memories.', body: 'Less guessing. More catching. The best pattern is the one you build.' },
+];
+
+function AiLearnsWaters() {
   return (
     <section className="rl-section rl-section-alt" id="how">
       <div className="rl-container">
-        <div className="rl-dash">
-          <div>
-            <h2 className="rl-h2">See your patterns.<br/>Catch more.</h2>
-            <p className="rl-lead-2">
-              ReelIntel learns from every trip you log and turns your data into powerful insights.
+        <div className="rl-ai-grid">
+          {/* Left column */}
+          <div className="rl-ai-copy">
+            <span className="rl-eyebrow rl-eyebrow-line">Powered by AI</span>
+            <h2 className="rl-h2" style={{ marginTop: 14 }}>AI that learns<br/><span>your waters.</span></h2>
+            <p className="rl-lead-2" style={{ marginBottom: 26 }}>
+              ReelIntel's AI engine analyzes every catch you log to discover patterns unique to you — from hotspots and seasons to bite times and techniques that work.
             </p>
-            <ul className="rl-check-list">
-              {['Top species breakdown', 'Best times & conditions', 'Productive areas on your map', 'Seasonal success trends', 'Personal best highlights'].map(t => (
-                <li key={t}><CheckIcon size={16} /> {t}</li>
-              ))}
-            </ul>
+            {AI_FEATURES.map((f) => (
+              <div className="rl-ai-feat" key={f.title}>
+                <div className="rl-ai-feat-ico"><f.icon size={22} /></div>
+                <div>
+                  <h4>{f.title}</h4>
+                  <p>{f.body}</p>
+                </div>
+              </div>
+            ))}
+            <div className="rl-ai-privacy">
+              <LockIcon size={20} />
+              <div>
+                <div className="rl-ai-privacy-title">100% Private &amp; Secure</div>
+                <div className="rl-ai-privacy-body">Your data stays yours. Always.</div>
+              </div>
+            </div>
           </div>
 
-          <div className="rl-dash-grid">
-            {/* Left column of mini-cards */}
-            <div className="rl-dash-col">
-              <div className="rl-mini">
-                <div className="rl-mini-label">Top species</div>
-                {[['Mahi-Mahi', 42], ['Red Snapper', 28], ['Amberjack', 16], ['King Mackerel', 12], ['Cobia', 9]].map(([n, c], i) => (
-                  <div className="rl-rank" key={n}>
-                    <span className="rl-rank-n">{i + 1}</span>
-                    <span className="rl-rank-name">{n}</span>
-                    <span className="rl-rank-val">{c}</span>
-                  </div>
-                ))}
-                <a className="rl-link" href={APP_STORE_URL}>View all species <ArrowRight size={12} /></a>
-              </div>
-              <div className="rl-mini">
-                <div className="rl-mini-label">Best times</div>
-                <div className="rl-time-row">
-                  <span className="rl-sun">☀</span>
-                  <div><div className="rl-time-day">Saturday</div><div className="rl-time-val">6:00 – 10:00 AM</div></div>
-                </div>
-                <div className="rl-time-row">
-                  <span className="rl-sun">☀</span>
-                  <div><div className="rl-time-day">Sunday</div><div className="rl-time-val">7:00 – 11:00 AM</div></div>
-                </div>
-                <a className="rl-link" href={APP_STORE_URL}>View all times <ArrowRight size={12} /></a>
-              </div>
-            </div>
-
-            {/* Center phone with heat map */}
-            <div className="rl-dash-phone-cell">
-              <div className="rl-phone-frame">
-                <img src={A.patternsHeatmap} alt="Heat-map view of catch density across the Gulf." loading="lazy" />
-              </div>
-            </div>
-
-            {/* Right column of mini-cards */}
-            <div className="rl-dash-col">
-              <div className="rl-mini">
-                <div className="rl-mini-label">Seasonal success</div>
-                <div style={{ fontSize: 12, color: P.inkMute, marginBottom: 6 }}>This Summer</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span className="rl-stat-big">87%</span>
-                  <span className="rl-stat-pos">+24%</span>
-                </div>
-                <div style={{ fontSize: 12, color: P.inkMute, marginTop: 4 }}>vs last summer</div>
-                <a className="rl-link" href={APP_STORE_URL}>View full report <ArrowRight size={12} /></a>
-              </div>
-              <div className="rl-mini">
-                <div className="rl-mini-label">Personal bests</div>
-                <div className="rl-pb-row">
-                  <span className="rl-pb-thumb"><FishIcon size={22} /></span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: P.ink }}>Mahi-Mahi</div>
-                    <div style={{ fontSize: 11, color: P.inkMute }}>45.2 lbs · 56 in · Jun 14, 2026</div>
-                  </div>
-                </div>
-                <a className="rl-link" href={APP_STORE_URL}>View all bests <ArrowRight size={12} /></a>
-              </div>
-            </div>
+          {/* Right column — supplied graphic */}
+          <div className="rl-ai-media">
+            <img
+              src={A.aiInsightsGraphic}
+              alt="ReelIntel AI Insights — top pattern, hotspot confidence, best bite window, seasonal success, catch trend, top locations, and most effective lures."
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </div>
       </div>
@@ -1138,7 +1167,7 @@ export function MarketingLanding() {
       </div>
       <Hero />
       <EverythingYouNeed />
-      <SeePatterns />
+      <AiLearnsWaters />
       <ComingSoon />
       <FinalCTA />
       <Footer />
