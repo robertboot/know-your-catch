@@ -623,9 +623,13 @@ body { margin: 0; }
   .rl-hero-copy { max-width: 100%; margin: 0 auto; }
   .rl-hero-copy .rl-lead { margin-left: auto; margin-right: auto; }
   .rl-store-row, .rl-hero-free { justify-content: center; }
-  .rl-hero-phones { min-height: 440px; margin-top: 10px; }
-  .rl-hero-phone-front { width: 46%; transform: translateX(-40%) rotate(-5deg); }
-  .rl-hero-phone-back  { width: 42%; transform: translateX(44%) rotate(7deg); }
+  /* Stacked layout: phones flow in normal document order BELOW the
+     copy/badges — no absolute positioning, so they can never overlap
+     the store buttons. Slight negative margins keep the overlapped look. */
+  .rl-hero-phones { min-height: 0; margin-top: 30px; align-items: flex-end; }
+  .rl-hero-phones img { position: static; filter: drop-shadow(0 16px 34px rgba(0,0,0,0.5)); }
+  .rl-hero-phone-front { width: 46%; transform: rotate(-4deg); margin-right: -5%; z-index: 2; }
+  .rl-hero-phone-back  { width: 42%; transform: rotate(5deg); margin-left: -5%; z-index: 1; }
 }
 
 /* Feature row — 5 icon+text columns with hairline dividers */
