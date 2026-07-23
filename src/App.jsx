@@ -152,13 +152,27 @@ export default function App() {
     refreshBrandAssets().catch(() => {});
     refreshCategories().catch(() => {});
     fetchRegulations().catch(() => {});
-    // Kick off the ML model fetch/cache in the background. First
-    // launch online: downloads the promoted model (~1 MB) and caches
-    // it. Subsequent launches: fast cache-hit unless a newer version
-    // has been published. Failures are silent — the classifier
-    // gracefully degrades to the manual-picker fallback.
-    initModel().catch(() => {});
+    // NOTE: the ML model (tfjs runtime + ~1 MB weights + ~3.6 MB WASM)
+    // is intentionally NOT fetched here. Cold boot no longer pays that
+    // cost — most launches are to check regulations or the logbook, not
+    // to identify a fish. initModel() is deferred to the first time the
+    // angler reaches the Fish-ID flow (see the effect below). It's
+    // idempotent, so navigating in and out only kicks it off once.
   }, []);
+
+  // Lazy model warm-up: the first time the user lands on any Fish-ID
+  // screen, start fetching/caching the classifier in the background so
+  // it's ready by the time they snap a photo. initModel() dedupes via
+  // its in-flight promise, so this fires exactly once per session.
+  const modelKickedRef = useRef(false);
+  useEffect(() => {
+    if (modelKickedRef.current) return;
+    const wantsModel = ['identify', 'photo_crop', 'photo_analyzing', 'photo_result', 'identify_confirm']
+      .includes(screen.name);
+    if (!wantsModel) return;
+    modelKickedRef.current = true;
+    initModel().catch(() => {});
+  }, [screen.name]);
 
   // Re-fetch the verified regulations overlay every time the app
   // returns to the foreground (not just cold boot). iOS keeps the

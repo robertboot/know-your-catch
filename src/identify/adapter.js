@@ -87,10 +87,10 @@ function normalizeScores(raw) {
 
 /* Real classifier — used when a model is loaded. */
 async function realClassify(imageDataUrl) {
-  // Prod boot kicks off initModel() in App.jsx, so this should be
-  // resolved already. But if the pipeline runs before boot init
-  // finishes we'd rather wait than fail — the analyzing UI already
-  // shows a spinner.
+  // Landing on any Fish-ID screen kicks off initModel() in App.jsx, so
+  // by the time a photo is analyzed it's usually resolved already. But
+  // if the pipeline somehow runs before that warm-up finishes we'd
+  // rather wait than fail — the analyzing UI already shows a spinner.
   const model = await (getReadyModel() || initModel());
   if (!model) return [];
   const info = getModelInfo();
