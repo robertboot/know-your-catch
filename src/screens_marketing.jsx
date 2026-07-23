@@ -52,6 +52,19 @@ const A = {
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
+// Set this to the Google Play listing once Android is live. While empty,
+// Android users fall back to the App Store (nothing dead-ends).
+const PLAY_STORE_URL = '';
+
+/* Route generic "get the app" CTAs to the right store for the device.
+   iOS + desktop → App Store; Android → Google Play (once PLAY_STORE_URL
+   is set, else App Store). Runs client-side; safe if navigator is absent. */
+function storeUrl() {
+  if (typeof navigator === 'undefined') return APP_STORE_URL;
+  const ua = navigator.userAgent || '';
+  if (/android/i.test(ua) && PLAY_STORE_URL) return PLAY_STORE_URL;
+  return APP_STORE_URL;
+}
 const CONTACT_URL   = 'mailto:robert@reelintel.ai';
 const PRIVACY_URL   = '/privacy';
 const TERMS_URL     = '/terms';
@@ -665,8 +678,11 @@ body { margin: 0; }
 .rl-hero-free {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
-  color: ${P.accent}; margin: 6px 0 26px; padding: 10px 0;
+  color: ${P.accent}; margin: 6px 0 18px; padding: 10px 0;
 }
+/* Primary CTA sits between the free line and the store badges, with a
+   little breathing room so the badges drop slightly lower. */
+.rl-hero-cta { margin: 0 0 22px; }
 .rl-store-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .rl-store-row img { height: 52px; width: auto; display: block; }
 .rl-hero-phones {
@@ -886,7 +902,7 @@ function Nav() {
       <div className="rl-nav-links">
         {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
       </div>
-      <a className="rl-btn rl-btn-primary" href={APP_STORE_URL} style={{ padding: '11px 20px', fontSize: 13 }}>
+      <a className="rl-btn rl-btn-primary" href={storeUrl()} style={{ padding: '11px 20px', fontSize: 13 }}>
         Get the app
       </a>
     </nav>
@@ -907,11 +923,16 @@ function Hero() {
             Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
           </p>
           <p className="rl-hero-free"><CheckIcon size={16} /> 100% free. No in-app purchases.</p>
+          <div className="rl-hero-cta">
+            <a className="rl-btn rl-btn-primary rl-btn-lg" href={storeUrl()}>
+              Download App <ArrowRight size={16} />
+            </a>
+          </div>
           <div className="rl-store-row">
             <a href={APP_STORE_URL} aria-label="Download on the App Store">
               <img src={A.appStoreBadge} alt="Download on the App Store" />
             </a>
-            <a href={APP_STORE_URL} aria-label="Get it on Google Play">
+            <a href={PLAY_STORE_URL || APP_STORE_URL} aria-label="Get it on Google Play">
               <img src={A.googlePlayBadge} alt="Get it on Google Play" />
             </a>
           </div>
@@ -1218,8 +1239,8 @@ function FinalCTA() {
       <div className="rl-container rl-final-cta-inner">
         <h2 className="rl-h2">Make every trip count.</h2>
         <p className="rl-lead-2">Know your catch. Keep it legal. Fish smarter.</p>
-        <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
-          Log Your Catch <ArrowRight size={16} />
+        <a className="rl-btn rl-btn-primary rl-btn-lg" href={storeUrl()}>
+          Download App <ArrowRight size={16} />
         </a>
       </div>
     </section>
