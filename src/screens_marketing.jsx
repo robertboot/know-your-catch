@@ -47,7 +47,7 @@ const A = {
   ctaMakeEveryTrip:    `${M}cta-make-every-trip-count.jpg`,
   appStoreBadge:       `${M}app-store-badge.svg`,
   googlePlayBadge:     `${M}google-play-badge.svg`,
-  aiInsightsGraphic:   `${M}ai-insights-graphic.png`,
+  aiInsightsGraphic:   `${M}AI-powered.png`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
