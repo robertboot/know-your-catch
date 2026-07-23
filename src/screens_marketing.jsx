@@ -682,9 +682,13 @@ body { margin: 0; }
 }
 /* Primary CTA sits between the free line and the store badges, with a
    little breathing room so the badges drop slightly lower. */
-.rl-hero-cta { margin: 0 0 22px; }
-.rl-store-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.rl-hero-cta { margin: 0 0 32px; }
+/* Store badges stay side by side on every width — never stack. Shrink
+   the badge height on small phones so both fit on one line. */
+.rl-store-row { display: flex; gap: 12px; flex-wrap: nowrap; align-items: center; }
 .rl-store-row img { height: 52px; width: auto; display: block; }
+@media (max-width: 560px) { .rl-store-row img { height: 44px; } }
+@media (max-width: 380px) { .rl-store-row { gap: 8px; } .rl-store-row img { height: 38px; } }
 .rl-hero-phones {
   position: relative; display: flex; align-items: flex-start; justify-content: center;
   min-height: 560px;
@@ -1251,7 +1255,7 @@ function Footer() {
   return (
     <footer className="rl-footer">
       <div className="rl-container rl-footer-inner">
-        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 68, width: 'auto' }} />
+        <img src={LOGO_HEADER} alt="ReelIntel" style={{ height: 60, width: 'auto', display: 'block' }} />
         <div className="rl-footer-links">
           {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
           <a href={PRIVACY_URL}>Privacy</a>
