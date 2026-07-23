@@ -252,6 +252,12 @@ body { margin: 0; }
   max-width: 640px; margin: 0 0 30px;
 }
 @media (max-width: 500px) { .rl-lead { font-size: 16px; } }
+/* Free callout — its own beat under the hero subtext, accent blue + bold. */
+.rl-free-line {
+  font-size: 17px; font-weight: 800; color: ${P.accent};
+  letter-spacing: 0.2px; margin: 0 0 26px;
+}
+@media (max-width: 500px) { .rl-free-line { font-size: 15px; } }
 .rl-cta-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
 /* Sections */
@@ -529,6 +535,7 @@ function Hero() {
         <p className="rl-lead">
           Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
         </p>
+        <p className="rl-free-line">100% free. No in-app purchases necessary.</p>
         <div className="rl-cta-row">
           <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
             Log Your Catch <ArrowRight size={16} />
@@ -711,8 +718,8 @@ function DataAndFree() {
             <p>Export it anytime and use it however you want — bring it to other tools, keep your own records. We keep your personal information secure.</p>
           </div>
           <div className="rl-feature">
-            <h3>Free to use, built to stay that way.</h3>
-            <p>No subscription. ReelIntel is free because the collective, anonymized picture makes it powerful for every angler. Get in now and fish smarter, on us.</p>
+            <h3>100% free. No in-app purchases necessary.</h3>
+            <p>No subscription, no paywall, no upsells. ReelIntel is free because the collective, anonymized picture makes it powerful for every angler. Get in now and fish smarter, on us.</p>
           </div>
         </div>
       </div>
