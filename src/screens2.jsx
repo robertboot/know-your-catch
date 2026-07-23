@@ -3399,7 +3399,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   };
 
   const canSave = !!speciesId;
+  // One-shot guard: a fast double-tap on SAVE CATCH would fire save()
+  // twice and create two catches (new-catch id is timestamp-based).
+  const savedRef = useRef(false);
   const save = (opts = {}) => {
+    if (savedRef.current) return;
+    savedRef.current = true;
     const entry = {
       id: existing ? existing.id : 'c_' + Date.now(),
       // Quick Confirm from the Review page saves a 'quick' catch — the
@@ -3480,6 +3485,43 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         // Un-check: this catch used to be the PB; drop the PB record.
         const nextPbs = { ...(state.pbs || {}) };
         delete nextPbs[entry.speciesId];
+        patch.pbs = nextPbs;
+      }
+    }
+
+    // Species changed on an edit: if this catch WAS the OLD species' PB,
+    // it's now a different species — don't leave the old PB pointing at
+    // it. Promote the next-best remaining catch of the old species, or
+    // drop that PB. (nextCatchLog already carries the edited entry under
+    // its NEW species, so it's correctly excluded here.)
+    if (existing && existing.speciesId && existing.speciesId !== entry.speciesId) {
+      const basePbs = patch.pbs || state.pbs || {};
+      const oldPB = basePbs[existing.speciesId];
+      if (oldPB && oldPB.catchId === existing.id) {
+        const metric = oldPB.primaryMetric || 'weight';
+        const measure = (x) => (metric === 'length' ? x.length : x.weight);
+        const candidates = nextCatchLog.filter(x => x.speciesId === existing.speciesId && measure(x) != null);
+        const nextPbs = { ...basePbs };
+        if (candidates.length) {
+          const best = candidates.reduce((b, x) => (measure(x) > measure(b) ? x : b));
+          nextPbs[existing.speciesId] = {
+            ...oldPB,
+            length: best.length ?? null,
+            weight: best.weight ?? null,
+            date: (best.dateIso || '').slice(0, 10),
+            lat: best.lat ?? null, lon: best.lon ?? null,
+            location: (best.lat != null && best.lon != null)
+              ? `${best.lat.toFixed(5)}°, ${best.lon.toFixed(5)}°`
+              : (oldPB.location || ''),
+            notes: best.notes || '',
+            jurisdiction: best.jurisdiction,
+            photos: catchPhotos(best),
+            photo: catchPhotos(best)[0] || null,
+            catchId: best.id,
+          };
+        } else {
+          delete nextPbs[existing.speciesId];
+        }
         patch.pbs = nextPbs;
       }
     }
