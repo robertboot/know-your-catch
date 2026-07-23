@@ -23,6 +23,7 @@ import {
   subscribe as subscribeSpeciesStore,
 } from '../species-store.js';
 import TrainingTab from './TrainingTab.jsx';
+import OceanHeatmapPanel from './OceanHeatmapPanel.jsx';
 import NotificationsTab from './NotificationsTab.jsx';
 import HomeDashboard from './HomeDashboard.jsx';
 import LegalTab from './LegalTab.jsx';
@@ -318,6 +319,7 @@ function SignedInShell({ email, onExit }) {
       {tab === 'branding'      && !detailView && <BrandingTab />}
       {tab === 'categories'    && !detailView && <CategoriesTab />}
       {tab === 'training'      && !detailView && <TrainingTab />}
+      {tab === 'ocean'         && !detailView && <OceanHeatmapPanel />}
       {tab === 'notifications' && !detailView && <NotificationsTab />}
       {tab === 'legal'         && !detailView && <LegalTab />}
     </Chrome>
@@ -340,6 +342,7 @@ function TabBar({ tab, onTab }) {
     { id: 'species',       label: 'Species' },
     { id: 'regulations',   label: 'Regulations' },
     { id: 'training',      label: 'Training' },
+    { id: 'ocean',         label: 'Ocean' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'categories',    label: 'Categories' },
     { id: 'branding',      label: 'Branding' },
