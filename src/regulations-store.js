@@ -631,38 +631,51 @@ export async function runRegsCascade({ species, jurisdictions, onProgress, cance
       const c = client();
       let existingStatus = 'draft';
       let existingSourceUrl = '';
+      let readOk = true;
       try {
-        const { data: cur } = await c.from('regulations')
+        const { data: cur, error } = await c.from('regulations')
           .select('status, source_url')
           .eq('species_id', species.id)
           .eq('jurisdiction_id', jur.id)
           .maybeSingle();
+        if (error) throw error;
         if (cur) { existingStatus = cur.status; existingSourceUrl = cur.source_url || ''; }
-      } catch {}
-      const payload = {
-        species_id: species.id,
-        jurisdiction_id: jur.id,
-        season_text: draft.draft.seasonText,
-        min_size_in: draft.draft.minSizeIn,
-        max_size_in: draft.draft.maxSizeIn,
-        bag_limit:   draft.draft.bagLimit,
-        boat_limit:  draft.draft.boatLimit,
-        notes:       draft.draft.notes,
-        source_note: draft.draft.sourceNote,
-        // Preserve verified status if the row is already verified —
-        // cascade shouldn't silently unverify existing compliance
-        // work. Otherwise land as draft.
-        status:      existingStatus === 'verified' ? 'verified' : 'draft',
-        drafted_by:  'ai',
-        source_url:  existingSourceUrl || '',
-      };
-      const up = await adminUpsertRegulation(payload);
-      if (!up.ok) {
-        failed.push({ jurisdictionId: jur.id, error: up.error });
-        try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'fail', error: up.error }); } catch {}
+      } catch {
+        readOk = false;
+      }
+      if (!readOk) {
+        // We couldn't read the current row, so we can't tell whether the
+        // upsert would clobber a VERIFIED status / its source_url.
+        // Refuse to write rather than silently downgrade compliance work.
+        const err = 'could not read current regulation — skipped to avoid overwriting verified data';
+        failed.push({ jurisdictionId: jur.id, error: err });
+        try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'fail', error: err }); } catch {}
       } else {
-        succeeded.push(jur.id);
-        try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'ok' }); } catch {}
+        const payload = {
+          species_id: species.id,
+          jurisdiction_id: jur.id,
+          season_text: draft.draft.seasonText,
+          min_size_in: draft.draft.minSizeIn,
+          max_size_in: draft.draft.maxSizeIn,
+          bag_limit:   draft.draft.bagLimit,
+          boat_limit:  draft.draft.boatLimit,
+          notes:       draft.draft.notes,
+          source_note: draft.draft.sourceNote,
+          // Preserve verified status if the row is already verified —
+          // cascade shouldn't silently unverify existing compliance
+          // work. Otherwise land as draft.
+          status:      existingStatus === 'verified' ? 'verified' : 'draft',
+          drafted_by:  'ai',
+          source_url:  existingSourceUrl || '',
+        };
+        const up = await adminUpsertRegulation(payload);
+        if (!up.ok) {
+          failed.push({ jurisdictionId: jur.id, error: up.error });
+          try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'fail', error: up.error }); } catch {}
+        } else {
+          succeeded.push(jur.id);
+          try { onProgress?.({ index: i, total, jurisdiction: jur, phase: 'ok' }); } catch {}
+        }
       }
     }
     // 500ms gap between jurisdictions — enough to spread rate-limit
