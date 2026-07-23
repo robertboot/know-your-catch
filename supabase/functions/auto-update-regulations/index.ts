@@ -213,12 +213,17 @@ Deno.serve(async (req: Request) => {
   const { data: speciesRows, error: spErr } = await db.from('species')
     .select('id, common_name, scientific, alt_names, category, is_active');
   if (spErr) return jsonResponse({ error: `species query: ${spErr.message}` }, 500);
+  const _seenSp = new Set<string>();
   const activeSpecies = (speciesRows || [])
     .filter(s => s.is_active !== false)
-    .filter(s => s.category !== 'bait');
+    .filter(s => s.category !== 'bait')
+    // Defensive dedupe by id — duplicate species rows would otherwise
+    // produce duplicate (species × jurisdiction) work items that race
+    // each other's upsert (last-write-wins) and waste research calls.
+    .filter(s => (_seenSp.has(s.id) ? false : (_seenSp.add(s.id), true)));
 
   const { data: regRows, error: regErr } = await db.from('regulations')
-    .select('id, species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, source_note, source_url, last_checked_at');
+    .select('id, species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, source_note, source_url, last_checked_at, drafted_by, verified_by');
   if (regErr) return jsonResponse({ error: `regulations query: ${regErr.message}` }, 500);
   const regByPair = new Map<string, NonNullable<typeof regRows>[number]>();
   for (const r of regRows || []) regByPair.set(`${r.species_id}|${r.jurisdiction_id}`, r);
@@ -245,9 +250,12 @@ Deno.serve(async (req: Request) => {
   // disputed rows (admin flagged conflicting sources) and anything a
   // HUMAN authored or edited (drafted_by is an email, not 'ai') —
   // manual entries are kept verbatim, full stop.
+  // A human authored/verified a row when the byline isn't the machine.
+  const isHuman = (v: any) => v && v !== 'ai' && v !== 'auto-updater';
   const isProtected = (row: any) =>
     row && (row.status === 'disputed'
-      || (row.drafted_by && row.drafted_by !== 'ai'));
+      || isHuman(row.drafted_by)
+      || isHuman(row.verified_by));
 
   // A row with no season and no numerics carries nothing an angler
   // can use — junk from the old bulk-verify era even when its status
@@ -280,17 +288,26 @@ Deno.serve(async (req: Request) => {
         // Row-less pair: write a stub draft so it carries a
         // last_checked_at and rotates instead of starving the grid.
         // Visible to the admin as an empty draft with the failure
-        // note — honest breadcrumb, not clutter.
-        await db.from('regulations').upsert({
-          species_id: sp.id,
-          jurisdiction_id: jur.id,
-          status: 'draft',
-          drafted_by: 'ai',
-          drafted_at: nowIso,
-          source_note: `auto-updater: research failed — ${draft.error}`,
-          auto_published: false,
-          last_checked_at: nowIso,
-        }, { onConflict: 'species_id,jurisdiction_id' });
+        // note — honest breadcrumb, not clutter. But re-check first: a
+        // human may have created + verified this pair during the failed
+        // research call — don't stub over fresh compliance work.
+        const { data: nowRow } = await db.from('regulations')
+          .select('id, status, drafted_by, verified_by')
+          .eq('species_id', sp.id).eq('jurisdiction_id', jur.id).maybeSingle();
+        if (!isProtected(nowRow)) {
+          await db.from('regulations').upsert({
+            species_id: sp.id,
+            jurisdiction_id: jur.id,
+            status: 'draft',
+            drafted_by: 'ai',
+            drafted_at: nowIso,
+            source_note: `auto-updater: research failed — ${draft.error}`,
+            auto_published: false,
+            last_checked_at: nowIso,
+          }, { onConflict: 'species_id,jurisdiction_id' });
+        } else if (nowRow?.id) {
+          await db.from('regulations').update({ last_checked_at: nowIso }).eq('id', nowRow.id);
+        }
       }
       return;
     }
@@ -369,6 +386,21 @@ Deno.serve(async (req: Request) => {
         auto_published: false,
       };
       outcome = 'drafted';
+    }
+
+    // TOCTOU guard: a human may have verified/edited this pair during
+    // the ~10s research call (our `row` snapshot predates it). Re-read
+    // current protection state and bail rather than overwrite fresh
+    // human compliance work with an AI draft.
+    {
+      const { data: nowRow } = await db.from('regulations')
+        .select('id, status, drafted_by, verified_by')
+        .eq('species_id', sp.id).eq('jurisdiction_id', jur.id).maybeSingle();
+      if (isProtected(nowRow)) {
+        if (nowRow?.id) await db.from('regulations').update({ last_checked_at: nowIso }).eq('id', nowRow.id);
+        unchanged += 1; detail.push({ pair: pairKey, outcome: 'skipped-protected-race' });
+        return;
+      }
     }
 
     const { error } = await db.from('regulations')
