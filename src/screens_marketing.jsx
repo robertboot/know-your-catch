@@ -1134,7 +1134,7 @@ const PRIVACY_CARDS = [
   { icon: BrainIcon,       title: 'AI Learns Your History',  body: "Your patterns become smarter with every trip—not someone else's." },
   { icon: CloudIcon,       title: 'Secure Cloud Sync',       body: 'Your data is encrypted and backed up so you can access it anywhere.' },
   { icon: DownloadIcon,    title: 'Export Anytime',          body: 'Download your catches, photos, and logs whenever you want.' },
-  { icon: ShieldXIcon,     title: 'We Never Sell Your Spots', body: 'We use anonymous trends to improve insights—your exact locations stay private.' },
+  { icon: ShieldXIcon,     title: 'We Never Sell Your Spots', body: 'If you opt in, we use anonymous trends to improve insights—your exact locations stay private.' },
 ];
 
 function YourDataYourRules() {
