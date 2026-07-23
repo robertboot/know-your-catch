@@ -45,6 +45,8 @@ const A = {
   tilePatterns:        `${M}tile-patterns.jpg`,
   comingSoonLidar:     `${M}coming-soon-lidar.jpg`,
   ctaMakeEveryTrip:    `${M}cta-make-every-trip-count.jpg`,
+  appStoreBadge:       `${M}app-store-badge.svg`,
+  googlePlayBadge:     `${M}google-play-badge.svg`,
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
@@ -67,9 +69,10 @@ const P = {
 };
 
 const NAV_ITEMS = [
-  { label: 'Features',     href: '#features'   },
-  { label: 'How it works', href: '#how'        },
-  { label: 'Free',         href: '#data-free'  },
+  { label: 'Features',     href: '#features'    },
+  { label: 'How it works', href: '#how'         },
+  { label: 'Regulations',  href: '#how'         },
+  { label: 'About',        href: '#coming'      },
 ];
 
 /* ============================================================
@@ -124,6 +127,61 @@ function ShieldIcon({ size = 22, color = P.accent }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3 l 8 3 v 6 c 0 5 -3 8 -8 9 c -5 -1 -8 -4 -8 -9 v -6 z"/>
       <polyline points="9 12 11.5 14.5 15.5 10"/>
+    </svg>
+  );
+}
+
+function CameraIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8 h 3 l 2 -2 h 8 l 2 2 h 3 v 11 h -18 z"/>
+      <circle cx="12" cy="13" r="3.4"/>
+    </svg>
+  );
+}
+function MapPinIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22 c 5 -6 8 -9 8 -13 a 8 8 0 0 0 -16 0 c 0 4 3 7 8 13 z"/>
+      <circle cx="12" cy="9" r="2.6"/>
+    </svg>
+  );
+}
+function ChartIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 17 9 11 13 15 21 6"/>
+      <polyline points="16 6 21 6 21 11"/>
+    </svg>
+  );
+}
+function CheckIcon({ size = 16, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 12 10 18 20 6"/>
+    </svg>
+  );
+}
+function InstagramIcon({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="5"/>
+      <circle cx="12" cy="12" r="4"/>
+      <circle cx="17.5" cy="6.5" r="0.6" fill={color}/>
+    </svg>
+  );
+}
+function FacebookIcon({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M13.5 22 v -8 h 2.6 l 0.4 -3 h -3 V 9 c 0 -0.9 0.3 -1.5 1.6 -1.5 H 17 V 4.8 c -0.3 0 -1.3 -0.1 -2.4 -0.1 c -2.4 0 -4 1.4 -4 4.1 V 11 H 8 v 3 h 2.6 v 8 z"/>
+    </svg>
+  );
+}
+function YouTubeIcon({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M22 8.2 a 3 3 0 0 0 -2.1 -2.1 C 18 5.5 12 5.5 12 5.5 s -6 0 -7.9 0.6 A 3 3 0 0 0 2 8.2 C 1.5 10 1.5 12 1.5 12 s 0 2 0.5 3.8 a 3 3 0 0 0 2.1 2.1 c 1.9 0.6 7.9 0.6 7.9 0.6 s 6 0 7.9 -0.6 a 3 3 0 0 0 2.1 -2.1 c 0.5 -1.8 0.5 -3.8 0.5 -3.8 s 0 -2 -0.5 -3.8 z M 10 15 V 9 l 5 3 z"/>
     </svg>
   );
 }
@@ -501,6 +559,152 @@ body { margin: 0; }
 .rl-footer-links a { color: ${P.inkSoft}; font-size: 13px; text-decoration: none; }
 .rl-footer-links a:hover { color: ${P.accent}; }
 .rl-footer-legal { font-size: 12px; color: ${P.inkMute}; }
+.rl-footer-social { display: flex; gap: 12px; align-items: center; }
+.rl-footer-social a {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: ${P.card}; border: 1px solid ${P.border}; color: ${P.inkSoft};
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.rl-footer-social a:hover { color: ${P.accent}; border-color: ${P.borderHi}; }
+
+/* ============================================================
+   REBUILD — mockup-faithful sections
+   ============================================================ */
+
+/* Nav tagline under the wordmark */
+.rl-brand { display: inline-flex; flex-direction: column; line-height: 1; }
+.rl-brand-tag {
+  font-size: 10px; font-weight: 800; letter-spacing: 3px; color: ${P.accent};
+  text-transform: uppercase; margin-top: 3px; padding-left: 2px;
+}
+
+/* Hero split — copy left, phones right */
+.rl-hero-grid {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center;
+  padding: 40px 0 30px;
+}
+.rl-hero-grid .rl-h1 { margin-top: 0; }
+.rl-hero-copy { max-width: 560px; }
+.rl-hero-copy .rl-lead { margin-bottom: 20px; }
+.rl-hero-free {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  color: ${P.accent}; margin: 0 0 22px;
+}
+.rl-store-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.rl-store-row img { height: 52px; width: auto; display: block; }
+.rl-hero-phones {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  min-height: 520px;
+}
+.rl-hero-phones img { position: absolute; height: auto; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.55)); }
+.rl-hero-phone-front { width: 62%; z-index: 2; transform: translateX(-14%) rotate(-4deg); }
+.rl-hero-phone-back  { width: 56%; z-index: 1; transform: translateX(34%) rotate(6deg); opacity: 0.96; }
+@media (max-width: 900px) {
+  .rl-hero-grid { grid-template-columns: 1fr; text-align: center; }
+  .rl-hero-copy { max-width: 100%; margin: 0 auto; }
+  .rl-hero-copy .rl-lead { margin-left: auto; margin-right: auto; }
+  .rl-store-row, .rl-hero-free { justify-content: center; }
+  .rl-hero-phones { min-height: 460px; margin-top: 10px; }
+}
+
+/* Feature row — 5 icon+text columns with hairline dividers */
+.rl-feat5 {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+  margin-top: 40px;
+}
+.rl-feat5-col {
+  padding: 0 22px; text-align: center;
+  border-left: 1px solid ${P.border};
+}
+.rl-feat5-col:first-child { border-left: none; }
+.rl-feat5-ico {
+  width: 54px; height: 54px; border-radius: 14px; margin: 0 auto 14px;
+  background: ${P.accentDim}; display: inline-flex; align-items: center; justify-content: center;
+}
+.rl-feat5-col h4 {
+  font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  color: ${P.accent}; margin: 0 0 8px;
+}
+.rl-feat5-col p { font-size: 13.5px; line-height: 1.55; color: ${P.inkSoft}; margin: 0; }
+@media (max-width: 900px) {
+  .rl-feat5 { grid-template-columns: repeat(2, 1fr); gap: 34px 0; }
+  .rl-feat5-col { border-left: none; }
+  .rl-feat5-col:nth-child(even) { border-left: 1px solid ${P.border}; }
+}
+@media (max-width: 520px) {
+  .rl-feat5 { grid-template-columns: 1fr; }
+  .rl-feat5-col:nth-child(even) { border-left: none; }
+}
+
+/* Patterns dashboard — copy left, composite right */
+.rl-dash { display: grid; grid-template-columns: 0.85fr 1.4fr; gap: 44px; align-items: center; }
+@media (max-width: 1000px) { .rl-dash { grid-template-columns: 1fr; gap: 34px; } }
+.rl-check-list { list-style: none; padding: 0; margin: 22px 0 0; }
+.rl-check-list li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; color: ${P.inkSoft}; padding: 7px 0;
+}
+.rl-dash-grid {
+  display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 14px; align-items: start;
+}
+@media (max-width: 760px) { .rl-dash-grid { grid-template-columns: 1fr 1fr; } .rl-dash-phone-cell { grid-column: 1 / -1; order: -1; } }
+.rl-dash-col { display: flex; flex-direction: column; gap: 14px; }
+.rl-mini {
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 14px; padding: 16px;
+}
+.rl-mini-label {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+  color: ${P.accent}; margin-bottom: 12px;
+}
+.rl-rank { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; color: ${P.ink}; }
+.rl-rank-n {
+  width: 20px; height: 20px; border-radius: 6px; background: ${P.accentDim}; color: ${P.accent};
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0;
+}
+.rl-rank-name { flex: 1; }
+.rl-rank-val { color: ${P.inkMute}; font-weight: 700; }
+.rl-link { color: ${P.accent}; font-size: 12px; font-weight: 700; margin-top: 12px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.rl-time-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.rl-time-row .rl-sun { color: #f2c14e; }
+.rl-time-day { font-size: 12px; color: ${P.inkMute}; }
+.rl-time-val { font-size: 14px; color: ${P.ink}; font-weight: 700; }
+.rl-stat-big { font-size: 40px; font-weight: 900; color: ${P.accent}; line-height: 1; }
+.rl-stat-pos { color: #2ecc71; font-weight: 800; font-size: 14px; }
+.rl-pb-row { display: flex; align-items: center; gap: 12px; }
+.rl-pb-thumb {
+  width: 54px; height: 40px; border-radius: 8px; flex-shrink: 0;
+  background: ${P.cardHi}; border: 1px solid ${P.border};
+  display: flex; align-items: center; justify-content: center;
+}
+/* Phone frame for the heat-map screenshot */
+.rl-dash-phone-cell { display: flex; justify-content: center; }
+.rl-phone-frame {
+  width: 100%; max-width: 240px; aspect-ratio: 9 / 19; border-radius: 30px;
+  border: 8px solid #0a1a2b; background: #06182b; overflow: hidden;
+  box-shadow: 0 26px 60px rgba(0,0,0,0.5); position: relative;
+}
+.rl-phone-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Coming-soon measurement diagram */
+.rl-measure { display: grid; grid-template-columns: 1fr 1.2fr; gap: 44px; align-items: center; }
+@media (max-width: 900px) { .rl-measure { grid-template-columns: 1fr; gap: 30px; } }
+.rl-measure-fig {
+  position: relative; border: 1px solid ${P.border}; border-radius: 16px;
+  background: radial-gradient(120% 100% at 50% 40%, ${P.cardHi}, ${P.card}); padding: 34px 26px;
+}
+.rl-measure-fig img { width: 100%; height: auto; display: block; }
+.rl-measure-top, .rl-measure-bottom {
+  text-align: center; color: ${P.accent}; font-weight: 800; font-size: 15px; letter-spacing: 0.4px;
+}
+.rl-measure-top { margin-bottom: 8px; }
+.rl-measure-bottom {
+  margin-top: 8px; display: inline-block; padding: 5px 14px; border-radius: 999px;
+  border: 1px solid ${P.borderHi}; background: ${P.accentDim};
+  position: relative; left: 50%; transform: translateX(-50%);
+}
 `;
 
 /* ============================================================
@@ -510,14 +714,14 @@ body { margin: 0; }
 function Nav() {
   return (
     <nav className="rl-nav" aria-label="Primary">
-      <a href="#top" style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <img src={LOGO_HEADER} alt="ReelIntel" style={{ height: 64, width: 'auto', display: 'block' }} />
+      <a href="#top" className="rl-brand" aria-label="ReelIntel — home">
+        <img src={LOGO_HEADER} alt="ReelIntel" style={{ height: 52, width: 'auto', display: 'block' }} />
       </a>
       <div className="rl-nav-links">
         {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
       </div>
-      <a className="rl-btn rl-btn-primary" href={APP_STORE_URL} style={{ padding: '10px 16px', fontSize: 13 }}>
-        Get the app <ArrowRight size={14} />
+      <a className="rl-btn rl-btn-primary" href={APP_STORE_URL} style={{ padding: '11px 20px', fontSize: 13 }}>
+        Get the app
       </a>
     </nav>
   );
@@ -528,18 +732,27 @@ function Hero() {
     <section className="rl-hero" id="top">
       <div className="rl-hero-bg" />
       <div className="rl-hero-scrim" />
-      <div className="rl-container rl-hero-inner">
-        <h1 className="rl-h1">
-          Know your catch.<br/><span>Keep it legal.</span><br/>Save the memory.
-        </h1>
-        <p className="rl-lead">
-          Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
-        </p>
-        <p className="rl-free-line">100% free. No in-app purchases necessary.</p>
-        <div className="rl-cta-row">
-          <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
-            Download the App <ArrowRight size={16} />
-          </a>
+      <div className="rl-container rl-hero-grid">
+        <div className="rl-hero-copy">
+          <h1 className="rl-h1">
+            Know your catch.<br/><span>Keep it legal.</span><br/>Save the memory.
+          </h1>
+          <p className="rl-lead">
+            Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
+          </p>
+          <p className="rl-hero-free"><CheckIcon size={16} /> 100% free. No in-app purchases.</p>
+          <div className="rl-store-row">
+            <a href={APP_STORE_URL} aria-label="Download on the App Store">
+              <img src={A.appStoreBadge} alt="Download on the App Store" />
+            </a>
+            <a href={APP_STORE_URL} aria-label="Get it on Google Play">
+              <img src={A.googlePlayBadge} alt="Get it on Google Play" />
+            </a>
+          </div>
+        </div>
+        <div className="rl-hero-phones" aria-hidden="true">
+          <img className="rl-hero-phone-back" src={A.regulationsPhone} alt="" loading="eager" />
+          <img className="rl-hero-phone-front" src={A.reviewCatchPhone} alt="" loading="eager" />
         </div>
       </div>
     </section>
@@ -683,25 +896,112 @@ const FEATURE_TILES = [
   },
 ];
 
+const FEATURES_5 = [
+  { icon: CameraIcon, title: 'Identify instantly', body: 'Snap a photo and our AI identifies your catch in seconds.' },
+  { icon: ShieldIcon, title: 'Rules you can trust', body: 'Up-to-date regulations for Gulf states, right when you need them.' },
+  { icon: MapPinIcon, title: 'Log every catch',    body: 'Track location, size, photos, and conditions on every trip.' },
+  { icon: ChartIcon,  title: 'Find patterns',      body: 'AI analyzes your logs to uncover your best times and spots.' },
+  { icon: TrophyIcon, title: 'Save your bests',    body: 'Celebrate Personal Bests and relive your favorite catches.' },
+];
+
 function EverythingYouNeed() {
   return (
-    <section className="rl-section">
+    <section className="rl-section" id="features">
       <div className="rl-container">
-        <div className="rl-section-head">
-          <h2 className="rl-h2">Everything you need for the day.</h2>
+        <div className="rl-section-head" style={{ marginBottom: 20 }}>
+          <h2 className="rl-h2">Everything you need. One app.</h2>
         </div>
-        <div className="rl-features">
-          {FEATURE_TILES.map((t, i) => (
-            <div
-              key={i}
-              className="rl-feature rl-feature-tile"
-              style={{ backgroundImage: `url("${t.bg}")` }}
-            >
-              <div className="rl-feature-icon"><t.icon size={22} /></div>
-              <h3>{t.title}</h3>
-              <p>{t.body}</p>
+        <div className="rl-feat5">
+          {FEATURES_5.map((f, i) => (
+            <div key={i} className="rl-feat5-col">
+              <div className="rl-feat5-ico"><f.icon size={26} /></div>
+              <h4>{f.title}</h4>
+              <p>{f.body}</p>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SeePatterns() {
+  return (
+    <section className="rl-section rl-section-alt" id="how">
+      <div className="rl-container">
+        <div className="rl-dash">
+          <div>
+            <h2 className="rl-h2">See your patterns.<br/>Catch more.</h2>
+            <p className="rl-lead-2">
+              ReelIntel learns from every trip you log and turns your data into powerful insights.
+            </p>
+            <ul className="rl-check-list">
+              {['Top species breakdown', 'Best times & conditions', 'Productive areas on your map', 'Seasonal success trends', 'Personal best highlights'].map(t => (
+                <li key={t}><CheckIcon size={16} /> {t}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rl-dash-grid">
+            {/* Left column of mini-cards */}
+            <div className="rl-dash-col">
+              <div className="rl-mini">
+                <div className="rl-mini-label">Top species</div>
+                {[['Mahi-Mahi', 42], ['Red Snapper', 28], ['Amberjack', 16], ['King Mackerel', 12], ['Cobia', 9]].map(([n, c], i) => (
+                  <div className="rl-rank" key={n}>
+                    <span className="rl-rank-n">{i + 1}</span>
+                    <span className="rl-rank-name">{n}</span>
+                    <span className="rl-rank-val">{c}</span>
+                  </div>
+                ))}
+                <a className="rl-link" href={APP_STORE_URL}>View all species <ArrowRight size={12} /></a>
+              </div>
+              <div className="rl-mini">
+                <div className="rl-mini-label">Best times</div>
+                <div className="rl-time-row">
+                  <span className="rl-sun">☀</span>
+                  <div><div className="rl-time-day">Saturday</div><div className="rl-time-val">6:00 – 10:00 AM</div></div>
+                </div>
+                <div className="rl-time-row">
+                  <span className="rl-sun">☀</span>
+                  <div><div className="rl-time-day">Sunday</div><div className="rl-time-val">7:00 – 11:00 AM</div></div>
+                </div>
+                <a className="rl-link" href={APP_STORE_URL}>View all times <ArrowRight size={12} /></a>
+              </div>
+            </div>
+
+            {/* Center phone with heat map */}
+            <div className="rl-dash-phone-cell">
+              <div className="rl-phone-frame">
+                <img src={A.patternsHeatmap} alt="Heat-map view of catch density across the Gulf." loading="lazy" />
+              </div>
+            </div>
+
+            {/* Right column of mini-cards */}
+            <div className="rl-dash-col">
+              <div className="rl-mini">
+                <div className="rl-mini-label">Seasonal success</div>
+                <div style={{ fontSize: 12, color: P.inkMute, marginBottom: 6 }}>This Summer</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span className="rl-stat-big">87%</span>
+                  <span className="rl-stat-pos">+24%</span>
+                </div>
+                <div style={{ fontSize: 12, color: P.inkMute, marginTop: 4 }}>vs last summer</div>
+                <a className="rl-link" href={APP_STORE_URL}>View full report <ArrowRight size={12} /></a>
+              </div>
+              <div className="rl-mini">
+                <div className="rl-mini-label">Personal bests</div>
+                <div className="rl-pb-row">
+                  <span className="rl-pb-thumb"><FishIcon size={22} /></span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: P.ink }}>Mahi-Mahi</div>
+                    <div style={{ fontSize: 11, color: P.inkMute }}>45.2 lbs · 56 in · Jun 14, 2026</div>
+                  </div>
+                </div>
+                <a className="rl-link" href={APP_STORE_URL}>View all bests <ArrowRight size={12} /></a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -729,21 +1029,25 @@ function DataAndFree() {
 
 function ComingSoon() {
   return (
-    <section className="rl-section">
-      <div className="rl-container rl-section-narrow">
-        <div className="rl-coming-badge">COMING SOON</div>
-        <h2 className="rl-h2">Measure and weigh your fish from one photo.</h2>
-        <p className="rl-lead-2">
-          Built-in LiDAR, no tape, no scale. Just snap and know. ReelIntel's AI grows more accurate every day — and it's only the beginning.
-        </p>
-        <figure className="rl-coming-figure">
-          <img
-            src={A.comingSoonLidar}
-            alt="ReelIntel LiDAR fish measurement — phone scanning a tuna with an AI length and weight estimate."
-            loading="lazy"
-            decoding="async"
-          />
-        </figure>
+    <section className="rl-section" id="coming">
+      <div className="rl-container">
+        <div className="rl-measure">
+          <div>
+            <div className="rl-coming-badge">COMING SOON</div>
+            <h2 className="rl-h2" style={{ marginTop: 14 }}>Measure and weigh<br/>your fish from one photo.</h2>
+            <p className="rl-lead-2">
+              Built-in LiDAR, no tape, no scale. Just snap and know. ReelIntel's AI grows more accurate every day — and it's only the beginning.
+            </p>
+          </div>
+          <div className="rl-measure-fig">
+            <img
+              src={A.comingSoonLidar}
+              alt="LiDAR fish measurement — length and weight estimated from one photo."
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -772,13 +1076,14 @@ function Footer() {
       <div className="rl-container rl-footer-inner">
         <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 40, width: 'auto' }} />
         <div className="rl-footer-links">
-          <a href={APP_STORE_URL} target="_blank" rel="noreferrer">App Store</a>
+          {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
           <a href={PRIVACY_URL}>Privacy</a>
           <a href={TERMS_URL}>Terms</a>
-          <a href={CONTACT_URL}>Contact</a>
         </div>
-        <div className="rl-footer-legal">
-          © {new Date().getFullYear()} ReelIntel, LLC. All rights reserved.
+        <div className="rl-footer-social">
+          <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramIcon /></a>
+          <a href="https://facebook.com" target="_blank" rel="noreferrer" aria-label="Facebook"><FacebookIcon /></a>
+          <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube"><YouTubeIcon /></a>
         </div>
       </div>
     </footer>
@@ -803,12 +1108,8 @@ export function MarketingLanding() {
         <AnnouncementBanner />
       </div>
       <Hero />
-      <FishSmarter />
-      <ProblemBridge />
-      <KnowRules />
-      <IdentifyIt />
       <EverythingYouNeed />
-      <DataAndFree />
+      <SeePatterns />
       <ComingSoon />
       <FinalCTA />
       <Footer />
