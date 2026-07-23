@@ -618,10 +618,10 @@ body { margin: 0; }
 .rl-store-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .rl-store-row img { height: 52px; width: auto; display: block; }
 .rl-hero-phones {
-  position: relative; display: flex; align-items: center; justify-content: center;
-  min-height: 520px;
+  position: relative; display: flex; align-items: flex-start; justify-content: center;
+  min-height: 560px;
 }
-.rl-hero-phones img { position: absolute; height: auto; filter: drop-shadow(0 26px 50px rgba(0,0,0,0.55)); }
+.rl-hero-phones img { position: absolute; top: 0; height: auto; filter: drop-shadow(0 26px 50px rgba(0,0,0,0.55)); }
 /* Smaller + spread further apart so more of each screen is visible. */
 .rl-hero-phone-front { width: 50%; z-index: 2; transform: translateX(-44%) rotate(-5deg); }
 .rl-hero-phone-back  { width: 46%; z-index: 1; transform: translateX(48%) rotate(7deg); opacity: 0.96; }
