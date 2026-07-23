@@ -325,6 +325,30 @@ body { margin: 0; }
 .rl-nav-links a:hover { color: ${P.accent}; }
 @media (max-width: 900px) { .rl-nav-links { display: none; } }
 
+/* Mobile hamburger — replaces the header CTA + nav links on small screens */
+.rl-nav-toggle { display: none; }
+@media (max-width: 900px) {
+  .rl-nav .rl-nav-cta { display: none; }  /* beats .rl-btn's inline-flex */
+  .rl-nav-toggle {
+    display: inline-flex; flex-direction: column; justify-content: center; gap: 5px;
+    width: 44px; height: 40px; padding: 8px 10px; margin-left: auto;
+    background: transparent; border: none; cursor: pointer;
+  }
+  .rl-nav-toggle span { display: block; height: 2px; width: 100%; background: ${P.ink}; border-radius: 2px; }
+}
+.rl-nav-menu {
+  position: absolute; top: calc(100% - 4px); right: 22px; z-index: 30;
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 12px;
+  padding: 10px; display: flex; flex-direction: column; gap: 2px; min-width: 210px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+}
+.rl-nav-menu a:not(.rl-btn) {
+  color: ${P.inkSoft}; text-decoration: none; font-size: 15px; font-weight: 500;
+  padding: 11px 12px; border-radius: 8px;
+}
+.rl-nav-menu a:not(.rl-btn):hover { background: ${P.cardHi}; color: ${P.accent}; }
+.rl-nav-menu .rl-btn { margin-top: 8px; justify-content: center; }
+
 /* Buttons */
 .rl-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -669,8 +693,9 @@ body { margin: 0; }
   display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 36px; align-items: start;
   /* top/bottom only — leave the horizontal padding from .rl-container
      intact. A left/right shorthand here would zero the side gutters and
-     make the headline sit flush to the edge. */
-  padding-top: 22px; padding-bottom: 20px;
+     make the headline sit flush to the edge. Extra top padding drops the
+     content a touch so more of the hero background shows above it. */
+  padding-top: 48px; padding-bottom: 20px;
 }
 .rl-hero-grid .rl-h1 { margin-top: 0; }
 .rl-hero-copy { max-width: 560px; }
@@ -898,6 +923,7 @@ body { margin: 0; }
    ============================================================ */
 
 function Nav() {
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <nav className="rl-nav" aria-label="Primary">
       <a href="#top" className="rl-brand" aria-label="ReelIntel — home">
@@ -906,9 +932,25 @@ function Nav() {
       <div className="rl-nav-links">
         {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
       </div>
-      <a className="rl-btn rl-btn-primary" href={storeUrl()} style={{ padding: '11px 20px', fontSize: 13 }}>
+      <a className="rl-btn rl-btn-primary rl-nav-cta" href={storeUrl()} style={{ padding: '11px 20px', fontSize: 13 }}>
         Get the app
       </a>
+      <button
+        className="rl-nav-toggle"
+        aria-label="Menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen(o => !o)}
+      >
+        <span/><span/><span/>
+      </button>
+      {menuOpen && (
+        <div className="rl-nav-menu">
+          {NAV_ITEMS.map(n => (
+            <a key={n.label} href={n.href} onClick={() => setMenuOpen(false)}>{n.label}</a>
+          ))}
+          <a className="rl-btn rl-btn-primary" href={storeUrl()} onClick={() => setMenuOpen(false)}>Get the app</a>
+        </div>
+      )}
     </nav>
   );
 }
