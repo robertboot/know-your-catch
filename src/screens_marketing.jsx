@@ -280,7 +280,10 @@ body { margin: 0; }
 }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
-  background: center/cover no-repeat url("${A.heroBg}");
+  /* 2:1 source — bias the crop toward the light rays + rig band (upper
+     third) and away from the dark reef floor, so it reads as "more of
+     the scene" rather than a zoomed-in middle slice. */
+  background: center 34% / cover no-repeat url("${A.heroBg}");
 }
 .rl-hero-scrim {
   position: absolute; inset: 0; z-index: 1;
@@ -599,15 +602,18 @@ body { margin: 0; }
   position: relative; display: flex; align-items: center; justify-content: center;
   min-height: 520px;
 }
-.rl-hero-phones img { position: absolute; height: auto; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.55)); }
-.rl-hero-phone-front { width: 62%; z-index: 2; transform: translateX(-14%) rotate(-4deg); }
-.rl-hero-phone-back  { width: 56%; z-index: 1; transform: translateX(34%) rotate(6deg); opacity: 0.96; }
+.rl-hero-phones img { position: absolute; height: auto; filter: drop-shadow(0 26px 50px rgba(0,0,0,0.55)); }
+/* Smaller + spread further apart so more of each screen is visible. */
+.rl-hero-phone-front { width: 50%; z-index: 2; transform: translateX(-44%) rotate(-5deg); }
+.rl-hero-phone-back  { width: 46%; z-index: 1; transform: translateX(48%) rotate(7deg); opacity: 0.96; }
 @media (max-width: 900px) {
   .rl-hero-grid { grid-template-columns: 1fr; text-align: center; }
   .rl-hero-copy { max-width: 100%; margin: 0 auto; }
   .rl-hero-copy .rl-lead { margin-left: auto; margin-right: auto; }
   .rl-store-row, .rl-hero-free { justify-content: center; }
-  .rl-hero-phones { min-height: 460px; margin-top: 10px; }
+  .rl-hero-phones { min-height: 440px; margin-top: 10px; }
+  .rl-hero-phone-front { width: 46%; transform: translateX(-40%) rotate(-5deg); }
+  .rl-hero-phone-back  { width: 42%; transform: translateX(44%) rotate(7deg); }
 }
 
 /* Feature row — 5 icon+text columns with hairline dividers */
