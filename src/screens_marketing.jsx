@@ -280,10 +280,15 @@ body { margin: 0; }
 }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
-  /* 2:1 source — bias the crop toward the light rays + rig band (upper
-     third) and away from the dark reef floor, so it reads as "more of
-     the scene" rather than a zoomed-in middle slice. */
-  background: center 34% / cover no-repeat url("${A.heroBg}");
+  background-color: ${P.bg};
+  /* Stretch to the full width AND full height of the hero container so
+     the whole image shows (no zoom-crop). 100% x 100% fits it edge to
+     edge; the source is close to the hero's aspect so distortion is
+     minimal. */
+  background-image: url("${A.heroBg}");
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 .rl-hero-scrim {
   position: absolute; inset: 0; z-index: 1;
