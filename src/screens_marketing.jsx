@@ -524,7 +524,7 @@ function Hero() {
       <div className="rl-hero-scrim" />
       <div className="rl-container rl-hero-inner">
         <h1 className="rl-h1">
-          Know your catch. Keep it legal.<br/><span>Save the memory.</span>
+          Know your catch.<br/><span>Keep it legal.</span><br/>Save the memory.
         </h1>
         <p className="rl-lead">
           Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
