@@ -199,9 +199,18 @@ export default function App() {
   // device that we want. Local-only rows will get pushed by the
   // syncChanges hook on the next state write.
   const pullSessionRef = useRef(null);
+  // Always-current auth uid, read by update()/sync so a stale closure
+  // (a timer captured before a sign-out / user switch) can never push
+  // the CURRENT user's data to a PREVIOUS user's Supabase row.
+  const authUidRef = useRef(null);
+  useEffect(() => { authUidRef.current = session?.user?.id || null; }, [session]);
   useEffect(() => {
     const uid = session?.user?.id;
-    if (!uid || pullSessionRef.current === uid) return;
+    // Reset the pull guard on sign-out so the next sign-in (even the
+    // same user) re-pulls the server snapshot instead of silently
+    // skipping it and drifting.
+    if (!uid) { pullSessionRef.current = null; return; }
+    if (pullSessionRef.current === uid) return;
     pullSessionRef.current = uid;
     let alive = true;
     (async () => {
@@ -345,7 +354,9 @@ export default function App() {
       // Fire-and-forget cross-device sync. syncChanges is debounced
       // per-record so a run of rapid edits collapses to one write.
       // Signed-out or no-Supabase = silent no-op.
-      const uid = session?.user?.id;
+      // Read the CURRENT uid from the ref (not the closure) so a stale
+      // update() captured before a user switch pushes to the right row.
+      const uid = authUidRef.current;
       if (uid) { try { cloudSyncChanges(prev, next, uid); } catch {} }
       return next;
     });

@@ -2704,7 +2704,40 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
   const currentPB = c.speciesId ? state.pbs?.[c.speciesId] : null;
   const isAlreadyPB = !!currentPB && currentPB.catchId === c.id;
   const remove = () => {
-    update({ catchLog: (state.catchLog || []).filter(x => x.id !== c.id) });
+    const nextCatchLog = (state.catchLog || []).filter(x => x.id !== c.id);
+    const patch = { catchLog: nextCatchLog };
+    // If this catch WAS the species' Personal Best, don't leave the PB
+    // pointing at a now-deleted catch. Promote the next-best remaining
+    // catch of that species (by the PB's primary metric); drop the PB if
+    // none with a measurement remain.
+    if (isAlreadyPB && c.speciesId) {
+      const metric = currentPB?.primaryMetric || (c.weight != null ? 'weight' : 'length');
+      const measure = (x) => (metric === 'length' ? x.length : x.weight);
+      const candidates = nextCatchLog.filter(x => x.speciesId === c.speciesId && measure(x) != null);
+      const nextPbs = { ...(state.pbs || {}) };
+      if (candidates.length) {
+        const best = candidates.reduce((b, x) => (measure(x) > measure(b) ? x : b));
+        nextPbs[c.speciesId] = {
+          ...currentPB,
+          length: best.length ?? null,
+          weight: best.weight ?? null,
+          date: (best.dateIso || '').slice(0, 10),
+          lat: best.lat ?? null, lon: best.lon ?? null,
+          location: (best.lat != null && best.lon != null)
+            ? `${best.lat.toFixed(5)}°, ${best.lon.toFixed(5)}°`
+            : (currentPB?.location || ''),
+          notes: best.notes || '',
+          jurisdiction: best.jurisdiction,
+          photos: catchPhotos(best),
+          photo: catchPhotos(best)[0] || null,
+          catchId: best.id,
+        };
+      } else {
+        delete nextPbs[c.speciesId];
+      }
+      patch.pbs = nextPbs;
+    }
+    update(patch);
     onBack();
   };
   // Promote this catch to the species' Personal Best in-place. Used
