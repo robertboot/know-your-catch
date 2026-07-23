@@ -228,10 +228,17 @@ function ImageSlot({ src, alt, label, variant, style }) {
    ============================================================ */
 
 const CSS = `
-html, body, #root { background: ${P.bg}; }
+html, body, #root { background: #020a12; }
 body { margin: 0; }
+/* Contain the whole marketing site to a standard centered width — no
+   edge-to-edge full-bleed. On wide monitors it sits as a centered
+   column with dark margins; below the cap it's simply full-width. This
+   keeps the hero image at a sane size instead of stretching across an
+   ultrawide display. */
 .rl-root {
+  max-width: 1400px; margin: 0 auto;
   background: ${P.bg}; color: ${P.ink};
+  box-shadow: 0 0 70px rgba(0,0,0,0.55);
   font-family: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
