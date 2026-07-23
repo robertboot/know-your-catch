@@ -47,7 +47,10 @@ import {
   SpeciesListScreen, PBsScreen, PBDetailScreen, PBEntryScreen, SettingsScreen,
   CatchLogScreen, CatchEntryScreen, CatchDetailScreen, QuizScreen,
 } from './screens2.jsx';
-import { PatternsScreen } from './screens_patterns.jsx';
+// Lazy-loaded: the whole screens_patterns module (charts, heat maps, and
+// Leaflet) only matters on the Patterns tab. Splitting it keeps ~all of it
+// out of the cold-start bundle.
+const PatternsScreen = lazy(() => import('./screens_patterns.jsx').then(m => ({ default: m.PatternsScreen })));
 import NotificationsDrawer, { useAnnouncementInbox } from './notifications-inbox.jsx';
 
 // Web-only admin console. When __KYC_ADMIN__ is false (ios:build) the
@@ -663,11 +666,15 @@ export default function App() {
       />;
       break;
     case 'patterns':
-      body = <PatternsScreen
-        state={state}
-        onPickSpecies={(id) => push({ name: 'species', id })}
-        onLogCatch={() => push({ name: 'identify', autoScan: true })}
-      />;
+      body = (
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: T.inkMute }}>Loading patterns…</div>}>
+          <PatternsScreen
+            state={state}
+            onPickSpecies={(id) => push({ name: 'species', id })}
+            onLogCatch={() => push({ name: 'identify', autoScan: true })}
+          />
+        </Suspense>
+      );
       break;
     case 'photo_crop':
       body = <CropStep
