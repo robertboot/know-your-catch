@@ -200,10 +200,14 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
     const topId = (typeof data.speciesId === 'string' && SPECIES_BY_ID[data.speciesId])
       ? data.speciesId : null;
     if (!topId) {
-      // Cloud saw no confident match — route to manual picker, same as
-      // an on-device 'low'. Returning a valid (empty) contract here
-      // means we DON'T fall back and re-run the weaker on-device model.
-      return { confidence: 'low', candidates: [], _source: 'ai' };
+      // Cloud saw no match in OUR species list. It can still describe
+      // what the fish is (data.note) even though we have no regulations
+      // for it — surface that instead of a dead "no match", and flag it
+      // so the UI can offer "add this species". Returning a valid
+      // (empty-candidate) contract means we DON'T fall back to the
+      // weaker on-device model.
+      const note = typeof data.note === 'string' ? data.note.trim() : '';
+      return { confidence: 'low', candidates: [], _source: 'ai', aiNote: note || null, offList: true };
     }
 
     // Build candidates: the top pick, then the alternates, with gently

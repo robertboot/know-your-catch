@@ -1712,17 +1712,37 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           width: '100%', maxHeight: 220, objectFit: 'cover',
           borderRadius: 6, marginBottom: 14, border: `2px solid ${T.cardEdge}`,
         }} />
-        <Card style={{ background: 'rgba(198,102,102,0.12)', borderColor: '#c66', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <AlertTriangle size={22} color="#c66" />
-            <div>
-              <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Couldn't identify confidently</div>
-              <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
-                The image was too uncertain to commit to a species. Try a clearer photo, or identify manually.
+        {result?.aiNote ? (
+          // Recognized, but not one of the app's regulated species — show
+          // what it looks like so the angler isn't left at a dead end,
+          // and nudge them to add it to the database.
+          <Card style={{ background: 'rgba(94,205,242,0.12)', borderColor: T.brass, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <AlertTriangle size={22} color={T.brass} />
+              <div>
+                <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Not in your database yet</div>
+                <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
+                  {result.aiNote}
+                </div>
+                <div style={{ fontSize: 13, color: T.inkMute, marginTop: 6, lineHeight: 1.5 }}>
+                  No size or bag rules are stored for this fish. Add it below, or pick the closest match.
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        ) : (
+          <Card style={{ background: 'rgba(198,102,102,0.12)', borderColor: '#c66', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <AlertTriangle size={22} color="#c66" />
+              <div>
+                <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Couldn't identify confidently</div>
+                <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
+                  The image was too uncertain to commit to a species. Try a clearer photo, or identify manually.
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {/* Manual ID: open the searchable species list (same picker as
               the confirm flow). Picking one records a model_correction

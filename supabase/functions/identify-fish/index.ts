@@ -154,11 +154,11 @@ Pick the single best-matching species FROM THE LIST BELOW. Respond with a JSON o
   "speciesId": "<an id from the list, or null>",
   "confidence": <0 to 1 — your honest probability that speciesId is correct>,
   "alternates": ["<up to 4 other plausible ids from the list, best first>"],
-  "note": "<one short sentence: the visual cues you keyed on, or why null>"
+  "note": "<one short sentence: the visual cues you keyed on; OR when speciesId is null, name the fish you believe it is>"
 }
 
 RULES:
-1. speciesId MUST be an id from the list, or null. Return null when there is no fish, several species share the frame with no clear subject, or the fish is clearly not in the list (say which in note).
+1. speciesId MUST be an id from the list, or null. Return null when there is no fish, several species share the frame with no clear subject, or the fish is clearly not in the list. When you return null BECAUSE the fish isn't in the list, still identify it in the note by its common name if you can (e.g. "Looks like a lookdown — not in the provided list."). A confident real-species name there is useful even though we have no rules for it.
 2. Lookalike discipline — hard pairs to separate carefully: Red vs Vermilion vs Lane vs Mutton vs Mangrove Snapper; Gag vs Black vs Scamp vs Yellowmouth Grouper; the Seriola jacks (Greater/Lesser Amberjack, Almaco, Banded Rudderfish); King vs Spanish vs Cero Mackerel; the Thunnus tunas. If the distinguishing feature isn't visible, lower confidence instead of guessing high.
 3. confidence is a calibrated probability, not enthusiasm. Provide alternates so the angler can correct you.
 4. Dead, iced, or partially-visible fish are normal — do your best from what's visible.
