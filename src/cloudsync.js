@@ -285,8 +285,16 @@ function scheduleSoftDelete(kind, key, payload) {
     try {
       setStatus('syncing');
       const table = kind === 'catches' ? 'catches' : 'pbs';
-      const conflictCols = kind === 'catches' ? 'id' : 'user_id,species_id';
-      const { error } = await c.from(table).upsert({ ...payload, deleted_at: new Date().toISOString() }, { onConflict: conflictCols });
+      // Stamp deleted_at ONLY — never overwrite the row. An upsert here
+      // replaced the whole row (wiping the catch fields / PB blob down to
+      // the payload), destroying the server copy so a soft-delete could
+      // never be recovered cross-device. update() also correctly no-ops
+      // if the row was never synced (offline-created then deleted).
+      let q = c.from(table).update({ deleted_at: new Date().toISOString() });
+      q = kind === 'catches'
+        ? q.eq('id', key).eq('user_id', payload.user_id)
+        : q.eq('user_id', payload.user_id).eq('species_id', key);
+      const { error } = await q;
       if (error) throw error;
       if (kind === 'catches') _lastPushed.catches.delete(key);
       else                    _lastPushed.pbs.delete(key);
