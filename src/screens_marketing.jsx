@@ -32,7 +32,7 @@ const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.p
 const LOGO_HEADER     = `${import.meta.env.BASE_URL}brand/icon-horz.png`;
 
 const A = {
-  heroBg:              `${M}F690FEE3-D738-4A27-A0CC-1981C3F343FF.png`,
+  heroBg:              `${M}888866A1-EE9A-4408-B410-E19A5141D228.png`,
   patternsHeatmap:     `${M}patterns-heatmap.jpg`,
   regulationsPhone:    `${M}regulations-phone.png`,
   reviewCatchPhone:    `${M}review-catch-phone.png`,
