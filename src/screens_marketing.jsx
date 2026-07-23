@@ -1230,7 +1230,7 @@ function Footer() {
   return (
     <footer className="rl-footer">
       <div className="rl-container rl-footer-inner">
-        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 40, width: 'auto' }} />
+        <img src={LOGO_HORIZONTAL} alt="ReelIntel" style={{ height: 68, width: 'auto' }} />
         <div className="rl-footer-links">
           {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
           <a href={PRIVACY_URL}>Privacy</a>
