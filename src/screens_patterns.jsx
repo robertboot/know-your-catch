@@ -28,8 +28,32 @@ import { Card, PrimaryButton, GhostButton, SectionLabel, H1 } from './components
 import { isNative } from './native.js';
 import { useScreenSize } from './screen-size.js';
 
-const THRESHOLD_OVERALL = 10;
+// Data-threshold gating for the Patterns feature. Tunable in one place.
+//   below MIN         → no insights, just progress toward the first patterns
+//   MIN .. CONFIDENT  → early / low-confidence patterns (shown with a caveat)
+//   CONFIDENT+        → full-confidence patterns
+const PATTERNS_MIN_CATCHES = 10;
+const PATTERNS_CONFIDENT_CATCHES = 30;
+
+const THRESHOLD_OVERALL = PATTERNS_MIN_CATCHES;
 const THRESHOLD_SPECIES = 5;
+
+// Singular/plural helper for catch counts.
+const catchesWord = (k) => (k === 1 ? 'catch' : 'catches');
+
+/* Accent-blue progress bar with an optional caption underneath. Used by
+   the pre-unlock (building) and early-read patterns states. */
+function PatternProgress({ value, target, caption }) {
+  const pct = Math.max(0, Math.min(1, value / target));
+  return (
+    <div style={{ margin: '2px 0 12px' }}>
+      <div style={{ height: 8, background: T.parchmentDeep, borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.round(pct * 100)}%`, height: '100%', background: T.brass, borderRadius: 4, transition: 'width 300ms ease' }} />
+      </div>
+      {caption && <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5 }}>{caption}</div>}
+    </div>
+  );
+}
 const THRESHOLD_WEATHER = 12;
 const THRESHOLD_MOON    = 15;
 
@@ -382,7 +406,7 @@ async function exportFile({ filename, mime, content }) {
 /* ============================================================
    Main screen
    ============================================================ */
-export function PatternsScreen({ state, onPickSpecies }) {
+export function PatternsScreen({ state, onPickSpecies, onLogCatch }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const isLandscape = size === 'tablet-landscape';
@@ -440,21 +464,50 @@ export function PatternsScreen({ state, onPickSpecies }) {
     />;
   }
 
-  if (total < THRESHOLD_OVERALL) {
+  // HARD GATE — below PATTERNS_MIN_CATCHES we never render inferences off
+  // too little data. The section stays VISIBLE (so anglers discover it and
+  // see progress), but only shows the empty (0) or building (1..9) state.
+  if (total < PATTERNS_MIN_CATCHES) {
+    const remaining = PATTERNS_MIN_CATCHES - total;
+    const h1size = isTablet ? (isLandscape ? 32 : 30) : 22;
+    const bodyStyle = { fontSize: isTablet ? 16 : 14, color: T.inkSoft, lineHeight: 1.55, margin: '0 0 10px' };
+    const subStyle  = { fontSize: isTablet ? 14 : 13, color: T.inkMute, lineHeight: 1.5, margin: 0, fontStyle: 'italic' };
     return (
       <div style={{ padding: isTablet ? '26px 22px' : '18px 16px' }}>
-        <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22} style={{ marginBottom: 6 }}>Patterns</H1>
-        <p style={{ fontSize: isTablet ? 17 : 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: isTablet ? 22 : 18 }}>
-          Log more catches to unlock patterns. Every catch adds to what your log knows.
-        </p>
-        <Card>
-          <SectionLabel style={{ marginBottom: 8 }}>Getting started</SectionLabel>
-          <UnlockRow current={total} target={THRESHOLD_OVERALL}
-            label={`Currently ${total} catch${total === 1 ? '' : 'es'} — need ${THRESHOLD_OVERALL - total} more before we can spot trends.`} />
-        </Card>
+        <H1 size={h1size} style={{ marginBottom: 12 }}>Patterns</H1>
+        {total === 0 ? (
+          /* STATE 1 — empty */
+          <Card>
+            <div style={{ fontSize: isTablet ? 20 : 17, fontWeight: 800, color: T.ink, lineHeight: 1.3, marginBottom: 10 }}>
+              Your patterns start with your first catch.
+            </div>
+            <p style={bodyStyle}>
+              ReelIntel learns what works for you — your tides, your conditions, your times of day. It needs about {PATTERNS_MIN_CATCHES} catches before the first patterns appear, and really hits its stride around {PATTERNS_CONFIDENT_CATCHES}.
+            </p>
+            <p style={{ ...subStyle, marginBottom: 16 }}>
+              Every catch you log makes it sharper. Start logging.
+            </p>
+            <PrimaryButton onClick={onLogCatch} style={{ width: '100%' }}>Log a catch</PrimaryButton>
+          </Card>
+        ) : (
+          /* STATE 2 — building (1..9) */
+          <Card>
+            <div style={{ fontSize: isTablet ? 20 : 17, fontWeight: 800, color: T.ink, marginBottom: 10 }}>
+              Building your patterns — {total} of {PATTERNS_MIN_CATCHES}
+            </div>
+            <PatternProgress value={total} target={PATTERNS_MIN_CATCHES} />
+            <p style={bodyStyle}>
+              AI needs data to find real patterns, not lucky guesses. {remaining} more {catchesWord(remaining)} and your first insights unlock.
+            </p>
+            <p style={subStyle}>Keep logging — the picture gets clearer with every fish.</p>
+          </Card>
+        )}
       </div>
     );
   }
+
+  // At/above the gate: early-read (10..29) or fully unlocked (30+).
+  const confident = total >= PATTERNS_CONFIDENT_CATCHES;
 
   // Hourly + monthly histograms across everything.
   const hourly  = histogram(catchLog, (c) => hourOf(c.dateIso));
@@ -485,10 +538,42 @@ export function PatternsScreen({ state, onPickSpecies }) {
 
   return (
     <div style={{ padding: isTablet ? '22px 22px 32px' : '16px 16px 24px' }}>
-      <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22} style={{ marginBottom: 6 }}>Patterns</H1>
-      <p style={{ fontSize: isTablet ? 17 : 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 0, marginBottom: isTablet ? 18 : 14 }}>
-        What your logbook knows about your fishing — based on {total} catch{total === 1 ? '' : 'es'} across {speciesMix.distinct} species.
-      </p>
+      <H1 size={isTablet ? (isLandscape ? 32 : 30) : 22} style={{ marginBottom: 8 }}>Patterns</H1>
+
+      {confident ? (
+        /* STATE 4 — dialed in */
+        <div style={{ marginBottom: isTablet ? 18 : 14 }}>
+          <div style={{ fontSize: isTablet ? 19 : 16, fontWeight: 800, color: T.ink, marginBottom: 4 }}>
+            Your patterns are dialed in — {total} catches
+          </div>
+          <p style={{ fontSize: isTablet ? 15 : 13, color: T.inkSoft, lineHeight: 1.55, margin: 0 }}>
+            Based on your own fishing history. The more you log, the sharper this gets.
+          </p>
+        </div>
+      ) : (
+        /* STATE 3 — early read (10..29) */
+        <div style={{ marginBottom: isTablet ? 16 : 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <div style={{ fontSize: isTablet ? 19 : 16, fontWeight: 800, color: T.ink }}>
+              Your first patterns are here — {total} catches in
+            </div>
+            <span style={{
+              fontSize: 10.5, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
+              color: T.brass, background: 'rgba(25,212,242,0.15)', border: `1px solid ${T.brass}`,
+              borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap',
+            }}>Early read</span>
+          </div>
+          <PatternProgress value={total} target={PATTERNS_CONFIDENT_CATCHES}
+            caption={`${total} of ${PATTERNS_CONFIDENT_CATCHES} for full confidence`} />
+          <div style={{
+            fontSize: isTablet ? 14 : 12.5, color: T.inkSoft, lineHeight: 1.5,
+            padding: '10px 12px', borderRadius: 8,
+            background: 'rgba(25,212,242,0.08)', border: `1px solid ${T.brass}55`,
+          }}>
+            These are early reads — with this much data ReelIntel can spot trends, but it can't be confident yet.
+          </div>
+        </div>
+      )}
 
       {/* Species mix */}
       <StatCard title="Species mix" n={total} icon={<Fish size={14} />}>
@@ -571,6 +656,17 @@ export function PatternsScreen({ state, onPickSpecies }) {
             Log at least two personal bests (or one with history) to see progression.
           </div>
         </StatCard>
+      )}
+
+      {/* Early-read footer — nudge toward the confident threshold. */}
+      {!confident && (
+        <div style={{
+          fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginTop: 16,
+          padding: '11px 13px', borderRadius: 8,
+          background: 'rgba(25,212,242,0.06)', border: `1px solid ${T.cardEdge}`,
+        }}>
+          Around {PATTERNS_CONFIDENT_CATCHES} catches is where patterns get genuinely reliable. Keep going.
+        </div>
       )}
 
       {/* Export */}

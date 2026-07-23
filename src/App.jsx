@@ -655,6 +655,7 @@ export default function App() {
       body = <PatternsScreen
         state={state}
         onPickSpecies={(id) => push({ name: 'species', id })}
+        onLogCatch={() => push({ name: 'identify', autoScan: true })}
       />;
       break;
     case 'photo_crop':
