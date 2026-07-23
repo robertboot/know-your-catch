@@ -300,7 +300,11 @@ body { margin: 0; }
   color: ${P.inkSoft};
 }
 .rl-img-slot img {
-  display: block; width: 100%; height: 100%; object-fit: cover;
+  /* Content images scale down WHOLE — never crop. Detail-dense art
+     like the Gulf heat map (with its right-hand species panel) must
+     stay fully readable on phones, so height follows the natural
+     aspect instead of being forced to fill a fixed box. */
+  display: block; width: 100%; height: auto; object-fit: contain;
 }
 .rl-img-slot.is-broken img { display: none; }
 .rl-img-slot-fallback {
@@ -315,22 +319,21 @@ body { margin: 0; }
   color: ${P.inkMute}; font-size: 13.5px; line-height: 1.55;
   max-width: 340px; margin: 0 auto;
 }
-/* Wide banner — full content width, 16:7 landscape. */
+/* Wide banner — full content width. No forced aspect-ratio: the
+   container hugs the image's natural height so nothing is cropped. */
 .rl-img-slot-banner {
-  aspect-ratio: 16 / 7; width: 100%; max-width: 100%;
+  width: 100%; max-width: 100%;
   box-shadow: 0 24px 60px rgba(0,0,0,0.45);
   margin-top: 32px;
 }
-/* Phone screenshot — portrait 9:19.5, capped so it doesn't dominate
-   the split column, centered inside its cell. */
+/* Phone screenshot — capped width, centered, natural height (no crop). */
 .rl-img-slot-phone {
-  aspect-ratio: 9 / 19.5; width: 100%; max-width: 300px;
+  width: 100%; max-width: 300px;
   border-radius: 32px; margin: 0 auto;
   box-shadow: 0 24px 60px rgba(0,0,0,0.45);
 }
 @media (max-width: 900px) {
   .rl-img-slot-phone { max-width: 260px; }
-  .rl-img-slot-banner { aspect-ratio: 4 / 3; }
 }
 
 /* Feature tiles — 4-up on desktop, 2-up on tablet, stack on phone.
@@ -521,10 +524,10 @@ function Hero() {
       <div className="rl-hero-scrim" />
       <div className="rl-container rl-hero-inner">
         <h1 className="rl-h1">
-          The more you fish,<br/><span>the smarter it gets.</span>
+          Know your catch. Keep it legal.<br/><span>Save the memory.</span>
         </h1>
         <p className="rl-lead">
-          AI-driven patterns that learn from every catch — when to go, where they're biting, and what to target. This isn't your old fishing app; it's the newest tech, and it keeps getting better.
+          Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
         </p>
         <div className="rl-cta-row">
           <a className="rl-btn rl-btn-primary rl-btn-lg" href={APP_STORE_URL}>
@@ -541,12 +544,15 @@ function FishSmarter() {
     <section className="rl-section" id="features">
       <div className="rl-container rl-section-narrow">
         <span className="rl-eyebrow">Fish smarter</span>
-        <h2 className="rl-h2" style={{ marginTop: 12 }}>See when — and where — they're biting.</h2>
+        <h2 className="rl-h2" style={{ marginTop: 12 }}>Your logs. Your patterns. Your spots stay yours.</h2>
         <p className="rl-lead-2">
-          Your patterns start with your own catches, then sharpen with anonymized trends from the angler community. Chasing mahi? See the windows when they're biting and general heat maps of where the action is, weighted by real catches around you — and it gets better every season as more anglers join.
+          Every catch you log builds a private picture of what works for you — the tides, conditions, and times of day that actually produce. AI studies your own history and tells you when to go and what to target.
+        </p>
+        <p className="rl-lead-2">
+          Want more? Opt in to community intel and unlock heat map zones showing where fish are being caught across the Gulf. It's off by default, and you can turn it off anytime.
         </p>
         <p className="rl-italic-note">
-          Your fishing spots stay private. ReelIntel uses only general, anonymized trends — never the individual places you fish.
+          Zones, never spots. Your exact fishing spots are never shared, never shown to another angler, and never appear on anyone's map. Export your data anytime.
         </p>
         <ImageSlot
           variant="banner"
