@@ -6,7 +6,7 @@
      - Colab notebook: getExportSignedUrl() to stream the ZIP down.
      - Colab notebook: signed upload URL to push the model bundle back
        to the model-artifacts bucket (see modelBundleUploadUrl below). */
-import { client } from './supabase-client.js';
+import { client, SUPABASE_URL } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 
 const BUCKET = 'training-exports';
@@ -138,6 +138,36 @@ export async function modelBundleUploadUrl() {
     token:     data.token,
     path,
   };
+}
+
+/* Request a 7-day upload TICKET from the mint-model-upload-url edge
+   function. This is the durable replacement for baking a raw signed
+   upload URL into the Colab snippet: that URL dies after ~2 hours, so a
+   long training run finished after it expired and the model upload
+   silently 403'd. The ticket instead lets Colab mint a FRESH upload URL
+   at the moment it uploads — training length no longer matters. The
+   real signing secret never leaves the server; we only ever hold the
+   ticket. Returns { ok, ticket, url } where url is the function endpoint
+   Colab POSTs to with { action:'redeem', ticket }. */
+export async function modelUploadTicket() {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  const sess = getLastSession();
+  const token = sess?.access_token;
+  if (!token) return { ok: false, error: 'not-signed-in' };
+  try {
+    const { data, error } = await c.functions.invoke('mint-model-upload-url', {
+      body: { action: 'issue' },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error || !data?.ok || !data?.ticket) {
+      return { ok: false, error: error?.message || data?.error || 'ticket mint failed' };
+    }
+    const base = (SUPABASE_URL || '').replace(/\/+$/, '');
+    return { ok: true, ticket: data.ticket, url: `${base}/functions/v1/mint-model-upload-url` };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 /* List pending bundles (already uploaded by Colab, awaiting import).

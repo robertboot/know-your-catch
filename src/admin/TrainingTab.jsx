@@ -42,7 +42,7 @@ import {
 import { CropStep } from '../components.jsx';
 import {
   uploadExport, listExports, getExportSignedUrl, deleteExport,
-  modelBundleUploadUrl, trainingPhotoSignedUrls,
+  modelBundleUploadUrl, modelUploadTicket, trainingPhotoSignedUrls,
 } from '../training-exports-store.js';
 import { getCategories, subscribe as subscribeCategoriesStore } from '../categories-store.js';
 import ModelsPanel from './ModelsPanel.jsx';
@@ -2542,12 +2542,17 @@ function ExportPanel() {
     try {
       const url = await getExportSignedUrl(row.storage_path);
       if (!url) throw new Error('signed URL failed');
-      // Also mint a signed upload URL so Colab can auto-upload the
-      // bundle back. Best-effort — if this fails the snippet still
-      // works, the bundle just has to be picked up manually.
-      const up = await modelBundleUploadUrl();
+      // Preferred: a 7-day upload TICKET. Colab redeems it for a FRESH
+      // upload URL right before uploading, so a long training run can't
+      // outlive it (the old pre-minted URL expired after ~2h and the
+      // finished model silently failed to upload). Falls back to a
+      // pre-minted URL if the mint function isn't deployed yet.
+      const ticket = await modelUploadTicket();
+      const up = ticket?.ok ? null : await modelBundleUploadUrl();
       const snippet = buildColabSnippet({
         exportUrl:   url,
+        mintUrl:     ticket?.ok ? ticket.url    : null,
+        mintTicket:  ticket?.ok ? ticket.ticket : null,
         bundleUrl:   up?.ok ? up.signedUrl : null,
         bundleToken: up?.ok ? up.token     : null,
       });
@@ -2760,20 +2765,27 @@ function ExportPanel() {
    both the export download AND the bundle upload are baked in — the
    Colab run then does the full round trip without any manual file
    handling. */
-function buildColabSnippet({ exportUrl, bundleUrl, bundleToken }) {
+function buildColabSnippet({ exportUrl, mintUrl, mintTicket, bundleUrl, bundleToken }) {
   const BRANCH = 'claude/upload-app-assets-NUxRr';
-  const bundleEnv = bundleUrl && bundleToken
-    ? `os.environ['REELINTEL_BUNDLE_UPLOAD'] = ${JSON.stringify(bundleUrl)}
+  // Preferred path: a mint endpoint + 7-day ticket. Colab redeems it for
+  // a fresh upload URL at the moment it uploads, so training duration is
+  // irrelevant. Legacy fallback: a pre-minted ~2h upload URL.
+  const uploadEnv = mintUrl && mintTicket
+    ? `os.environ['REELINTEL_MINT_URL'] = ${JSON.stringify(mintUrl)}
+os.environ['REELINTEL_MINT_TICKET'] = ${JSON.stringify(mintTicket)}
+`
+    : (bundleUrl && bundleToken
+        ? `os.environ['REELINTEL_BUNDLE_UPLOAD'] = ${JSON.stringify(bundleUrl)}
 os.environ['REELINTEL_BUNDLE_UPLOAD_TOKEN'] = ${JSON.stringify(bundleToken)}
 `
-    : '';
+        : '');
   return (
 `# ReelIntel — train v-next from cloud export.
 # Paste this cell into a fresh Colab notebook, run once.
 # Runtime → Change runtime type → T4 GPU or L4 GPU first.
 import os, urllib.request, runpy
 os.environ['REELINTEL_EXPORT_URL'] = ${JSON.stringify(exportUrl)}
-${bundleEnv}url = 'https://raw.githubusercontent.com/robertboot/know-your-catch/${BRANCH}/training/colab_run.py'
+${uploadEnv}url = 'https://raw.githubusercontent.com/robertboot/know-your-catch/${BRANCH}/training/colab_run.py'
 urllib.request.urlretrieve(url, '/content/colab_run.py')
 runpy.run_path('/content/colab_run.py', run_name='__main__')
 `);

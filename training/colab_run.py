@@ -372,8 +372,40 @@ print(f"[colab_run] Bundle: {BUNDLE_ZIP} "
 
 
 # 10. Upload the bundle back to Supabase Storage.
+#
+#     Preferred path: an upload TICKET. A pre-minted signed upload URL is
+#     only valid ~2 hours, and a long training run finished after it had
+#     expired -> the upload silently 403'd and the model was lost. The
+#     ticket (valid 7 days) lets us mint a FRESH upload URL right HERE,
+#     seconds before the PUT, so training duration no longer matters.
+mint_url = os.environ.get("REELINTEL_MINT_URL")
+mint_ticket = os.environ.get("REELINTEL_MINT_TICKET")
 upload_url = os.environ.get("REELINTEL_BUNDLE_UPLOAD")
 upload_token = os.environ.get("REELINTEL_BUNDLE_UPLOAD_TOKEN")
+
+if mint_url and mint_ticket:
+    print("[colab_run] Redeeming upload ticket for a fresh upload URL...")
+    try:
+        mint_req = Request(
+            mint_url,
+            data=json.dumps({"action": "redeem", "ticket": mint_ticket}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urlopen(mint_req) as resp:
+            minted = json.loads(resp.read().decode())
+        if minted.get("ok") and minted.get("signedUrl") and minted.get("token"):
+            upload_url = minted["signedUrl"]
+            upload_token = minted["token"]
+            print("[colab_run] Fresh upload URL minted (valid now, can't expire "
+                  "mid-run).")
+        else:
+            print(f"[colab_run] WARNING: ticket redeem returned no URL "
+                  f"({minted.get('error')}). Falling back to pre-minted URL if any.")
+    except Exception as e:
+        print(f"[colab_run] WARNING: ticket redeem failed: {e}. Falling back to "
+              "pre-minted URL if any.")
+
 if upload_url and upload_token:
     print("[colab_run] Uploading bundle to Supabase Storage...")
     try:
