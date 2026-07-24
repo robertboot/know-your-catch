@@ -164,15 +164,20 @@ export default function App() {
   // screen, start fetching/caching the classifier in the background so
   // it's ready by the time they snap a photo. initModel() dedupes via
   // its in-flight promise, so this fires exactly once per session.
+  // NOTE: read the active screen from `stack` (declared above), NOT the
+  // `screen` const — that's defined much further down, so referencing it
+  // in this effect's deps would hit its temporal dead zone and throw on
+  // every render.
   const modelKickedRef = useRef(false);
   useEffect(() => {
     if (modelKickedRef.current) return;
+    const name = stack[stack.length - 1]?.name;
     const wantsModel = ['identify', 'photo_crop', 'photo_analyzing', 'photo_result', 'identify_confirm']
-      .includes(screen.name);
+      .includes(name);
     if (!wantsModel) return;
     modelKickedRef.current = true;
     initModel().catch(() => {});
-  }, [screen.name]);
+  }, [stack]);
 
   // Re-fetch the verified regulations overlay every time the app
   // returns to the foreground (not just cold boot). iOS keeps the
