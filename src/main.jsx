@@ -2,6 +2,13 @@ import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { installChunkReloadGuard } from './chunk-reload.js';
+
+// Web only: iOS ships a self-contained bundle (no hashed chunks to go
+// stale), so the stale-deploy recovery is pointless there. On the web
+// deploy it saves anyone with an open tab from a chunk 404 after a
+// redeploy.
+if (__KYC_WEB__) installChunkReloadGuard();
 
 /* Root picker.
      - iOS + gh-pages preview:  __KYC_WEB__ is false → always App.
