@@ -1,0 +1,66 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+:root {
+  --kyc-header-height: 72px;
+  --kyc-footer-height: 64px;
+}
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #00081b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #EAF3F7;
+  /* Prevent iOS bounce on overscroll */
+  overscroll-behavior: none;
+}
+/* Thin teal scrollbar for the featured-species rail */
+.kyc-hscroll { scrollbar-width: thin; scrollbar-color: #1E3E55 transparent; -webkit-overflow-scrolling: touch; }
+.kyc-hscroll::-webkit-scrollbar { height: 6px; }
+.kyc-hscroll::-webkit-scrollbar-thumb { background: #1E3E55; border-radius: 3px; }
+/* Catch-log map pin */
+.kyc-pin { width: 16px; height: 16px; border-radius: 50%; background: #34C2D6; border: 2px solid #061320; box-shadow: 0 0 0 2px #34C2D6, 0 0 6px rgba(52,194,214,0.6); }
+.kyc-pin-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid #34C2D6; box-shadow: 0 0 6px rgba(0,0,0,0.6); }
+/* Leaflet dark-theme popup */
+.leaflet-container { background: #061320 !important; font-family: inherit !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #0E2436 !important; color: #EAF3F7 !important; }
+.leaflet-popup-content { margin: 10px 12px !important; font-size: 12px !important; }
+.leaflet-control-attribution { background: rgba(8,24,38,0.8) !important; color: #6E8A9B !important; font-size: 9px !important; }
+.leaflet-control-attribution a { color: #34C2D6 !important; }
+.leaflet-control-zoom a { background: #0E2436 !important; color: #EAF3F7 !important; border-color: #1E3E55 !important; }
+button { font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+/* Hide number input arrows */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+input[type=number] { -moz-appearance: textfield; }
+/* Tappable species photo: cyan hint ring on hover, scale on press */
+.kyc-tappable { cursor: pointer; transition: transform 80ms ease-out; }
+.kyc-tappable:active { transform: scale(0.985); }
+/* Lightbox backdrop animation */
+.kyc-lightbox-enter { animation: kyc-fade-in 140ms ease-out; }
+@keyframes kyc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Slow Ken Burns drift for hero / scan background images. Applied to a
+   wrapper so a child img can still carry a tilt-parallax transform.
+   Runs regardless of prefers-reduced-motion — it's a deliberate brand
+   ambiance, kept slow + subtle enough to be comfortable.
+   -webkit- prefixes + translateZ layer promotion so iOS WKWebView
+   (the Capacitor app) actually runs it. */
+.kyc-kenburns {
+  -webkit-animation: kyc-kenburns 18s ease-in-out infinite alternate;
+  animation: kyc-kenburns 18s ease-in-out infinite alternate;
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+@-webkit-keyframes kyc-kenburns {
+  0%   { -webkit-transform: scale(1.0)  translate3d(1.5%, 0.5%, 0); }
+  100% { -webkit-transform: scale(1.09) translate3d(-2%, -1.5%, 0); }
+}
+@keyframes kyc-kenburns {
+  0%   { transform: scale(1.0)  translate3d(1.5%, 0.5%, 0); }
+  100% { transform: scale(1.09) translate3d(-2%, -1.5%, 0); }
+}
