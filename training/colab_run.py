@@ -333,7 +333,7 @@ cmd = [
     sys.executable, "-u", SCRIPT_PATH,
     "--export", str(STUB_ZIP),
     "--out",    str(OUT_DIR),
-    "--epochs", "20",
+    "--epochs", "35",
 ]
 print(f"[colab_run] Running: {' '.join(cmd)}")
 print("[colab_run] ---- train_fish_id.py output begins ----")

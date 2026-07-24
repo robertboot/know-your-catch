@@ -262,7 +262,11 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
       <div style={{ display: 'grid', gap: 8 }}>
         {rows.map(r => {
           const m = r.metrics_json || {};
-          const overall = m.overall_accuracy != null ? `${(m.overall_accuracy * 100).toFixed(1)}%` : '—';
+          // Prefer the QUANTIZED (shipped) accuracy when the training run
+          // recorded it — that's what actually runs on the phone. Older
+          // models only have the float overall_accuracy.
+          const shipAcc = m.quantized_accuracy != null ? m.quantized_accuracy : m.overall_accuracy;
+          const overall = shipAcc != null ? `${(shipAcc * 100).toFixed(1)}%` : '—';
           const species = Array.isArray(r.labels_json?.labels) ? r.labels_json.labels.length : 0;
           return (
             <Card
@@ -508,7 +512,12 @@ function ModelDetail({ id, onBack }) {
   const labels = m.confusion_labels || row.labels_json?.labels || [];
   const cm = m.confusion_matrix || [];
   const perSpecies = m.per_species || {};
-  const overall = m.overall_accuracy;
+  // Headline the quantized (shipped) accuracy when available; fall back
+  // to the float overall for older models that didn't measure it.
+  const shipAccOf = (mm) => (mm?.quantized_accuracy != null ? mm.quantized_accuracy : mm?.overall_accuracy);
+  const overall = shipAccOf(m);
+  const prevOverall = shipAccOf(prev?.metrics_json);
+  const isQuantized = m.quantized_accuracy != null;
   const lookalikeBreakdown = m.lookalike_group_confusion || [];
 
   return (
@@ -532,15 +541,22 @@ function ModelDetail({ id, onBack }) {
       </Card>
 
       <Card>
-        <SectionLabel style={{ marginBottom: 6 }}>Overall accuracy</SectionLabel>
+        <SectionLabel style={{ marginBottom: 6 }}>
+          {isQuantized ? 'Accuracy (shipped / on-device)' : 'Overall accuracy'}
+        </SectionLabel>
         <div style={{ fontSize: 30, fontWeight: 900, color: T.ink }}>
           {overall != null ? `${(overall * 100).toFixed(1)}%` : '—'}
-          {prev?.metrics_json?.overall_accuracy != null && (
+          {prevOverall != null && overall != null && (
             <span style={{ fontSize: 14, color: T.inkMute, marginLeft: 12, fontWeight: 400 }}>
-              vs. {(prev.metrics_json.overall_accuracy * 100).toFixed(1)}% ({row.metrics_json.overall_accuracy > prev.metrics_json.overall_accuracy ? '+' : ''}{((row.metrics_json.overall_accuracy - prev.metrics_json.overall_accuracy) * 100).toFixed(1)} pts)
+              vs. {(prevOverall * 100).toFixed(1)}% ({overall > prevOverall ? '+' : ''}{((overall - prevOverall) * 100).toFixed(1)} pts)
             </span>
           )}
         </div>
+        {isQuantized && m.float_accuracy != null && (
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>
+            Float model scored {(m.float_accuracy * 100).toFixed(1)}% — the shipped figure above is the INT8 model that runs on the phone.
+          </div>
+        )}
       </Card>
 
       <LookalikeBreakdownCard breakdown={lookalikeBreakdown} />

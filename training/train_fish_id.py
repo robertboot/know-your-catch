@@ -31,9 +31,12 @@ from pathlib import Path
 
 IMG_SIZE = 224
 BATCH_SIZE = 32
-DEFAULT_EPOCHS = 20
-FROZEN_EPOCHS = 5
-UNFREEZE_LAST_N = 20
+DEFAULT_EPOCHS = 35          # was 20 — fine-tuning needs longer to converge
+FROZEN_EPOCHS = 8            # was 5 — let the head settle before unfreezing
+UNFREEZE_LAST_N = 80         # was 20 — adapt more of the backbone to fish
+DEFAULT_MIN_IMAGES = 40      # per-class TRAIN floor; below this a species is
+                             # excluded (too few photos to learn — it would
+                             # only add noise and drag the average down)
 
 
 def unzip_export(zip_path: Path, work_dir: Path) -> tuple[Path, dict]:
@@ -114,7 +117,12 @@ def build_model(num_classes: int):
     inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3), dtype="float32")
     x = layers.Rescaling(1.0 / 255.0)(inputs)
 
-    base = tf.keras.applications.MobileNetV3Small(
+    # MobileNetV3-Large (was Small). Small is the tiniest backbone and
+    # underpowered for 60+ fine-grained fish classes with many near-
+    # identical lookalikes (snappers, groupers, tunas). Large roughly
+    # doubles capacity for a small size/latency cost — still an on-device
+    # model that runs on the iOS Neural Engine.
+    base = tf.keras.applications.MobileNetV3Large(
         input_shape=(IMG_SIZE, IMG_SIZE, 3),
         include_top=False,
         weights="imagenet",
@@ -130,9 +138,31 @@ def build_model(num_classes: int):
     return model, base
 
 
-def train(model, base, train_ds, val_ds, epochs: int):
+def compute_class_weights(data_root: Path, labels: list[str]):
+    """Balanced class weights from the TRAIN split image counts, so rare
+    species aren't steamrolled by common ones during .fit(). Without
+    this, an imbalanced dataset (some species 500 photos, some 45) biases
+    the model toward the majority classes and the minority species score
+    near zero — a big driver of the accuracy drop as species were added.
+
+    Returns ({class_index: weight}, [per-class train counts]). Weight is
+    the standard sklearn 'balanced' form: total / (n_classes * count)."""
+    counts = []
+    for l in labels:
+        d = data_root / "train" / l
+        counts.append(sum(1 for _ in d.iterdir()) if d.is_dir() else 0)
+    total = sum(counts)
+    n = len(labels)
+    weights = {
+        i: (total / (n * c)) if c > 0 else 1.0
+        for i, c in enumerate(counts)
+    }
+    return weights, counts
+
+
+def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
     """Two-stage fine-tune. Returns the training history for the
-    metrics dump."""
+    metrics dump. class_weight balances rare vs common species."""
     import tensorflow as tf
 
     # Stage 1: head only.
@@ -147,7 +177,8 @@ def train(model, base, train_ds, val_ds, epochs: int):
     ]
     h1 = model.fit(
         train_ds, validation_data=val_ds,
-        epochs=FROZEN_EPOCHS, callbacks=callbacks, verbose=2,
+        epochs=FROZEN_EPOCHS, callbacks=callbacks,
+        class_weight=class_weight, verbose=2,
     )
 
     # Stage 2: unfreeze last N layers of the backbone.
@@ -162,7 +193,7 @@ def train(model, base, train_ds, val_ds, epochs: int):
     h2 = model.fit(
         train_ds, validation_data=val_ds,
         epochs=max(1, epochs - FROZEN_EPOCHS),
-        callbacks=callbacks, verbose=2,
+        callbacks=callbacks, class_weight=class_weight, verbose=2,
     )
 
     history = {
@@ -209,6 +240,38 @@ def evaluate(model, val_ds, labels: list[str]):
         "confusion_matrix": cm.tolist(),
         "confusion_labels": labels,
     }
+
+
+def evaluate_tflite(tflite_path: Path, val_ds, labels: list[str]):
+    """Run the QUANTIZED .tflite over the val split and return its
+    accuracy. This is what actually ships to the phone — INT8 post-
+    training quantization can cost a few points versus the float Keras
+    model, and until now nobody measured it, so the admin's headline
+    accuracy overstated real-world performance. Feeds uint8 or float
+    inputs to match whatever dtype the converter produced."""
+    import numpy as np
+    import tensorflow as tf
+
+    interp = tf.lite.Interpreter(model_path=str(tflite_path))
+    interp.allocate_tensors()
+    inp = interp.get_input_details()[0]
+    out = interp.get_output_details()[0]
+    in_dtype = inp["dtype"]
+
+    correct = total = 0
+    for x, y in val_ds:
+        for img, label in zip(x.numpy(), y.numpy()):
+            # img is float [0,255]; feed uint8 if the model expects it,
+            # else float32 (dynamic-range fallback path).
+            sample = np.clip(img, 0, 255)
+            sample = sample.astype(np.uint8) if in_dtype == np.uint8 else sample.astype(np.float32)
+            interp.set_tensor(inp["index"], np.expand_dims(sample, 0))
+            interp.invoke()
+            pred = interp.get_tensor(out["index"])[0]
+            if int(np.argmax(pred)) == int(label):
+                correct += 1
+            total += 1
+    return (correct / total) if total else None
 
 
 def compute_lookalike_group_confusion(metrics: dict, groups: list[list[str]]):
@@ -312,6 +375,8 @@ def main():
     p.add_argument("--out",    required=True, help="Output artifacts directory")
     p.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
     p.add_argument("--seed",   type=int, default=42)
+    p.add_argument("--min-images", type=int, default=DEFAULT_MIN_IMAGES,
+                   help="exclude species with fewer than this many TRAIN images")
     args = p.parse_args()
 
     random.seed(args.seed)
@@ -344,14 +409,43 @@ def main():
               f"train/ or val/ split: {', '.join(droppable)}", flush=True)
         labels = [l for l in labels if l not in droppable]
         excluded = excluded + droppable
+
+    # Minimum-images floor. A species with a handful of TRAIN photos can't
+    # be learned — it only adds label noise and drags the average down.
+    # Exclude it (the app falls back to the cloud/manual path for it) and
+    # report the count so it's obvious which species need more clean
+    # photos before they're worth including.
+    train_counts = {
+        l: (sum(1 for _ in (data_root / "train" / l).iterdir())
+            if (data_root / "train" / l).is_dir() else 0)
+        for l in labels
+    }
+    thin = [l for l in labels if train_counts[l] < args.min_images]
+    if thin:
+        thin_sorted = sorted(thin, key=lambda l: train_counts[l])
+        print(f"WARNING: excluding {len(thin)} species under the "
+              f"{args.min_images}-image floor: "
+              + ", ".join(f"{l}({train_counts[l]})" for l in thin_sorted), flush=True)
+        labels = [l for l in labels if l not in thin]
+        excluded = excluded + thin
     if len(labels) < 2:
-        raise SystemExit("fewer than 2 trainable species after split check — nothing to train")
+        raise SystemExit("fewer than 2 trainable species after the image-count "
+                         "floor — lower --min-images or verify more photos")
+
+    # Per-species train counts for the kept set — the worklist for "which
+    # species still need more photos" (lowest counts = weakest classes).
+    kept_counts = sorted(((l, train_counts[l]) for l in labels), key=lambda t: t[1])
+    print(f"Training {len(labels)} species. Thinnest classes: "
+          + ", ".join(f"{l}={c}" for l, c in kept_counts[:10]), flush=True)
+
+    class_weight, _ = compute_class_weights(data_root, labels)
 
     train_ds, val_ds = build_datasets(data_root, labels, args.seed)
     model, base = build_model(num_classes=len(labels))
     print(model.summary())
 
-    history = train(model, base, train_ds, val_ds, epochs=args.epochs)
+    history = train(model, base, train_ds, val_ds, epochs=args.epochs,
+                    class_weight=class_weight)
 
     # Checkpoint the trained Keras model BEFORE quantization. If the
     # TFLite converter later throws, the trained weights are still
@@ -375,6 +469,16 @@ def main():
     print(f"Quantizing to INT8 → {tflite_path}")
     quantize_to_tflite(model, val_ds, tflite_path)
 
+    # Measure the QUANTIZED model — this is what ships to the phone, and
+    # it can differ from the float number above. Surface both so the
+    # admin's headline reflects real on-device accuracy, not the float
+    # model's. Also record kept per-species train counts for the worklist.
+    print("Evaluating the quantized .tflite (shipped model)…")
+    metrics["quantized_accuracy"] = evaluate_tflite(tflite_path, val_ds, labels)
+    metrics["float_accuracy"] = metrics["overall_accuracy"]
+    metrics["train_counts"] = {l: train_counts[l] for l in labels}
+    metrics["min_images"] = args.min_images
+
     # Quantize succeeded — the .keras checkpoint has served its
     # purpose. Drop it so the artifacts dir stays lean.
     if keras_ckpt.exists():
@@ -393,7 +497,10 @@ def main():
     print(f"  fish_id_model.tflite    ({tflite_path.stat().st_size / 1024:.0f} KB)")
     print(f"  fish_id_labels.json")
     print(f"  fish_id_metrics.json")
-    print(f"\nOverall val accuracy: {metrics['overall_accuracy']:.3f}")
+    qa = metrics.get("quantized_accuracy")
+    print(f"\nFloat val accuracy:     {metrics['overall_accuracy']:.3f}")
+    print(f"Quantized (shipped):    {qa:.3f}" if qa is not None else
+          "Quantized (shipped):    n/a")
 
 
 if __name__ == "__main__":
