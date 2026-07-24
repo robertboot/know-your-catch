@@ -19,7 +19,7 @@ where species_id = 'Red Drum';
 -- 2. Retire the now-empty duplicate species row so the phantom "excluded"
 --    coverage row disappears. Deactivate (safe against any other FK
 --    references) rather than delete.
-update species set active = false where id = 'Red Drum';
+update species set is_active = false where id = 'Red Drum';
 
 -- 3. Verify: 'Red Drum' should be gone; red_drum keeps its verified count
 --    and gains 4 pending.
