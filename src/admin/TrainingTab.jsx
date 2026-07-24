@@ -2262,6 +2262,14 @@ function CoveragePanel({ onUploadSpecies }) {
             {totals.totalSpecies} active species, {totals.totalVerified.toLocaleString()} verified images total
           </div>
         </div>
+        {totals.excluded > 0 && (
+          <div style={{
+            marginTop: 8, padding: '7px 10px', borderRadius: 6,
+            background: T.closedBg, color: T.closed, fontSize: 12, fontWeight: 600,
+          }}>
+            ⚠ {totals.excluded} species below the {MIN_TRAIN_THRESHOLD}-image training floor — they won't be in the next model. Set the status filter to “Excluded” to see and prioritize them.
+          </div>
+        )}
         <div style={{ fontSize: 11, color: T.inkMute, marginTop: 10, lineHeight: 1.6 }}>
           <b style={{ color: T.closed }}>Excluded</b> (&lt; {MIN_TRAIN_THRESHOLD}) — classifier drops entirely; too few examples to learn from.
           {' '}

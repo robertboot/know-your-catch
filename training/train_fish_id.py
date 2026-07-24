@@ -34,9 +34,11 @@ BATCH_SIZE = 32
 DEFAULT_EPOCHS = 35          # was 20 — fine-tuning needs longer to converge
 FROZEN_EPOCHS = 8            # was 5 — let the head settle before unfreezing
 UNFREEZE_LAST_N = 80         # was 20 — adapt more of the backbone to fish
-DEFAULT_MIN_IMAGES = 40      # per-class TRAIN floor; below this a species is
-                             # excluded (too few photos to learn — it would
-                             # only add noise and drag the average down)
+DEFAULT_MIN_IMAGES = 45      # per-class floor on TOTAL images (train+val).
+                             # Matches the admin coverage count (verified
+                             # images), so "45" means the same thing in both
+                             # places. Below it a species is excluded — too
+                             # few photos to learn, only adds noise.
 
 
 def unzip_export(zip_path: Path, work_dir: Path) -> tuple[Path, dict]:
@@ -415,26 +417,26 @@ def main():
     # Exclude it (the app falls back to the cloud/manual path for it) and
     # report the count so it's obvious which species need more clean
     # photos before they're worth including.
-    train_counts = {
-        l: (sum(1 for _ in (data_root / "train" / l).iterdir())
-            if (data_root / "train" / l).is_dir() else 0)
-        for l in labels
-    }
-    thin = [l for l in labels if train_counts[l] < args.min_images]
+    def split_count(split, l):
+        d = data_root / split / l
+        return sum(1 for _ in d.iterdir()) if d.is_dir() else 0
+    train_counts = {l: split_count("train", l) for l in labels}
+    total_counts = {l: train_counts[l] + split_count("val", l) for l in labels}
+    thin = [l for l in labels if total_counts[l] < args.min_images]
     if thin:
-        thin_sorted = sorted(thin, key=lambda l: train_counts[l])
+        thin_sorted = sorted(thin, key=lambda l: total_counts[l])
         print(f"WARNING: excluding {len(thin)} species under the "
               f"{args.min_images}-image floor: "
-              + ", ".join(f"{l}({train_counts[l]})" for l in thin_sorted), flush=True)
+              + ", ".join(f"{l}({total_counts[l]})" for l in thin_sorted), flush=True)
         labels = [l for l in labels if l not in thin]
         excluded = excluded + thin
     if len(labels) < 2:
         raise SystemExit("fewer than 2 trainable species after the image-count "
                          "floor — lower --min-images or verify more photos")
 
-    # Per-species train counts for the kept set — the worklist for "which
+    # Per-species image counts for the kept set — the worklist for "which
     # species still need more photos" (lowest counts = weakest classes).
-    kept_counts = sorted(((l, train_counts[l]) for l in labels), key=lambda t: t[1])
+    kept_counts = sorted(((l, total_counts[l]) for l in labels), key=lambda t: t[1])
     print(f"Training {len(labels)} species. Thinnest classes: "
           + ", ".join(f"{l}={c}" for l, c in kept_counts[:10]), flush=True)
 

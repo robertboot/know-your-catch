@@ -96,8 +96,13 @@ function xhrJson({ method, url, headers = {}, body, timeoutMs = 30_000 }) {
    can distinguish them reliably.
 
    Kept as constants for now; move to a Supabase meta table later
-   if we start tuning per-species. */
-export const MIN_TRAIN_THRESHOLD  = 30;
+   if we start tuning per-species.
+
+   MIN_TRAIN_THRESHOLD is kept in lock-step with the trainer's
+   --min-images floor (training/train_fish_id.py DEFAULT_MIN_IMAGES):
+   both count total images per species, so a species shown as "excluded"
+   here is exactly the set the trainer will drop. Change them together. */
+export const MIN_TRAIN_THRESHOLD  = 45;
 export const ADEQUATE_THRESHOLD   = 75;
 export const TARGET_COVERAGE      = 200;
 
