@@ -410,4 +410,23 @@ else:
     print("[colab_run] No REELINTEL_BUNDLE_UPLOAD env var - leaving bundle "
           f"at {BUNDLE_ZIP} for manual pickup.")
 
+# 11. Belt-and-suspenders: ALWAYS also push the bundle to the browser as a
+#     download, regardless of whether the Supabase upload succeeded. Two
+#     independent failure modes have each silently lost a finished model:
+#       - the signed upload URL is only valid ~2 hours and a long training
+#         run outlives it (silent 403), and
+#       - the Colab runtime's disk is wiped the instant it disconnects
+#         (idle timeout, or the browser evicting a backgrounded tab).
+#     A finished model then evaporates with nothing to recover. This
+#     download lands the zip on the device running the notebook — drop it
+#     into the admin Models -> "Upload artifacts" button to import it.
+#     Guarded so a non-Colab / headless kernel just skips it cleanly.
+try:
+    from google.colab import files as _colab_files
+    print(f"[colab_run] Downloading a local backup copy of {BUNDLE_ZIP.name} "
+          "to your device (survives URL expiry AND runtime disconnect)...")
+    _colab_files.download(str(BUNDLE_ZIP))
+except Exception as e:
+    print(f"[colab_run] (device download skipped — not in Colab? {e})")
+
 print("[colab_run] Done.")
