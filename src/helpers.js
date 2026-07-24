@@ -29,6 +29,14 @@ export function speciesPhoto(id) {
 export const speciesById = (id) => SPECIES.find(s => s.id === id);
 export const jurisdictionById = (id) => JURISDICTIONS.find(j => j.id === id);
 
+// The federal jurisdiction that governs a given jurisdiction's coast.
+// Atlantic-coast waters answer to Federal South Atlantic (SAFMC); all
+// others to Federal Gulf (GMFMC). Accepts an id or a jurisdiction object.
+export const federalJurisdictionFor = (jur) => {
+  const coast = (typeof jur === 'string' ? jurisdictionById(jur) : jur)?.coast;
+  return coast === 'atlantic' ? 'fed_satlantic' : 'fed_gulf';
+};
+
 export function getComparison(idA, idB) {
   const k1 = `${idA}:${idB}`;
   const k2 = `${idB}:${idA}`;

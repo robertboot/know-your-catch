@@ -13,10 +13,12 @@ import gulfFederal2026 from '../regulations/feed/gulf-federal-2026.json';
 export const JURISDICTIONS = [
   { id: 'al_state', name: 'Alabama State Waters', short: 'AL', agency: 'Alabama DCNR', boundary: '3 nm', regsUrl: 'https://www.outdooralabama.com/fishing/saltwater-fishing' },
   { id: 'fl_state', name: 'Florida Gulf State Waters', short: 'FL', agency: 'FWC', boundary: '9 nm', regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
+  { id: 'fl_atlantic', name: 'Florida Atlantic State Waters', short: 'FL-ATL', agency: 'FWC', boundary: '3 nm', coast: 'atlantic', regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
   { id: 'ms_state', name: 'Mississippi State Waters', short: 'MS', agency: 'MDMR', boundary: '3 nm', regsUrl: 'https://dmr.ms.gov/' },
   { id: 'la_state', name: 'Louisiana State Waters', short: 'LA', agency: 'LDWF', boundary: '3 nm', regsUrl: 'https://www.wlf.louisiana.gov/' },
   { id: 'tx_state', name: 'Texas State Waters', short: 'TX', agency: 'TPWD', boundary: '9 nm', regsUrl: 'https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing' },
   { id: 'fed_gulf', name: 'Federal Gulf Waters', short: 'FED', agency: 'NOAA / GMFMC', boundary: 'Beyond state waters', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico' },
+  { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', short: 'FED-SA', agency: 'NOAA / SAFMC', boundary: 'Beyond state waters', coast: 'atlantic', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-south-atlantic' },
 ];
 
 export const CATEGORIES = [
@@ -544,6 +546,19 @@ export const COMPARISONS = {
 function buildRegs() {
   const reefGear = ['Non-stainless circle hooks (natural bait)', 'Descending device (rigged, 16+ oz)', 'Venting tool (rigged)'];
   const states = ['al_state','fl_state','ms_state','la_state','tx_state','fed_gulf'];
+  // Atlantic-coast jurisdictions are managed SEPARATELY (FWC Atlantic /
+  // SAFMC / ASMFC) and their seasons + limits genuinely differ from the
+  // Gulf. They therefore must NOT inherit the Gulf `default` numbers —
+  // showing a Gulf bag/size limit as if it were Atlantic law is exactly
+  // the "confidently wrong" failure this app exists to prevent. Instead
+  // they get an honest, unverified "verify with the agency" placeholder
+  // (with correct Atlantic source links via JURISDICTIONS), and the
+  // verified Supabase overlay / admin research pipeline fills in accurate
+  // values over time — same as how Gulf verified data already works. An
+  // explicit spec.fl_atlantic / spec.fed_satlantic override is still
+  // honored when the seed already knows a coastwide-correct value.
+  const atlanticJurs = ['fl_atlantic','fed_satlantic'];
+  const ATL_NOTE = 'Atlantic-coast rules differ from the Gulf and are set separately (FWC Atlantic / SAFMC / ASMFC). These values are not yet verified for the Atlantic — confirm the current rule with the agency before you keep a fish.';
   function R(spec) {
     const out = {};
     for (const s of states) {
@@ -556,6 +571,23 @@ function buildRegs() {
         ...spec.default,
         ...(spec[s] || {}),
       };
+    }
+    for (const s of atlanticJurs) {
+      const override = spec[s];
+      out[s] = override
+        ? { lastUpdated: '2025-04-01', source: spec.source || 'agency website', verified: false, ...override }
+        : {
+            lastUpdated: '2025-04-01',
+            source: s === 'fed_satlantic' ? 'fisheries.noaa.gov (SAFMC)' : 'myfwc.com (FWC Atlantic)',
+            verified: false,
+            open: 'Check current Atlantic season',
+            minSize: null, maxSize: null, bagLimit: null,
+            // Descending device / venting / non-stainless circle hooks are
+            // required in South Atlantic federal reef fisheries too, so the
+            // gear guidance carries over even while numeric limits don't.
+            ...(spec.default?.gear ? { gear: spec.default.gear } : {}),
+            notes: ATL_NOTE,
+          };
     }
     return out;
   }

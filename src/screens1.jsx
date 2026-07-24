@@ -15,7 +15,7 @@ import {
 import { regulationFor } from './regulations-store.js';
 import { defaultState, saveState } from './storage.js';
 import {
-  speciesById, jurisdictionById, getComparison,
+  speciesById, jurisdictionById, federalJurisdictionFor, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
   sunPosition, moonPhase, fetchWeatherForTime, catchPhotos,
   pbPhotos, buildPBReport, shareReport,
@@ -66,7 +66,7 @@ export function SplashScreen({
     >
       <img
         src={brandAsset('logo_brand', `${import.meta.env.BASE_URL}brand/reelintel-brand.png`)}
-        alt="ReelIntel — identify, check rules, log catch, find better spots. Built for the Gulf of America."
+        alt="ReelIntel — identify, check rules, log catch, find better spots. Built for Gulf Coast and Florida Atlantic waters."
         style={{
           maxWidth: 'min(92vw, 460px)',
           maxHeight: showCTAs ? '54vh' : '82vh',
@@ -108,12 +108,13 @@ export function SplashScreen({
 const FEATURED_IDS = ['red_snapper', 'king_mackerel', 'gag_grouper', 'mahi', 'greater_amberjack', 'cobia', 'wahoo'];
 
 function regForSpecies(id, jurId) {
-  // Prefer the exact jurisdiction, then federal Gulf, then any
+  // Prefer the exact jurisdiction, then the coast-correct federal
+  // fallback (Atlantic → South Atlantic, otherwise Gulf), then any
   // verified/bundled row we can find. regulationFor() walks the
   // verified Supabase overlay → bundled precedence per lookup.
   const primary = regulationFor(id, jurId).regulation;
   if (primary) return primary;
-  const fed = regulationFor(id, 'fed_gulf').regulation;
+  const fed = regulationFor(id, federalJurisdictionFor(jurId)).regulation;
   if (fed) return fed;
   return null;
 }

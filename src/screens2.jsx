@@ -15,7 +15,7 @@ import {
   savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl,
 } from './photos-store.js';
 import {
-  speciesById, jurisdictionById, getComparison,
+  speciesById, jurisdictionById, federalJurisdictionFor, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
   shareReport, fetchWeatherForTime, PROHIBITED_RE,
@@ -75,11 +75,12 @@ export function SpeciesDetailScreen({ id, state, jurisdiction, stale, onLookalik
   const heroHeight   = size === 'phone' ? 220 : size === 'tablet' ? 300 : 340;
   const fallbackSize = size === 'phone' ? 100 : 200;
   const reg = jurisdiction ? regulationFor(id, jurisdiction.id).regulation : null;
-  const fedReg = regulationFor(id, 'fed_gulf').regulation;
+  const fedId = federalJurisdictionFor(jurisdiction);
+  const fedReg = regulationFor(id, fedId).regulation;
   // No comparison column when the state view is ALREADY showing the
   // federal rules via fallback — it would compare federal to itself.
   const showFedColumn = reg && fedReg && !reg._fromFed
-    && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
+    && jurisdiction?.id !== fedId && differs(reg, fedReg);
   const pb = state.pbs[id];
 
   const saveNote = () => {
@@ -943,11 +944,12 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
   const reg          = regResult.regulation;
   const regRow       = regResult.row || null; // raw Supabase row when source='verified'
   const regSource    = regResult.source;
-  const fedReg = regulationFor(id, 'fed_gulf').regulation;
+  const fedId = federalJurisdictionFor(jurisdiction);
+  const fedReg = regulationFor(id, fedId).regulation;
   // No comparison column when the state view is ALREADY showing the
   // federal rules via fallback — it would compare federal to itself.
   const showFedColumn = reg && fedReg && !reg._fromFed
-    && jurisdiction?.id !== 'fed_gulf' && differs(reg, fedReg);
+    && jurisdiction?.id !== fedId && differs(reg, fedReg);
   const pb = state.pbs?.[id];
   return (
     <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>

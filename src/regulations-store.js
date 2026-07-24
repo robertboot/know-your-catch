@@ -16,7 +16,14 @@
    without a round-trip. */
 
 import { client } from './supabase-client.js';
-import { REGULATIONS as BUNDLED_REGS } from './data.js';
+import { REGULATIONS as BUNDLED_REGS, JURISDICTIONS } from './data.js';
+
+// The correct federal fallback depends on the coast: an Atlantic-coast
+// jurisdiction must fall back to Federal South Atlantic, never Federal
+// Gulf (cross-coast rules are simply wrong). Gulf/default → fed_gulf.
+const _COAST = Object.fromEntries(JURISDICTIONS.map(j => [j.id, j.coast || 'gulf']));
+const federalFallbackFor = (jurId) =>
+  _COAST[jurId] === 'atlantic' ? 'fed_satlantic' : 'fed_gulf';
 
 const CACHE_KEY = 'kyc_regulations_overlay_v1';
 
@@ -149,12 +156,14 @@ export function regulationFor(speciesId, jurisdictionId) {
   };
 
   let result = resolveAt(jurisdictionId);
-  // Fed fallback — only for STATE jurisdictions (fed_gulf falling
-  // back to itself would loop). Same resolve, so a verified fed row
-  // gets the identical per-field bundled merge it gets when viewed
-  // directly as Federal Gulf.
-  if (!result && jurisdictionId !== 'fed_gulf') {
-    const fed = resolveAt('fed_gulf');
+  // Fed fallback — only for STATE jurisdictions (a federal jurisdiction
+  // falling back to itself would loop). Coast-aware: Atlantic state
+  // waters fall back to Federal South Atlantic, Gulf state waters to
+  // Federal Gulf. Same resolve, so a verified fed row gets the identical
+  // per-field bundled merge it gets when viewed directly.
+  const fedId = federalFallbackFor(jurisdictionId);
+  if (!result && jurisdictionId !== fedId) {
+    const fed = resolveAt(fedId);
     if (fed) {
       result = {
         source: `${fed.source}-fed`, // 'verified-fed' | 'bundled-fed'
