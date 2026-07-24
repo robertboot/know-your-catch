@@ -1004,7 +1004,7 @@ function ReviewPanel() {
   }, [aiRuntime, aiRow?.id]);
 
   // iNaturalist second opinion for the focused row — runs alongside
-  // the Big Red predict whenever AI assist is on and a token is set.
+  // the DeepBlue predict whenever AI assist is on and a token is set.
   // Cached per row id. A stale/expired token surfaces inline so the
   // reviewer knows to refresh it.
   useEffect(() => {
@@ -1476,7 +1476,7 @@ function ReviewPanel() {
               })()}
 
               {/* iNaturalist second opinion — a free cross-check. When
-                  its top pick agrees with Big Red's or the row label,
+                  its top pick agrees with DeepBlue's or the row label,
                   that's a strong confirm signal. */}
               {inatToken && (() => {
                 const ip = inatPreds[aiRow.id];
@@ -2696,7 +2696,7 @@ function ExportPanel() {
               <li>Verify GPU: type <code>!nvidia-smi</code> in a cell → Run. Should show an NVIDIA card. Skip this and you'll land on CPU — training takes hours instead of ~30 min.</li>
               <li>New code cell → paste (⌘V) → click ▶ (or Shift+Enter).</li>
               <li>Walk away 30-60 min. It downloads all photos, trains, INT8-quantizes, uploads the bundle back automatically.</li>
-              <li>When it finishes: come back here → <strong>Models</strong> tab → <strong>Pending bundles</strong> → click <strong>Import</strong> → name it (default is Big Red N.0, override with e.g. <em>Big Red 1.1</em>) → click <strong>Promote</strong>.</li>
+              <li>When it finishes: come back here → <strong>Models</strong> tab → <strong>Pending bundles</strong> → click <strong>Import</strong> → name it (default is DeepBlue N.0, override with e.g. <em>DeepBlue 1.1</em>) → click <strong>Promote</strong>.</li>
               <li>Phone: Settings → Fish ID model → <strong>Check for updates</strong> → new version loads.</li>
             </ol>
             <div style={{ marginTop: 10, padding: '8px 10px', background: T.warnBg, borderRadius: 6, color: T.warn, fontSize: 11 }}>

@@ -102,7 +102,7 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
         }
       }
       if (!tfliteFile || !labels || !metrics) throw new Error('bundle missing files');
-      const defaultName = `Big Red ${rows.length + 1}.0`;
+      const defaultName = `DeepBlue ${rows.length + 1}.0`;
       const versionName = (window.prompt(
         'Name this model version:', defaultName,
       ) || defaultName).trim();
@@ -117,7 +117,7 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
       // move was awaited but not checked, so an RLS mismatch or
       // storage-move race silently re-shipped the SAME bundle over and
       // over — the admin thought "Import" was failing and would click
-      // it repeatedly, ending up with four identical Big Red X.0 rows.
+      // it repeatedly, ending up with four identical DeepBlue X.0 rows.
       // Now: surface the move failure as a warning so the admin knows
       // the DB import succeeded but the bundle is still in pending/.
       const mv = await markBundleImported(pendingRow.path);

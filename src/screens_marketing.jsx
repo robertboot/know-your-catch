@@ -1195,9 +1195,15 @@ function AiLearnsWaters() {
           <div className="rl-ai-copy">
             <span className="rl-eyebrow rl-eyebrow-line">Powered by AI</span>
             <h2 className="rl-h2" style={{ marginTop: 14 }}>AI that learns<br/><span>your waters.</span></h2>
-            <p className="rl-lead-2" style={{ marginBottom: 26 }}>
+            <p className="rl-lead-2" style={{ marginBottom: 18 }}>
               ReelIntel's AI engine analyzes every catch you log to discover patterns unique to you — from hotspots and seasons to bite times and techniques that work.
             </p>
+            <a href="#deepblue" style={{
+              color: '#19D4F2', fontWeight: 700, textDecoration: 'none',
+              display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 26,
+            }}>
+              Instant photo ID is powered by DeepBlue — see how it works <ArrowRight size={15} />
+            </a>
             {AI_FEATURES.map((f) => (
               <div className="rl-ai-feat" key={f.title}>
                 <div className="rl-ai-feat-ico"><f.icon size={22} /></div>
@@ -1276,6 +1282,43 @@ function ComingSoon() {
   );
 }
 
+function DeepBlue() {
+  return (
+    <section className="rl-section rl-section-alt" id="deepblue">
+      <div className="rl-container">
+        <span className="rl-eyebrow rl-eyebrow-line">The engine inside</span>
+        <h2 className="rl-h2" style={{ marginTop: 14 }}>
+          Meet <span style={{ color: '#19D4F2' }}>DeepBlue</span>.
+        </h2>
+        <p className="rl-lead-2" style={{ maxWidth: 780, marginBottom: 30 }}>
+          DeepBlue is ReelIntel's proprietary fish-identification model — trained on
+          hundreds of thousands of real fish photos to deliver the most accurate
+          on-device fish ID available. It runs right on your phone, so the moment you
+          snap a photo you get an instant, private identification — no signal required.
+        </p>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 16,
+        }}>
+          <div className="rl-feature">
+            <h3>Hundreds of thousands of photos</h3>
+            <p>Trained on a massive, ever-growing library of real catches — and it keeps learning from every angler who logs one.</p>
+          </div>
+          <div className="rl-feature">
+            <h3>Runs on your device</h3>
+            <p>Identification happens on your phone, not a server. It works offline, and your photos stay private to you.</p>
+          </div>
+          <div className="rl-feature">
+            <h3>Built for these waters</h3>
+            <p>Purpose-built for the species you actually catch across the Gulf Coast and Florida Atlantic — not a generic classifier.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FinalCTA() {
   return (
     <section
@@ -1334,6 +1377,7 @@ export function MarketingLanding() {
       <YourDataYourRules />
       <AiLearnsWaters />
       <ComingSoon />
+      <DeepBlue />
       <FinalCTA />
       <Footer />
     </div>
