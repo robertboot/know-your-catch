@@ -18,9 +18,14 @@
     "ios:assets": "capacitor-assets generate --ios --assetPath resources",
     "ios:prepare": "bash scripts/ios-prepare.sh",
     "ios:ship": "bash scripts/ios-ship.sh",
-    "ios:open": "cap open ios"
+    "ios:open": "cap open ios",
+    "android:build": "KYC_BASE=./ KYC_ADMIN=false vite build && find dist/marketing -type f ! -name 'tile-*' -delete && (find dist/marketing -type d -empty -delete 2>/dev/null || true)",
+    "android:sync": "npm run android:build && cap sync android",
+    "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "android:open": "cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
     "@capacitor/app": "^8.1.0",
     "@capacitor/camera": "^8.2.0",
     "@capacitor/core": "^8.4.1",
