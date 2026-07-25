@@ -725,6 +725,29 @@ export async function countsBySpecies() {
   const c = client();
   if (!c) return { ok: false, counts: {}, error: 'not-configured' };
 
+  // Fast path: a single server-side GROUP BY (training_counts_by_species
+  // RPC). Returns ~84 rows instantly instead of paging tens of thousands
+  // of rows through the browser — which was slow enough that late-scanned
+  // species showed a phantom 0 until the last page landed. Falls back to
+  // the client-side pagination below if the RPC isn't deployed yet.
+  try {
+    const { data, error } = await c.rpc('training_counts_by_species');
+    if (!error && Array.isArray(data)) {
+      const agg = {};
+      for (const r of data) {
+        agg[r.species_id] = {
+          pending:   Number(r.pending)   || 0,
+          verified:  Number(r.verified)  || 0,
+          rejected:  Number(r.rejected)  || 0,
+          corrected: Number(r.corrected) || 0,
+          total:     Number(r.total)     || 0,
+          lastUploadedAt: r.last_uploaded_at || null,
+        };
+      }
+      return { ok: true, counts: agg };
+    }
+  } catch { /* fall through to client-side pagination */ }
+
   const PAGE = 1000;
   const counts = {};
   let from = 0;
