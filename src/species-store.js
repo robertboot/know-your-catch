@@ -123,14 +123,23 @@ export function applyOverrides(overrides) {
   for (const ov of overrides) {
     if (!ov?.id) continue;
     let idx = SPECIES.findIndex(s => s.id === ov.id);
+    let matchedBySci = false;
     if (idx < 0 && ov.scientific && bundledSci.has(normSci(ov.scientific))) {
       idx = bundledSci.get(normSci(ov.scientific));
+      matchedBySci = true;
     }
     if (idx >= 0) {
       // Keep the bundled id, and never let a retired/old category (not in
       // the current taxonomy) revert the clean bundled category.
       const merged = { ...SPECIES[idx], ...ov, id: SPECIES[idx].id };
       if (!validCats.has(merged.category)) merged.category = SPECIES[idx].category;
+      // Guard: when the override matched by SCIENTIFIC NAME (not id), it's a
+      // differently-ided row mapping onto this bundled species — almost
+      // always a retired duplicate. Never let such a row's active:false hide
+      // the canonical species (a leftover 'Red Drum' duplicate deactivated
+      // red_drum this way, so the app stopped offering it for ID). Only an
+      // id-matched override may deactivate.
+      if (matchedBySci && ov.active === false) merged.active = SPECIES[idx].active;
       SPECIES[idx] = merged;
     } else {
       // Genuinely new custom species. Coerce any old/unknown category
