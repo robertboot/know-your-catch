@@ -187,6 +187,10 @@ export async function publishPromotedModel() {
   const manifest = {
     version_name:    prod.version_name,
     input_size:      prod.labels_json?.input_size      ?? 224,
+    // float16/float32 models take a float32 input tensor; legacy INT8
+    // models took uint8. Default to uint8 so older published models keep
+    // their existing behavior.
+    input_dtype:     prod.labels_json?.input_dtype      ?? 'uint8',
     labels:          prod.labels_json?.labels          || [],
     excluded_species:prod.labels_json?.excluded_species || [],
     min_confidence:  prod.labels_json?.min_confidence  ?? 0.6,

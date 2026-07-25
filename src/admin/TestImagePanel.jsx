@@ -152,6 +152,7 @@ export default function TestImagePanel() {
           minConfidence:  prod.labels_json?.min_confidence  ?? 0.6,
           highConfidence: prod.labels_json?.high_confidence ?? 0.85,
           inputSize:      prod.labels_json?.input_size      ?? IMG_SIZE,
+          inputDtype:     prod.labels_json?.input_dtype     ?? 'uint8',
         });
         setError('');
       } catch (e) {
@@ -278,7 +279,12 @@ export default function TestImagePanel() {
         rgb[i * 3 + 1] = rgba[i * 4 + 1];
         rgb[i * 3 + 2] = rgba[i * 4 + 2];
       }
-      const input = tf.tensor4d(rgb, [1, runtime.inputSize, runtime.inputSize, 3], 'int32');
+      // float16/float32 models take a float32 [0,255] tensor (Rescaling
+      // normalises inside the graph); legacy INT8 models took uint8 (fed
+      // as int32). Default to the legacy path.
+      const input = runtime.inputDtype === 'float32'
+        ? tf.tensor4d(Float32Array.from(rgb), [1, runtime.inputSize, runtime.inputSize, 3], 'float32')
+        : tf.tensor4d(rgb, [1, runtime.inputSize, runtime.inputSize, 3], 'int32');
       console.log('[test-image] input tensor built', input.shape, input.dtype, 'first bytes:', Array.from(rgb.slice(0, 6)));
 
       const out = runtime.tflite.predict(input);

@@ -112,10 +112,9 @@ def build_model(num_classes: int):
     from tensorflow.keras import layers, models
 
     # Float32 input in [0, 255]. Rescaling normalises to [0, 1] for
-    # MobileNet. The TFLite converter (see quantize_to_tflite) inserts
-    # the uint8→float32 quantize op at the input boundary via
-    # inference_input_type = tf.uint8, so the shipped .tflite still
-    # accepts uint8 tensors from the app.
+    # MobileNet. The shipped .tflite is float16-weighted (see
+    # quantize_to_tflite) and keeps this float32 [0, 255] input boundary —
+    # the app feeds a float32 tensor and the graph rescales internally.
     inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3), dtype="float32")
     x = layers.Rescaling(1.0 / 255.0)(inputs)
 
@@ -316,59 +315,41 @@ LOOKALIKE_GROUP_SEEDS = [
 ]
 
 
-def quantize_to_tflite(model, val_ds, out_path: Path):
-    """INT8 post-training quantization with val samples as the
-    representative dataset. Slower than dynamic-range but produces a
-    ~2-4 MB model that runs on the iOS Neural Engine at near-full
-    accuracy."""
+def quantize_to_tflite(model, out_path: Path):
+    """FLOAT16 weight quantization. Full INT8 PTQ was catastrophic for
+    this MobileNetV3 model — its hard-swish activations lose too much
+    precision under INT8, so the shipped model scored ~23% while the
+    float model scored ~82%. (Nobody measured the quantized number
+    before, which is why the on-device model always "underperformed".)
+
+    Float16 keeps accuracy within a hair of the float model, still loads
+    in the tflite WASM runtime the app uses, and roughly halves the
+    float32 size. Input and output stay FLOAT32 — the app feeds a
+    float32 [0,255] tensor and the model's Rescaling layer normalises
+    inside the graph. Returns the input dtype string for the labels file.
+
+    Falls back to a plain (lossless) float32 model if float16 conversion
+    isn't available in the current TF build."""
     import tensorflow as tf
 
-    def rep_dataset():
-        # Model's native input dtype is float32 in [0, 255] (Rescaling
-        # inside the graph divides by 255). Yield tensors in that exact
-        # range so calibration matches the training-time distribution.
-        # The inference_input_type = uint8 below tells the converter to
-        # add a uint8 → float32 quantize op AT THE MODEL BOUNDARY,
-        # separate from calibration; the two mustn't be conflated.
-        n = 0
-        for x, _ in val_ds:
-            for img in x:
-                sample = tf.cast(img, tf.float32)
-                # image_dataset_from_directory + Keras 3 already returns
-                # tensors in [0, 255]. Clamp defensively so a stray
-                # sample outside that range can't spoil quantization
-                # stats.
-                sample = tf.clip_by_value(sample, 0.0, 255.0)
-                yield [tf.expand_dims(sample, 0)]
-                n += 1
-                if n >= 100:
-                    return
-
-    # Try full INT8 first — that's what the iOS Neural Engine wants
-    # and what makes the .tflite tiny. If any op in the graph doesn't
-    # have an INT8 kernel in the current TF version, fall back to
-    # dynamic-range quantization (weights INT8, activations FP32) so
-    # the run still produces a shippable model. The dynamic model is
-    # ~2× larger but still runs on device.
-    def try_convert(strict_int8: bool):
+    def convert(kind: str):
         conv = tf.lite.TFLiteConverter.from_keras_model(model)
-        conv.optimizations = [tf.lite.Optimize.DEFAULT]
-        if strict_int8:
-            conv.representative_dataset = rep_dataset
-            conv.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-            conv.inference_input_type = tf.uint8
-            conv.inference_output_type = tf.uint8
+        if kind == "float16":
+            conv.optimizations = [tf.lite.Optimize.DEFAULT]
+            conv.target_spec.supported_types = [tf.float16]
+        # kind == "float32": no optimizations → plain lossless float model
         return conv.convert()
 
     try:
-        tflite = try_convert(strict_int8=True)
-        print("Quantization: full INT8 succeeded.")
+        tflite = convert("float16")
+        print("Quantization: float16 succeeded.")
     except Exception as e:
-        print(f"Quantization: full INT8 failed ({e.__class__.__name__}: {e})")
-        print("Quantization: falling back to dynamic-range quantization.")
-        tflite = try_convert(strict_int8=False)
-        print("Quantization: dynamic-range succeeded.")
+        print(f"Quantization: float16 failed ({e.__class__.__name__}: {e})")
+        print("Quantization: falling back to plain float32 (larger, lossless).")
+        tflite = convert("float32")
+        print("Quantization: float32 succeeded.")
     out_path.write_bytes(tflite)
+    return "float32"  # both float16- and float32-weighted models take float32 input
 
 
 def main():
@@ -468,8 +449,8 @@ def main():
     metrics["created_at"] = datetime.now(timezone.utc).isoformat()
 
     tflite_path = out_dir / "fish_id_model.tflite"
-    print(f"Quantizing to INT8 → {tflite_path}")
-    quantize_to_tflite(model, val_ds, tflite_path)
+    print(f"Quantizing (float16) → {tflite_path}")
+    input_dtype = quantize_to_tflite(model, tflite_path)
 
     # Measure the QUANTIZED model — this is what ships to the phone, and
     # it can differ from the float number above. Surface both so the
@@ -492,6 +473,9 @@ def main():
         "min_confidence":  0.6,
         "high_confidence": 0.85,
         "input_size":      IMG_SIZE,
+        # The app feeds the model this input dtype. float16/float32 models
+        # take a float32 [0,255] tensor; older INT8 models took uint8.
+        "input_dtype":     input_dtype,
     }, indent=2))
     (out_dir / "fish_id_metrics.json").write_text(json.dumps(metrics, indent=2))
 

@@ -100,7 +100,13 @@ async function realClassify(imageDataUrl) {
   const img = await loadImage(imageDataUrl);
   const size = info.input_size || IMG_SIZE_DEFAULT;
   const rgb = imageToRgb(img, size);
-  const input = tf.tensor4d(rgb, [1, size, size, 3], 'int32');
+  // float16/float32 models want a float32 [0,255] tensor (the model's
+  // Rescaling layer divides by 255 internally). Legacy INT8 models took
+  // uint8, fed here as int32. Default to the legacy path when the
+  // manifest doesn't declare a dtype.
+  const input = info.input_dtype === 'float32'
+    ? tf.tensor4d(Float32Array.from(rgb), [1, size, size, 3], 'float32')
+    : tf.tensor4d(rgb, [1, size, size, 3], 'int32');
   let output;
   try {
     output = model.predict(input);
