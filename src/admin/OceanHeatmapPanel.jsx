@@ -119,8 +119,15 @@ export default function OceanHeatmapPanel() {
       opacity: 0.72,
       attribution: 'Ocean data: NOAA CoastWatch / NASA',
     });
-    layer.on('load', () => setStatus('ok'));
-    layer.on('tileerror', () => setStatus('error'));
+    // Forgiving status: WMS tiles fail individually all the time (a single
+    // cloud-covered or timed-out tile), and one stray 'tileerror' should
+    // NOT declare the whole layer dead — that flashed a false "didn't load"
+    // even when the composite rendered fine. A single successful tile means
+    // the layer works; only when the entire visible set fails (load cycle
+    // completes with zero tiles loaded) do we surface the error.
+    let anyTileLoaded = false;
+    layer.on('tileload', () => { anyTileLoaded = true; setStatus('ok'); });
+    layer.on('load', () => setStatus(anyTileLoaded ? 'ok' : 'error'));
     layer.addTo(map);
     overlayRef.current = layer;
   }, [active]);
