@@ -72,6 +72,7 @@ export default function OceanHeatmapPanel() {
   const overlayRef = useRef(null);
   const [active, setActive] = useState('chl');
   const [status, setStatus] = useState('loading'); // 'loading' | 'ok' | 'error'
+  const [dateISO, setDateISO] = useState('');      // '' = latest available composite
 
   // Init the map once.
   useEffect(() => {
@@ -118,6 +119,10 @@ export default function OceanHeatmapPanel() {
       numcolorbands: 100,
       opacity: 0.72,
       attribution: 'Ocean data: NOAA CoastWatch / NASA',
+      // When a date is chosen, request that composite (ERDDAP snaps TIME to
+      // the nearest available). Empty → ERDDAP serves the latest. Lets the
+      // angler step back off a cloud-covered "latest" to a clearer window.
+      ...(dateISO ? { time: `${dateISO}T12:00:00Z` } : {}),
     });
     // Forgiving status: WMS tiles fail individually all the time (a single
     // cloud-covered or timed-out tile), and one stray 'tileerror' should
@@ -130,7 +135,7 @@ export default function OceanHeatmapPanel() {
     layer.on('load', () => setStatus(anyTileLoaded ? 'ok' : 'error'));
     layer.addTo(map);
     overlayRef.current = layer;
-  }, [active]);
+  }, [active, dateISO]);
 
   const cfg = LAYERS[active];
 
@@ -159,6 +164,45 @@ export default function OceanHeatmapPanel() {
         </div>
       </div>
 
+      {/* Composite date scrubber. Empty = latest available; pick a day to
+          step back off a cloud-covered window. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ fontSize: 12, color: T.inkMute, fontWeight: 700 }}>Composite date</span>
+        <button
+          onClick={() => setDateISO('')}
+          style={{
+            padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            background: dateISO === '' ? T.brass : 'transparent',
+            color: dateISO === '' ? T.oceanDeep : T.ink,
+            border: `1.5px solid ${dateISO === '' ? T.brass : T.cardEdge}`,
+          }}
+        >Latest</button>
+        {[8, 16, 24].map(d => (
+          <button
+            key={d}
+            onClick={() => {
+              const dt = new Date(Date.now() - d * 86400000);
+              setDateISO(dt.toISOString().slice(0, 10));
+            }}
+            style={{
+              padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: 'transparent', color: T.inkSoft, border: `1.5px solid ${T.cardEdge}`,
+            }}
+          >−{d}d</button>
+        ))}
+        <input
+          type="date"
+          value={dateISO}
+          max={new Date().toISOString().slice(0, 10)}
+          onChange={(e) => setDateISO(e.target.value)}
+          style={{
+            padding: '5px 8px', borderRadius: 8, fontSize: 12,
+            background: T.oceanDeep, color: T.ink, border: `1.5px solid ${T.cardEdge}`,
+            colorScheme: 'dark',
+          }}
+        />
+      </div>
+
       <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
         <div ref={mapElRef} style={{ height: '62vh', minHeight: 420, width: '100%', background: '#06182b' }} />
         {status === 'error' && (
@@ -178,7 +222,11 @@ export default function OceanHeatmapPanel() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <SectionLabel style={{ margin: 0 }}>{cfg.label} · {cfg.units}</SectionLabel>
           {status === 'loading' && <span style={{ fontSize: 12, color: T.inkMute }}>Loading tiles…</span>}
-          {status === 'ok' && <span style={{ fontSize: 12, color: T.open, fontWeight: 700 }}>Latest composite</span>}
+          {status === 'ok' && (
+            <span style={{ fontSize: 12, color: T.open, fontWeight: 700 }}>
+              {dateISO ? `Composite near ${dateISO}` : 'Latest composite'}
+            </span>
+          )}
         </div>
         <div style={{
           height: 14, borderRadius: 4, marginTop: 10,
@@ -194,7 +242,7 @@ export default function OceanHeatmapPanel() {
         <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginTop: 10 }}>{cfg.blurb}</div>
         <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8 }}>
           Data: NOAA CoastWatch / NASA Ocean Color (public domain). Prototype — daily
-          caching, a date scrubber, and temperature-break detection come next.
+          caching and temperature-break detection come next.
         </div>
       </Card>
     </div>
