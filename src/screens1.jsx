@@ -3177,18 +3177,24 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                         )}
                       </div>
                     </div>
-                    {/* Fishability gauge */}
-                    <div style={{ position: 'relative', width: gSize, height: gSize, flexShrink: 0 }}>
-                      <svg width={gSize} height={gSize}>
-                        <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
-                        <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
-                          strokeDasharray={gC} strokeDashoffset={gOff}
-                          style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
-                      </svg>
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score != null ? fishabilityGrade(score) : '—'}</span>
-                        <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginTop: 2 }}>FISHABILITY</span>
+                    {/* Fishability gauge + jump-to-Why link */}
+                    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                      <div style={{ position: 'relative', width: gSize, height: gSize }}>
+                        <svg width={gSize} height={gSize}>
+                          <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
+                          <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
+                            strokeDasharray={gC} strokeDashoffset={gOff}
+                            style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
+                        </svg>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score != null ? fishabilityGrade(score) : '—'}</span>
+                          <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginTop: 2 }}>FISHABILITY</span>
+                        </div>
                       </div>
+                      <button className="kyc-press" onClick={() => { const el = document.getElementById('why-section'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.brass, fontSize: isTablet ? 13 : 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+                        Why {score != null ? fishabilityGrade(score) : ''}? <ChevronRight size={14} />
+                      </button>
                     </div>
                   </div>
                   {/* Condition chips */}
@@ -3269,8 +3275,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                           : <GlanceCard icon={<CloudSun size={16} color={T.brass} />} label="SKY" big={`${Math.round(current.cloud_cover || 0)}%`} unit="cloud" small={weatherLabel(current.weather_code)} />}
                     </div>
 
-                    {/* Why this score */}
-                    <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24 }}>
+                    {/* Next 24 hours — hourly chart + data */}
+                    {hourly.length > 0 && (
+                      <ForecastMatrix cols={hourly} isTablet={isTablet} tide={tide} mode="hourly" title="Next 24 hours" subtitle={tide ? `Tide: ${tide.stationName}` : null} />
+                    )}
+
+                    {/* Why this score — anchored so the hero link can jump here */}
+                    <Card id="why-section" className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24, scrollMarginTop: 12 }}>
                       <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score != null ? fishabilityGrade(score) : '—'}?</div>
                       <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
                         Your score is weighted around fishability and ride comfort.
@@ -3284,18 +3295,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               </>
             );
           })()}
-
-          {/* Next 24 hours — shared ForecastMatrix (hourly mode), on Overview. */}
-          {fxTab === 'overview' && hourly.length > 0 && (
-            <ForecastMatrix
-              cols={hourly}
-              isTablet={isTablet}
-              tide={tide}
-              mode="hourly"
-              title="Next 24 hours"
-              subtitle={tide ? `Tide: ${tide.stationName}` : null}
-            />
-          )}
 
           {/* 10-day outlook — same ForecastMatrix, 6-hour blocks. */}
           {fxTab === '7day' && blocks.length > 0 && (
