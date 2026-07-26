@@ -121,31 +121,30 @@ export default function OceanHeatmapPanel() {
 
     if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
 
-    const layer = L.tileLayer.wms(`${ERDDAP_WMS}/${cfg.dataset}/request?`, {
+    // Single GetMap image (EPSG:4326) covering the region, overlaid — NOT
+    // tiled. Leaflet's WMS tiling requests Web-Mercator (EPSG:3857) tiles,
+    // which this ERDDAP rejects; a single 4326 GetMap for the fixed region
+    // is exactly ERDDAP's documented working request and sidesteps that.
+    const [[s, w], [n, e]] = REGION_BOUNDS;
+    const params = new URLSearchParams({
+      service: 'WMS', version: '1.3.0', request: 'GetMap',
+      crs: 'EPSG:4326',
+      bbox: `${s},${w},${n},${e}`,   // WMS 1.3.0 + EPSG:4326 → lat,lon order
+      width: '1024', height: '464',  // ~matches the region's 21°×9.5° aspect
       layers: `${cfg.dataset}:${cfg.variable}`,
-      // Empty style → ERDDAP's default palette for the variable. Our old
-      // `boxfill/rainbow` used a lowercase palette name ERDDAP rejects
-      // (case-sensitive), which made every GetMap return an error.xml.
       styles: '',
       format: 'image/png',
-      transparent: true,
-      version: '1.3.0',
+      transparent: 'true',
+    });
+    if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
+    const url = `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
+
+    const layer = L.imageOverlay(url, REGION_BOUNDS, {
       opacity: 0.72,
       attribution: 'Ocean data: NOAA CoastWatch / NASA',
-      // When a date is chosen, request that composite (ERDDAP snaps TIME to
-      // the nearest available). Empty → ERDDAP serves the latest. Lets the
-      // angler step back off a cloud-covered "latest" to a clearer window.
-      ...(dateISO ? { time: `${dateISO}T12:00:00Z` } : {}),
     });
-    // Forgiving status: WMS tiles fail individually all the time (a single
-    // cloud-covered or timed-out tile), and one stray 'tileerror' should
-    // NOT declare the whole layer dead — that flashed a false "didn't load"
-    // even when the composite rendered fine. A single successful tile means
-    // the layer works; only when the entire visible set fails (load cycle
-    // completes with zero tiles loaded) do we surface the error.
-    let anyTileLoaded = false;
-    layer.on('tileload', () => { anyTileLoaded = true; setStatus('ok'); });
-    layer.on('load', () => setStatus(anyTileLoaded ? 'ok' : 'error'));
+    layer.on('load',  () => setStatus('ok'));
+    layer.on('error', () => setStatus('error'));
     layer.addTo(map);
     overlayRef.current = layer;
   }, [active, dateISO]);
