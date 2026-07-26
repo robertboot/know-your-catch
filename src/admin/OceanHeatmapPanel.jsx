@@ -104,11 +104,11 @@ export default function OceanHeatmapPanel() {
       maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;
-    // The panel can mount at 0 height inside the tab; fitBounds against a
-    // 0-size container zooms all the way out (why the whole hemisphere
-    // showed). Size the container FIRST, then fit the region.
-    map.fitBounds(REGION_BOUNDS);
-    setTimeout(() => { map.invalidateSize(); map.fitBounds(REGION_BOUNDS); }, 200);
+    // Fixed center/zoom frames the Gulf + FL Atlantic and does NOT depend on
+    // the container being sized (fitBounds against a 0-height container
+    // zoomed all the way out — the whole-hemisphere view).
+    map.setView([26, -85], 6);
+    setTimeout(() => map.invalidateSize(), 200);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
@@ -134,9 +134,6 @@ export default function OceanHeatmapPanel() {
       numcolorbands: 100,
       opacity: 0.72,
       attribution: 'Ocean data: NOAA CoastWatch / NASA',
-      // Only request WMS tiles inside the coverage region — no whole-globe
-      // data pulls even if the viewport edges spill slightly past it.
-      bounds: L.latLngBounds(REGION_BOUNDS),
       // When a date is chosen, request that composite (ERDDAP snaps TIME to
       // the nearest available). Empty → ERDDAP serves the latest. Lets the
       // angler step back off a cloud-covered "latest" to a clearer window.
