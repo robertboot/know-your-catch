@@ -1195,11 +1195,11 @@ export default function App() {
           position: 'fixed',
           top: `calc(env(safe-area-inset-top) + var(--kyc-header-height) + 12px)`,
           left: '50%', transform: 'translateX(-50%)',
-          background: toast.kind === 'nag' ? T.warnBg : T.openBg,
-          border: `1px solid ${toast.kind === 'nag' ? T.warn : T.open}`,
-          color: toast.kind === 'nag' ? T.warn : T.open,
-          padding: '10px 16px', borderRadius: 8, fontSize: 15, fontWeight: 700,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+          background: toast.kind === 'nag' ? T.warn : T.open,
+          border: 'none',
+          color: T.oceanDeep,
+          padding: '10px 16px', borderRadius: 8, fontSize: 15, fontWeight: 800,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
           zIndex: 200, maxWidth: 'calc(100% - 32px)',
         }}>
           {toast.text}
