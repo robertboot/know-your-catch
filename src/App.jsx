@@ -40,6 +40,7 @@ import {
   SplashScreen, HomeScreen, IdentifyScreen, CategoriesScreen, CategoryScreen, SearchScreen,
   PhotoAnalyzingScreen, PhotoResultScreen, WeatherForecastScreen,
 } from './screens1.jsx';
+import { OceanMapsScreen } from './screens_ocean.jsx';
 import { getPhoto } from './native.js';
 import {
   SpeciesDetailScreen, RegulationsListScreen, RegulationDetailScreen,
@@ -657,6 +658,7 @@ export default function App() {
     onSelectFromLibrary:  () => startCaptureFlow('library'),
     onPatterns:   () => push({ name: 'patterns' }),
     onForecast:   () => push({ name: 'forecast' }),
+    onOceanMaps:  () => push({ name: 'oceanmaps' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
@@ -927,6 +929,9 @@ export default function App() {
       break;
     case 'forecast':
       body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} update={update} />;
+      break;
+    case 'oceanmaps':
+      body = <OceanMapsScreen isTablet={size === 'tablet' || size === 'tablet-landscape'} />;
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}
