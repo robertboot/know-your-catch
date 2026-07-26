@@ -79,9 +79,12 @@ export default function OceanHeatmapPanel() {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
+  const landRef = useRef(null);   // land-mask GeoJSON layer
+  const landGeoRef = useRef(null); // cached GeoJSON so the toggle needn't refetch
   const [active, setActive] = useState('chl');
   const [status, setStatus] = useState('loading'); // 'loading' | 'ok' | 'error'
   const [dateISO, setDateISO] = useState('');      // '' = latest available composite
+  const [showLand, setShowLand] = useState(true);  // clip data to water only
 
   // Init the map once.
   useEffect(() => {
@@ -111,14 +114,7 @@ export default function OceanHeatmapPanel() {
     map.getPane('landmask').style.pointerEvents = 'none';
     fetch('https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_land.geojson')
       .then((r) => r.json())
-      .then((geo) => {
-        if (!mapRef.current) return;
-        L.geoJSON(geo, {
-          pane: 'landmask',
-          interactive: false,
-          style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
-        }).addTo(map);
-      })
+      .then((geo) => { landGeoRef.current = geo; setShowLand((v) => v); })
       .catch(() => {}); // no mask → data still shows, just bleeds onto coast
     // Labels/coastline pane above the land mask so place names stay legible.
     map.createPane('coastline');
@@ -178,6 +174,20 @@ export default function OceanHeatmapPanel() {
     layer.addTo(map);
     overlayRef.current = layer;
   }, [active, dateISO]);
+
+  // Add/remove the land mask when toggled (or once the GeoJSON arrives).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (landRef.current) { map.removeLayer(landRef.current); landRef.current = null; }
+    if (showLand && landGeoRef.current) {
+      landRef.current = L.geoJSON(landGeoRef.current, {
+        pane: 'landmask',
+        interactive: false,
+        style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
+      }).addTo(map);
+    }
+  }, [showLand]);
 
   const cfg = LAYERS[active];
 
@@ -243,6 +253,15 @@ export default function OceanHeatmapPanel() {
             colorScheme: 'dark',
           }}
         />
+        <button
+          onClick={() => setShowLand((v) => !v)}
+          style={{
+            marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            background: showLand ? T.brass : 'transparent',
+            color: showLand ? T.oceanDeep : T.ink,
+            border: `1.5px solid ${showLand ? T.brass : T.cardEdge}`,
+          }}
+        >Land overlay {showLand ? 'on' : 'off'}</button>
       </div>
 
       <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
