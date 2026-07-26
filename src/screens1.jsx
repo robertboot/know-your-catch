@@ -712,7 +712,7 @@ export function HomeScreen({
               <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4, whiteSpace: 'nowrap' }}>Partly Cloudy</div>
             </div>
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ConditionStat label="WIND"     value="SE 14 mph" />
+              <ConditionStat label="WIND"     value="SE 12 kt" />
               <ConditionStat label="WATER"    value="79°" />
               <ConditionStat label="WAVES"    value="2.1 ft" />
               <ConditionStat label="PRESSURE" value="30.12 in" />
@@ -2735,7 +2735,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
           + `&forecast_days=10`
-          + `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
+          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
         // Marine data lives on a separate Open-Meteo endpoint with water-only
         // coverage (inland points return nulls), so fetch it alongside — not
         // blocking — the main forecast. Heights are meters → feet, SST is
@@ -3098,7 +3098,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             const sColor = fishabilityColor(score);
             const repHour = win ? (hourly.find(h => h.when >= win.startMs) || hourly[0]) : hourly[0];
             const subs = subScores(repHour || {});
-            const windMph = Math.round(current.wind_speed_10m || 0);
+            const windKt = Math.round(current.wind_speed_10m || 0);
             const windTxt = compassDir(current.wind_direction_10m || 0);
             const gust = hourly[0]?.gust != null ? Math.round(hourly[0].gust) : null;
             const seasFt = repHour?.waveFt ?? marine?.waveFt ?? null;
@@ -3196,7 +3196,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       <Waves size={14} color={T.brass} /> {seasFt != null ? `${seasFt.toFixed(1)} ft seas` : 'Seas —'}
                     </span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
-                      <Wind size={14} color={T.brass} /> {windTxt} {windMph} mph
+                      <Wind size={14} color={T.brass} /> {windTxt} {windKt} kt
                     </span>
                     {periodS != null && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 800,
@@ -3258,7 +3258,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   <>{/* --overview-- */}
                     {/* Conditions at a glance */}
                     <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
-                      <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windMph}`} unit="mph" small={gust != null ? `Gusts to ${gust}` : ''} />
+                      <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windKt}`} unit="kt" small={gust != null ? `Gusts to ${gust}` : ''} />
                       <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`}
                         small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${periodS.toFixed(1)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
                       {tideVal != null
@@ -3274,7 +3274,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
                         Your score is weighted around fishability and ride comfort.
                       </div>
-                      <FactorScale label="Wind" value={repHour?.wind} unit="mph" axisMax={38} bands={WIND_BANDS} isTablet={isTablet} />
+                      <FactorScale label="Wind" value={repHour?.wind} unit="kt" axisMax={33} bands={WIND_BANDS} isTablet={isTablet} />
                       <FactorScale label="Wave height" value={seasFt} unit="ft" axisMax={6} bands={WAVE_BANDS} isTablet={isTablet} />
                       <FactorScale label="Wave period" value={periodS} unit="s" axisMax={12} bands={PERIOD_BANDS} isTablet={isTablet} />
                     </Card>
@@ -3362,8 +3362,8 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
     } },
     { key: 'temp', label: 'Temp, °F', h: RH, color: T.ink, bg: c => airColor(c.temp), cell: c => c.temp != null ? `${Math.round(c.temp)}°` : '—' },
     { key: 'rain', label: 'Rain, %', h: RH, color: T.inkSoft, bg: c => rainColor(c.precipPct), cell: c => `${Math.round(c.precipPct || 0)}` },
-    { key: 'wind', label: 'Wind, mph', h: RH, color: T.ink, bg: c => windColor(c.wind), cell: c => c.wind != null ? withArrow((c.windDir || 0) + 180, T.ink, Math.round(c.wind)) : '—' },
-    { key: 'gust', label: 'Gust, mph', h: RH, color: T.inkSoft, bg: c => windColor(c.gust), cell: c => c.gust != null ? `${Math.round(c.gust)}` : '—' },
+    { key: 'wind', label: 'Wind, kt', h: RH, color: T.ink, bg: c => windColor(c.wind), cell: c => c.wind != null ? withArrow((c.windDir || 0) + 180, T.ink, Math.round(c.wind)) : '—' },
+    { key: 'gust', label: 'Gust, kt', h: RH, color: T.inkSoft, bg: c => windColor(c.gust), cell: c => c.gust != null ? `${Math.round(c.gust)}` : '—' },
     ...(anySST ? [
       { key: 'sst', label: 'Sea, °F', h: RH, color: T.ink, bg: c => sstColor(c.sstF), cell: c => c.sstF != null ? `${Math.round(c.sstF)}°` : '—' },
     ] : []),
@@ -3489,12 +3489,12 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
    research-based (Beaufort wind force + NWS small-craft guidance, and
    sea-state / swell-period seamanship rules of thumb). Each band: the
    upper bound of its range, a colour, and a plain-language name. */
-const WIND_BANDS = [ // mph
-  { max: 7,  color: '#3fa34d', name: 'Calm–light' },
-  { max: 12, color: '#7fae3e', name: 'Gentle breeze' },
-  { max: 18, color: '#c9b03a', name: 'Moderate breeze' },
-  { max: 24, color: '#d98330', name: 'Fresh — small-craft caution' },
-  { max: 38, color: '#c0392b', name: 'Strong — small-craft advisory' },
+const WIND_BANDS = [ // knots (Beaufort + NWS small-craft advisory ~20–33 kt)
+  { max: 6,  color: '#3fa34d', name: 'Calm–light' },
+  { max: 10, color: '#7fae3e', name: 'Gentle breeze' },
+  { max: 16, color: '#c9b03a', name: 'Moderate breeze' },
+  { max: 21, color: '#d98330', name: 'Fresh — small-craft caution' },
+  { max: 33, color: '#c0392b', name: 'Strong — small-craft advisory' },
 ];
 const WAVE_BANDS = [ // ft
   { max: 1, color: '#3fa34d', name: 'Calm' },

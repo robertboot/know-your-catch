@@ -42,7 +42,7 @@ function scaleColor(value, stops, alpha = 0.4) {
 // Palettes tuned to Windy's grid: wind ramps green(calm)→olive→amber→red,
 // waves in blues, and fish-activity/bite in a teal→vivid-green scale.
 const AIR_STOPS  = [[50, '#2f6fb0'], [65, '#2aa0a0'], [75, '#3fa34d'], [84, '#c9b03a'], [92, '#d98330'], [100, '#c0392b']];
-const WIND_STOPS = [[3, '#4a9e4a'], [8, '#7fae3e'], [12, '#c9b03a'], [16, '#d98330'], [21, '#c0392b'], [30, '#8f2417']];
+const WIND_STOPS = [[3, '#4a9e4a'], [7, '#7fae3e'], [10, '#c9b03a'], [14, '#d98330'], [18, '#c0392b'], [26, '#8f2417']]; // knots
 const WAVE_STOPS = [[0, '#123a5e'], [1, '#17518a'], [2, '#1f77c2'], [4, '#2aa0e0'], [7, '#5ac8f5']];
 const CURR_STOPS = [[0, '#123a5e'], [0.3, '#1f77c2'], [0.8, '#2aa0e0'], [1.5, '#5ac8f5']];
 // Windy fish-activity greens: teal at the low end → vivid green at the top.
@@ -50,7 +50,7 @@ const ACT_STOPS  = [[40, '#2f9e8f'], [52, '#4a9e5a'], [65, '#57b34d'], [78, '#6f
 
 export const airColor  = (f)   => scaleColor(f, AIR_STOPS, 0.5);
 export const sstColor  = (f)   => scaleColor(f, AIR_STOPS, 0.44);
-export const windColor = (mph) => scaleColor(mph, WIND_STOPS, 0.62);
+export const windColor = (kt) => scaleColor(kt, WIND_STOPS, 0.62);
 export const waveColor = (ft)  => scaleColor(ft, WAVE_STOPS, 0.55);
 export const currColor = (kt)  => scaleColor(kt, CURR_STOPS, 0.55);
 export const actColor  = (pct) => scaleColor(pct, ACT_STOPS, 1);   // solid, Windy-style boxes
@@ -107,12 +107,12 @@ export const TIDE_STATIONS = [
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
 // Each sub-score 0–100. Missing marine data falls back gracefully.
-// Wind is in mph (the app's unit). Calibrated against typical Gulf days:
-// small seas with a short period are calm and fishable, so period only
-// bites hard when the seas are also up (steep, uncomfortable chop).
+// Wind is in knots (the app's marine unit). Calibrated against typical
+// Gulf days: small seas with a short period are calm and fishable, so
+// period only bites hard when the seas are also up (steep chop).
 export function subScores(h) {
-  // Wind: glassy ≤6 mph is ideal; unfishable by ~28 mph.
-  const wind = h.wind == null ? null : Math.round(clamp01((28 - h.wind) / 22) * 100);
+  // Wind: glassy ≤5 kt is ideal; unfishable by ~24 kt (small-craft advisory).
+  const wind = h.wind == null ? null : Math.round(clamp01((24 - h.wind) / 19) * 100);
   // Wave height: ≤1 ft ideal; rough by ~5.5 ft.
   const seas = h.waveFt == null ? null : Math.round(clamp01((5.5 - h.waveFt) / 4.5) * 100);
   // Wave period, judged in context of wave height:

@@ -124,7 +124,7 @@ const hourLabel = (h) => {
   return `${hh} ${suffix}`;
 };
 const tempBucket  = (t) => t == null ? null : `${Math.floor(t / 5) * 5}–${Math.floor(t / 5) * 5 + 4}°F`;
-const windBucket  = (w) => w == null ? null : `${Math.floor(w / 5) * 5}–${Math.floor(w / 5) * 5 + 4} mph`;
+const windBucket  = (w) => { if (w == null) return null; const k = w * 0.868976; return `${Math.floor(k / 5) * 5}–${Math.floor(k / 5) * 5 + 4} kt`; };
 const pressBucket = (p) => p == null ? null : `${Math.floor(p / 10) * 10}–${Math.floor(p / 10) * 10 + 9} mb`;
 const moonBucket  = (name) => name || null;
 

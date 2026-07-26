@@ -2572,7 +2572,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
               {c.weather && (
                 <div style={{ fontSize: metaFontSize, color: T.inkSoft, marginTop: 2 }}>
                   {c.weather.tempF != null ? `${Math.round(c.weather.tempF)}°F · ` : ''}
-                  {c.weather.windMph != null ? `Wind ${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph · ` : ''}
+                  {c.weather.windMph != null ? `Wind ${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph * 0.868976)} kt · ` : ''}
                   {c.weather.cloudPct != null ? `${Math.round(c.weather.cloudPct)}% cloud` : ''}
                 </div>
               )}
@@ -2937,7 +2937,7 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
         {c.weather ? (
           <>
             {c.weather.tempF != null && <DetailRow label="Temp" value={`${Math.round(c.weather.tempF)}°F`} />}
-            {c.weather.windMph != null && <DetailRow label="Wind" value={`${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph)} mph`} />}
+            {c.weather.windMph != null && <DetailRow label="Wind" value={`${compassDir(c.weather.windDir || 0)} ${Math.round(c.weather.windMph * 0.868976)} kt`} />}
             {c.weather.cloudPct != null && <DetailRow label="Clouds" value={`${Math.round(c.weather.cloudPct)}%`} />}
             {c.weather.pressureMb != null && <DetailRow label="Pressure" value={`${Math.round(c.weather.pressureMb)} mb`} />}
           </>
@@ -4014,7 +4014,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         <DetailRow label="Weather" value={
           wxStatus === 'loading' ? 'Fetching…'
           : wxStatus === 'offline' ? 'Offline — skipped'
-          : weather ? `${Math.round(weather.tempF)}°F · ${Math.round(weather.windMph)} mph ${compassDir(weather.windDir || 0)} · ${Math.round(weather.cloudPct)}% cloud`
+          : weather ? `${Math.round(weather.tempF)}°F · ${Math.round(weather.windMph * 0.868976)} kt ${compassDir(weather.windDir || 0)} · ${Math.round(weather.cloudPct)}% cloud`
           : 'Waiting for GPS…'
         } />
       </Card>
