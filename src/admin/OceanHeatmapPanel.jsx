@@ -130,11 +130,6 @@ export default function OceanHeatmapPanel() {
       format: 'image/png',
       transparent: true,
       version: '1.3.0',
-      // ERDDAP-specific WMS params (Leaflet forwards unknown options as
-      // query params on the request).
-      colorscalerange: cfg.range,
-      logscale: cfg.log ? 'true' : 'false',
-      numcolorbands: 100,
       opacity: 0.72,
       attribution: 'Ocean data: NOAA CoastWatch / NASA',
       // When a date is chosen, request that composite (ERDDAP snaps TIME to
