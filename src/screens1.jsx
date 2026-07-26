@@ -5,7 +5,7 @@ import {
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
-  Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset, Info,
+  Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -3403,6 +3403,31 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
   const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
   const todayStr = mode === 'blocks' ? cols[0]?.date : null;
 
+  // Smooth horizontal gradients (Windy-style): precompute each coloured
+  // row's per-column colour, then blend each cell into its neighbours so
+  // the row reads as a continuous gradient instead of hard blocks.
+  const rowColors = {};
+  ROWS.forEach(r => { if (r.bg) rowColors[r.key] = cols.map(c => r.bg(c)); });
+  const parseRgba = (s) => {
+    if (!s || s === 'transparent') return [0, 0, 0, 0];
+    const m = s.match(/rgba?\(([^)]+)\)/);
+    if (!m) return [0, 0, 0, 1];
+    const p = m[1].split(',').map(Number);
+    return [p[0] || 0, p[1] || 0, p[2] || 0, p[3] == null ? 1 : p[3]];
+  };
+  const mix = (a, b) => {
+    const A = parseRgba(a), B = parseRgba(b);
+    return `rgba(${Math.round((A[0] + B[0]) / 2)},${Math.round((A[1] + B[1]) / 2)},${Math.round((A[2] + B[2]) / 2)},${((A[3] + B[3]) / 2).toFixed(3)})`;
+  };
+  const cellBg = (key, i) => {
+    const arr = rowColors[key];
+    if (!arr) return 'transparent';
+    const cur = arr[i];
+    const left = i > 0 ? mix(arr[i - 1], cur) : cur;
+    const right = i < arr.length - 1 ? mix(cur, arr[i + 1]) : cur;
+    return `linear-gradient(90deg, ${left} 0%, ${cur} 50%, ${right} 100%)`;
+  };
+
   return (
     <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 18 : 12, borderRadius: 24 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
@@ -3437,13 +3462,15 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
                   <span style={{ fontSize: mode === 'blocks' ? (isTablet ? 11 : 9) : labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{timeLabel}</span>
                 </div>
                 <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                  {weatherIcon(c.weatherCode, isTablet ? 22 : 18, T.brass)}
+                  {c.isDaylight === false && (c.weatherCode == null || c.weatherCode <= 2)
+                    ? <Moon size={isTablet ? 20 : 16} color={T.brass} />
+                    : weatherIcon(c.weatherCode, isTablet ? 22 : 18, T.brass)}
                   {mode === 'hourly' && c.sunrise && <Sunrise size={arrowSz + 2} color="#FFC857" />}
                   {mode === 'hourly' && c.sunset && <Sunset size={arrowSz + 2} color="#FF9A3D" />}
                 </div>
                 {TICK_H > 0 && <div style={{ height: TICK_H, backgroundImage: tickBg }} />}
                 {ROWS.map(r => (
-                  <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: 600, color: r.color || T.ink, background: r.bg ? r.bg(c) : 'transparent', whiteSpace: 'nowrap' }}>
+                  <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: 600, color: r.color || T.ink, background: r.bg ? cellBg(r.key, i) : 'transparent', whiteSpace: 'nowrap' }}>
                     {r.render ? r.render(c) : r.cell(c)}
                   </div>
                 ))}

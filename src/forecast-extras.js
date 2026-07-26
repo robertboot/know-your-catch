@@ -225,7 +225,8 @@ export function sixHourBlocks(hours) {
     const slot = Math.floor(parseInt(x.isoHour.slice(11, 13), 10) / 6); // 0..3
     const key = `${date}#${slot}`;
     let b = map.get(key);
-    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [] }; map.set(key, b); }
+    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [] }; map.set(key, b); }
+    if (x.isDaylight) b.dl++; else b.nt++;
     if (x.temp != null) b.t.push(x.temp);
     if (x.wind != null) b.w.push(x.wind);
     if (x.windDir != null) b.wdir.push(x.windDir);
@@ -245,6 +246,7 @@ export function sixHourBlocks(hours) {
     const temp = avg(b.t), wind = avg(b.w), gust = max(b.g), waveFt = avg(b.h), periodS = avg(b.p), bite = avg(b.bi);
     return {
       when: b.when, date: b.date, slot: b.slot, weatherCode: b.code,
+      isDaylight: b.dl >= b.nt,
       label: ['12a', '6a', '12p', '6p'][b.slot],
       isoHour: `${b.date}T${String(b.slot * 6).padStart(2, '0')}`, // for tide lookup
       temp, wind, windDir: avg(b.wdir), gust, waveFt, periodS, waveDir: avg(b.wd),
