@@ -28,9 +28,6 @@ import { T } from '../theme.js';
 import { Card, SectionLabel } from '../components.jsx';
 
 const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
-// NASA GIBS WMTS (Web Mercator) — pre-rendered, always-current satellite
-// tiles. Used for chlorophyll (the ERDDAP composites kept going stale).
-const GIBS_BASE = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best';
 
 // Gulf of Mexico + South Florida view.
 const GULF_CENTER = [26.0, -88.0];
@@ -51,20 +48,18 @@ const LAYERS = {
   chl: {
     key: 'chl',
     label: 'Chlorophyll',
-    // NASA GIBS pre-rendered tiles (always near-real-time) instead of an
-    // ERDDAP WMS dataset — the ERDDAP composites kept being retired/frozen.
-    // VIIRS SNPP daily chlorophyll; GIBS bakes the color palette into the
-    // tiles, so there's no colorscalerange/legend to tune here.
-    gibs: {
-      layer: 'VIIRS_SNPP_Chlorophyll_A',
-      matrixSet: 'GoogleMapsCompatible_Level7',
-      maxNativeZoom: 7,
-      ext: 'png',
-      latencyDays: 2,   // "Latest" = today − this, so the composite exists
-    },
+    // MODIS-Aqua R2022 NRT, 8-day composite, 2003-present (near-real-time).
+    // Replaces the retired science-quality erdMH1chla8day (ended 2022). The
+    // 8-day composite has far fewer cloud gaps than a daily layer, and NRT
+    // keeps it current — the best of both.
+    dataset: 'erdMH1chla8day_R2022NRT',
+    variable: 'chlorophyll',        // MODIS erdMH1 family uses `chlorophyll`
+    palette: 'rainbow',
+    range: '0.03,30',
+    log: true,
     units: 'mg/m³',
-    legendStops: ['0.01', '0.1', '0.5', '1', '5', '20'],
-    blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water. Daily VIIRS — step the date back if clouds hide your area.',
+    legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
+    blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water.',
   },
   sst: {
     key: 'sst',
@@ -124,44 +119,27 @@ export default function OceanHeatmapPanel() {
 
     if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
 
-    const regionBounds = L.latLngBounds(REGION_BOUNDS);
-    let layer;
-    if (cfg.gibs) {
-      // NASA GIBS pre-rendered tiles. GIBS is daily and needs a real date —
-      // "Latest" (empty scrubber) maps to today minus the layer's latency so
-      // the composite actually exists.
-      const g = cfg.gibs;
-      const day = dateISO || new Date(Date.now() - g.latencyDays * 86400000).toISOString().slice(0, 10);
-      const url = `${GIBS_BASE}/${g.layer}/default/${day}/${g.matrixSet}/{z}/{y}/{x}.${g.ext}`;
-      layer = L.tileLayer(url, {
-        bounds: regionBounds,
-        maxNativeZoom: g.maxNativeZoom,
-        maxZoom: 10,
-        opacity: 0.78,
-        attribution: 'Ocean color: NASA GIBS',
-      });
-    } else {
-      layer = L.tileLayer.wms(`${ERDDAP_WMS}/${cfg.dataset}/request?`, {
-        layers: `${cfg.dataset}:${cfg.variable}`,
-        styles: `boxfill/${cfg.palette}`,
-        format: 'image/png',
-        transparent: true,
-        version: '1.3.0',
-        // ERDDAP-specific WMS params (Leaflet forwards unknown options as
-        // query params on the request).
-        colorscalerange: cfg.range,
-        logscale: cfg.log ? 'true' : 'false',
-        numcolorbands: 100,
-        opacity: 0.72,
-        attribution: 'Ocean data: NOAA CoastWatch / NASA',
-        // Only request WMS tiles inside the coverage region — no whole-globe
-        // data pulls even if the viewport edges spill slightly past it.
-        bounds: regionBounds,
-        // When a date is chosen, request that composite (ERDDAP snaps TIME to
-        // the nearest available). Empty → ERDDAP serves the latest.
-        ...(dateISO ? { time: `${dateISO}T12:00:00Z` } : {}),
-      });
-    }
+    const layer = L.tileLayer.wms(`${ERDDAP_WMS}/${cfg.dataset}/request?`, {
+      layers: `${cfg.dataset}:${cfg.variable}`,
+      styles: `boxfill/${cfg.palette}`,
+      format: 'image/png',
+      transparent: true,
+      version: '1.3.0',
+      // ERDDAP-specific WMS params (Leaflet forwards unknown options as
+      // query params on the request).
+      colorscalerange: cfg.range,
+      logscale: cfg.log ? 'true' : 'false',
+      numcolorbands: 100,
+      opacity: 0.72,
+      attribution: 'Ocean data: NOAA CoastWatch / NASA',
+      // Only request WMS tiles inside the coverage region — no whole-globe
+      // data pulls even if the viewport edges spill slightly past it.
+      bounds: L.latLngBounds(REGION_BOUNDS),
+      // When a date is chosen, request that composite (ERDDAP snaps TIME to
+      // the nearest available). Empty → ERDDAP serves the latest. Lets the
+      // angler step back off a cloud-covered "latest" to a clearer window.
+      ...(dateISO ? { time: `${dateISO}T12:00:00Z` } : {}),
+    });
     // Forgiving status: WMS tiles fail individually all the time (a single
     // cloud-covered or timed-out tile), and one stray 'tileerror' should
     // NOT declare the whole layer dead — that flashed a false "didn't load"
