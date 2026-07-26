@@ -134,12 +134,13 @@ export function fishabilityHour(h) {
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
+// Continuous red→amber→green ramp so neighbouring scores read as
+// neighbouring colours (no hard cliff at a band edge). Solid (alpha 1)
+// for legible badges/gauge.
+const FISH_STOPS = [[35, '#c0392b'], [55, '#d1642b'], [68, '#d98330'], [76, '#9bb03a'], [85, '#4fa64a'], [95, '#63e08a']];
 export function fishabilityColor(score) {
   if (score == null) return '#7d8ca0';
-  if (score >= 90) return '#63e08a';
-  if (score >= 75) return '#3fa34d';
-  if (score >= 60) return '#d98330';
-  return '#c0392b';
+  return scaleColor(score, FISH_STOPS, 1);
 }
 
 export function fishabilityLabel(score) {
