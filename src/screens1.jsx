@@ -7,6 +7,7 @@ import {
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
   Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
   Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog,
+  Star, StarHalf,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -327,6 +328,142 @@ function ScrollDots({ count, active }) {
         }} />
       ))}
     </div>
+  );
+}
+
+/* HomeConditions — live "Today's Conditions" card with the Fishability
+   gauge, verdict, star rating and a go/no-go call, plus the key readings.
+   Fetches the same Open-Meteo + marine data as the forecast screen for a
+   resolved home location (last catch → jurisdiction centre → Gulf). */
+function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
+  const [data, setData] = useState(null);
+  const [status, setStatus] = useState('loading');
+  const [gaugeOn, setGaugeOn] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setStatus('loading');
+      const recent = (state?.catchLog || []).find(c => c.lat != null && c.lon != null);
+      const jc = jurisdiction?.center;
+      const { lat, lon } = recent ? { lat: recent.lat, lon: recent.lon }
+        : jc ? { lat: jc.lat, lon: jc.lon } : { lat: 27.5, lon: -84 };
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+          + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,weather_code`
+          + `&daily=temperature_2m_max,temperature_2m_min&forecast_days=1`
+          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
+        const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
+          + `&current=wave_height,wave_period,sea_surface_temperature&timezone=auto`;
+        const [r, mr] = await Promise.all([fetch(url), fetch(marineUrl).catch(() => null)]);
+        if (!r.ok) throw new Error('wx');
+        const j = await r.json();
+        const cur = j.current || {};
+        let waveFt = null, periodS = null, sstF = null;
+        try {
+          const mj = mr && mr.ok ? await mr.json() : null;
+          const mc = mj?.current;
+          if (mc) {
+            if (mc.wave_height != null) waveFt = mc.wave_height * 3.28084;
+            periodS = mc.wave_period ?? null;
+            if (mc.sea_surface_temperature != null) sstF = mc.sea_surface_temperature * 9 / 5 + 32;
+          }
+        } catch {}
+        const bite = biteIndex(new Date(), lat, lon, moonPhase(new Date()).illumination);
+        const score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite });
+        if (!alive) return;
+        setData({
+          tempF: cur.temperature_2m, windKt: cur.wind_speed_10m, windDir: cur.wind_direction_10m,
+          gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score,
+        });
+        setStatus('ok');
+      } catch { if (alive) setStatus('error'); }
+    })();
+    return () => { alive = false; };
+  }, [state?.catchLog, jurisdiction]);
+
+  useEffect(() => { setGaugeOn(false); const t = setTimeout(() => setGaugeOn(true), 80); return () => clearTimeout(t); }, [data?.score]);
+
+  const score = data?.score ?? null;
+  const sColor = fishabilityColor(score);
+  const gSize = isTablet ? 132 : 118, gStroke = isTablet ? 12 : 11;
+  const gR = (gSize - gStroke) / 2, gC = 2 * Math.PI * gR;
+  const gOff = gaugeOn && score != null ? gC * (1 - score / 100) : gC;
+  const starVal = score != null ? score / 20 : 0;
+  const cta = score == null ? { t: '—', Ic: CloudSun }
+    : score >= 85 ? { t: 'GO OFFSHORE', Ic: CheckCircle2 }
+    : score >= 70 ? { t: 'GOOD — GET OUT', Ic: CheckCircle2 }
+    : score >= 55 ? { t: 'FAIR — STAY NEARSHORE', Ic: AlertTriangle }
+    : score >= 40 ? { t: 'MARGINAL', Ic: AlertTriangle }
+    : { t: 'STAY IN', Ic: AlertTriangle };
+
+  const Stat = ({ label, value }) => (
+    <div>
+      <div style={{ fontSize: 10, letterSpacing: 1.2, color: T.inkMute, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: isTablet ? 18 : 16, fontWeight: 800, color: T.ink, marginTop: 2 }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <Card style={{ marginTop: 14, padding: isTablet ? 20 : 16, borderRadius: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+        <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
+        {onForecast && <button onClick={onForecast} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST ›</button>}
+      </div>
+
+      {status === 'loading' && <div style={{ padding: 24, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>Loading conditions…</div>}
+      {status === 'error' && <div style={{ padding: 16, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>Conditions unavailable right now.</div>}
+
+      {status === 'ok' && data && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isTablet ? 22 : 16, flexWrap: 'wrap' }}>
+            {/* Fishability gauge */}
+            <div style={{ position: 'relative', width: gSize, height: gSize, flexShrink: 0 }}>
+              <svg width={gSize} height={gSize}>
+                <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
+                <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
+                  strokeDasharray={gC} strokeDashoffset={gOff}
+                  style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
+              </svg>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: isTablet ? 44 : 38, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score}</span>
+                <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 3 }}>{fishabilityLabel(score)}</span>
+                <span style={{ fontSize: isTablet ? 9 : 8, fontWeight: 700, letterSpacing: 1, color: T.inkMute, marginTop: 2 }}>FISHING SCORE</span>
+              </div>
+            </div>
+
+            {/* Stars + key readings */}
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
+                {[0, 1, 2, 3, 4].map(i => {
+                  const full = i + 1 <= Math.floor(starVal);
+                  const half = !full && (starVal - i) >= 0.5;
+                  const sz = isTablet ? 22 : 20;
+                  return full ? <Star key={i} size={sz} color="#FFC857" fill="#FFC857" />
+                    : half ? <StarHalf key={i} size={sz} color="#FFC857" fill="#FFC857" />
+                    : <Star key={i} size={sz} color={T.cardEdge} fill="none" />;
+                })}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isTablet ? 12 : 10 }}>
+                <Stat label="AIR" value={data.tempF != null ? `${Math.round(data.tempF)}°` : '—'} />
+                <Stat label="WIND" value={data.windKt != null ? `${compassDir(data.windDir || 0)} ${Math.round(data.windKt)} kt` : '—'} />
+                <Stat label="WAVES" value={data.waveFt != null ? `${data.waveFt.toFixed(1)} ft` : '—'} />
+                <Stat label="WATER" value={data.sstF != null ? `${Math.round(data.sstF)}°` : '—'} />
+              </div>
+            </div>
+          </div>
+
+          {/* Go / no-go call */}
+          <button onClick={onForecast} className="kyc-press" style={{
+            marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            background: 'transparent', border: `2px solid ${sColor}`, borderRadius: 14, cursor: 'pointer',
+            padding: isTablet ? '13px 0' : '11px 0', color: sColor, fontSize: isTablet ? 16 : 14, fontWeight: 900, letterSpacing: 0.8,
+          }}>
+            <cta.Ic size={isTablet ? 20 : 18} /> {cta.t}
+          </button>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -682,6 +819,9 @@ export function HomeScreen({
           width and the user swipes between them.
           Tablet: split the row 50/50 across the full container width —
           scrolling makes no sense with the room the iPad canvas offers. */}
+      {/* Today's Conditions — live, with the Fishability score gauge */}
+      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} isTablet={isTablet} />
+
       <div
         className={isTablet ? undefined : 'kyc-hscroll'}
         style={isTablet ? {
@@ -693,33 +833,6 @@ export function HomeScreen({
           scrollSnapType: 'x proximity',
         }}
       >
-        {/* Conditions */}
-        <Card style={{
-          flex: isTablet ? '1 1 0' : '0 0 320px',
-          padding: 14, borderRadius: 18,
-          display: 'flex', flexDirection: 'column', scrollSnapAlign: 'start',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-            <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>TODAY'S CONDITIONS</span>
-            {onForecast && (
-              <button onClick={onForecast} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW FORECAST</button>
-            )}
-          </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ textAlign: 'center', flexShrink: 0 }}>
-              <CloudSun size={32} color={T.warn} strokeWidth={1.8} />
-              <div style={{ fontSize: 29, fontWeight: 900, color: T.ink, marginTop: 4, lineHeight: 1 }}>82°</div>
-              <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4, whiteSpace: 'nowrap' }}>Partly Cloudy</div>
-            </div>
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ConditionStat label="WIND"     value="SE 12 kt" />
-              <ConditionStat label="WATER"    value="79°" />
-              <ConditionStat label="WAVES"    value="2.1 ft" />
-              <ConditionStat label="PRESSURE" value="30.12 in" />
-            </div>
-          </div>
-        </Card>
-
         {/* Regulation Alerts */}
         <Card style={{
           flex: isTablet ? '1 1 0' : '0 0 320px',
