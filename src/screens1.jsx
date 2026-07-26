@@ -3292,37 +3292,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                         display: 'inline-flex', alignItems: 'center', gap: 4,
                       }}>View hourly detail <ChevronRight size={16} /></button>
                     </Card>
-
-                    {/* Next hours — horizontal cards */}
-                    {hourly.length > 0 && (
-                      <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 14, borderRadius: 24 }}>
-                        <SectionLabel style={{ marginBottom: 10 }}>Next hours at a glance</SectionLabel>
-                        <div className="kyc-hscroll" style={{ display: 'flex', gap: isTablet ? 12 : 8, overflowX: 'auto', overflowY: 'hidden', margin: '0 -4px', padding: '0 4px 6px' }}>
-                          {hourly.slice(0, 12).map((h, i) => {
-                            const d = new Date(h.when); const hr = d.getHours();
-                            const lbl = hr === 0 ? '12 AM' : hr < 12 ? `${hr} AM` : hr === 12 ? '12 PM' : `${hr - 12} PM`;
-                            const fs = fishabilityHour(h);
-                            return (
-                              <div key={i} style={{
-                                flex: `0 0 ${isTablet ? 96 : 78}px`, textAlign: 'center', padding: isTablet ? '12px 8px' : '10px 6px',
-                                background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
-                              }}>
-                                <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, fontWeight: 700 }}>{lbl}</div>
-                                <div style={{ margin: '8px auto 6px' }}>{weatherIcon(h.weatherCode, isTablet ? 26 : 22, T.brass)}</div>
-                                <div style={{ fontSize: isTablet ? 20 : 16, fontWeight: 900, color: T.ink }}>{Math.round(h.temp)}°</div>
-                                <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkSoft, marginTop: 6 }}>
-                                  {h.waveFt != null ? `${h.waveFt.toFixed(1)} ft` : '—'}
-                                </div>
-                                <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 2 }}>
-                                  {h.wind != null ? `${Math.round(h.wind)} mph` : ''}
-                                </div>
-                                <div style={{ marginTop: 8, fontSize: isTablet ? 12 : 10, fontWeight: 900, color: T.oceanDeep, background: fishabilityColor(fs), borderRadius: 999, padding: '2px 0' }}>{fs}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </Card>
-                    )}
                   </>
                 )}
               </>
@@ -3425,31 +3394,50 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               is a 6-hour block (12a/6a/12p/6p) with hourly tick marks and
               Windy-style heat gradients. */}
           {fxTab === '7day' && blocks.length > 0 && (() => {
-            const RH = isTablet ? 28 : 24;
-            const HEAD_H = isTablet ? 30 : 26;   // day (top) + slot (bottom)
+            const RH = isTablet ? 36 : 32;       // taller metric rows
+            const WAVE_H = isTablet ? 50 : 44;   // wave row fits an icon + value
+            const BITE_H = isTablet ? 46 : 40;   // bite bars
+            const HEAD_H = isTablet ? 34 : 30;   // day (top) + slot (bottom)
             const TICK_H = 8;                    // hourly tick strip
-            const COL_W = isTablet ? 50 : 40;
-            const labelFs = isTablet ? 12 : 10;
-            const valFs = isTablet ? 13 : 11;
+            const COL_W = isTablet ? 58 : 48;
+            const labelFs = isTablet ? 13 : 11;
+            const valFs = isTablet ? 14 : 12;
             const anyWave = blocks.some(b => b.waveFt != null);
             const BROWS = [
               { key: 'score', label: 'Fishability', h: RH, bold: true, color: T.oceanDeep, bg: b => fishabilityColor(b.score), cell: b => `${b.score}` },
+              // Bite bars — taller bar = better solunar feeding window (Windy-style).
+              { key: 'bite', label: 'Bite', h: BITE_H, render: b => (
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '3px 5px' }}>
+                  <div style={{ width: '68%', height: `${Math.max(6, b.bite || 0)}%`, background: fishabilityColor(b.bite), borderRadius: 3 }} />
+                  <span style={{ position: 'absolute', top: 2, left: 0, right: 0, fontSize: isTablet ? 10 : 9, color: T.inkMute, fontWeight: 800 }}>{b.bite != null ? Math.round(b.bite) : ''}</span>
+                </div>
+              ) },
               { key: 'temp',  label: 'Temp, °F',    h: RH, color: T.ink,    bg: b => airColor(b.temp),   cell: b => b.temp != null ? `${Math.round(b.temp)}°` : '—' },
               { key: 'wind',  label: 'Wind, mph',   h: RH, color: T.ink,    bg: b => windColor(b.wind),  cell: b => b.wind != null ? `${Math.round(b.wind)}` : '—' },
               { key: 'gust',  label: 'Gust, mph',   h: RH, color: T.inkSoft, bg: b => windColor(b.gust), cell: b => b.gust != null ? `${Math.round(b.gust)}` : '—' },
               ...(anyWave ? [
-                { key: 'wave', label: 'Wave, ft',  h: RH, color: T.ink,    bg: b => waveColor(b.waveFt), cell: b => b.waveFt != null ? b.waveFt.toFixed(1) : '—' },
+                // Wave row — a wave glyph sized by height, plus the value.
+                { key: 'wave', label: 'Wave, ft', h: WAVE_H, bg: b => waveColor(b.waveFt), render: b => {
+                  if (b.waveFt == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
+                  const sz = Math.round(11 + Math.min(b.waveFt, 5) / 5 * 13); // 11–24 px
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, height: '100%' }}>
+                      <Waves size={sz} color={T.brass} strokeWidth={2} />
+                      <span style={{ fontSize: valFs, fontWeight: 700, color: T.ink }}>{b.waveFt.toFixed(1)}</span>
+                    </div>
+                  );
+                } },
                 { key: 'per',  label: 'Period, s', h: RH, color: T.inkSoft, cell: b => b.periodS != null ? `${Math.round(b.periodS)}` : '—' },
               ] : []),
             ];
             const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
             const todayStr = blocks[0]?.date;
             return (
-              <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 18 : 12, borderRadius: 24 }}>
-                <SectionLabel style={{ marginBottom: 10 }}>10-day outlook · 6-hour blocks</SectionLabel>
+              <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 14, borderRadius: 24 }}>
+                <SectionLabel style={{ marginBottom: 12 }}>10-day outlook · 6-hour blocks</SectionLabel>
                 <div style={{ display: 'flex', alignItems: 'stretch' }}>
                   {/* Fixed label column */}
-                  <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
+                  <div style={{ flexShrink: 0, background: T.card, paddingRight: 12, borderRight: `1px solid ${T.cardEdge}` }}>
                     <div style={{ height: HEAD_H }} />
                     <div style={{ height: TICK_H }} />
                     {BROWS.map(r => (
@@ -3471,7 +3459,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                           <div style={{ height: TICK_H, backgroundImage: tickBg }} />
                           {BROWS.map(r => (
                             <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 900 : 600, color: r.color || T.ink, background: r.bg ? r.bg(b) : 'transparent', whiteSpace: 'nowrap' }}>
-                              {r.cell(b)}
+                              {r.render ? r.render(b) : r.cell(b)}
                             </div>
                           ))}
                         </div>

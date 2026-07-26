@@ -238,7 +238,7 @@ export function sixHourBlocks(hours) {
     return {
       when: b.when, date: b.date, slot: b.slot, code: b.code,
       label: ['12a', '6a', '12p', '6p'][b.slot],
-      temp, wind, gust, waveFt, periodS, waveDir,
+      temp, wind, gust, waveFt, periodS, waveDir, bite,
       score: fishabilityHour({ wind, waveFt, periodS, bite }),
     };
   });
