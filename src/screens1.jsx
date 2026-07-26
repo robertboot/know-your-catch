@@ -3157,24 +3157,25 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   border: `1px solid ${T.cardEdge}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>NEXT BEST FISHING WINDOW</span>
+                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>TODAY'S WEATHER</span>
                     <span style={{ flexShrink: 0, fontSize: isTablet ? 13 : 11, fontWeight: 900, letterSpacing: 0.6, color: T.oceanDeep, background: sColor, borderRadius: 999, padding: '4px 12px' }}>
                       {score != null ? `${fishabilityGrade(score)} · ${fishabilityLabel(score)}` : '—'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {win ? (
-                        <>
-                          <div style={{ fontSize: isTablet ? 18 : 15, color: T.inkSoft, fontWeight: 600 }}>{dayWord}</div>
-                          <div style={{ fontSize: isTablet ? 40 : 30, fontWeight: 900, color: T.ink, lineHeight: 1.05, margin: '2px 0 4px' }}>{range}</div>
-                          <div style={{ fontSize: isTablet ? 15 : 12, color: T.brass, fontWeight: 700 }}>Leave the dock by {fmtT(leaveBy)}</div>
-                        </>
-                      ) : (
-                        <div style={{ fontSize: isTablet ? 20 : 16, fontWeight: 800, color: T.ink, lineHeight: 1.3 }}>
-                          No clear daytime window in range — check the hourly detail.
-                        </div>
-                      )}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: isTablet ? 16 : 12 }}>
+                      <div style={{ flexShrink: 0 }}>{weatherIcon(current.weather_code, isTablet ? 54 : 42, T.warn)}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: isTablet ? 44 : 34, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{Math.round(current.temperature_2m)}°</div>
+                        <div style={{ fontSize: isTablet ? 15 : 13, color: T.inkSoft, fontWeight: 600, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{weatherLabel(current.weather_code)}</div>
+                        {daily[0] && (
+                          <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
+                            <span style={{ color: T.warn }}>H {Math.round(daily[0].tMax)}°</span>
+                            <span style={{ margin: '0 6px' }}>·</span>
+                            <span>L {Math.round(daily[0].tMin)}°</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {/* Fishability gauge */}
                     <div style={{ position: 'relative', width: gSize, height: gSize, flexShrink: 0 }}>
