@@ -3239,12 +3239,12 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   )}
                 </Card>
 
-                {/* Segmented tabs */}
+                {/* Segmented tabs — Overview (24-hour detail) + 10-Day forecast */}
                 <div style={{ position: 'relative', display: 'flex', background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 16, padding: 4, marginBottom: 14 }}>
-                  <div style={{ position: 'absolute', top: 4, bottom: 4, width: 'calc((100% - 8px) / 3)', borderRadius: 12, background: T.brass,
-                    left: `calc(4px + ${['overview', 'hourly', '7day'].indexOf(fxTab)} * ((100% - 8px) / 3))`,
+                  <div style={{ position: 'absolute', top: 4, bottom: 4, width: 'calc((100% - 8px) / 2)', borderRadius: 12, background: T.brass,
+                    left: `calc(4px + ${['overview', '7day'].indexOf(fxTab)} * ((100% - 8px) / 2))`,
                     transition: 'left 0.28s cubic-bezier(0.22,1,0.36,1)' }} />
-                  {[['overview', 'Overview'], ['hourly', 'Hourly'], ['7day', '10-Day']].map(([k, lbl]) => (
+                  {[['overview', 'Overview'], ['7day', '10-Day']].map(([k, lbl]) => (
                     <button key={k} onClick={() => setFxTab(k)} style={{
                       position: 'relative', zIndex: 1, flex: 1, background: 'transparent', border: 'none', cursor: 'pointer',
                       padding: isTablet ? '11px 0' : '9px 0', fontSize: isTablet ? 15 : 13, fontWeight: 800,
@@ -3289,10 +3289,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                           <span style={{ width: isTablet ? 74 : 58, flexShrink: 0, textAlign: 'right', fontSize: isTablet ? 13 : 11, fontWeight: 800, color: barColor(v) }}>{v == null ? '—' : ratingWord(v)}</span>
                         </div>
                       ))}
-                      <button className="kyc-press" onClick={() => setFxTab('hourly')} style={{
-                        marginTop: 8, background: 'transparent', border: 'none', color: T.brass, fontSize: isTablet ? 14 : 13, fontWeight: 800, cursor: 'pointer', padding: 0,
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                      }}>View hourly detail <ChevronRight size={16} /></button>
                     </Card>
                   </>
                 )}
@@ -3300,9 +3296,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             );
           })()}
 
-          {/* Next 24 hours — shared ForecastMatrix (hourly mode). Shown on
-              Overview (in place of the old glance strip) and on Hourly. */}
-          {(fxTab === 'hourly' || fxTab === 'overview') && hourly.length > 0 && (
+          {/* Next 24 hours — shared ForecastMatrix (hourly mode), on Overview. */}
+          {fxTab === 'overview' && hourly.length > 0 && (
             <ForecastMatrix
               cols={hourly}
               isTablet={isTablet}
