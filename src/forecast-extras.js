@@ -210,6 +210,40 @@ export function bestWindow(hours) {
   return best;
 }
 
+/* Aggregate an hourly series into 6-hour blocks (00/06/12/18 local) for
+   the 10-day matrix. Each block averages the hour values it spans and
+   carries a fishability score so the outlook reads like Windy's grid. */
+export function sixHourBlocks(hours) {
+  if (!hours || !hours.length) return [];
+  const map = new Map();
+  for (const x of hours) {
+    if (!x.isoHour) continue;
+    const date = x.isoHour.slice(0, 10);
+    const slot = Math.floor(parseInt(x.isoHour.slice(11, 13), 10) / 6); // 0..3
+    const key = `${date}#${slot}`;
+    let b = map.get(key);
+    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, t: [], w: [], g: [], h: [], p: [], wd: [], bi: [] }; map.set(key, b); }
+    if (x.temp != null) b.t.push(x.temp);
+    if (x.wind != null) b.w.push(x.wind);
+    if (x.gust != null) b.g.push(x.gust);
+    if (x.waveFt != null) b.h.push(x.waveFt);
+    if (x.periodS != null) b.p.push(x.periodS);
+    if (x.waveDir != null) b.wd.push(x.waveDir);
+    if (x.bite != null) b.bi.push(x.bite);
+  }
+  const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const max = (a) => a.length ? Math.max(...a) : null;
+  return [...map.values()].sort((a, b) => a.when - b.when).map((b) => {
+    const temp = avg(b.t), wind = avg(b.w), gust = max(b.g), waveFt = avg(b.h), periodS = avg(b.p), waveDir = avg(b.wd), bite = avg(b.bi);
+    return {
+      when: b.when, date: b.date, slot: b.slot, code: b.code,
+      label: ['12a', '6a', '12p', '6p'][b.slot],
+      temp, wind, gust, waveFt, periodS, waveDir,
+      score: fishabilityHour({ wind, waveFt, periodS, bite }),
+    };
+  });
+}
+
 export function nearestTideStation(lat, lon) {
   if (lat == null || lon == null) return null;
   let best = null, bestD = Infinity;

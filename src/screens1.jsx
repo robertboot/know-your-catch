@@ -23,7 +23,7 @@ import {
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
   biteIndex, nearestTideStation,
-  subScores, fishabilityHour, fishabilityColor, fishabilityLabel, ratingWord, bestWindow,
+  subScores, fishabilityHour, fishabilityColor, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks,
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
@@ -2593,6 +2593,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
   const [tide, setTide]       = useState(null); // { stationName, byHour: Map<isoHour, ft> } or null
   const [daily, setDaily]     = useState([]);
   const [hourly, setHourly]   = useState([]);
+  const [blocks, setBlocks]   = useState([]); // 6-hour blocks for the 10-day matrix
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [fxTab, setFxTab]     = useState('overview'); // 'overview' | 'hourly' | '7day'
@@ -2846,7 +2847,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         const moonIllum = moonPhase(new Date()).illumination;
         const h = j.hourly || {};
         const nowMs = Date.now();
-        const hoursOut = (h.time || []).map((iso, i) => {
+        const allHours = (h.time || []).map((iso, i) => {
           const when = new Date(iso).getTime();
           const isoHour = iso.slice(0, 13);
           const wave = marineHourly?.get(when) || null;
@@ -2871,8 +2872,10 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             sunrise: sunriseHours.has(isoHour),
             sunset: sunsetHours.has(isoHour),
           };
-        }).filter(x => x.when >= nowMs - 60 * 60 * 1000).slice(0, 24);
-        setHourly(hoursOut);
+        }).filter(x => x.when >= nowMs - 60 * 60 * 1000);
+        setHourly(allHours.slice(0, 24));
+        // 6-hour blocks across the whole 10-day feed for the outlook matrix.
+        setBlocks(sixHourBlocks(allHours));
       } catch (e) {
         if (!alive) return;
         setError(e?.message || 'Could not load forecast.');
@@ -3268,9 +3271,16 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
                         Your score is weighted around fishability and ride comfort.
                       </div>
-                      {[['Wind', subs.wind], ['Wave height', subs.seas], ['Wave period', subs.period]].map(([lbl, v]) => (
+                      {[
+                        ['Wind', subs.wind, repHour?.wind != null ? `${Math.round(repHour.wind)} mph` : '—'],
+                        ['Wave height', subs.seas, seasFt != null ? `${seasFt.toFixed(1)} ft` : '—'],
+                        ['Wave period', subs.period, periodS != null ? `${Math.round(periodS)} s` : '—'],
+                      ].map(([lbl, v, meas]) => (
                         <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                          <span style={{ width: isTablet ? 96 : 78, flexShrink: 0, fontSize: isTablet ? 14 : 12, color: T.inkSoft, fontWeight: 700 }}>{lbl}</span>
+                          <div style={{ width: isTablet ? 112 : 92, flexShrink: 0 }}>
+                            <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, fontWeight: 700 }}>{lbl}</div>
+                            <div style={{ fontSize: isTablet ? 13 : 11, color: T.ink, fontWeight: 800 }}>{meas}</div>
+                          </div>
                           <div style={{ flex: 1, height: 10, borderRadius: 999, background: T.oceanDeep, overflow: 'hidden' }}>
                             <div style={{ height: '100%', borderRadius: 999, width: `${v ?? 0}%`, background: barColor(v), transition: 'width 0.9s cubic-bezier(0.22,1,0.36,1)' }} />
                           </div>
@@ -3411,65 +3421,67 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             );
           })()}
 
-          {/* 7-day outlook */}
-          {fxTab === '7day' && daily.length > 0 && (
-            <Card className="kyc-fadeup" style={{ padding: isTablet ? 20 : 14, borderRadius: 24 }}>
-              <SectionLabel style={{ marginBottom: 10 }}>10-day outlook</SectionLabel>
-              <div style={{ display: 'grid', gap: isTablet ? 10 : 6 }}>
-                {daily.map((d, i) => {
-                  const dt = new Date(d.date + 'T00:00:00');
-                  const day = i === 0
-                    ? 'Today'
-                    : dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                  const dayScore = fishabilityHour({ wind: d.windMax, waveFt: d.waveFtMax, periodS: d.periodMaxS, bite: null });
-                  return (
-                    <div key={d.date} style={{
-                      // Every cell can shrink (minWidth:0 + ellipsis) so the
-                      // row NEVER exceeds the card — the old fixed widths
-                      // summed past a phone's width and shoved the whole
-                      // page sideways.
-                      display: 'flex', alignItems: 'center', gap: isTablet ? 12 : 8,
-                      padding: isTablet ? '12px 14px' : '10px 10px',
-                      background: T.parchmentDeep, borderRadius: 8,
-                      border: `1px solid ${T.cardEdge}`,
-                      maxWidth: '100%', overflow: 'hidden',
-                    }}>
-                      <span style={{
-                        flexShrink: 0, minWidth: isTablet ? 32 : 28, textAlign: 'center',
-                        fontSize: isTablet ? 14 : 12, fontWeight: 900, color: T.oceanDeep,
-                        background: fishabilityColor(dayScore), borderRadius: 8, padding: isTablet ? '4px 6px' : '3px 5px',
-                      }}>{dayScore}</span>
-                      <div style={{
-                        fontSize: isTablet ? 15 : 12, fontWeight: 700, color: T.ink,
-                        width: isTablet ? 120 : 74, flexShrink: 0,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>{day}</div>
-                      <span style={{ flexShrink: 0, display: 'inline-flex' }}>
-                        {weatherIcon(d.weatherCode, isTablet ? 28 : 22, T.brass)}
-                      </span>
-                      <div style={{
-                        flex: 1, minWidth: 0, fontSize: isTablet ? 14 : 11, color: T.inkSoft,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {weatherLabel(d.weatherCode)}
+          {/* 10-day outlook — same matrix format as Hourly, but each column
+              is a 6-hour block (12a/6a/12p/6p) with hourly tick marks and
+              Windy-style heat gradients. */}
+          {fxTab === '7day' && blocks.length > 0 && (() => {
+            const RH = isTablet ? 28 : 24;
+            const HEAD_H = isTablet ? 30 : 26;   // day (top) + slot (bottom)
+            const TICK_H = 8;                    // hourly tick strip
+            const COL_W = isTablet ? 50 : 40;
+            const labelFs = isTablet ? 12 : 10;
+            const valFs = isTablet ? 13 : 11;
+            const anyWave = blocks.some(b => b.waveFt != null);
+            const BROWS = [
+              { key: 'score', label: 'Fishability', h: RH, bold: true, color: T.oceanDeep, bg: b => fishabilityColor(b.score), cell: b => `${b.score}` },
+              { key: 'temp',  label: 'Temp, °F',    h: RH, color: T.ink,    bg: b => airColor(b.temp),   cell: b => b.temp != null ? `${Math.round(b.temp)}°` : '—' },
+              { key: 'wind',  label: 'Wind, mph',   h: RH, color: T.ink,    bg: b => windColor(b.wind),  cell: b => b.wind != null ? `${Math.round(b.wind)}` : '—' },
+              { key: 'gust',  label: 'Gust, mph',   h: RH, color: T.inkSoft, bg: b => windColor(b.gust), cell: b => b.gust != null ? `${Math.round(b.gust)}` : '—' },
+              ...(anyWave ? [
+                { key: 'wave', label: 'Wave, ft',  h: RH, color: T.ink,    bg: b => waveColor(b.waveFt), cell: b => b.waveFt != null ? b.waveFt.toFixed(1) : '—' },
+                { key: 'per',  label: 'Period, s', h: RH, color: T.inkSoft, cell: b => b.periodS != null ? `${Math.round(b.periodS)}` : '—' },
+              ] : []),
+            ];
+            const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
+            const todayStr = blocks[0]?.date;
+            return (
+              <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 18 : 12, borderRadius: 24 }}>
+                <SectionLabel style={{ marginBottom: 10 }}>10-day outlook · 6-hour blocks</SectionLabel>
+                <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                  {/* Fixed label column */}
+                  <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
+                    <div style={{ height: HEAD_H }} />
+                    <div style={{ height: TICK_H }} />
+                    {BROWS.map(r => (
+                      <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {r.label}
                       </div>
-                      <div style={{ fontSize: isTablet ? 14 : 11, color: T.inkMute, flexShrink: 0, textAlign: 'right' }}>
-                        {compassDir(d.windDir || 0)} {Math.round(d.windMax || 0)}
-                      </div>
-                      <div style={{
-                        fontSize: isTablet ? 16 : 13, fontWeight: 800, color: T.ink,
-                        flexShrink: 0, textAlign: 'right',
-                      }}>
-                        <span style={{ color: T.warn }}>{Math.round(d.tMax)}°</span>
-                        <span style={{ color: T.inkMute, margin: '0 4px' }}>·</span>
-                        <span style={{ color: T.inkSoft }}>{Math.round(d.tMin)}°</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
+                    ))}
+                  </div>
+                  <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
+                    {blocks.map((b, i) => {
+                      const dayStart = b.slot === 0 || i === 0;
+                      const dayLbl = b.date === todayStr ? 'Today' : new Date(b.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+                      return (
+                        <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', borderLeft: dayStart && i !== 0 ? `1px solid ${T.cardEdge}` : 'none' }}>
+                          <div style={{ height: HEAD_H, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: labelFs, fontWeight: 800, color: T.brass, minHeight: labelFs + 2 }}>{dayStart ? dayLbl : ''}</span>
+                            <span style={{ fontSize: isTablet ? 11 : 9, fontWeight: 700, color: T.inkMute }}>{b.label}</span>
+                          </div>
+                          <div style={{ height: TICK_H, backgroundImage: tickBg }} />
+                          {BROWS.map(r => (
+                            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 900 : 600, color: r.color || T.ink, background: r.bg ? r.bg(b) : 'transparent', whiteSpace: 'nowrap' }}>
+                              {r.cell(b)}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
 
           <div style={{ fontSize: isTablet ? 12 : 11, color: T.inkMute, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>
             Data from Open-Meteo. Always confirm marine conditions with your local NOAA/NWS forecast before heading out.
