@@ -2584,6 +2584,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
     return spot;
   };
   const [current, setCurrent] = useState(null);
+  const [marine, setMarine]   = useState(null); // { waveFt, periodS, waveDir } or null
   const [daily, setDaily]     = useState([]);
   const [hourly, setHourly]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2724,11 +2725,50 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code`
           + `&forecast_days=7`
           + `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
-        const r = await fetch(url);
+        // Marine (wave) data lives on a separate Open-Meteo endpoint and
+        // only has coverage over water — inland/lake points return nulls,
+        // so fetch it alongside (not blocking) the main forecast and treat
+        // a miss as "no marine data" rather than an error. Heights come in
+        // meters; convert to feet. Periods are already in seconds.
+        const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
+          + `&current=wave_height,wave_period,wave_direction`
+          + `&hourly=wave_height,wave_period`
+          + `&forecast_days=7&timezone=auto`;
+        const [r, marineRes] = await Promise.all([
+          fetch(url),
+          fetch(marineUrl).catch(() => null),
+        ]);
         if (!r.ok) throw new Error(`open-meteo ${r.status}`);
         const j = await r.json();
         if (!alive) return;
         setCurrent(j.current || null);
+
+        // Parse marine, tolerant of a failed/empty response.
+        const M_TO_FT = 3.28084;
+        let marineHourly = null;
+        try {
+          const mj = marineRes && marineRes.ok ? await marineRes.json() : null;
+          const mc = mj?.current;
+          if (mc && mc.wave_height != null) {
+            setMarine({
+              waveFt: mc.wave_height * M_TO_FT,
+              periodS: mc.wave_period,
+              waveDir: mc.wave_direction,
+            });
+          } else {
+            setMarine(null);
+          }
+          const mh = mj?.hourly;
+          if (mh?.time) {
+            marineHourly = new Map();
+            mh.time.forEach((iso, i) => {
+              marineHourly.set(new Date(iso).getTime(), {
+                waveFt: mh.wave_height?.[i] != null ? mh.wave_height[i] * M_TO_FT : null,
+                periodS: mh.wave_period?.[i] ?? null,
+              });
+            });
+          }
+        } catch { setMarine(null); }
         // daily arrays are parallel by index
         const d = j.daily || {};
         const days = (d.time || []).map((iso, i) => ({
@@ -2743,13 +2783,19 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         setDaily(days);
         const h = j.hourly || {};
         const nowMs = Date.now();
-        const hoursOut = (h.time || []).map((iso, i) => ({
-          when: new Date(iso).getTime(),
-          temp: h.temperature_2m?.[i],
-          precipPct: h.precipitation_probability?.[i],
-          wind: h.wind_speed_10m?.[i],
-          weatherCode: h.weather_code?.[i],
-        })).filter(x => x.when >= nowMs - 60 * 60 * 1000).slice(0, 24);
+        const hoursOut = (h.time || []).map((iso, i) => {
+          const when = new Date(iso).getTime();
+          const wave = marineHourly?.get(when) || null;
+          return {
+            when,
+            temp: h.temperature_2m?.[i],
+            precipPct: h.precipitation_probability?.[i],
+            wind: h.wind_speed_10m?.[i],
+            weatherCode: h.weather_code?.[i],
+            waveFt: wave?.waveFt ?? null,
+            periodS: wave?.periodS ?? null,
+          };
+        }).filter(x => x.when >= nowMs - 60 * 60 * 1000).slice(0, 24);
         setHourly(hoursOut);
       } catch (e) {
         if (!alive) return;
@@ -2974,6 +3020,12 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             </div>
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: isTablet ? 14 : 10 }}>
               <ConditionStat label="WIND"     value={`${compassDir(current.wind_direction_10m || 0)} ${Math.round(current.wind_speed_10m || 0)} mph`} />
+              {marine && (
+                <ConditionStat label="WAVES" value={`${marine.waveFt != null ? marine.waveFt.toFixed(1) : '—'} ft${marine.waveDir != null ? ` ${compassDir(marine.waveDir)}` : ''}`} />
+              )}
+              {marine && (
+                <ConditionStat label="WAVE PERIOD" value={`${marine.periodS != null ? marine.periodS.toFixed(1) : '—'} s`} />
+              )}
               <ConditionStat label="CLOUDS"   value={`${Math.round(current.cloud_cover || 0)}%`} />
               <ConditionStat label="PRESSURE" value={`${(current.pressure_msl || 0).toFixed(1)} mb`} />
               <ConditionStat label="RAIN"     value={`${(current.precipitation || 0).toFixed(2)} mm`} />
@@ -3006,6 +3058,11 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       <div style={{ margin: '6px auto' }}>{weatherIcon(h.weatherCode, isTablet ? 26 : 22, T.brass)}</div>
                       <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 800, color: T.ink }}>{Math.round(h.temp)}°</div>
                       <div style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute, marginTop: 4 }}>{Math.round(h.precipPct || 0)}% rain</div>
+                      {h.waveFt != null && (
+                        <div style={{ fontSize: isTablet ? 11 : 9, color: T.brass, marginTop: 3 }}>
+                          {h.waveFt.toFixed(1)}ft{h.periodS != null ? ` · ${Math.round(h.periodS)}s` : ''}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
