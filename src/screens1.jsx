@@ -3058,9 +3058,10 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             return (
               <Card style={{ marginBottom: 14, padding: isTablet ? 18 : 12 }}>
                 <SectionLabel style={{ marginBottom: 10 }}>Next 24 hours</SectionLabel>
-                <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', margin: '0 -4px', padding: '0 4px 6px' }}>
-                  {/* Fixed metric-label column */}
-                  <div style={{ position: 'sticky', left: 0, zIndex: 2, flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
+                {/* Fixed label column (never scrolls) beside a separate
+                    horizontally-scrolling hours pane — no overlap/bleed. */}
+                <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                  <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
                     <div style={{ height: HEAD_H }} />
                     <div style={{ height: ICON_H }} />
                     {ROWS.map(r => (
@@ -3069,23 +3070,24 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       </div>
                     ))}
                   </div>
-                  {/* One column per hour */}
-                  {hourly.map((h, i) => {
-                    const d = new Date(h.when);
-                    const hr = d.getHours();
-                    const label = hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`;
-                    return (
-                      <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', background: i === 0 ? `${T.brass}12` : 'transparent', borderRadius: 8 }}>
-                        <div style={{ height: HEAD_H, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{label}</div>
-                        <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{weatherIcon(h.weatherCode, isTablet ? 24 : 20, T.brass)}</div>
-                        {ROWS.map(r => (
-                          <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 800 : 600, color: r.color || T.ink, whiteSpace: 'nowrap' }}>
-                            {r.cell(h)}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
+                  <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
+                    {hourly.map((h, i) => {
+                      const d = new Date(h.when);
+                      const hr = d.getHours();
+                      const label = hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`;
+                      return (
+                        <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', background: i === 0 ? `${T.brass}12` : 'transparent', borderRadius: 8 }}>
+                          <div style={{ height: HEAD_H, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{label}</div>
+                          <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{weatherIcon(h.weatherCode, isTablet ? 24 : 20, T.brass)}</div>
+                          {ROWS.map(r => (
+                            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 800 : 600, color: r.color || T.ink, whiteSpace: 'nowrap' }}>
+                              {r.cell(h)}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </Card>
             );
