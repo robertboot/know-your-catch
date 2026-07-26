@@ -3263,7 +3263,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
                         Your score is weighted around fishability and ride comfort.
                       </div>
-                      {[['Seas', subs.seas], ['Wind', subs.wind], ['Wave period', subs.period]].map(([lbl, v]) => (
+                      {[['Wind', subs.wind], ['Wave height', subs.seas], ['Wave period', subs.period]].map(([lbl, v]) => (
                         <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                           <span style={{ width: isTablet ? 96 : 78, flexShrink: 0, fontSize: isTablet ? 14 : 12, color: T.inkSoft, fontWeight: 700 }}>{lbl}</span>
                           <div style={{ flex: 1, height: 10, borderRadius: 999, background: T.oceanDeep, overflow: 'hidden' }}>

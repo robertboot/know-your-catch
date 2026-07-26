@@ -104,20 +104,31 @@ export const TIDE_STATIONS = [
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
 // Each sub-score 0–100. Missing marine data falls back gracefully.
+// Wind is in mph (the app's unit). Calibrated against typical Gulf days:
+// small seas with a short period are calm and fishable, so period only
+// bites hard when the seas are also up (steep, uncomfortable chop).
 export function subScores(h) {
-  // Wind: glassy ≤5 mph is ideal; unfishable by ~28 mph.
-  const wind = h.wind == null ? null : Math.round(clamp01((28 - h.wind) / 23) * 100);
-  // Seas: ≤1 ft ideal; rough by ~5 ft.
-  const seas = h.waveFt == null ? null : Math.round(clamp01((5 - h.waveFt) / 4) * 100);
-  // Wave period: long swell rides well; short wind-chop (<4 s) is harsh.
-  const period = h.periodS == null ? null
-    : Math.round(clamp01((h.periodS - 3) / 5) * 100); // 3 s→0, 8 s+→100
+  // Wind: glassy ≤6 mph is ideal; unfishable by ~28 mph.
+  const wind = h.wind == null ? null : Math.round(clamp01((28 - h.wind) / 22) * 100);
+  // Wave height: ≤1 ft ideal; rough by ~5.5 ft.
+  const seas = h.waveFt == null ? null : Math.round(clamp01((5.5 - h.waveFt) / 4.5) * 100);
+  // Wave period, judged in context of wave height:
+  //   • small seas (≤2 ft): short period is not uncomfortable → stay generous
+  //   • bigger seas: a longer period is needed to ride comfortably
+  let period = null;
+  if (h.periodS != null) {
+    period = (h.waveFt ?? 0) <= 2
+      ? Math.round(55 + clamp01((h.periodS - 1) / 6) * 40)  // ~4 s→75, floor 55
+      : Math.round(clamp01((h.periodS - 3) / 5) * 100);     // 3 s→0, 8 s+→100
+    period = Math.max(0, Math.min(100, period));
+  }
   return { wind, seas, period };
 }
 
 export function fishabilityHour(h) {
   const s = subScores(h);
-  // Weighted blend of whatever we have; renormalize over present terms.
+  // Total is heavily weighted on the three sailing/fishing factors —
+  // wave height, wind, wave period — renormalized over whatever's present.
   const terms = [];
   if (s.seas != null)   terms.push([s.seas, 0.4]);
   if (s.wind != null)   terms.push([s.wind, 0.35]);
@@ -129,8 +140,8 @@ export function fishabilityHour(h) {
   } else {
     score = 50; // no marine data → neutral, let bite nudge it
   }
-  // Nudge by the solunar bite estimate (±10).
-  if (h.bite != null) score = score * 0.85 + h.bite * 0.15;
+  // Small solunar nudge only — the three factors dominate (±5).
+  if (h.bite != null) score = score * 0.9 + h.bite * 0.1;
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
