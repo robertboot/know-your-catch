@@ -344,10 +344,18 @@ function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
     let alive = true;
     (async () => {
       setStatus('loading');
+      // Location priority: STARRED fishing spot → any saved spot → last
+      // catch → jurisdiction centre → Gulf. The starred spot is the
+      // angler's chosen "home water" (managed on the Forecast screen).
+      const spots = state?.fishingSpots || [];
+      const starred = spots.find(s => s.starred) || spots[0] || null;
       const recent = (state?.catchLog || []).find(c => c.lat != null && c.lon != null);
       const jc = jurisdiction?.center;
-      const { lat, lon } = recent ? { lat: recent.lat, lon: recent.lon }
-        : jc ? { lat: jc.lat, lon: jc.lon } : { lat: 27.5, lon: -84 };
+      const place = starred ? { lat: starred.lat, lon: starred.lon, name: starred.name }
+        : recent ? { lat: recent.lat, lon: recent.lon, name: 'Last catch' }
+        : jc ? { lat: jc.lat, lon: jc.lon, name: jurisdiction?.name || 'Selected waters' }
+        : { lat: 27.5, lon: -84, name: 'Gulf of America' };
+      const { lat, lon } = place;
       try {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,weather_code`
@@ -373,8 +381,10 @@ function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
         const score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite });
         if (!alive) return;
         setData({
+          placeName: place.name,
           tempF: cur.temperature_2m, windKt: cur.wind_speed_10m, windDir: cur.wind_direction_10m,
           gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score,
+          tMax: j.daily?.temperature_2m_max?.[0], tMin: j.daily?.temperature_2m_min?.[0],
         });
         setStatus('ok');
       } catch { if (alive) setStatus('error'); }
@@ -406,9 +416,16 @@ function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
 
   return (
     <Card style={{ marginTop: 14, padding: isTablet ? 20 : 16, borderRadius: 22 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-        <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
-        {onForecast && <button onClick={onForecast} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST ›</button>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
+          {data?.placeName && (
+            <div style={{ fontSize: isTablet ? 13 : 12, color: T.brassDeep || T.brass, fontWeight: 700, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Star size={12} color="#FFC857" fill="#FFC857" /> {data.placeName}
+            </div>
+          )}
+        </div>
+        {onForecast && <button onClick={onForecast} style={{ flexShrink: 0, background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST ›</button>}
       </div>
 
       {status === 'loading' && <div style={{ padding: 24, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>Loading conditions…</div>}
@@ -416,46 +433,67 @@ function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
 
       {status === 'ok' && data && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isTablet ? 22 : 16, flexWrap: 'wrap' }}>
-            {/* Fishability gauge */}
-            <div style={{ position: 'relative', width: gSize, height: gSize, flexShrink: 0 }}>
-              <svg width={gSize} height={gSize}>
-                <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
-                <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
-                  strokeDasharray={gC} strokeDashoffset={gOff}
-                  style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
-              </svg>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: isTablet ? 44 : 38, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{fishabilityGrade(score)}</span>
-                <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 3 }}>{fishabilityLabel(score)}</span>
-                <span style={{ fontSize: isTablet ? 9 : 8, fontWeight: 700, letterSpacing: 1, color: T.inkMute, marginTop: 2 }}>FISHING GRADE</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Weather */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: isTablet ? 14 : 10 }}>
+              <div style={{ flexShrink: 0 }}>{weatherIcon(data.code, isTablet ? 52 : 42, T.warn)}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: isTablet ? 44 : 34, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{data.tempF != null ? `${Math.round(data.tempF)}°` : '—'}</div>
+                <div style={{ fontSize: isTablet ? 15 : 13, color: T.inkSoft, fontWeight: 600, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{weatherLabel(data.code)}</div>
+                {data.tMax != null && (
+                  <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
+                    <span style={{ color: T.warn }}>H {Math.round(data.tMax)}°</span>
+                    <span style={{ margin: '0 6px' }}>·</span>
+                    <span>L {Math.round(data.tMin)}°</span>
+                  </div>
+                )}
               </div>
             </div>
+            {/* Fishability gauge + Why link */}
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <div style={{ position: 'relative', width: gSize, height: gSize }}>
+                <svg width={gSize} height={gSize}>
+                  <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
+                  <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
+                    strokeDasharray={gC} strokeDashoffset={gOff}
+                    style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{fishabilityGrade(score)}</span>
+                  <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 2 }}>{fishabilityLabel(score)}</span>
+                </div>
+              </div>
+              {onForecast && (
+                <button className="kyc-press" onClick={onForecast} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.brass, fontSize: isTablet ? 13 : 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+                  Why {fishabilityGrade(score)}? <ChevronRight size={14} />
+                </button>
+              )}
+            </div>
+          </div>
 
-            {/* Stars + key readings */}
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
-                {[0, 1, 2, 3, 4].map(i => {
-                  const full = i + 1 <= Math.floor(starVal);
-                  const half = !full && (starVal - i) >= 0.5;
-                  const sz = isTablet ? 22 : 20;
-                  return full ? <Star key={i} size={sz} color="#FFC857" fill="#FFC857" />
-                    : half ? <StarHalf key={i} size={sz} color="#FFC857" fill="#FFC857" />
-                    : <Star key={i} size={sz} color={T.cardEdge} fill="none" />;
-                })}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isTablet ? 12 : 10 }}>
-                <Stat label="AIR" value={data.tempF != null ? `${Math.round(data.tempF)}°` : '—'} />
-                <Stat label="WIND" value={data.windKt != null ? `${compassDir(data.windDir || 0)} ${Math.round(data.windKt)} kt` : '—'} />
-                <Stat label="WAVES" value={data.waveFt != null ? `${data.waveFt.toFixed(1)} ft` : '—'} />
-                <Stat label="WATER" value={data.sstF != null ? `${Math.round(data.sstF)}°` : '—'} />
-              </div>
-            </div>
+          {/* Condition chips */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+              <Waves size={14} color={T.brass} /> {data.waveFt != null ? `${data.waveFt.toFixed(1)} ft seas` : 'Seas —'}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+              <Wind size={14} color={T.brass} /> {data.windKt != null ? `${compassDir(data.windDir || 0)} ${Math.round(data.windKt)} kt` : 'Wind —'}
+            </span>
+            {data.periodS != null && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+                {data.periodS.toFixed(1)} sec period
+              </span>
+            )}
+            {data.sstF != null && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+                <Thermometer size={14} color={T.brass} /> {Math.round(data.sstF)}° water
+              </span>
+            )}
           </div>
 
           {/* Go / no-go call */}
           <button onClick={onForecast} className="kyc-press" style={{
-            marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            marginTop: 14, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             background: 'transparent', border: `2px solid ${sColor}`, borderRadius: 14, cursor: 'pointer',
             padding: isTablet ? '13px 0' : '11px 0', color: sColor, fontSize: isTablet ? 16 : 14, fontWeight: 900, letterSpacing: 0.8,
           }}>
