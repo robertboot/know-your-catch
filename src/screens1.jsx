@@ -2722,7 +2722,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl,weather_code`
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant`
-          + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code`
+          + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
           + `&forecast_days=7`
           + `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
         // Marine (wave) data lives on a separate Open-Meteo endpoint and
@@ -2791,6 +2791,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             temp: h.temperature_2m?.[i],
             precipPct: h.precipitation_probability?.[i],
             wind: h.wind_speed_10m?.[i],
+            windDir: h.wind_direction_10m?.[i],
+            gust: h.wind_gusts_10m?.[i],
             weatherCode: h.weather_code?.[i],
             waveFt: wave?.waveFt ?? null,
             periodS: wave?.periodS ?? null,
@@ -3032,43 +3034,62 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             </div>
           </Card>
 
-          {/* Next 24 hours strip */}
-          {hourly.length > 0 && (
-            <Card style={{ marginBottom: 14, padding: isTablet ? 20 : 14 }}>
-              <SectionLabel style={{ marginBottom: 10 }}>Next 24 hours</SectionLabel>
-              <div className="kyc-hscroll" style={{
-                display: 'flex', gap: isTablet ? 14 : 10,
-                overflowX: 'auto', overflowY: 'hidden',
-                margin: '0 -8px', padding: '0 8px 6px',
-                scrollSnapType: 'x proximity',
-              }}>
-                {hourly.map((h, i) => {
-                  const d = new Date(h.when);
-                  const hour = d.getHours();
-                  const label = hour === 0 ? '12a' : hour < 12 ? `${hour}a` : hour === 12 ? '12p' : `${hour - 12}p`;
-                  return (
-                    <div key={i} style={{
-                      flex: `0 0 ${isTablet ? 84 : 66}px`,
-                      textAlign: 'center', padding: '10px 6px',
-                      background: T.parchmentDeep, borderRadius: 8,
-                      border: `1px solid ${T.cardEdge}`,
-                      scrollSnapAlign: 'start',
-                    }}>
-                      <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, letterSpacing: 0.8 }}>{label}</div>
-                      <div style={{ margin: '6px auto' }}>{weatherIcon(h.weatherCode, isTablet ? 26 : 22, T.brass)}</div>
-                      <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 800, color: T.ink }}>{Math.round(h.temp)}°</div>
-                      <div style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute, marginTop: 4 }}>{Math.round(h.precipPct || 0)}% rain</div>
-                      {h.waveFt != null && (
-                        <div style={{ fontSize: isTablet ? 11 : 9, color: T.brass, marginTop: 3 }}>
-                          {h.waveFt.toFixed(1)}ft{h.periodS != null ? ` · ${Math.round(h.periodS)}s` : ''}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
+          {/* Next 24 hours — Windy-style matrix: fixed metric labels on the
+              left, hours scrolling horizontally. Each row is one metric so
+              wind, gusts and waves line up column-by-column across the hours. */}
+          {hourly.length > 0 && (() => {
+            const RH = isTablet ? 30 : 26;          // metric row height
+            const HEAD_H = isTablet ? 24 : 20;      // time header height
+            const ICON_H = isTablet ? 34 : 30;      // weather icon row height
+            const COL_W = isTablet ? 76 : 60;       // per-hour column width
+            const anyWave = hourly.some(h => h.waveFt != null);
+            const ROWS = [
+              { key: 'temp',   label: 'Temp',      h: RH, bold: true,  color: T.ink,     cell: h => `${Math.round(h.temp)}°` },
+              { key: 'rain',   label: 'Rain, %',   h: RH, color: T.inkMute, cell: h => `${Math.round(h.precipPct || 0)}` },
+              { key: 'wind',   label: 'Wind, mph', h: RH, color: T.inkSoft, cell: h => h.wind != null ? `${compassDir(h.windDir || 0)} ${Math.round(h.wind)}` : '—' },
+              { key: 'gust',   label: 'Gust, mph', h: RH, color: T.inkMute, cell: h => h.gust != null ? `${Math.round(h.gust)}` : '—' },
+              ...(anyWave ? [
+                { key: 'wave',   label: 'Wave, ft',  h: RH, color: T.brass, cell: h => h.waveFt != null ? h.waveFt.toFixed(1) : '—' },
+                { key: 'period', label: 'Period, s', h: RH, color: T.brass, cell: h => h.periodS != null ? `${Math.round(h.periodS)}` : '—' },
+              ] : []),
+            ];
+            const labelFs = isTablet ? 12 : 10;
+            const valFs = isTablet ? 14 : 12;
+            return (
+              <Card style={{ marginBottom: 14, padding: isTablet ? 18 : 12 }}>
+                <SectionLabel style={{ marginBottom: 10 }}>Next 24 hours</SectionLabel>
+                <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', margin: '0 -4px', padding: '0 4px 6px' }}>
+                  {/* Fixed metric-label column */}
+                  <div style={{ position: 'sticky', left: 0, zIndex: 2, flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
+                    <div style={{ height: HEAD_H }} />
+                    <div style={{ height: ICON_H }} />
+                    {ROWS.map(r => (
+                      <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {r.label}
+                      </div>
+                    ))}
+                  </div>
+                  {/* One column per hour */}
+                  {hourly.map((h, i) => {
+                    const d = new Date(h.when);
+                    const hr = d.getHours();
+                    const label = hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`;
+                    return (
+                      <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', background: i === 0 ? `${T.brass}12` : 'transparent', borderRadius: 8 }}>
+                        <div style={{ height: HEAD_H, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{label}</div>
+                        <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{weatherIcon(h.weatherCode, isTablet ? 24 : 20, T.brass)}</div>
+                        {ROWS.map(r => (
+                          <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 800 : 600, color: r.color || T.ink, whiteSpace: 'nowrap' }}>
+                            {r.cell(h)}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })()}
 
           {/* 7-day outlook */}
           {daily.length > 0 && (
