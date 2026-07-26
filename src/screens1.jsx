@@ -3300,8 +3300,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
 
           {/* Next 24 hours — Windy-style matrix: fixed metric labels on the
               left, hours scrolling horizontally. Each row is one metric so
-              wind, gusts and waves line up column-by-column across the hours. */}
-          {fxTab === 'hourly' && hourly.length > 0 && (() => {
+              wind, gusts and waves line up column-by-column across the hours.
+              Shown on Overview (in place of the old glance strip) and Hourly. */}
+          {(fxTab === 'hourly' || fxTab === 'overview') && hourly.length > 0 && (() => {
             const RH = isTablet ? 30 : 26;          // metric row height
             const HEAD_H = isTablet ? 24 : 20;      // time header height
             const ICON_H = isTablet ? 34 : 30;      // weather icon row height
