@@ -24,7 +24,7 @@ import {
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
   biteIndex, nearestTideStation,
-  subScores, fishabilityHour, fishabilityColor, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks,
+  subScores, fishabilityHour, fishabilityColor, fishabilityGrade, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks,
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
@@ -3159,7 +3159,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
                     <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>NEXT BEST FISHING WINDOW</span>
                     <span style={{ flexShrink: 0, fontSize: isTablet ? 13 : 11, fontWeight: 900, letterSpacing: 0.6, color: T.oceanDeep, background: sColor, borderRadius: 999, padding: '4px 12px' }}>
-                      {score != null ? `${score} · ${fishabilityLabel(score)}` : '—'}
+                      {score != null ? `${fishabilityGrade(score)} · ${fishabilityLabel(score)}` : '—'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -3185,7 +3185,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                           style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
                       </svg>
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score ?? '—'}</span>
+                        <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score != null ? fishabilityGrade(score) : '—'}</span>
                         <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginTop: 2 }}>FISHABILITY</span>
                       </div>
                     </div>
@@ -3217,7 +3217,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   {showLegend && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.cardEdge}` }}>
                       <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, lineHeight: 1.55, marginBottom: 12 }}>
-                        A 0–100 estimate of how good the fishing should be, weighted for both catching fish
+                        A letter grade (A–F) for how good the fishing should be, weighted for both catching fish
                         and a comfortable ride: <strong style={{ color: T.ink }}>seas</strong>,{' '}
                         <strong style={{ color: T.ink }}>wind</strong>, and{' '}
                         <strong style={{ color: T.ink }}>wave period</strong>, nudged by the{' '}
@@ -3227,10 +3227,10 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                           fishability axis (FISH_STOPS in forecast-extras). */}
                       <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #c0392b 0%, #c0392b 35%, #d1642b 55%, #d98330 68%, #9bb03a 76%, #4fa64a 85%, #63e08a 95%, #63e08a 100%)' }} />
                       <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
-                        <span style={{ position: 'absolute', left: '0%' }}>0 · Poor</span>
-                        <span style={{ position: 'absolute', left: '60%', transform: 'translateX(-50%)' }}>60 · Fair</span>
-                        <span style={{ position: 'absolute', left: '75%', transform: 'translateX(-50%)' }}>75 · Good</span>
-                        <span style={{ position: 'absolute', right: '0%' }}>90+ · Great</span>
+                        <span style={{ position: 'absolute', left: '0%' }}>F</span>
+                        <span style={{ position: 'absolute', left: '65%', transform: 'translateX(-50%)' }}>C</span>
+                        <span style={{ position: 'absolute', left: '82%', transform: 'translateX(-50%)' }}>B</span>
+                        <span style={{ position: 'absolute', right: '0%' }}>A</span>
                       </div>
                       <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 12, lineHeight: 1.5 }}>
                         Fishability is ReelIntel's own estimate — always confirm marine conditions with your
@@ -3270,7 +3270,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
 
                     {/* Why this score */}
                     <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24 }}>
-                      <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score ?? '—'}?</div>
+                      <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score != null ? fishabilityGrade(score) : '—'}?</div>
                       <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
                         Your score is weighted around fishability and ride comfort.
                       </div>
@@ -3359,10 +3359,15 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Arrow deg={deg} color={color} />{text}</span>
   );
 
+  const gradeD = isTablet ? 34 : 30;
   const ROWS = [
-    { key: 'fish', label: 'Fishability', h: RH, render: c => {
+    { key: 'fish', label: 'Fishability', h: isTablet ? 40 : 36, render: c => {
       const sc = c.score != null ? c.score : fishabilityHour(c);
-      return <span style={{ background: fishabilityColor(sc), color: '#06212f', fontWeight: 900, borderRadius: 5, padding: isTablet ? '3px 8px' : '2px 6px', fontSize: valFs }}>{sc}</span>;
+      return (
+        <div style={{ width: gradeD, height: gradeD, borderRadius: '50%', background: fishabilityColor(sc), color: '#06212f', fontWeight: 900, fontSize: isTablet ? 14 : 12, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
+          {fishabilityGrade(sc)}
+        </div>
+      );
     } },
     { key: 'bite', label: 'Bite, %', h: BITE_H, render: c => {
       if (c.bite == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
@@ -3381,13 +3386,27 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
       { key: 'sst', label: 'Sea, °F', h: RH, color: T.ink, bg: c => sstColor(c.sstF), cell: c => c.sstF != null ? `${Math.round(c.sstF)}°` : '—' },
     ] : []),
     ...(anyWave ? [
-      { key: 'wave', label: 'Wave, ft', h: WAVE_H, bg: c => waveColor(c.waveFt), render: c => {
+      { key: 'wave', label: 'Wave, ft', h: WAVE_H, bg: c => waveColor(c.waveFt), render: (c, i) => {
         if (c.waveFt == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
-        const sz = Math.round(11 + Math.min(c.waveFt, 5) / 5 * 13);
+        // Draw the actual wave profile: crest height rises/falls with wave
+        // height, blended into neighbours so it flows across the row.
+        const w = COL_W, H = WAVE_H;
+        const norm = (v) => v == null ? null : Math.max(0.14, Math.min(1, v / 4)); // 0–4 ft → 0..1
+        const cur = norm(c.waveFt);
+        const pv = norm(cols[i - 1]?.waveFt);
+        const nv = norm(cols[i + 1]?.waveFt);
+        const yOf = (f) => Math.round(H - 6 - f * 0.62 * H); // taller wave = higher crest
+        const yC = yOf(cur);
+        const yL = yOf(((pv ?? cur) + cur) / 2);
+        const yR = yOf(((nv ?? cur) + cur) / 2);
+        const top = `M0,${yL} Q ${w * 0.25},${(yL + yC) / 2} ${w / 2},${yC} Q ${w * 0.75},${(yC + yR) / 2} ${w},${yR}`;
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, height: '100%' }}>
-            <Waves size={sz} color={T.brass} strokeWidth={2} />
-            <span style={{ fontSize: valFs, fontWeight: 700, color: T.ink }}>{c.waveFt.toFixed(1)}</span>
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <svg width="100%" height="100%" viewBox={`0 0 ${w} ${H}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0 }}>
+              <path d={`${top} L ${w},${H} L 0,${H} Z`} fill="rgba(90,200,245,0.32)" />
+              <path d={top} fill="none" stroke={T.brass} strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span style={{ position: 'absolute', left: 0, right: 0, bottom: 3, textAlign: 'center', fontSize: valFs, fontWeight: 800, color: T.ink }}>{c.waveFt.toFixed(1)}</span>
           </div>
         );
       } },
@@ -3472,7 +3491,7 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
                 {TICK_H > 0 && <div style={{ height: TICK_H, backgroundImage: tickBg }} />}
                 {ROWS.map(r => (
                   <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: 600, color: r.color || T.ink, background: r.bg ? cellBg(r.key, i) : 'transparent', whiteSpace: 'nowrap' }}>
-                    {r.render ? r.render(c) : r.cell(c)}
+                    {r.render ? r.render(c, i) : r.cell(c)}
                   </div>
                 ))}
               </div>
