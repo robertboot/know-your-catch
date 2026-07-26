@@ -3300,189 +3300,29 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             );
           })()}
 
-          {/* Next 24 hours — Windy-style matrix: fixed metric labels on the
-              left, hours scrolling horizontally. Each row is one metric so
-              wind, gusts and waves line up column-by-column across the hours.
-              Shown on Overview (in place of the old glance strip) and Hourly. */}
-          {(fxTab === 'hourly' || fxTab === 'overview') && hourly.length > 0 && (() => {
-            const RH = isTablet ? 30 : 26;          // metric row height
-            const HEAD_H = isTablet ? 24 : 20;      // time header height
-            const ICON_H = isTablet ? 34 : 30;      // weather icon row height
-            const COL_W = isTablet ? 76 : 60;       // per-hour column width
-            const labelFs = isTablet ? 12 : 10;
-            const valFs = isTablet ? 14 : 12;
-            const arrowSz = isTablet ? 12 : 10;
-            const anyWave    = hourly.some(h => h.waveFt != null);
-            const anySST     = hourly.some(h => h.sstF != null);
-            const anyCurrent = hourly.some(h => h.currentKt != null);
-            const hasTide    = !!(tide && hourly.some(h => tide.byHour.has(h.isoHour)));
-            // Direction arrow: Navigation points north by default; rotate to
-            // where the flow is GOING. Wind/waves are reported as "from", so
-            // add 180°; ocean current is already "to".
-            const Arrow = ({ deg, color }) => (
-              <Navigation size={arrowSz} color={color} fill={color} strokeWidth={1}
-                style={{ transform: `rotate(${(deg || 0)}deg)`, flexShrink: 0 }} />
-            );
-            const withArrow = (deg, color, text) => (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <Arrow deg={deg} color={color} />{text}
-              </span>
-            );
-            const ROWS = [
-              { key: 'temp', label: 'Temp, °F',   h: RH, bold: true, color: T.ink,     bg: h => airColor(h.temp),        cell: h => `${Math.round(h.temp)}°` },
-              { key: 'rain', label: 'Rain, %',    h: RH, color: T.inkSoft,             bg: h => rainColor(h.precipPct),  cell: h => `${Math.round(h.precipPct || 0)}` },
-              { key: 'wind', label: 'Wind, mph',  h: RH, color: T.ink,                 bg: h => windColor(h.wind),       cell: h => h.wind != null ? withArrow((h.windDir || 0) + 180, T.ink, Math.round(h.wind)) : '—' },
-              { key: 'gust', label: 'Gust, mph',  h: RH, color: T.inkSoft,             bg: h => windColor(h.gust),       cell: h => h.gust != null ? `${Math.round(h.gust)}` : '—' },
-              { key: 'bite', label: 'Bite, %',    h: RH, bold: true, color: T.ink,     cell: h => h.bite == null ? '—' : (
-                <span style={{ background: actColor(h.bite), color: '#06212f', fontWeight: 900, borderRadius: 5, padding: isTablet ? '3px 8px' : '2px 6px', fontSize: valFs }}>{h.bite}</span>
-              ) },
-              ...(anySST ? [
-                { key: 'sst',  label: 'Sea, °F',   h: RH, color: T.ink,                bg: h => sstColor(h.sstF),        cell: h => h.sstF != null ? `${Math.round(h.sstF)}°` : '—' },
-              ] : []),
-              ...(anyWave ? [
-                { key: 'wave', label: 'Wave, ft',  h: RH, color: T.ink,                bg: h => waveColor(h.waveFt),     cell: h => h.waveFt != null ? withArrow((h.waveDir || 0) + 180, T.ink, h.waveFt.toFixed(1)) : '—' },
-                { key: 'per',  label: 'Period, s', h: RH, color: T.inkSoft,            cell: h => h.periodS != null ? `${Math.round(h.periodS)}` : '—' },
-              ] : []),
-              ...(anyCurrent ? [
-                { key: 'curr', label: 'Current, kt', h: RH, color: T.ink,              bg: h => currColor(h.currentKt),  cell: h => h.currentKt != null ? withArrow(h.currentDir || 0, T.ink, h.currentKt.toFixed(1)) : '—' },
-              ] : []),
-              ...(hasTide ? [
-                { key: 'tide', label: 'Tide, ft',  h: RH, color: T.brass,              cell: h => { const v = tide.byHour.get(h.isoHour); return v != null ? v.toFixed(1) : '—'; } },
-              ] : []),
-            ];
-            return (
-              <Card style={{ marginBottom: 14, padding: isTablet ? 18 : 12 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-                  <SectionLabel style={{ margin: 0 }}>Next 24 hours</SectionLabel>
-                  {tide && <span style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute }}>Tide: {tide.stationName}</span>}
-                </div>
-                {/* Fixed label column (never scrolls) beside a separate
-                    horizontally-scrolling hours pane — no overlap/bleed. */}
-                <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                  <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
-                    <div style={{ height: HEAD_H }} />
-                    <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700 }}>Sun</div>
-                    {ROWS.map(r => (
-                      <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        {r.label}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
-                    {hourly.map((h, i) => {
-                      const d = new Date(h.when);
-                      const hr = d.getHours();
-                      const label = hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`;
-                      return (
-                        <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center' }}>
-                          <div style={{ height: HEAD_H, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{label}</div>
-                          <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                            {weatherIcon(h.weatherCode, isTablet ? 22 : 18, T.brass)}
-                            {h.sunrise && <Sunrise size={arrowSz + 2} color="#FFC857" />}
-                            {h.sunset && <Sunset size={arrowSz + 2} color="#FF9A3D" />}
-                          </div>
-                          {ROWS.map(r => (
-                            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 800 : 600, color: r.color || T.ink, background: r.bg ? r.bg(h) : 'transparent', whiteSpace: 'nowrap' }}>
-                              {r.cell(h)}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </Card>
-            );
-          })()}
+          {/* Next 24 hours — shared ForecastMatrix (hourly mode). Shown on
+              Overview (in place of the old glance strip) and on Hourly. */}
+          {(fxTab === 'hourly' || fxTab === 'overview') && hourly.length > 0 && (
+            <ForecastMatrix
+              cols={hourly}
+              isTablet={isTablet}
+              tide={tide}
+              mode="hourly"
+              title="Next 24 hours"
+              subtitle={tide ? `Tide: ${tide.stationName}` : null}
+            />
+          )}
 
-          {/* 10-day outlook — same matrix format as Hourly, but each column
-              is a 6-hour block (12a/6a/12p/6p) with hourly tick marks and
-              Windy-style heat gradients. */}
-          {fxTab === '7day' && blocks.length > 0 && (() => {
-            const RH = isTablet ? 36 : 32;       // taller metric rows
-            const WAVE_H = isTablet ? 50 : 44;   // wave row fits an icon + value
-            const BITE_H = isTablet ? 46 : 40;   // bite bars
-            const HEAD_H = isTablet ? 34 : 30;   // day (top) + slot (bottom)
-            const TICK_H = 8;                    // hourly tick strip
-            const COL_W = isTablet ? 58 : 48;
-            const labelFs = isTablet ? 13 : 11;
-            const valFs = isTablet ? 14 : 12;
-            const anyWave = blocks.some(b => b.waveFt != null);
-            const BROWS = [
-              { key: 'score', label: 'Fishability', h: RH, bold: true, color: T.oceanDeep, bg: b => fishabilityColor(b.score), cell: b => `${b.score}` },
-              // Bite — Windy-style solid green box, taller box = better window.
-              { key: 'bite', label: 'Bite', h: BITE_H, render: b => {
-                if (b.bite == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
-                const pct = Math.round(b.bite);
-                return (
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', height: '100%', padding: '4px 4px 5px' }}>
-                    <div style={{
-                      width: '84%', height: `${Math.max(38, pct)}%`, minHeight: 20,
-                      background: actColor(pct), borderRadius: 6,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#06212f', fontWeight: 900, fontSize: isTablet ? 11 : 9,
-                    }}>{pct}%</div>
-                  </div>
-                );
-              } },
-              { key: 'temp',  label: 'Temp, °F',    h: RH, color: T.ink,    bg: b => airColor(b.temp),   cell: b => b.temp != null ? `${Math.round(b.temp)}°` : '—' },
-              { key: 'wind',  label: 'Wind, mph',   h: RH, color: T.ink,    bg: b => windColor(b.wind),  cell: b => b.wind != null ? `${Math.round(b.wind)}` : '—' },
-              { key: 'gust',  label: 'Gust, mph',   h: RH, color: T.inkSoft, bg: b => windColor(b.gust), cell: b => b.gust != null ? `${Math.round(b.gust)}` : '—' },
-              ...(anyWave ? [
-                // Wave row — a wave glyph sized by height, plus the value.
-                { key: 'wave', label: 'Wave, ft', h: WAVE_H, bg: b => waveColor(b.waveFt), render: b => {
-                  if (b.waveFt == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
-                  const sz = Math.round(11 + Math.min(b.waveFt, 5) / 5 * 13); // 11–24 px
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, height: '100%' }}>
-                      <Waves size={sz} color={T.brass} strokeWidth={2} />
-                      <span style={{ fontSize: valFs, fontWeight: 700, color: T.ink }}>{b.waveFt.toFixed(1)}</span>
-                    </div>
-                  );
-                } },
-                { key: 'per',  label: 'Period, s', h: RH, color: T.inkSoft, cell: b => b.periodS != null ? `${Math.round(b.periodS)}` : '—' },
-              ] : []),
-            ];
-            const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
-            const todayStr = blocks[0]?.date;
-            return (
-              <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 14, borderRadius: 24 }}>
-                <SectionLabel style={{ marginBottom: 12 }}>10-day outlook · 6-hour blocks</SectionLabel>
-                <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                  {/* Fixed label column */}
-                  <div style={{ flexShrink: 0, background: T.card, paddingRight: 12, borderRight: `1px solid ${T.cardEdge}` }}>
-                    <div style={{ height: HEAD_H }} />
-                    <div style={{ height: TICK_H }} />
-                    {BROWS.map(r => (
-                      <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        {r.label}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
-                    {blocks.map((b, i) => {
-                      const dayStart = b.slot === 0 || i === 0;
-                      const dayLbl = b.date === todayStr ? 'Today' : new Date(b.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
-                      return (
-                        <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', borderLeft: dayStart && i !== 0 ? `1px solid ${T.cardEdge}` : 'none' }}>
-                          <div style={{ height: HEAD_H, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: labelFs, fontWeight: 800, color: T.brass, minHeight: labelFs + 2 }}>{dayStart ? dayLbl : ''}</span>
-                            <span style={{ fontSize: isTablet ? 11 : 9, fontWeight: 700, color: T.inkMute }}>{b.label}</span>
-                          </div>
-                          <div style={{ height: TICK_H, backgroundImage: tickBg }} />
-                          {BROWS.map(r => (
-                            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 900 : 600, color: r.color || T.ink, background: r.bg ? r.bg(b) : 'transparent', whiteSpace: 'nowrap' }}>
-                              {r.render ? r.render(b) : r.cell(b)}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </Card>
-            );
-          })()}
+          {/* 10-day outlook — same ForecastMatrix, 6-hour blocks. */}
+          {fxTab === '7day' && blocks.length > 0 && (
+            <ForecastMatrix
+              cols={blocks}
+              isTablet={isTablet}
+              tide={tide}
+              mode="blocks"
+              title="10-day outlook · 6-hour blocks"
+            />
+          )}
 
           <div style={{ fontSize: isTablet ? 12 : 11, color: T.inkMute, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>
             Data from Open-Meteo. Always confirm marine conditions with your local NOAA/NWS forecast before heading out.
@@ -3490,6 +3330,134 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         </>
       )}
     </div>
+  );
+}
+
+/* ForecastMatrix — one Windy-style grid used by BOTH the hourly chart and
+   the 10-day outlook so their rows, colours and styling are identical. The
+   only difference is the time axis: `mode='hourly'` renders one column per
+   hour; `mode='blocks'` renders one column per 6-hour block with day
+   dividers + hourly tick marks. Every column object carries the same field
+   names (temp, wind, windDir, gust, waveFt, periodS, waveDir, sstF,
+   currentKt, currentDir, precipPct, bite, score, weatherCode, isoHour). */
+function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
+  const RH = isTablet ? 30 : 26;
+  const WAVE_H = isTablet ? 46 : 40;
+  const BITE_H = isTablet ? 44 : 38;
+  const HEAD_H = mode === 'blocks' ? (isTablet ? 32 : 28) : (isTablet ? 24 : 20);
+  const ICON_H = isTablet ? 30 : 26;
+  const TICK_H = mode === 'blocks' ? 8 : 0;
+  const COL_W = mode === 'blocks' ? (isTablet ? 58 : 48) : (isTablet ? 64 : 54);
+  const labelFs = isTablet ? 12 : 10;
+  const valFs = isTablet ? 13 : 11;
+  const arrowSz = isTablet ? 11 : 9;
+  const anyWave = cols.some(c => c.waveFt != null);
+  const anySST = cols.some(c => c.sstF != null);
+  const anyCurrent = cols.some(c => c.currentKt != null);
+  const hasTide = !!(tide && cols.some(c => tide.byHour.has(c.isoHour)));
+
+  const Arrow = ({ deg, color }) => (
+    <Navigation size={arrowSz} color={color} fill={color} strokeWidth={1} style={{ transform: `rotate(${deg || 0}deg)`, flexShrink: 0 }} />
+  );
+  const withArrow = (deg, color, text) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Arrow deg={deg} color={color} />{text}</span>
+  );
+
+  const ROWS = [
+    { key: 'fish', label: 'Fishability', h: RH, render: c => {
+      const sc = c.score != null ? c.score : fishabilityHour(c);
+      return <span style={{ background: fishabilityColor(sc), color: '#06212f', fontWeight: 900, borderRadius: 5, padding: isTablet ? '3px 8px' : '2px 6px', fontSize: valFs }}>{sc}</span>;
+    } },
+    { key: 'bite', label: 'Bite, %', h: BITE_H, render: c => {
+      if (c.bite == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
+      const pct = Math.round(c.bite);
+      return (
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', height: '100%', padding: '4px 4px 5px' }}>
+          <div style={{ width: '84%', height: `${Math.max(38, pct)}%`, minHeight: 18, background: actColor(pct), borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#06212f', fontWeight: 900, fontSize: isTablet ? 11 : 9 }}>{pct}%</div>
+        </div>
+      );
+    } },
+    { key: 'temp', label: 'Temp, °F', h: RH, color: T.ink, bg: c => airColor(c.temp), cell: c => c.temp != null ? `${Math.round(c.temp)}°` : '—' },
+    { key: 'rain', label: 'Rain, %', h: RH, color: T.inkSoft, bg: c => rainColor(c.precipPct), cell: c => `${Math.round(c.precipPct || 0)}` },
+    { key: 'wind', label: 'Wind, mph', h: RH, color: T.ink, bg: c => windColor(c.wind), cell: c => c.wind != null ? withArrow((c.windDir || 0) + 180, T.ink, Math.round(c.wind)) : '—' },
+    { key: 'gust', label: 'Gust, mph', h: RH, color: T.inkSoft, bg: c => windColor(c.gust), cell: c => c.gust != null ? `${Math.round(c.gust)}` : '—' },
+    ...(anySST ? [
+      { key: 'sst', label: 'Sea, °F', h: RH, color: T.ink, bg: c => sstColor(c.sstF), cell: c => c.sstF != null ? `${Math.round(c.sstF)}°` : '—' },
+    ] : []),
+    ...(anyWave ? [
+      { key: 'wave', label: 'Wave, ft', h: WAVE_H, bg: c => waveColor(c.waveFt), render: c => {
+        if (c.waveFt == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
+        const sz = Math.round(11 + Math.min(c.waveFt, 5) / 5 * 13);
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, height: '100%' }}>
+            <Waves size={sz} color={T.brass} strokeWidth={2} />
+            <span style={{ fontSize: valFs, fontWeight: 700, color: T.ink }}>{c.waveFt.toFixed(1)}</span>
+          </div>
+        );
+      } },
+      { key: 'per', label: 'Period, s', h: RH, color: T.inkSoft, cell: c => c.periodS != null ? `${Math.round(c.periodS)}` : '—' },
+    ] : []),
+    ...(anyCurrent ? [
+      { key: 'curr', label: 'Current, kt', h: RH, color: T.ink, bg: c => currColor(c.currentKt), cell: c => c.currentKt != null ? withArrow(c.currentDir || 0, T.ink, c.currentKt.toFixed(1)) : '—' },
+    ] : []),
+    ...(hasTide ? [
+      { key: 'tide', label: 'Tide, ft', h: RH, color: T.brass, cell: c => { const v = tide.byHour.get(c.isoHour); return v != null ? v.toFixed(1) : '—'; } },
+    ] : []),
+  ];
+
+  const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
+  const todayStr = mode === 'blocks' ? cols[0]?.date : null;
+
+  return (
+    <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 18 : 12, borderRadius: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+        <SectionLabel style={{ margin: 0 }}>{title}</SectionLabel>
+        {subtitle && <span style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute }}>{subtitle}</span>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        {/* Fixed label column */}
+        <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
+          <div style={{ height: HEAD_H }} />
+          <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700 }}>{mode === 'hourly' ? 'Sky' : 'Sky'}</div>
+          {TICK_H > 0 && <div style={{ height: TICK_H }} />}
+          {ROWS.map(r => (
+            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.label}</div>
+          ))}
+        </div>
+        <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
+          {cols.map((c, i) => {
+            let timeLabel = '', dayStart = false, dayLbl = '';
+            if (mode === 'hourly') {
+              const d = new Date(c.when); const hr = d.getHours();
+              timeLabel = hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`;
+            } else {
+              dayStart = c.slot === 0 || i === 0;
+              dayLbl = c.date === todayStr ? 'Today' : new Date(c.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+              timeLabel = c.label;
+            }
+            return (
+              <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', borderLeft: mode === 'blocks' && dayStart && i !== 0 ? `1px solid ${T.cardEdge}` : 'none' }}>
+                <div style={{ height: HEAD_H, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  {mode === 'blocks' && <span style={{ fontSize: labelFs, fontWeight: 800, color: T.brass, minHeight: labelFs + 2 }}>{dayStart ? dayLbl : ''}</span>}
+                  <span style={{ fontSize: mode === 'blocks' ? (isTablet ? 11 : 9) : labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{timeLabel}</span>
+                </div>
+                <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                  {weatherIcon(c.weatherCode, isTablet ? 22 : 18, T.brass)}
+                  {mode === 'hourly' && c.sunrise && <Sunrise size={arrowSz + 2} color="#FFC857" />}
+                  {mode === 'hourly' && c.sunset && <Sunset size={arrowSz + 2} color="#FF9A3D" />}
+                </div>
+                {TICK_H > 0 && <div style={{ height: TICK_H, backgroundImage: tickBg }} />}
+                {ROWS.map(r => (
+                  <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: 600, color: r.color || T.ink, background: r.bg ? r.bg(c) : 'transparent', whiteSpace: 'nowrap' }}>
+                    {r.render ? r.render(c) : r.cell(c)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
   );
 }
 
