@@ -3203,7 +3203,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                         background: shortPeriod ? 'rgba(217,131,48,0.18)' : T.oceanDeep,
                         border: `1px solid ${shortPeriod ? '#d98330' : T.cardEdge}`,
                         color: shortPeriod ? '#e8a75a' : T.ink }}>
-                        {shortPeriod ? '⚠︎ ' : ''}{Math.round(periodS)} sec period
+                        {shortPeriod ? '⚠︎ ' : ''}{periodS.toFixed(1)} sec period
                       </span>
                     )}
                   </div>
@@ -3260,7 +3260,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                     <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
                       <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windMph}`} unit="mph" small={gust != null ? `Gusts to ${gust}` : ''} />
                       <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`}
-                        small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${Math.round(periodS)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
+                        small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${periodS.toFixed(1)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
                       {tideVal != null
                         ? <GlanceCard icon={<Anchor size={16} color={T.brass} />} label="TIDE" big={tideVal.toFixed(1)} unit="ft" small={tideTrend || ''} />
                         : marine?.sstF != null
@@ -3410,7 +3410,7 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
           </div>
         );
       } },
-      { key: 'per', label: 'Period, s', h: RH, color: T.inkSoft, cell: c => c.periodS != null ? `${Math.round(c.periodS)}` : '—' },
+      { key: 'per', label: 'Period, s', h: RH, color: T.inkSoft, cell: c => c.periodS != null ? c.periodS.toFixed(1) : '—' },
     ] : []),
     ...(anyCurrent ? [
       { key: 'curr', label: 'Current, kt', h: RH, color: T.ink, bg: c => currColor(c.currentKt), cell: c => c.currentKt != null ? withArrow(c.currentDir || 0, T.ink, c.currentKt.toFixed(1)) : '—' },
