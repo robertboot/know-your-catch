@@ -3359,16 +3359,11 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Arrow deg={deg} color={color} />{text}</span>
   );
 
-  const gradeD = isTablet ? 34 : 30;
   const ROWS = [
-    { key: 'fish', label: 'Fishability', h: isTablet ? 40 : 36, render: c => {
-      const sc = c.score != null ? c.score : fishabilityHour(c);
-      return (
-        <div style={{ width: gradeD, height: gradeD, borderRadius: '50%', background: fishabilityColor(sc), color: '#06212f', fontWeight: 900, fontSize: isTablet ? 14 : 12, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-          {fishabilityGrade(sc)}
-        </div>
-      );
-    } },
+    // Full-row colour strip (Windy-style) with the letter grade on top.
+    { key: 'fish', label: 'Fishability', h: isTablet ? 32 : 28, color: '#06212f',
+      bg: c => fishabilityColor(c.score != null ? c.score : fishabilityHour(c)),
+      cell: c => <span style={{ fontWeight: 900, fontSize: isTablet ? 14 : 12 }}>{fishabilityGrade(c.score != null ? c.score : fishabilityHour(c))}</span> },
     { key: 'bite', label: 'Bite, %', h: BITE_H, render: c => {
       if (c.bite == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
       const pct = Math.round(c.bite);
