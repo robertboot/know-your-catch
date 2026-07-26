@@ -130,7 +130,7 @@ export default function OceanHeatmapPanel() {
       service: 'WMS', version: '1.3.0', request: 'GetMap',
       crs: 'EPSG:4326',
       bbox: `${s},${w},${n},${e}`,   // WMS 1.3.0 + EPSG:4326 → lat,lon order
-      width: '1024', height: '464',  // ~matches the region's 21°×9.5° aspect
+      width: '2048', height: '928',  // ~matches the region's 21°×9.5° aspect
       layers: `${cfg.dataset}:${cfg.variable}`,
       styles: '',
       format: 'image/png',
