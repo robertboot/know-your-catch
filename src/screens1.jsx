@@ -3217,9 +3217,14 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                         <strong style={{ color: T.ink }}>wave period</strong>, nudged by the{' '}
                         <strong style={{ color: T.ink }}>solunar bite</strong> (sun & moon). Higher is better.
                       </div>
-                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #c0392b, #d1642b, #d98330, #9bb03a, #4fa64a, #63e08a)' }} />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
-                        <span>0 · Poor</span><span>60 · Fair</span><span>75 · Good</span><span>90+ · Great</span>
+                      {/* Gradient stops + tick positions match the real 0–100
+                          fishability axis (FISH_STOPS in forecast-extras). */}
+                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #c0392b 0%, #c0392b 35%, #d1642b 55%, #d98330 68%, #9bb03a 76%, #4fa64a 85%, #63e08a 95%, #63e08a 100%)' }} />
+                      <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
+                        <span style={{ position: 'absolute', left: '0%' }}>0 · Poor</span>
+                        <span style={{ position: 'absolute', left: '60%', transform: 'translateX(-50%)' }}>60 · Fair</span>
+                        <span style={{ position: 'absolute', left: '75%', transform: 'translateX(-50%)' }}>75 · Good</span>
+                        <span style={{ position: 'absolute', right: '0%' }}>90+ · Great</span>
                       </div>
                       <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 12, lineHeight: 1.5 }}>
                         Fishability is ReelIntel's own estimate — always confirm marine conditions with your
