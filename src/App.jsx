@@ -928,7 +928,7 @@ export default function App() {
       body = <RegulationAlertsScreen state={state} jurisdiction={jurisdiction} onPick={(id) => push({ name: 'regulation', id })} onEditFavorites={() => setShowFavorites(true)} />;
       break;
     case 'forecast':
-      body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} update={update} />;
+      body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} update={update} onOceanMaps={(layer) => push({ name: 'oceanmaps', layer })} />;
       break;
     case 'oceanmaps':
       body = <OceanMapsScreen isTablet={size === 'tablet' || size === 'tablet-landscape'} initialLayer={screen.layer} />;

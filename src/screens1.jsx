@@ -2694,7 +2694,7 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
   );
 }
 
-export function WeatherForecastScreen({ jurisdiction, state, update }) {
+export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const [coords, setCoords]   = useState(null);
@@ -3388,6 +3388,25 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       </span>
                     )}
                   </div>
+                  {/* Satellite ocean map shortcuts */}
+                  {onOceanMaps && (
+                    <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                      <button onClick={() => onOceanMaps('chl')} className="kyc-press" style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
+                        padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                      }}>
+                        <Waves size={16} color="#4fd07a" /> Chlorophyll map
+                      </button>
+                      <button onClick={() => onOceanMaps('sst')} className="kyc-press" style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
+                        padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                      }}>
+                        <Thermometer size={16} color="#ff9a3d" /> Sea temp map
+                      </button>
+                    </div>
+                  )}
                   {/* Fishability legend toggle + panel */}
                   <button className="kyc-press" onClick={() => setShowLegend(v => !v)} style={{
                     marginTop: 14, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
