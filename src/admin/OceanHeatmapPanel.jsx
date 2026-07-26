@@ -32,6 +32,11 @@ const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
 // Gulf of Mexico + South Florida view.
 const GULF_CENTER = [26.0, -88.0];
 const GULF_ZOOM   = 5;
+// The app's coverage: US Gulf Coast (TX→FL) + Florida Atlantic waters,
+// with a little offshore margin (Gulf Stream break off the FL east coast).
+// Locking the map to this box means Leaflet only ever requests tiles/WMS
+// data for this region instead of the whole globe — no wasted NOAA pulls.
+const REGION_BOUNDS = [[22.0, -98.5], [31.5, -77.5]]; // [SW, NE] lat,lon
 
 /* Each layer maps to an ERDDAP gridded dataset's WMS service.
    - dataset/variable → WMS layer name is `${dataset}:${variable}`
@@ -85,11 +90,15 @@ export default function OceanHeatmapPanel() {
     const map = L.map(mapElRef.current, {
       center: GULF_CENTER,
       zoom: GULF_ZOOM,
-      minZoom: 4,
+      minZoom: 5,
       maxZoom: 10,
       zoomControl: true,
       attributionControl: true,
+      // Hard-lock panning to the coverage region so no off-area tiles load.
+      maxBounds: REGION_BOUNDS,
+      maxBoundsViscosity: 1.0,
     });
+    map.fitBounds(REGION_BOUNDS);
     // Dark base to match the admin theme.
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -124,6 +133,9 @@ export default function OceanHeatmapPanel() {
       numcolorbands: 100,
       opacity: 0.72,
       attribution: 'Ocean data: NOAA CoastWatch / NASA',
+      // Only request WMS tiles inside the coverage region — no whole-globe
+      // data pulls even if the viewport edges spill slightly past it.
+      bounds: L.latLngBounds(REGION_BOUNDS),
       // When a date is chosen, request that composite (ERDDAP snaps TIME to
       // the nearest available). Empty → ERDDAP serves the latest. Lets the
       // angler step back off a cloud-covered "latest" to a clearer window.
