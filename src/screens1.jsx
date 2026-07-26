@@ -6,6 +6,7 @@ import {
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
   Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
+  Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -3526,10 +3527,15 @@ function weatherIcon(code, size, color) {
   // Coarse mapping to the icons already imported in this file — same
   // vocabulary as HomeScreen's Today's Conditions card, so the two
   // surfaces feel consistent without a new icon set.
-  if (code == null) return <CloudSun size={size} color={color} strokeWidth={1.8} />;
-  if (code >= 95 && code <= 99) return <Waves size={size} color={color} strokeWidth={1.8} />; // thunderstorm proxy
-  if (code >= 51 && code <= 82) return <Waves size={size} color={color} strokeWidth={1.8} />; // rain
-  if (code >= 71 && code <= 77) return <CloudSun size={size} color={color} strokeWidth={1.8} />;
-  if (code === 45 || code === 48) return <CloudSun size={size} color={color} strokeWidth={1.8} />;
-  return <CloudSun size={size} color={color} strokeWidth={1.8} />;
+  const p = { size, color, strokeWidth: 1.8 };
+  if (code == null) return <CloudSun {...p} />;
+  if (code === 0) return <Sun {...p} />;                         // clear
+  if (code <= 2) return <CloudSun {...p} />;                     // mainly clear / partly cloudy
+  if (code === 3) return <Cloud {...p} />;                       // overcast
+  if (code === 45 || code === 48) return <CloudFog {...p} />;    // fog
+  if (code >= 51 && code <= 57) return <CloudDrizzle {...p} />;  // drizzle
+  if (code >= 71 && code <= 77) return <CloudSnow {...p} />;     // snow
+  if (code >= 95) return <CloudLightning {...p} />;              // thunderstorm
+  if (code >= 61 && code <= 82) return <CloudRain {...p} />;     // rain / showers
+  return <CloudSun {...p} />;
 }
