@@ -5,7 +5,7 @@ import {
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
-  Crosshair, Save as SaveIcon,
+  Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -20,6 +20,10 @@ import {
   sunPosition, moonPhase, fetchWeatherForTime, catchPhotos,
   pbPhotos, buildPBReport, shareReport,
 } from './helpers.js';
+import {
+  airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
+  biteIndex, nearestTideStation,
+} from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
@@ -2584,7 +2588,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
     return spot;
   };
   const [current, setCurrent] = useState(null);
-  const [marine, setMarine]   = useState(null); // { waveFt, periodS, waveDir } or null
+  const [marine, setMarine]   = useState(null); // { waveFt, periodS, waveDir, sstF, currentKt, currentDir } or null
+  const [tide, setTide]       = useState(null); // { stationName, byHour: Map<isoHour, ft> } or null
   const [daily, setDaily]     = useState([]);
   const [hourly, setHourly]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2721,22 +2726,32 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         const { lat, lon } = coords;
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl,weather_code`
-          + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant`
+          + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
           + `&forecast_days=7`
           + `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
-        // Marine (wave) data lives on a separate Open-Meteo endpoint and
-        // only has coverage over water — inland/lake points return nulls,
-        // so fetch it alongside (not blocking) the main forecast and treat
-        // a miss as "no marine data" rather than an error. Heights come in
-        // meters; convert to feet. Periods are already in seconds.
+        // Marine data lives on a separate Open-Meteo endpoint with water-only
+        // coverage (inland points return nulls), so fetch it alongside — not
+        // blocking — the main forecast. Heights are meters → feet, SST is
+        // °C → °F, current velocity is km/h → knots; periods stay seconds.
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
-          + `&current=wave_height,wave_period,wave_direction`
-          + `&hourly=wave_height,wave_period`
+          + `&current=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
+          + `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&forecast_days=7&timezone=auto`;
-        const [r, marineRes] = await Promise.all([
+        // Tides: nearest curated NOAA station (US Gulf/FL), hourly heights
+        // for the next 48h. Skipped cleanly when no station is close.
+        const station = nearestTideStation(lat, lon);
+        let tideUrl = null;
+        if (station) {
+          const now = new Date();
+          const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+          tideUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=ReelIntel`
+            + `&begin_date=${ymd}&range=48&datum=MLLW&station=${station.id}&time_zone=lst_ldt&units=english&interval=h&format=json`;
+        }
+        const [r, marineRes, tideRes] = await Promise.all([
           fetch(url),
           fetch(marineUrl).catch(() => null),
+          tideUrl ? fetch(tideUrl).catch(() => null) : Promise.resolve(null),
         ]);
         if (!r.ok) throw new Error(`open-meteo ${r.status}`);
         const j = await r.json();
@@ -2744,7 +2759,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         setCurrent(j.current || null);
 
         // Parse marine, tolerant of a failed/empty response.
-        const M_TO_FT = 3.28084;
+        const M_TO_FT = 3.28084, C_TO_F = (c) => c * 9 / 5 + 32, KMH_TO_KT = 0.539957;
         let marineHourly = null;
         try {
           const mj = marineRes && marineRes.ok ? await marineRes.json() : null;
@@ -2754,6 +2769,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               waveFt: mc.wave_height * M_TO_FT,
               periodS: mc.wave_period,
               waveDir: mc.wave_direction,
+              sstF: mc.sea_surface_temperature != null ? C_TO_F(mc.sea_surface_temperature) : null,
+              currentKt: mc.ocean_current_velocity != null ? mc.ocean_current_velocity * KMH_TO_KT : null,
+              currentDir: mc.ocean_current_direction ?? null,
             });
           } else {
             setMarine(null);
@@ -2765,10 +2783,32 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               marineHourly.set(new Date(iso).getTime(), {
                 waveFt: mh.wave_height?.[i] != null ? mh.wave_height[i] * M_TO_FT : null,
                 periodS: mh.wave_period?.[i] ?? null,
+                waveDir: mh.wave_direction?.[i] ?? null,
+                sstF: mh.sea_surface_temperature?.[i] != null ? C_TO_F(mh.sea_surface_temperature[i]) : null,
+                currentKt: mh.ocean_current_velocity?.[i] != null ? mh.ocean_current_velocity[i] * KMH_TO_KT : null,
+                currentDir: mh.ocean_current_direction?.[i] ?? null,
               });
             });
           }
         } catch { setMarine(null); }
+
+        // Parse tides into an hourly (local-time) lookup.
+        try {
+          const tj = tideRes && tideRes.ok ? await tideRes.json() : null;
+          const preds = tj?.predictions;
+          if (station && Array.isArray(preds) && preds.length) {
+            const byHour = new Map();
+            preds.forEach((p) => {
+              const key = p.t.replace(' ', 'T').slice(0, 13); // YYYY-MM-DDTHH
+              const v = parseFloat(p.v);
+              if (!Number.isNaN(v)) byHour.set(key, v);
+            });
+            setTide({ stationName: station.name, byHour });
+          } else {
+            setTide(null);
+          }
+        } catch { setTide(null); }
+
         // daily arrays are parallel by index
         const d = j.daily || {};
         const days = (d.time || []).map((iso, i) => ({
@@ -2779,15 +2819,23 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           precip: d.precipitation_sum?.[i],
           windMax: d.wind_speed_10m_max?.[i],
           windDir: d.wind_direction_10m_dominant?.[i],
+          sunrise: d.sunrise?.[i],
+          sunset: d.sunset?.[i],
         }));
         setDaily(days);
+        // Sun-up/down hours (local ISO hour keys) for the Sun row markers.
+        const sunriseHours = new Set((d.sunrise || []).map(s => s?.slice(0, 13)));
+        const sunsetHours  = new Set((d.sunset  || []).map(s => s?.slice(0, 13)));
+        const moonIllum = moonPhase(new Date()).illumination;
         const h = j.hourly || {};
         const nowMs = Date.now();
         const hoursOut = (h.time || []).map((iso, i) => {
           const when = new Date(iso).getTime();
+          const isoHour = iso.slice(0, 13);
           const wave = marineHourly?.get(when) || null;
           return {
             when,
+            isoHour,
             temp: h.temperature_2m?.[i],
             precipPct: h.precipitation_probability?.[i],
             wind: h.wind_speed_10m?.[i],
@@ -2796,6 +2844,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             weatherCode: h.weather_code?.[i],
             waveFt: wave?.waveFt ?? null,
             periodS: wave?.periodS ?? null,
+            waveDir: wave?.waveDir ?? null,
+            sstF: wave?.sstF ?? null,
+            currentKt: wave?.currentKt ?? null,
+            currentDir: wave?.currentDir ?? null,
+            bite: biteIndex(new Date(when), lat, lon, moonIllum),
+            sunrise: sunriseHours.has(isoHour),
+            sunset: sunsetHours.has(isoHour),
           };
         }).filter(x => x.when >= nowMs - 60 * 60 * 1000).slice(0, 24);
         setHourly(hoursOut);
@@ -3042,28 +3097,57 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             const HEAD_H = isTablet ? 24 : 20;      // time header height
             const ICON_H = isTablet ? 34 : 30;      // weather icon row height
             const COL_W = isTablet ? 76 : 60;       // per-hour column width
-            const anyWave = hourly.some(h => h.waveFt != null);
-            const ROWS = [
-              { key: 'temp',   label: 'Temp',      h: RH, bold: true,  color: T.ink,     cell: h => `${Math.round(h.temp)}°` },
-              { key: 'rain',   label: 'Rain, %',   h: RH, color: T.inkMute, cell: h => `${Math.round(h.precipPct || 0)}` },
-              { key: 'wind',   label: 'Wind, mph', h: RH, color: T.inkSoft, cell: h => h.wind != null ? `${compassDir(h.windDir || 0)} ${Math.round(h.wind)}` : '—' },
-              { key: 'gust',   label: 'Gust, mph', h: RH, color: T.inkMute, cell: h => h.gust != null ? `${Math.round(h.gust)}` : '—' },
-              ...(anyWave ? [
-                { key: 'wave',   label: 'Wave, ft',  h: RH, color: T.brass, cell: h => h.waveFt != null ? h.waveFt.toFixed(1) : '—' },
-                { key: 'period', label: 'Period, s', h: RH, color: T.brass, cell: h => h.periodS != null ? `${Math.round(h.periodS)}` : '—' },
-              ] : []),
-            ];
             const labelFs = isTablet ? 12 : 10;
             const valFs = isTablet ? 14 : 12;
+            const arrowSz = isTablet ? 12 : 10;
+            const anyWave    = hourly.some(h => h.waveFt != null);
+            const anySST     = hourly.some(h => h.sstF != null);
+            const anyCurrent = hourly.some(h => h.currentKt != null);
+            const hasTide    = !!(tide && hourly.some(h => tide.byHour.has(h.isoHour)));
+            // Direction arrow: Navigation points north by default; rotate to
+            // where the flow is GOING. Wind/waves are reported as "from", so
+            // add 180°; ocean current is already "to".
+            const Arrow = ({ deg, color }) => (
+              <Navigation size={arrowSz} color={color} fill={color} strokeWidth={1}
+                style={{ transform: `rotate(${(deg || 0)}deg)`, flexShrink: 0 }} />
+            );
+            const withArrow = (deg, color, text) => (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <Arrow deg={deg} color={color} />{text}
+              </span>
+            );
+            const ROWS = [
+              { key: 'temp', label: 'Temp, °F',   h: RH, bold: true, color: T.ink,     bg: h => airColor(h.temp),        cell: h => `${Math.round(h.temp)}°` },
+              { key: 'rain', label: 'Rain, %',    h: RH, color: T.inkSoft,             bg: h => rainColor(h.precipPct),  cell: h => `${Math.round(h.precipPct || 0)}` },
+              { key: 'wind', label: 'Wind, mph',  h: RH, color: T.ink,                 bg: h => windColor(h.wind),       cell: h => h.wind != null ? withArrow((h.windDir || 0) + 180, T.ink, Math.round(h.wind)) : '—' },
+              { key: 'gust', label: 'Gust, mph',  h: RH, color: T.inkSoft,             bg: h => windColor(h.gust),       cell: h => h.gust != null ? `${Math.round(h.gust)}` : '—' },
+              { key: 'bite', label: 'Bite, %',    h: RH, bold: true, color: T.ink,     bg: h => actColor(h.bite),        cell: h => `${h.bite}` },
+              ...(anySST ? [
+                { key: 'sst',  label: 'Sea, °F',   h: RH, color: T.ink,                bg: h => sstColor(h.sstF),        cell: h => h.sstF != null ? `${Math.round(h.sstF)}°` : '—' },
+              ] : []),
+              ...(anyWave ? [
+                { key: 'wave', label: 'Wave, ft',  h: RH, color: T.ink,                bg: h => waveColor(h.waveFt),     cell: h => h.waveFt != null ? withArrow((h.waveDir || 0) + 180, T.ink, h.waveFt.toFixed(1)) : '—' },
+                { key: 'per',  label: 'Period, s', h: RH, color: T.inkSoft,            cell: h => h.periodS != null ? `${Math.round(h.periodS)}` : '—' },
+              ] : []),
+              ...(anyCurrent ? [
+                { key: 'curr', label: 'Current, kt', h: RH, color: T.ink,              bg: h => currColor(h.currentKt),  cell: h => h.currentKt != null ? withArrow(h.currentDir || 0, T.ink, h.currentKt.toFixed(1)) : '—' },
+              ] : []),
+              ...(hasTide ? [
+                { key: 'tide', label: 'Tide, ft',  h: RH, color: T.brass,              cell: h => { const v = tide.byHour.get(h.isoHour); return v != null ? v.toFixed(1) : '—'; } },
+              ] : []),
+            ];
             return (
               <Card style={{ marginBottom: 14, padding: isTablet ? 18 : 12 }}>
-                <SectionLabel style={{ marginBottom: 10 }}>Next 24 hours</SectionLabel>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                  <SectionLabel style={{ margin: 0 }}>Next 24 hours</SectionLabel>
+                  {tide && <span style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute }}>Tide: {tide.stationName}</span>}
+                </div>
                 {/* Fixed label column (never scrolls) beside a separate
                     horizontally-scrolling hours pane — no overlap/bleed. */}
                 <div style={{ display: 'flex', alignItems: 'stretch' }}>
                   <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
                     <div style={{ height: HEAD_H }} />
-                    <div style={{ height: ICON_H }} />
+                    <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700 }}>Sun</div>
                     {ROWS.map(r => (
                       <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>
                         {r.label}
@@ -3076,11 +3160,15 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       const hr = d.getHours();
                       const label = hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`;
                       return (
-                        <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', background: i === 0 ? `${T.brass}12` : 'transparent', borderRadius: 8 }}>
+                        <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center' }}>
                           <div style={{ height: HEAD_H, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{label}</div>
-                          <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{weatherIcon(h.weatherCode, isTablet ? 24 : 20, T.brass)}</div>
+                          <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                            {weatherIcon(h.weatherCode, isTablet ? 22 : 18, T.brass)}
+                            {h.sunrise && <Sunrise size={arrowSz + 2} color="#FFC857" />}
+                            {h.sunset && <Sunset size={arrowSz + 2} color="#FF9A3D" />}
+                          </div>
                           {ROWS.map(r => (
-                            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 800 : 600, color: r.color || T.ink, whiteSpace: 'nowrap' }}>
+                            <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: valFs, fontWeight: r.bold ? 800 : 600, color: r.color || T.ink, background: r.bg ? r.bg(h) : 'transparent', whiteSpace: 'nowrap' }}>
                               {r.cell(h)}
                             </div>
                           ))}
