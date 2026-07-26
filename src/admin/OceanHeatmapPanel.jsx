@@ -97,7 +97,6 @@ export default function OceanHeatmapPanel() {
       maxBounds: REGION_BOUNDS,
       maxBoundsViscosity: 1.0,
     });
-    map.fitBounds(REGION_BOUNDS);
     // Dark base to match the admin theme.
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -105,8 +104,11 @@ export default function OceanHeatmapPanel() {
       maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;
-    // Leaflet sizing: the container may mount at 0 height inside the tab.
-    setTimeout(() => map.invalidateSize(), 200);
+    // The panel can mount at 0 height inside the tab; fitBounds against a
+    // 0-size container zooms all the way out (why the whole hemisphere
+    // showed). Size the container FIRST, then fit the region.
+    map.fitBounds(REGION_BOUNDS);
+    setTimeout(() => { map.invalidateSize(); map.fitBounds(REGION_BOUNDS); }, 200);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
