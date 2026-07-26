@@ -426,9 +426,9 @@ function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
                   style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: isTablet ? 44 : 38, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score}</span>
+                <span style={{ fontSize: isTablet ? 44 : 38, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{fishabilityGrade(score)}</span>
                 <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 3 }}>{fishabilityLabel(score)}</span>
-                <span style={{ fontSize: isTablet ? 9 : 8, fontWeight: 700, letterSpacing: 1, color: T.inkMute, marginTop: 2 }}>FISHING SCORE</span>
+                <span style={{ fontSize: isTablet ? 9 : 8, fontWeight: 700, letterSpacing: 1, color: T.inkMute, marginTop: 2 }}>FISHING GRADE</span>
               </div>
             </div>
 
