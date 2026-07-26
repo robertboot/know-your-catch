@@ -2731,7 +2731,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl,weather_code`
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
-          + `&forecast_days=7`
+          + `&forecast_days=10`
           + `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
         // Marine data lives on a separate Open-Meteo endpoint with water-only
         // coverage (inland points return nulls), so fetch it alongside — not
@@ -2740,7 +2740,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
           + `&current=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
-          + `&forecast_days=7&timezone=auto`;
+          + `&daily=wave_height_max,wave_period_max,wave_direction_dominant`
+          + `&forecast_days=10&timezone=auto`;
         // Tides: nearest curated NOAA station (US Gulf/FL), hourly heights
         // for the next 48h. Skipped cleanly when no station is close.
         const station = nearestTideStation(lat, lon);
@@ -2763,7 +2764,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
 
         // Parse marine, tolerant of a failed/empty response.
         const M_TO_FT = 3.28084, C_TO_F = (c) => c * 9 / 5 + 32, KMH_TO_KT = 0.539957;
-        let marineHourly = null;
+        let marineHourly = null, marineDaily = null;
         try {
           const mj = marineRes && marineRes.ok ? await marineRes.json() : null;
           const mc = mj?.current;
@@ -2790,6 +2791,16 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                 sstF: mh.sea_surface_temperature?.[i] != null ? C_TO_F(mh.sea_surface_temperature[i]) : null,
                 currentKt: mh.ocean_current_velocity?.[i] != null ? mh.ocean_current_velocity[i] * KMH_TO_KT : null,
                 currentDir: mh.ocean_current_direction?.[i] ?? null,
+              });
+            });
+          }
+          const md = mj?.daily;
+          if (md?.time) {
+            marineDaily = new Map();
+            md.time.forEach((date, i) => {
+              marineDaily.set(date, {
+                waveFtMax: md.wave_height_max?.[i] != null ? md.wave_height_max[i] * M_TO_FT : null,
+                periodMaxS: md.wave_period_max?.[i] ?? null,
               });
             });
           }
@@ -2824,6 +2835,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           windDir: d.wind_direction_10m_dominant?.[i],
           sunrise: d.sunrise?.[i],
           sunset: d.sunset?.[i],
+          waveFtMax: marineDaily?.get(iso)?.waveFtMax ?? null,
+          periodMaxS: marineDaily?.get(iso)?.periodMaxS ?? null,
         }));
         setDaily(days);
         // Sun-up/down hours (local ISO hour keys) for the Sun row markers.
@@ -3194,7 +3207,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   <div style={{ position: 'absolute', top: 4, bottom: 4, width: 'calc((100% - 8px) / 3)', borderRadius: 12, background: T.brass,
                     left: `calc(4px + ${['overview', 'hourly', '7day'].indexOf(fxTab)} * ((100% - 8px) / 3))`,
                     transition: 'left 0.28s cubic-bezier(0.22,1,0.36,1)' }} />
-                  {[['overview', 'Overview'], ['hourly', 'Hourly'], ['7day', '7-Day']].map(([k, lbl]) => (
+                  {[['overview', 'Overview'], ['hourly', 'Hourly'], ['7day', '10-Day']].map(([k, lbl]) => (
                     <button key={k} onClick={() => setFxTab(k)} style={{
                       position: 'relative', zIndex: 1, flex: 1, background: 'transparent', border: 'none', cursor: 'pointer',
                       padding: isTablet ? '11px 0' : '9px 0', fontSize: isTablet ? 15 : 13, fontWeight: 800,
@@ -3369,13 +3382,14 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           {/* 7-day outlook */}
           {fxTab === '7day' && daily.length > 0 && (
             <Card className="kyc-fadeup" style={{ padding: isTablet ? 20 : 14, borderRadius: 24 }}>
-              <SectionLabel style={{ marginBottom: 10 }}>7-day outlook</SectionLabel>
+              <SectionLabel style={{ marginBottom: 10 }}>10-day outlook</SectionLabel>
               <div style={{ display: 'grid', gap: isTablet ? 10 : 6 }}>
                 {daily.map((d, i) => {
                   const dt = new Date(d.date + 'T00:00:00');
                   const day = i === 0
                     ? 'Today'
                     : dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                  const dayScore = fishabilityHour({ wind: d.windMax, waveFt: d.waveFtMax, periodS: d.periodMaxS, bite: null });
                   return (
                     <div key={d.date} style={{
                       // Every cell can shrink (minWidth:0 + ellipsis) so the
@@ -3388,9 +3402,14 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       border: `1px solid ${T.cardEdge}`,
                       maxWidth: '100%', overflow: 'hidden',
                     }}>
+                      <span style={{
+                        flexShrink: 0, minWidth: isTablet ? 32 : 28, textAlign: 'center',
+                        fontSize: isTablet ? 14 : 12, fontWeight: 900, color: T.oceanDeep,
+                        background: fishabilityColor(dayScore), borderRadius: 8, padding: isTablet ? '4px 6px' : '3px 5px',
+                      }}>{dayScore}</span>
                       <div style={{
                         fontSize: isTablet ? 15 : 12, fontWeight: 700, color: T.ink,
-                        width: isTablet ? 140 : 88, flexShrink: 0,
+                        width: isTablet ? 120 : 74, flexShrink: 0,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>{day}</div>
                       <span style={{ flexShrink: 0, display: 'inline-flex' }}>
