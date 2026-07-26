@@ -29,6 +29,11 @@ const MarketingLanding    = __KYC_WEB__
 const ResetPasswordPage   = __KYC_WEB__
   ? lazy(() => import('./screens_marketing.jsx').then(m => ({ default: m.ResetPasswordPage })))
   : null;
+// Vercel Web Analytics — web deploy only. Lazy + __KYC_WEB__ gated so
+// Rollup drops it from the iOS bundle (it only reports on Vercel anyway).
+const Analytics           = __KYC_WEB__
+  ? lazy(() => import('@vercel/analytics/react').then(m => ({ default: m.Analytics })))
+  : null;
 
 function pickRoot() {
   if (!__KYC_WEB__ || !MarketingLanding) return <App />;
@@ -52,5 +57,8 @@ function pickRoot() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>{pickRoot()}</React.StrictMode>
+  <React.StrictMode>
+    {pickRoot()}
+    {Analytics && <Suspense fallback={null}><Analytics /></Suspense>}
+  </React.StrictMode>
 );
