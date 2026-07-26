@@ -60,7 +60,7 @@ export const rainColor = (pct) => (pct ? `rgba(42,160,224,${Math.min(0.5, (pct /
    A 0–100 estimate (NOT a fetched value): feeding peaks at dawn/dusk
    (sun near the horizon) and is amplified near the new and full moon.
    Deliberately simple and labelled as an estimate in the UI. */
-export function biteIndex(date, lat, lon, moonIllumination) {
+export function biteIndex(date, lat, lon, moonIllumination = 0) {
   const alt = sunPosition(date, lat, lon).altitudeDeg;
   const dawnDusk = Math.max(0, 1 - Math.abs(alt) / 6); // 1 at horizon → 0 by ±6°
   const base = alt > 0 ? 0.34 : 0.48;                  // night edges out bright midday

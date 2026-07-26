@@ -49,6 +49,7 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
   const [status, setStatus] = useState('loading');
   const [dateISO, setDateISO] = useState('');
   const [showLand, setShowLand] = useState(true);
+  const [landReady, setLandReady] = useState(false); // GeoJSON loaded → (re)draw mask
 
   // Init the map once.
   useEffect(() => {
@@ -67,7 +68,7 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
     map.getPane('landmask').style.pointerEvents = 'none';
     fetch('https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_land.geojson')
       .then((r) => r.json())
-      .then((geo) => { landGeoRef.current = geo; setShowLand((v) => v); })
+      .then((geo) => { landGeoRef.current = geo; setLandReady(true); })
       .catch(() => {});
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450;
@@ -116,7 +117,7 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
         style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
       }).addTo(map);
     }
-  }, [showLand]);
+  }, [showLand, landReady]);
 
   const cfg = LAYERS[active];
   const chip = (activeState, label, onClick) => (

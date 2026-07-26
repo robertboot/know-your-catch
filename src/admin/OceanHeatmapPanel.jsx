@@ -85,6 +85,7 @@ export default function OceanHeatmapPanel() {
   const [status, setStatus] = useState('loading'); // 'loading' | 'ok' | 'error'
   const [dateISO, setDateISO] = useState('');      // '' = latest available composite
   const [showLand, setShowLand] = useState(true);  // clip data to water only
+  const [landReady, setLandReady] = useState(false); // GeoJSON loaded → (re)draw mask
 
   // Init the map once.
   useEffect(() => {
@@ -114,7 +115,7 @@ export default function OceanHeatmapPanel() {
     map.getPane('landmask').style.pointerEvents = 'none';
     fetch('https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_land.geojson')
       .then((r) => r.json())
-      .then((geo) => { landGeoRef.current = geo; setShowLand((v) => v); })
+      .then((geo) => { landGeoRef.current = geo; setLandReady(true); })
       .catch(() => {}); // no mask → data still shows, just bleeds onto coast
     // Labels/coastline pane above the land mask so place names stay legible.
     map.createPane('coastline');
@@ -187,7 +188,7 @@ export default function OceanHeatmapPanel() {
         style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
       }).addTo(map);
     }
-  }, [showLand]);
+  }, [showLand, landReady]);
 
   const cfg = LAYERS[active];
 

@@ -339,6 +339,17 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [gaugeOn, setGaugeOn] = useState(false);
+  const [tick, setTick] = useState(0); // bumped to re-fetch (foreground + interval)
+
+  // Keep conditions fresh: refetch every 15 min while mounted, and
+  // immediately whenever the app returns to the foreground.
+  useEffect(() => {
+    const bump = () => setTick(t => t + 1);
+    const onVis = () => { if (document.visibilityState === 'visible') bump(); };
+    const id = setInterval(bump, 15 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -390,7 +401,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
       } catch { if (alive) setStatus('error'); }
     })();
     return () => { alive = false; };
-  }, [state?.catchLog, jurisdiction]);
+  }, [state?.catchLog, jurisdiction, state?.fishingSpots, tick]);
 
   useEffect(() => { setGaugeOn(false); const t = setTimeout(() => setGaugeOn(true), 80); return () => clearTimeout(t); }, [data?.score]);
 
@@ -2699,6 +2710,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
   const isTablet = size !== 'phone';
   const [coords, setCoords]   = useState(null);
   const [locLabel, setLocLabel] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0); // re-fetch on foreground + interval
+  const resolvedRef = useRef(false); // resolve the default location only once
   // Saved fishing spots — synced user state. selectedSpotId tracks
   // which chip is active ('current' = live GPS).
   const spots = Array.isArray(state?.fishingSpots) ? state.fishingSpots : [];
@@ -2852,6 +2865,11 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
   //   2) Most recent catch's coords.
   //   3) Jurisdiction center (data.js).
   useEffect(() => {
+    // Resolve the DEFAULT location once — otherwise saving/starring/deleting
+    // a spot (which mutates fishingSpots) would yank the view back off a
+    // manually-picked location. The spot chips set coords directly after this.
+    if (resolvedRef.current) return undefined;
+    resolvedRef.current = true;
     let alive = true;
     (async () => {
       // Default to the STARRED fishing spot so the forecast opens on the
@@ -2884,7 +2902,18 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
       setLocLabel(fallback.label);
     })();
     return () => { alive = false; };
-  }, [state?.catchLog, jurisdiction, state?.fishingSpots]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the forecast fresh: refetch every 15 min while mounted and
+  // immediately when the app returns to the foreground.
+  useEffect(() => {
+    const bump = () => setRefreshTick(t => t + 1);
+    const onVis = () => { if (document.visibilityState === 'visible') bump(); };
+    const id = setInterval(bump, 15 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   useEffect(() => {
     if (!coords) return undefined;
@@ -3049,7 +3078,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
       }
     })();
     return () => { alive = false; };
-  }, [coords]);
+  }, [coords, refreshTick]);
 
   // Sweep the fishability gauge up from zero whenever the data (hence the
   // score) changes or the Overview tab is re-shown.
