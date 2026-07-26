@@ -39,13 +39,13 @@ const LAYERS = {
   },
 };
 
-export function OceanMapsScreen({ isTablet }) {
+export function OceanMapsScreen({ isTablet, initialLayer }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
   const landRef = useRef(null);
   const landGeoRef = useRef(null);
-  const [active, setActive] = useState('chl');
+  const [active, setActive] = useState(initialLayer === 'sst' ? 'sst' : 'chl');
   const [status, setStatus] = useState('loading');
   const [dateISO, setDateISO] = useState('');
   const [showLand, setShowLand] = useState(true);

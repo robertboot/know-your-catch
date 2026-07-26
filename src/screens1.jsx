@@ -335,7 +335,7 @@ function ScrollDots({ count, active }) {
    gauge, verdict, star rating and a go/no-go call, plus the key readings.
    Fetches the same Open-Meteo + marine data as the forecast screen for a
    resolved home location (last catch → jurisdiction centre → Gulf). */
-function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
+function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet }) {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [gaugeOn, setGaugeOn] = useState(false);
@@ -499,6 +499,26 @@ function HomeConditions({ state, jurisdiction, onForecast, isTablet }) {
           }}>
             <cta.Ic size={isTablet ? 20 : 18} /> {cta.t}
           </button>
+
+          {/* Satellite ocean map shortcuts */}
+          {onOceanMaps && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+              <button onClick={() => onOceanMaps('chl')} className="kyc-press" style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
+                padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+              }}>
+                <Waves size={16} color="#4fd07a" /> Chlorophyll map
+              </button>
+              <button onClick={() => onOceanMaps('sst')} className="kyc-press" style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
+                padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+              }}>
+                <Thermometer size={16} color="#ff9a3d" /> Sea temp map
+              </button>
+            </div>
+          )}
         </>
       )}
     </Card>
@@ -509,7 +529,7 @@ export function HomeScreen({
   state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
   onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
-  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast,
+  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast, onOceanMaps,
   finishSetupVisible, onFinishSetup, onDismissFinishSetup,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
@@ -859,7 +879,7 @@ export function HomeScreen({
           Tablet: split the row 50/50 across the full container width —
           scrolling makes no sense with the room the iPad canvas offers. */}
       {/* Today's Conditions — live, with the Fishability score gauge */}
-      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} isTablet={isTablet} />
+      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} />
 
       {/* Regulation Alerts — full-width, single-line active alert; rely on
           VIEW ALL for the rest. */}
@@ -3311,7 +3331,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                   border: `1px solid ${T.cardEdge}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>TODAY'S WEATHER</span>
+                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>TODAY'S CONDITIONS</span>
                     <span style={{ flexShrink: 0, fontSize: isTablet ? 13 : 11, fontWeight: 900, letterSpacing: 0.6, color: T.oceanDeep, background: sColor, borderRadius: 999, padding: '4px 12px' }}>
                       {score != null ? `${fishabilityGrade(score)} · ${fishabilityLabel(score)}` : '—'}
                     </span>

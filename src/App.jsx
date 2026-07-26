@@ -658,7 +658,7 @@ export default function App() {
     onSelectFromLibrary:  () => startCaptureFlow('library'),
     onPatterns:   () => push({ name: 'patterns' }),
     onForecast:   () => push({ name: 'forecast' }),
-    onOceanMaps:  () => push({ name: 'oceanmaps' }),
+    onOceanMaps:  (layer) => push({ name: 'oceanmaps', layer }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
@@ -931,7 +931,7 @@ export default function App() {
       body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} update={update} />;
       break;
     case 'oceanmaps':
-      body = <OceanMapsScreen isTablet={size === 'tablet' || size === 'tablet-landscape'} />;
+      body = <OceanMapsScreen isTablet={size === 'tablet' || size === 'tablet-landscape'} initialLayer={screen.layer} />;
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}
