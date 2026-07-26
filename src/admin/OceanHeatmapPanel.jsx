@@ -103,10 +103,26 @@ export default function OceanHeatmapPanel() {
       subdomains: 'abcd',
       maxZoom: 19,
     }).addTo(map);
-    // Labels/coastline pane above the color overlay so land stays legible
-    // no matter how opaque the chlorophyll/SST image is.
+    // Land mask ABOVE the color overlay: the ERDDAP image is a rectangle,
+    // so its coarse coastal cells bleed the color onto land. A dark land
+    // polygon on a pane above the overlay clips the data to water only.
+    map.createPane('landmask');
+    map.getPane('landmask').style.zIndex = 440; // above overlayPane (400/410)
+    map.getPane('landmask').style.pointerEvents = 'none';
+    fetch('https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_land.geojson')
+      .then((r) => r.json())
+      .then((geo) => {
+        if (!mapRef.current) return;
+        L.geoJSON(geo, {
+          pane: 'landmask',
+          interactive: false,
+          style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
+        }).addTo(map);
+      })
+      .catch(() => {}); // no mask → data still shows, just bleeds onto coast
+    // Labels/coastline pane above the land mask so place names stay legible.
     map.createPane('coastline');
-    map.getPane('coastline').style.zIndex = 450; // above overlayPane (400/410)
+    map.getPane('coastline').style.zIndex = 450; // above landmask (440)
     map.getPane('coastline').style.pointerEvents = 'none';
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
