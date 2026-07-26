@@ -5,7 +5,7 @@ import {
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
-  Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset,
+  Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset, Info,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -2597,6 +2597,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
   const [error, setError]     = useState('');
   const [fxTab, setFxTab]     = useState('overview'); // 'overview' | 'hourly' | '7day'
   const [gaugeOn, setGaugeOn] = useState(false);       // drives the 0→score sweep
+  const [showLegend, setShowLegend] = useState(false); // fishability score legend
   const [changing, setChanging]     = useState(false);
   const [searchQ, setSearchQ]       = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -3200,6 +3201,32 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       </span>
                     )}
                   </div>
+                  {/* Fishability legend toggle + panel */}
+                  <button className="kyc-press" onClick={() => setShowLegend(v => !v)} style={{
+                    marginTop: 14, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 5, color: T.brass, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                  }}>
+                    <Info size={15} /> How the Fishability score works
+                  </button>
+                  {showLegend && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.cardEdge}` }}>
+                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, lineHeight: 1.55, marginBottom: 12 }}>
+                        A 0–100 estimate of how good the fishing should be, weighted for both catching fish
+                        and a comfortable ride: <strong style={{ color: T.ink }}>seas</strong>,{' '}
+                        <strong style={{ color: T.ink }}>wind</strong>, and{' '}
+                        <strong style={{ color: T.ink }}>wave period</strong>, nudged by the{' '}
+                        <strong style={{ color: T.ink }}>solunar bite</strong> (sun & moon). Higher is better.
+                      </div>
+                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #c0392b, #d1642b, #d98330, #9bb03a, #4fa64a, #63e08a)' }} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
+                        <span>0 · Poor</span><span>60 · Fair</span><span>75 · Good</span><span>90+ · Great</span>
+                      </div>
+                      <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 12, lineHeight: 1.5 }}>
+                        Fishability is ReelIntel's own estimate — always confirm marine conditions with your
+                        local NOAA/NWS forecast before heading out.
+                      </div>
+                    </div>
+                  )}
                 </Card>
 
                 {/* Segmented tabs */}
