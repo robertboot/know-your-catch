@@ -494,6 +494,7 @@ export function HomeScreen({
     })
     .filter(Boolean);
   const anyClosed = featured.some(f => f.status === 'closed');
+  const closedNames = featured.filter(f => f.status === 'closed').map(f => f.s.commonName);
 
   return (
     <div style={{ padding: '14px 16px' }}>
@@ -822,45 +823,28 @@ export function HomeScreen({
       {/* Today's Conditions — live, with the Fishability score gauge */}
       <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} isTablet={isTablet} />
 
-      <div
-        className={isTablet ? undefined : 'kyc-hscroll'}
-        style={isTablet ? {
-          display: 'flex', gap: 16, marginTop: 14,
-        } : {
-          display: 'flex', gap: 12,
-          overflowX: 'auto', overflowY: 'hidden',
-          margin: '14px -16px 0', padding: '0 16px 6px',
-          scrollSnapType: 'x proximity',
-        }}
-      >
-        {/* Regulation Alerts */}
-        <Card style={{
-          flex: isTablet ? '1 1 0' : '0 0 320px',
-          padding: 14, borderRadius: 18,
-          display: 'flex', flexDirection: 'column', scrollSnapAlign: 'start',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-            <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
-            <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
-          </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <ShieldCheck size={36} color={anyClosed ? T.warn : T.open} strokeWidth={1.6} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, color: T.ink, fontWeight: 800, lineHeight: 1.25 }}>
-                {anyClosed ? 'Active closure' : 'No Active Closures'}
-              </div>
-              <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
-                {anyClosed
-                  ? 'A featured species is closed in these waters.'
-                  : `All clear in ${jurisdiction ? jurisdiction.name : 'these waters'}.`}
-              </div>
-              <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 8, lineHeight: 1.4 }}>
-                Always check before you head out.
-              </div>
+      {/* Regulation Alerts — full-width, single-line active alert; rely on
+          VIEW ALL for the rest. */}
+      <Card style={{ marginTop: 14, padding: isTablet ? '14px 16px' : '12px 14px', borderRadius: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <ShieldCheck size={isTablet ? 30 : 26} color={anyClosed ? T.warn : T.open} strokeWidth={1.7} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
+              <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
+            </div>
+            <div style={{ fontSize: isTablet ? 14 : 13, marginTop: 3, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {anyClosed ? (
+                <><strong style={{ color: T.warn }}>{closedNames[0]} closed</strong>
+                  <span style={{ color: T.inkSoft }}>{closedNames.length > 1 ? ` · +${closedNames.length - 1} more` : ''} in {jurisdiction ? jurisdiction.name : 'these waters'}</span></>
+              ) : (
+                <><strong style={{ color: T.open }}>All clear</strong>
+                  <span style={{ color: T.inkSoft }}> in {jurisdiction ? jurisdiction.name : 'these waters'}</span></>
+              )}
             </div>
           </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       {/* Featured Species */}
       <Card style={{ marginTop: 14, padding: 14, borderRadius: 18 }}>
