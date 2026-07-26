@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "web:build": "KYC_BASE=/ KYC_ADMIN=true KYC_WEB=true vite build --outDir dist-web",
+    "web:build": "NODE_OPTIONS=--max-old-space-size=4096 KYC_BASE=/ KYC_ADMIN=true KYC_WEB=true vite build --outDir dist-web",
     "web:preview": "vite preview --outDir dist-web",
     "preview": "vite preview",
     "validate-feeds": "node regulations/validate.mjs",
