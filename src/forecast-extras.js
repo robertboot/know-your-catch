@@ -39,18 +39,21 @@ function scaleColor(value, stops, alpha = 0.4) {
   return 'transparent';
 }
 
+// Palettes tuned to Windy's grid: wind ramps green(calm)→olive→amber→red,
+// waves in blues, and fish-activity/bite in a teal→vivid-green scale.
 const AIR_STOPS  = [[50, '#2f6fb0'], [65, '#2aa0a0'], [75, '#3fa34d'], [84, '#c9b03a'], [92, '#d98330'], [100, '#c0392b']];
-const WIND_STOPS = [[2, '#1f7a3d'], [8, '#3fa34d'], [13, '#c9b03a'], [18, '#d98330'], [24, '#c0392b'], [32, '#7d1d13']];
+const WIND_STOPS = [[3, '#4a9e4a'], [8, '#7fae3e'], [12, '#c9b03a'], [16, '#d98330'], [21, '#c0392b'], [30, '#8f2417']];
 const WAVE_STOPS = [[0, '#123a5e'], [1, '#17518a'], [2, '#1f77c2'], [4, '#2aa0e0'], [7, '#5ac8f5']];
 const CURR_STOPS = [[0, '#123a5e'], [0.3, '#1f77c2'], [0.8, '#2aa0e0'], [1.5, '#5ac8f5']];
-const ACT_STOPS  = [[20, '#3a4a5c'], [40, '#2f7d5a'], [60, '#3fa34d'], [80, '#4fd07a'], [95, '#63e08a']];
+// Windy fish-activity greens: teal at the low end → vivid green at the top.
+const ACT_STOPS  = [[40, '#2f9e8f'], [52, '#4a9e5a'], [65, '#57b34d'], [78, '#6fce55'], [92, '#8ee35a']];
 
-export const airColor  = (f)   => scaleColor(f, AIR_STOPS, 0.38);
-export const sstColor  = (f)   => scaleColor(f, AIR_STOPS, 0.34);
-export const windColor = (mph) => scaleColor(mph, WIND_STOPS, 0.42);
-export const waveColor = (ft)  => scaleColor(ft, WAVE_STOPS, 0.42);
-export const currColor = (kt)  => scaleColor(kt, CURR_STOPS, 0.42);
-export const actColor  = (pct) => scaleColor(pct, ACT_STOPS, 0.5);
+export const airColor  = (f)   => scaleColor(f, AIR_STOPS, 0.5);
+export const sstColor  = (f)   => scaleColor(f, AIR_STOPS, 0.44);
+export const windColor = (mph) => scaleColor(mph, WIND_STOPS, 0.62);
+export const waveColor = (ft)  => scaleColor(ft, WAVE_STOPS, 0.55);
+export const currColor = (kt)  => scaleColor(kt, CURR_STOPS, 0.55);
+export const actColor  = (pct) => scaleColor(pct, ACT_STOPS, 1);   // solid, Windy-style boxes
 export const rainColor = (pct) => (pct ? `rgba(42,160,224,${Math.min(0.5, (pct / 100) * 0.55)})` : 'transparent');
 
 /* ---- solunar bite index -------------------------------------------
@@ -117,9 +120,9 @@ export function subScores(h) {
   //   • bigger seas: a longer period is needed to ride comfortably
   let period = null;
   if (h.periodS != null) {
-    period = (h.waveFt ?? 0) <= 2
-      ? Math.round(55 + clamp01((h.periodS - 1) / 6) * 40)  // ~4 s→75, floor 55
-      : Math.round(clamp01((h.periodS - 3) / 5) * 100);     // 3 s→0, 8 s+→100
+    period = (h.waveFt ?? 0) <= 2.5
+      ? Math.round(70 + clamp01((h.periodS - 1) / 4) * 30)  // calm seas: 4 s→93 (great)
+      : Math.round(clamp01((h.periodS - 3) / 5) * 100);     // bigger seas: 3 s→0, 8 s+→100
     period = Math.max(0, Math.min(100, period));
   }
   return { wind, seas, period };

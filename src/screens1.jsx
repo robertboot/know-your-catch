@@ -3103,7 +3103,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             const seasFt = repHour?.waveFt ?? marine?.waveFt ?? null;
             const seasDir = marine?.waveDir != null ? compassDir(marine.waveDir) : '';
             const periodS = repHour?.periodS ?? marine?.periodS ?? null;
-            const shortPeriod = periodS != null && periodS < 5;
+            // Short period is only a problem when seas are up (steep chop) —
+            // a short period on calm water is normal and fine.
+            const shortPeriod = periodS != null && periodS < 5 && (seasFt ?? 0) > 2.5;
             // Tide value + trend for the glance card.
             let tideVal = null, tideTrend = '';
             if (tide && hourly.length) {
@@ -3331,7 +3333,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
               { key: 'rain', label: 'Rain, %',    h: RH, color: T.inkSoft,             bg: h => rainColor(h.precipPct),  cell: h => `${Math.round(h.precipPct || 0)}` },
               { key: 'wind', label: 'Wind, mph',  h: RH, color: T.ink,                 bg: h => windColor(h.wind),       cell: h => h.wind != null ? withArrow((h.windDir || 0) + 180, T.ink, Math.round(h.wind)) : '—' },
               { key: 'gust', label: 'Gust, mph',  h: RH, color: T.inkSoft,             bg: h => windColor(h.gust),       cell: h => h.gust != null ? `${Math.round(h.gust)}` : '—' },
-              { key: 'bite', label: 'Bite, %',    h: RH, bold: true, color: T.ink,     bg: h => actColor(h.bite),        cell: h => `${h.bite}` },
+              { key: 'bite', label: 'Bite, %',    h: RH, bold: true, color: T.ink,     cell: h => h.bite == null ? '—' : (
+                <span style={{ background: actColor(h.bite), color: '#06212f', fontWeight: 900, borderRadius: 5, padding: isTablet ? '3px 8px' : '2px 6px', fontSize: valFs }}>{h.bite}</span>
+              ) },
               ...(anySST ? [
                 { key: 'sst',  label: 'Sea, °F',   h: RH, color: T.ink,                bg: h => sstColor(h.sstF),        cell: h => h.sstF != null ? `${Math.round(h.sstF)}°` : '—' },
               ] : []),
@@ -3406,13 +3410,21 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
             const anyWave = blocks.some(b => b.waveFt != null);
             const BROWS = [
               { key: 'score', label: 'Fishability', h: RH, bold: true, color: T.oceanDeep, bg: b => fishabilityColor(b.score), cell: b => `${b.score}` },
-              // Bite bars — taller bar = better solunar feeding window (Windy-style).
-              { key: 'bite', label: 'Bite', h: BITE_H, render: b => (
-                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '3px 5px' }}>
-                  <div style={{ width: '68%', height: `${Math.max(6, b.bite || 0)}%`, background: fishabilityColor(b.bite), borderRadius: 3 }} />
-                  <span style={{ position: 'absolute', top: 2, left: 0, right: 0, fontSize: isTablet ? 10 : 9, color: T.inkMute, fontWeight: 800 }}>{b.bite != null ? Math.round(b.bite) : ''}</span>
-                </div>
-              ) },
+              // Bite — Windy-style solid green box, taller box = better window.
+              { key: 'bite', label: 'Bite', h: BITE_H, render: b => {
+                if (b.bite == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
+                const pct = Math.round(b.bite);
+                return (
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', height: '100%', padding: '4px 4px 5px' }}>
+                    <div style={{
+                      width: '84%', height: `${Math.max(38, pct)}%`, minHeight: 20,
+                      background: actColor(pct), borderRadius: 6,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#06212f', fontWeight: 900, fontSize: isTablet ? 11 : 9,
+                    }}>{pct}%</div>
+                  </div>
+                );
+              } },
               { key: 'temp',  label: 'Temp, °F',    h: RH, color: T.ink,    bg: b => airColor(b.temp),   cell: b => b.temp != null ? `${Math.round(b.temp)}°` : '—' },
               { key: 'wind',  label: 'Wind, mph',   h: RH, color: T.ink,    bg: b => windColor(b.wind),  cell: b => b.wind != null ? `${Math.round(b.wind)}` : '—' },
               { key: 'gust',  label: 'Gust, mph',   h: RH, color: T.inkSoft, bg: b => windColor(b.gust), cell: b => b.gust != null ? `${Math.round(b.gust)}` : '—' },
