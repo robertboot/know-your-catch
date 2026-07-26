@@ -96,6 +96,108 @@ export const TIDE_STATIONS = [
   { id: '8720218', name: 'Mayport, FL',          lat: 30.398, lon: -81.428 },
 ];
 
+/* ---- fishability scoring -------------------------------------------
+   Turns raw conditions into a 0–100 "should I go?" score weighted for
+   catching fish AND a comfortable ride. Sub-scores are exposed so the
+   "Why this score?" breakdown can show what helped or hurt. */
+
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+// Each sub-score 0–100. Missing marine data falls back gracefully.
+export function subScores(h) {
+  // Wind: glassy ≤5 mph is ideal; unfishable by ~28 mph.
+  const wind = h.wind == null ? null : Math.round(clamp01((28 - h.wind) / 23) * 100);
+  // Seas: ≤1 ft ideal; rough by ~5 ft.
+  const seas = h.waveFt == null ? null : Math.round(clamp01((5 - h.waveFt) / 4) * 100);
+  // Wave period: long swell rides well; short wind-chop (<4 s) is harsh.
+  const period = h.periodS == null ? null
+    : Math.round(clamp01((h.periodS - 3) / 5) * 100); // 3 s→0, 8 s+→100
+  return { wind, seas, period };
+}
+
+export function fishabilityHour(h) {
+  const s = subScores(h);
+  // Weighted blend of whatever we have; renormalize over present terms.
+  const terms = [];
+  if (s.seas != null)   terms.push([s.seas, 0.4]);
+  if (s.wind != null)   terms.push([s.wind, 0.35]);
+  if (s.period != null) terms.push([s.period, 0.25]);
+  let score;
+  if (terms.length) {
+    const wsum = terms.reduce((a, [, w]) => a + w, 0);
+    score = terms.reduce((a, [v, w]) => a + v * w, 0) / wsum;
+  } else {
+    score = 50; // no marine data → neutral, let bite nudge it
+  }
+  // Nudge by the solunar bite estimate (±10).
+  if (h.bite != null) score = score * 0.85 + h.bite * 0.15;
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+export function fishabilityColor(score) {
+  if (score == null) return '#7d8ca0';
+  if (score >= 90) return '#63e08a';
+  if (score >= 75) return '#3fa34d';
+  if (score >= 60) return '#d98330';
+  return '#c0392b';
+}
+
+export function fishabilityLabel(score) {
+  if (score == null) return '—';
+  if (score >= 90) return 'GREAT';
+  if (score >= 75) return 'GOOD';
+  if (score >= 60) return 'FAIR';
+  return 'POOR';
+}
+
+export function ratingWord(score) {
+  if (score == null) return '—';
+  if (score >= 90) return 'Excellent';
+  if (score >= 75) return 'Good';
+  if (score >= 60) return 'Fair';
+  return 'Poor';
+}
+
+/* Best fishing window: scan daylight (+ dawn/dusk) hours over the feed,
+   score each, and pick the highest-scoring contiguous run (≥2 h). Prefer
+   the earliest strong window so the recommendation is actionable today/
+   tomorrow rather than days out. Returns null if nothing qualifies. */
+export function bestWindow(hours) {
+  if (!hours || !hours.length) return null;
+  const scored = hours.map(h => ({
+    when: h.when,
+    isDay: !!h.isDaylight,
+    score: fishabilityHour(h),
+  }));
+  // Candidate hours: daylight or civil-ish edge (we approximate with isDay).
+  let best = null;
+  let i = 0;
+  while (i < scored.length) {
+    if (!scored[i].isDay) { i++; continue; }
+    let j = i;
+    while (j + 1 < scored.length && scored[j + 1].isDay) j++;
+    // Within this daylight block, find the best contiguous sub-run whose
+    // hours are all within 12 pts of the block's peak.
+    const block = scored.slice(i, j + 1);
+    const peak = Math.max(...block.map(b => b.score));
+    let runStart = null;
+    for (let k = 0; k <= block.length; k++) {
+      const good = k < block.length && block[k].score >= peak - 12;
+      if (good && runStart == null) runStart = k;
+      if (!good && runStart != null) {
+        const run = block.slice(runStart, k);
+        const avg = run.reduce((a, b) => a + b.score, 0) / run.length;
+        if (run.length >= 2 && (!best || avg > best.avg)) {
+          best = { startMs: run[0].when, endMs: run[run.length - 1].when + 3600000, avg: Math.round(avg) };
+        }
+        runStart = null;
+      }
+    }
+    i = j + 1;
+  }
+  return best;
+}
+
 export function nearestTideStation(lat, lon) {
   if (lat == null || lon == null) return null;
   let best = null, bestD = Infinity;

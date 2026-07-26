@@ -42,6 +42,13 @@ input[type=number] { -moz-appearance: textfield; }
 /* Lightbox backdrop animation */
 .kyc-lightbox-enter { animation: kyc-fade-in 140ms ease-out; }
 @keyframes kyc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Cards rise + fade on load (marine forecast dashboard). Staggered via
+   inline animation-delay. Respects reduced-motion. */
+@keyframes kyc-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.kyc-fadeup { animation: kyc-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.kyc-press { transition: transform 0.12s ease; }
+.kyc-press:active { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .kyc-fadeup { animation: none; } }
 /* Slow Ken Burns drift for hero / scan background images. Applied to a
    wrapper so a child img can still carry a tilt-parallax transform.
    Runs regardless of prefers-reduced-motion — it's a deliberate brand

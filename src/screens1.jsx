@@ -23,6 +23,7 @@ import {
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
   biteIndex, nearestTideStation,
+  subScores, fishabilityHour, fishabilityColor, fishabilityLabel, ratingWord, bestWindow,
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
@@ -2594,6 +2595,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
   const [hourly, setHourly]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [fxTab, setFxTab]     = useState('overview'); // 'overview' | 'hourly' | '7day'
+  const [gaugeOn, setGaugeOn] = useState(false);       // drives the 0→score sweep
   const [changing, setChanging]     = useState(false);
   const [searchQ, setSearchQ]       = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -2833,9 +2836,11 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           const when = new Date(iso).getTime();
           const isoHour = iso.slice(0, 13);
           const wave = marineHourly?.get(when) || null;
+          const isDaylight = sunPosition(new Date(when), lat, lon).altitudeDeg > 0;
           return {
             when,
             isoHour,
+            isDaylight,
             temp: h.temperature_2m?.[i],
             precipPct: h.precipitation_probability?.[i],
             wind: h.wind_speed_10m?.[i],
@@ -2864,9 +2869,17 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
     return () => { alive = false; };
   }, [coords]);
 
+  // Sweep the fishability gauge up from zero whenever the data (hence the
+  // score) changes or the Overview tab is re-shown.
+  useEffect(() => {
+    setGaugeOn(false);
+    const id = setTimeout(() => setGaugeOn(true), 80);
+    return () => clearTimeout(id);
+  }, [hourly, fxTab]);
+
   return (
     <div style={{ padding: isTablet ? '22px 22px' : '16px 16px', maxWidth: '100%', overflowX: 'hidden' }}>
-      <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Weather Forecast</H1>
+      <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Marine Forecast</H1>
 
       {/* One-time explainer for Fishing Spots. */}
       {showSpotsIntro && (
@@ -3060,39 +3073,211 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
 
       {current && !loading && (
         <>
-          {/* Current conditions hero */}
-          <Card style={{
-            marginBottom: 14, padding: isTablet ? 22 : 16,
-            display: 'flex', alignItems: 'center', gap: 20,
-            background: T.oceanDeep,
-          }}>
-            <div style={{ textAlign: 'center', flexShrink: 0 }}>
-              {weatherIcon(current.weather_code, isTablet ? 56 : 44, T.warn)}
-              <div style={{ fontSize: isTablet ? 44 : 36, fontWeight: 900, color: T.ink, marginTop: 6, lineHeight: 1 }}>
-                {Math.round(current.temperature_2m)}°
+          {/* ---- Decision-first dashboard: best-window hero + score gauge --- */}
+          {(() => {
+            const win = bestWindow(hourly);
+            const score = win ? win.avg : (hourly[0] ? fishabilityHour(hourly[0]) : null);
+            const sColor = fishabilityColor(score);
+            const repHour = win ? (hourly.find(h => h.when >= win.startMs) || hourly[0]) : hourly[0];
+            const subs = subScores(repHour || {});
+            const windMph = Math.round(current.wind_speed_10m || 0);
+            const windTxt = compassDir(current.wind_direction_10m || 0);
+            const gust = hourly[0]?.gust != null ? Math.round(hourly[0].gust) : null;
+            const seasFt = repHour?.waveFt ?? marine?.waveFt ?? null;
+            const seasDir = marine?.waveDir != null ? compassDir(marine.waveDir) : '';
+            const periodS = repHour?.periodS ?? marine?.periodS ?? null;
+            const shortPeriod = periodS != null && periodS < 5;
+            // Tide value + trend for the glance card.
+            let tideVal = null, tideTrend = '';
+            if (tide && hourly.length) {
+              const cur = tide.byHour.get(hourly[0].isoHour);
+              const later = tide.byHour.get(hourly[Math.min(4, hourly.length - 1)].isoHour);
+              if (cur != null) { tideVal = cur; if (later != null) tideTrend = later > cur ? 'Rising' : later < cur ? 'Falling' : 'Slack'; }
+            }
+            const fmtT = (ms) => { const d = new Date(ms); let hh = d.getHours(); const mm = d.getMinutes(); const ap = hh < 12 ? 'AM' : 'PM'; hh = hh % 12 || 12; return mm ? `${hh}:${String(mm).padStart(2, '0')} ${ap}` : `${hh} ${ap}`; };
+            let dayWord = '', range = '', leaveBy = null;
+            if (win) {
+              const s = new Date(win.startMs), now = new Date();
+              const same = (a, b) => a.toDateString() === b.toDateString();
+              const tmw = new Date(now.getTime() + 86400000);
+              dayWord = same(s, now) ? 'Today' : same(s, tmw) ? 'Tomorrow' : s.toLocaleDateString(undefined, { weekday: 'long' });
+              range = `${fmtT(win.startMs)} – ${fmtT(win.endMs)}`;
+              leaveBy = win.startMs - 45 * 60000;
+            }
+            // Gauge geometry.
+            const gSize = isTablet ? 150 : 118, gStroke = isTablet ? 13 : 11;
+            const gR = (gSize - gStroke) / 2, gC = 2 * Math.PI * gR;
+            const gOff = gaugeOn && score != null ? gC * (1 - score / 100) : gC;
+
+            const barColor = (v) => v == null ? T.cardEdge : v >= 75 ? '#3fa34d' : v >= 60 ? '#d98330' : '#c0392b';
+            const GlanceCard = ({ icon, label, big, small, unit, smallColor }) => (
+              <div className="kyc-fadeup" style={{
+                flex: 1, minWidth: 0, background: `linear-gradient(160deg, ${T.card}, ${T.oceanDeep})`,
+                border: `1px solid ${T.cardEdge}`, borderRadius: 20, padding: isTablet ? 16 : 12,
+                boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  {icon}
+                  <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute }}>{label}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: isTablet ? 28 : 22, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{big}</span>
+                  {unit && <span style={{ fontSize: isTablet ? 13 : 11, color: T.inkMute, fontWeight: 700 }}>{unit}</span>}
+                </div>
+                <div style={{ fontSize: isTablet ? 13 : 11, color: smallColor || T.inkSoft, marginTop: 8, fontWeight: 600 }}>{small}</div>
               </div>
-              <div style={{ fontSize: isTablet ? 14 : 11, color: T.inkMute, marginTop: 6 }}>
-                {weatherLabel(current.weather_code)}
-              </div>
-            </div>
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: isTablet ? 14 : 10 }}>
-              <ConditionStat label="WIND"     value={`${compassDir(current.wind_direction_10m || 0)} ${Math.round(current.wind_speed_10m || 0)} mph`} />
-              {marine && (
-                <ConditionStat label="WAVES" value={`${marine.waveFt != null ? marine.waveFt.toFixed(1) : '—'} ft${marine.waveDir != null ? ` ${compassDir(marine.waveDir)}` : ''}`} />
-              )}
-              {marine && (
-                <ConditionStat label="WAVE PERIOD" value={`${marine.periodS != null ? marine.periodS.toFixed(1) : '—'} s`} />
-              )}
-              <ConditionStat label="CLOUDS"   value={`${Math.round(current.cloud_cover || 0)}%`} />
-              <ConditionStat label="PRESSURE" value={`${(current.pressure_msl || 0).toFixed(1)} mb`} />
-              <ConditionStat label="RAIN"     value={`${(current.precipitation || 0).toFixed(2)} mm`} />
-            </div>
-          </Card>
+            );
+
+            return (
+              <>
+                {/* Hero — the answer first */}
+                <Card className="kyc-fadeup" style={{
+                  marginBottom: 14, padding: isTablet ? 24 : 18, borderRadius: 24,
+                  background: `linear-gradient(155deg, ${T.card} 0%, ${T.oceanDeep} 100%)`,
+                  border: `1px solid ${T.cardEdge}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>NEXT BEST FISHING WINDOW</span>
+                    <span style={{ flexShrink: 0, fontSize: isTablet ? 13 : 11, fontWeight: 900, letterSpacing: 0.6, color: T.oceanDeep, background: sColor, borderRadius: 999, padding: '4px 12px' }}>
+                      {score != null ? `${score} · ${fishabilityLabel(score)}` : '—'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {win ? (
+                        <>
+                          <div style={{ fontSize: isTablet ? 18 : 15, color: T.inkSoft, fontWeight: 600 }}>{dayWord}</div>
+                          <div style={{ fontSize: isTablet ? 40 : 30, fontWeight: 900, color: T.ink, lineHeight: 1.05, margin: '2px 0 4px' }}>{range}</div>
+                          <div style={{ fontSize: isTablet ? 15 : 12, color: T.brass, fontWeight: 700 }}>Leave the dock by {fmtT(leaveBy)}</div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: isTablet ? 20 : 16, fontWeight: 800, color: T.ink, lineHeight: 1.3 }}>
+                          No clear daytime window in range — check the hourly detail.
+                        </div>
+                      )}
+                    </div>
+                    {/* Fishability gauge */}
+                    <div style={{ position: 'relative', width: gSize, height: gSize, flexShrink: 0 }}>
+                      <svg width={gSize} height={gSize}>
+                        <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
+                        <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
+                          strokeDasharray={gC} strokeDashoffset={gOff}
+                          style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
+                      </svg>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score ?? '—'}</span>
+                        <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginTop: 2 }}>FISHABILITY</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Condition chips */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+                      <Waves size={14} color={T.brass} /> {seasFt != null ? `${seasFt.toFixed(1)} ft seas` : 'Seas —'}
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+                      <Wind size={14} color={T.brass} /> {windTxt} {windMph} mph
+                    </span>
+                    {periodS != null && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 800,
+                        background: shortPeriod ? 'rgba(217,131,48,0.18)' : T.oceanDeep,
+                        border: `1px solid ${shortPeriod ? '#d98330' : T.cardEdge}`,
+                        color: shortPeriod ? '#e8a75a' : T.ink }}>
+                        {shortPeriod ? '⚠︎ ' : ''}{Math.round(periodS)} sec period
+                      </span>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Segmented tabs */}
+                <div style={{ position: 'relative', display: 'flex', background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 16, padding: 4, marginBottom: 14 }}>
+                  <div style={{ position: 'absolute', top: 4, bottom: 4, width: 'calc((100% - 8px) / 3)', borderRadius: 12, background: T.brass,
+                    left: `calc(4px + ${['overview', 'hourly', '7day'].indexOf(fxTab)} * ((100% - 8px) / 3))`,
+                    transition: 'left 0.28s cubic-bezier(0.22,1,0.36,1)' }} />
+                  {[['overview', 'Overview'], ['hourly', 'Hourly'], ['7day', '7-Day']].map(([k, lbl]) => (
+                    <button key={k} onClick={() => setFxTab(k)} style={{
+                      position: 'relative', zIndex: 1, flex: 1, background: 'transparent', border: 'none', cursor: 'pointer',
+                      padding: isTablet ? '11px 0' : '9px 0', fontSize: isTablet ? 15 : 13, fontWeight: 800,
+                      color: fxTab === k ? T.oceanDeep : T.inkSoft,
+                    }}>{lbl}</button>
+                  ))}
+                </div>
+
+                {fxTab === 'overview' && (
+                  <>{/* --overview-- */}
+                    {/* Conditions at a glance */}
+                    <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
+                      <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windMph}`} unit="mph" small={gust != null ? `Gusts to ${gust}` : ''} />
+                      <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`}
+                        small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${Math.round(periodS)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
+                      {tideVal != null
+                        ? <GlanceCard icon={<Anchor size={16} color={T.brass} />} label="TIDE" big={tideVal.toFixed(1)} unit="ft" small={tideTrend || ''} />
+                        : marine?.sstF != null
+                          ? <GlanceCard icon={<Thermometer size={16} color={T.brass} />} label="SEA TEMP" big={`${Math.round(marine.sstF)}°`} unit="F" small="Surface" />
+                          : <GlanceCard icon={<CloudSun size={16} color={T.brass} />} label="SKY" big={`${Math.round(current.cloud_cover || 0)}%`} unit="cloud" small={weatherLabel(current.weather_code)} />}
+                    </div>
+
+                    {/* Why this score */}
+                    <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24 }}>
+                      <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score ?? '—'}?</div>
+                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
+                        Your score is weighted around fishability and ride comfort.
+                      </div>
+                      {[['Seas', subs.seas], ['Wind', subs.wind], ['Wave period', subs.period]].map(([lbl, v]) => (
+                        <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                          <span style={{ width: isTablet ? 96 : 78, flexShrink: 0, fontSize: isTablet ? 14 : 12, color: T.inkSoft, fontWeight: 700 }}>{lbl}</span>
+                          <div style={{ flex: 1, height: 10, borderRadius: 999, background: T.oceanDeep, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 999, width: `${v ?? 0}%`, background: barColor(v), transition: 'width 0.9s cubic-bezier(0.22,1,0.36,1)' }} />
+                          </div>
+                          <span style={{ width: isTablet ? 74 : 58, flexShrink: 0, textAlign: 'right', fontSize: isTablet ? 13 : 11, fontWeight: 800, color: barColor(v) }}>{v == null ? '—' : ratingWord(v)}</span>
+                        </div>
+                      ))}
+                      <button className="kyc-press" onClick={() => setFxTab('hourly')} style={{
+                        marginTop: 8, background: 'transparent', border: 'none', color: T.brass, fontSize: isTablet ? 14 : 13, fontWeight: 800, cursor: 'pointer', padding: 0,
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                      }}>View hourly detail <ChevronRight size={16} /></button>
+                    </Card>
+
+                    {/* Next hours — horizontal cards */}
+                    {hourly.length > 0 && (
+                      <Card className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 14, borderRadius: 24 }}>
+                        <SectionLabel style={{ marginBottom: 10 }}>Next hours at a glance</SectionLabel>
+                        <div className="kyc-hscroll" style={{ display: 'flex', gap: isTablet ? 12 : 8, overflowX: 'auto', overflowY: 'hidden', margin: '0 -4px', padding: '0 4px 6px' }}>
+                          {hourly.slice(0, 12).map((h, i) => {
+                            const d = new Date(h.when); const hr = d.getHours();
+                            const lbl = hr === 0 ? '12 AM' : hr < 12 ? `${hr} AM` : hr === 12 ? '12 PM' : `${hr - 12} PM`;
+                            const fs = fishabilityHour(h);
+                            return (
+                              <div key={i} style={{
+                                flex: `0 0 ${isTablet ? 96 : 78}px`, textAlign: 'center', padding: isTablet ? '12px 8px' : '10px 6px',
+                                background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 16,
+                              }}>
+                                <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, fontWeight: 700 }}>{lbl}</div>
+                                <div style={{ margin: '8px auto 6px' }}>{weatherIcon(h.weatherCode, isTablet ? 26 : 22, T.brass)}</div>
+                                <div style={{ fontSize: isTablet ? 20 : 16, fontWeight: 900, color: T.ink }}>{Math.round(h.temp)}°</div>
+                                <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkSoft, marginTop: 6 }}>
+                                  {h.waveFt != null ? `${h.waveFt.toFixed(1)} ft` : '—'}
+                                </div>
+                                <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 2 }}>
+                                  {h.wind != null ? `${Math.round(h.wind)} mph` : ''}
+                                </div>
+                                <div style={{ marginTop: 8, fontSize: isTablet ? 12 : 10, fontWeight: 900, color: T.oceanDeep, background: fishabilityColor(fs), borderRadius: 999, padding: '2px 0' }}>{fs}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </Card>
+                    )}
+                  </>
+                )}
+              </>
+            );
+          })()}
 
           {/* Next 24 hours — Windy-style matrix: fixed metric labels on the
               left, hours scrolling horizontally. Each row is one metric so
               wind, gusts and waves line up column-by-column across the hours. */}
-          {hourly.length > 0 && (() => {
+          {fxTab === 'hourly' && hourly.length > 0 && (() => {
             const RH = isTablet ? 30 : 26;          // metric row height
             const HEAD_H = isTablet ? 24 : 20;      // time header height
             const ICON_H = isTablet ? 34 : 30;      // weather icon row height
@@ -3182,8 +3367,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           })()}
 
           {/* 7-day outlook */}
-          {daily.length > 0 && (
-            <Card style={{ padding: isTablet ? 20 : 14 }}>
+          {fxTab === '7day' && daily.length > 0 && (
+            <Card className="kyc-fadeup" style={{ padding: isTablet ? 20 : 14, borderRadius: 24 }}>
               <SectionLabel style={{ marginBottom: 10 }}>7-day outlook</SectionLabel>
               <div style={{ display: 'grid', gap: isTablet ? 10 : 6 }}>
                 {daily.map((d, i) => {
