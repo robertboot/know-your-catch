@@ -43,8 +43,13 @@ const LAYERS = {
   chl: {
     key: 'chl',
     label: 'Chlorophyll',
-    dataset: 'erdMH1chla8day',      // MODIS-Aqua, 8-day composite (fewer cloud gaps than daily)
-    variable: 'chlorophyll',
+    // VIIRS Suomi-NPP (NASA/GSFC OBPG), 8-day, 4 km. Replaces the retired
+    // erdMH1chla8day (MODIS-Aqua science quality ended 2022 → no recent
+    // data → the layer wouldn't load). This R2018 reprocessing runs
+    // ~2012–mid-2022; "Latest" serves its last composite. For true
+    // near-real-time, swap to the MODIS "R2022 NRT, 2003-present" dataset.
+    dataset: 'erdVH2018chla8day',
+    variable: 'chlor_a',
     palette: 'rainbow',
     range: '0.03,20',
     log: true,
