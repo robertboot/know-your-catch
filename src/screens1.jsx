@@ -2834,6 +2834,15 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
   useEffect(() => {
     let alive = true;
     (async () => {
+      // Default to the STARRED fishing spot so the forecast opens on the
+      // same "home water" the Home card scores — no location mismatch.
+      const starred = (state?.fishingSpots || []).find(s => s.starred);
+      if (starred) {
+        setCoords({ lat: starred.lat, lon: starred.lon });
+        setLocLabel(starred.name);
+        setSelectedSpotId(starred.id);
+        return;
+      }
       const recent = (state?.catchLog || []).find(c => c.lat != null && c.lon != null);
       const jurCenter = jurisdiction?.center;
       const fallback = recent
@@ -2855,7 +2864,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
       setLocLabel(fallback.label);
     })();
     return () => { alive = false; };
-  }, [state?.catchLog, jurisdiction]);
+  }, [state?.catchLog, jurisdiction, state?.fishingSpots]);
 
   useEffect(() => {
     if (!coords) return undefined;
@@ -2866,7 +2875,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
       try {
         const { lat, lon } = coords;
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
-          + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,pressure_msl,weather_code`
+          + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation,pressure_msl,weather_code`
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
           + `&forecast_days=10`
@@ -3229,10 +3238,20 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
           {/* ---- Decision-first dashboard: best-window hero + score gauge --- */}
           {(() => {
             const win = bestWindow(hourly);
-            const score = win ? win.avg : (hourly[0] ? fishabilityHour(hourly[0]) : null);
+            // Grade the CURRENT conditions so the hero matches the Home card:
+            // same live `current` + marine-current inputs Home scores.
+            const nowHour = {
+              wind: current.wind_speed_10m,
+              gust: current.wind_gusts_10m ?? hourly[0]?.gust,
+              waveFt: marine?.waveFt ?? hourly[0]?.waveFt ?? null,
+              periodS: marine?.periodS ?? hourly[0]?.periodS ?? null,
+              windDir: current.wind_direction_10m,
+              bite: hourly[0]?.bite,
+            };
+            const score = fishabilityHour(nowHour);
             const sColor = fishabilityColor(score);
-            const repHour = win ? (hourly.find(h => h.when >= win.startMs) || hourly[0]) : hourly[0];
-            const subs = subScores(repHour || {});
+            const repHour = nowHour;
+            const subs = subScores(nowHour);
             const windKt = Math.round(current.wind_speed_10m || 0);
             const windTxt = compassDir(current.wind_direction_10m || 0);
             const gust = hourly[0]?.gust != null ? Math.round(hourly[0].gust) : null;
