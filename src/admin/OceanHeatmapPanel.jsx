@@ -123,7 +123,10 @@ export default function OceanHeatmapPanel() {
 
     const layer = L.tileLayer.wms(`${ERDDAP_WMS}/${cfg.dataset}/request?`, {
       layers: `${cfg.dataset}:${cfg.variable}`,
-      styles: `boxfill/${cfg.palette}`,
+      // Empty style → ERDDAP's default palette for the variable. Our old
+      // `boxfill/rainbow` used a lowercase palette name ERDDAP rejects
+      // (case-sensitive), which made every GetMap return an error.xml.
+      styles: '',
       format: 'image/png',
       transparent: true,
       version: '1.3.0',
