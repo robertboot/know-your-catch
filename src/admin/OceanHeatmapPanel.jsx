@@ -103,6 +103,16 @@ export default function OceanHeatmapPanel() {
       subdomains: 'abcd',
       maxZoom: 19,
     }).addTo(map);
+    // Labels/coastline pane above the color overlay so land stays legible
+    // no matter how opaque the chlorophyll/SST image is.
+    map.createPane('coastline');
+    map.getPane('coastline').style.zIndex = 450; // above overlayPane (400/410)
+    map.getPane('coastline').style.pointerEvents = 'none';
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      pane: 'coastline',
+    }).addTo(map);
     mapRef.current = map;
     // Fixed center/zoom frames the Gulf + FL Atlantic and does NOT depend on
     // the container being sized (fitBounds against a 0-height container
