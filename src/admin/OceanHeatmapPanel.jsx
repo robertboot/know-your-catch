@@ -54,12 +54,12 @@ const LAYERS = {
     // ~2012–mid-2022; "Latest" serves its last composite. For true
     // near-real-time, swap to the MODIS "R2022 NRT, 2003-present" dataset.
     dataset: 'erdVH2018chla8day',
-    variable: 'chlor_a',
+    variable: 'chla',              // ERDDAP renames NASA's chlor_a → chla here
     palette: 'rainbow',
-    range: '0.03,20',
+    range: '0.03,30',              // matches the dataset's native colorBar (log)
     log: true,
     units: 'mg/m³',
-    legendStops: ['0.03', '0.1', '0.5', '1', '3', '20'],
+    legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
     blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water.',
   },
   sst: {
