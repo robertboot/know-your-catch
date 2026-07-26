@@ -3320,10 +3320,11 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
    screen at once, with a draggable window that scrolls the detail grid
    below (and follows it when the grid is scrolled). Two-way synced to the
    matrix's horizontal scroll container via `scrollRef`. */
-function TimelineBar({ blocks, scrollRef, isTablet }) {
+function TimelineBar({ blocks, scrollRef, isTablet, mode = 'blocks' }) {
   const barRef = useRef(null);
   const dragging = useRef(false);
   const [view, setView] = useState({ left: 0, width: 1 });
+  const scoreOf = (b) => b.score != null ? b.score : fishabilityHour(b);
 
   const measure = () => {
     const el = scrollRef.current; if (!el) return;
@@ -3343,8 +3344,9 @@ function TimelineBar({ blocks, scrollRef, isTablet }) {
   const gradient = useMemo(() => {
     if (!blocks.length) return T.oceanDeep;
     const n = blocks.length;
-    const stops = blocks.map((b, i) => `${fishabilityColor(b.score)} ${((i / (n - 1)) * 100).toFixed(1)}%`);
+    const stops = blocks.map((b, i) => `${fishabilityColor(scoreOf(b))} ${((i / (n - 1)) * 100).toFixed(1)}%`);
     return `linear-gradient(90deg, ${stops.join(',')})`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks]);
 
   const scrollFrom = (clientX) => {
@@ -3366,14 +3368,20 @@ function TimelineBar({ blocks, scrollRef, isTablet }) {
   }, []);
 
   const n = blocks.length;
-  const dayStarts = blocks.map((b, i) => ({ b, i })).filter(({ b }) => b.slot === 0);
   const todayStr = blocks[0]?.date;
+  // Marks along the top: day starts for the 10-day view, 6-hourly ticks
+  // for the 24-hour view.
+  const marks = mode === 'blocks'
+    ? blocks.map((b, i) => ({ i, label: b.date === todayStr ? 'Today' : new Date(b.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' }), hot: b.date === todayStr }))
+        .filter((_, i) => blocks[i].slot === 0)
+    : blocks.map((c, i) => ({ c, i })).filter(({ c }) => new Date(c.when).getHours() % 6 === 0)
+        .map(({ c, i }) => { const hr = new Date(c.when).getHours(); return { i, label: hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`, hot: i === 0 }; });
   return (
     <div style={{ marginBottom: 12, userSelect: 'none' }}>
       <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginBottom: 4, fontSize: isTablet ? 11 : 9, fontWeight: 800, color: T.inkMute }}>
-        {dayStarts.map(({ b, i }) => (
-          <span key={i} style={{ position: 'absolute', left: `${(i / (n - 1)) * 100}%`, transform: i === 0 ? 'none' : 'translateX(-50%)', whiteSpace: 'nowrap', color: b.date === todayStr ? T.brass : T.inkMute }}>
-            {b.date === todayStr ? 'Today' : new Date(b.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })}
+        {marks.map(({ i, label, hot }) => (
+          <span key={i} style={{ position: 'absolute', left: `${(i / (n - 1)) * 100}%`, transform: i === 0 ? 'none' : 'translateX(-50%)', whiteSpace: 'nowrap', color: hot ? T.brass : T.inkMute }}>
+            {label}
           </span>
         ))}
       </div>
@@ -3506,7 +3514,7 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
         <SectionLabel style={{ margin: 0 }}>{title}</SectionLabel>
         {subtitle && <span style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute }}>{subtitle}</span>}
       </div>
-      {mode === 'blocks' && <TimelineBar blocks={cols} scrollRef={scrollRef} isTablet={isTablet} />}
+      <TimelineBar blocks={cols} scrollRef={scrollRef} isTablet={isTablet} mode={mode} />
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         {/* Fixed label column */}
         <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
