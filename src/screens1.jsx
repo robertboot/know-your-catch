@@ -3316,6 +3316,75 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
   );
 }
 
+/* TimelineBar — a full-width 10-day fishability colour strip that fits on
+   screen at once, with a draggable window that scrolls the detail grid
+   below (and follows it when the grid is scrolled). Two-way synced to the
+   matrix's horizontal scroll container via `scrollRef`. */
+function TimelineBar({ blocks, scrollRef, isTablet }) {
+  const barRef = useRef(null);
+  const dragging = useRef(false);
+  const [view, setView] = useState({ left: 0, width: 1 });
+
+  const measure = () => {
+    const el = scrollRef.current; if (!el) return;
+    const sw = el.scrollWidth || 1;
+    setView({ left: el.scrollLeft / sw, width: Math.min(1, el.clientWidth / sw) });
+  };
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return undefined;
+    measure();
+    const t = setTimeout(measure, 250);
+    el.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => { clearTimeout(t); el.removeEventListener('scroll', measure); window.removeEventListener('resize', measure); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const gradient = useMemo(() => {
+    if (!blocks.length) return T.oceanDeep;
+    const n = blocks.length;
+    const stops = blocks.map((b, i) => `${fishabilityColor(b.score)} ${((i / (n - 1)) * 100).toFixed(1)}%`);
+    return `linear-gradient(90deg, ${stops.join(',')})`;
+  }, [blocks]);
+
+  const scrollFrom = (clientX) => {
+    const bar = barRef.current, el = scrollRef.current; if (!bar || !el) return;
+    const rect = bar.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const target = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, frac * el.scrollWidth - el.clientWidth / 2));
+    el.scrollLeft = target;
+    measure();
+  };
+  const down = (e) => { dragging.current = true; scrollFrom((e.touches?.[0] ?? e).clientX); };
+  useEffect(() => {
+    const move = (e) => { if (dragging.current) scrollFrom((e.touches?.[0] ?? e).clientX); };
+    const up = () => { dragging.current = false; };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+    window.addEventListener('touchmove', move, { passive: true }); window.addEventListener('touchend', up);
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const n = blocks.length;
+  const dayStarts = blocks.map((b, i) => ({ b, i })).filter(({ b }) => b.slot === 0);
+  const todayStr = blocks[0]?.date;
+  return (
+    <div style={{ marginBottom: 12, userSelect: 'none' }}>
+      <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginBottom: 4, fontSize: isTablet ? 11 : 9, fontWeight: 800, color: T.inkMute }}>
+        {dayStarts.map(({ b, i }) => (
+          <span key={i} style={{ position: 'absolute', left: `${(i / (n - 1)) * 100}%`, transform: i === 0 ? 'none' : 'translateX(-50%)', whiteSpace: 'nowrap', color: b.date === todayStr ? T.brass : T.inkMute }}>
+            {b.date === todayStr ? 'Today' : new Date(b.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })}
+          </span>
+        ))}
+      </div>
+      <div ref={barRef} onMouseDown={down} onTouchStart={down}
+        style={{ position: 'relative', height: isTablet ? 22 : 18, borderRadius: 8, background: gradient, cursor: 'pointer', touchAction: 'none' }}>
+        <div style={{ position: 'absolute', top: -2, bottom: -2, left: `${view.left * 100}%`, width: `${view.width * 100}%`, border: '2px solid #fff', borderRadius: 8, boxShadow: '0 0 6px rgba(0,0,0,0.55)', background: 'rgba(255,255,255,0.14)', pointerEvents: 'none' }} />
+      </div>
+    </div>
+  );
+}
+
 /* ForecastMatrix — one Windy-style grid used by BOTH the hourly chart and
    the 10-day outlook so their rows, colours and styling are identical. The
    only difference is the time axis: `mode='hourly'` renders one column per
@@ -3324,6 +3393,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
    names (temp, wind, windDir, gust, waveFt, periodS, waveDir, sstF,
    currentKt, currentDir, precipPct, bite, score, weatherCode, isoHour). */
 function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
+  const scrollRef = useRef(null);
   const RH = isTablet ? 30 : 26;
   const WAVE_H = isTablet ? 46 : 40;
   const BITE_H = isTablet ? 44 : 38;
@@ -3436,6 +3506,7 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
         <SectionLabel style={{ margin: 0 }}>{title}</SectionLabel>
         {subtitle && <span style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute }}>{subtitle}</span>}
       </div>
+      {mode === 'blocks' && <TimelineBar blocks={cols} scrollRef={scrollRef} isTablet={isTablet} />}
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         {/* Fixed label column */}
         <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
@@ -3446,7 +3517,7 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
             <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.label}</div>
           ))}
         </div>
-        <div className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
+        <div ref={scrollRef} className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
           {cols.map((c, i) => {
             let timeLabel = '', dayStart = false, dayLbl = '';
             if (mode === 'hourly') {
