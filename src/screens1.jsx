@@ -3225,7 +3225,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update }) {
                       </div>
                       {/* Gradient stops + tick positions match the real 0–100
                           fishability axis (FISH_STOPS in forecast-extras). */}
-                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #c0392b 0%, #c0392b 35%, #d1642b 55%, #d98330 68%, #9bb03a 76%, #4fa64a 85%, #63e08a 95%, #63e08a 100%)' }} />
+                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #c0392b 0%, #c0392b 40%, #d1642b 58%, #d98330 70%, #9bb03a 82%, #4fa64a 90%, #63e08a 97%, #63e08a 100%)' }} />
                       <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
                         <span style={{ position: 'absolute', left: '0%' }}>F</span>
                         <span style={{ position: 'absolute', left: '65%', transform: 'translateX(-50%)' }}>C</span>

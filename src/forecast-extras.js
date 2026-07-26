@@ -42,7 +42,7 @@ function scaleColor(value, stops, alpha = 0.4) {
 // Palettes tuned to Windy's grid: wind ramps green(calm)→olive→amber→red,
 // waves in blues, and fish-activity/bite in a teal→vivid-green scale.
 const AIR_STOPS  = [[50, '#2f6fb0'], [65, '#2aa0a0'], [75, '#3fa34d'], [84, '#c9b03a'], [92, '#d98330'], [100, '#c0392b']];
-const WIND_STOPS = [[3, '#4a9e4a'], [7, '#7fae3e'], [10, '#c9b03a'], [14, '#d98330'], [18, '#c0392b'], [26, '#8f2417']]; // knots
+const WIND_STOPS = [[4, '#4a9e4a'], [8, '#9bb03a'], [11, '#d1a838'], [15, '#d98330'], [19, '#c0392b'], [26, '#8f2417']]; // knots — ambers by ~11 kt like Windy
 const WAVE_STOPS = [[0, '#123a5e'], [1, '#17518a'], [2, '#1f77c2'], [4, '#2aa0e0'], [7, '#5ac8f5']];
 const CURR_STOPS = [[0, '#123a5e'], [0.3, '#1f77c2'], [0.8, '#2aa0e0'], [1.5, '#5ac8f5']];
 // Windy fish-activity greens: teal at the low end → vivid green at the top.
@@ -111,17 +111,23 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x));
 // Gulf days: small seas with a short period are calm and fishable, so
 // period only bites hard when the seas are also up (steep chop).
 export function subScores(h) {
-  // Wind: glassy ≤5 kt is ideal; unfishable by ~24 kt (small-craft advisory).
-  const wind = h.wind == null ? null : Math.round(clamp01((24 - h.wind) / 19) * 100);
-  // Wave height: ≤1 ft ideal; rough by ~5.5 ft.
-  const seas = h.waveFt == null ? null : Math.round(clamp01((5.5 - h.waveFt) / 4.5) * 100);
+  // Wind (kt): factor GUSTS in — gusty air is less safe/comfortable than
+  // the sustained number alone, so blend the two. Deliberately cautious:
+  // ideal ≤5 kt, unfishable by ~22 kt (well inside small-craft advisory).
+  let wind = null;
+  if (h.wind != null) {
+    const eff = h.gust != null ? h.wind * 0.65 + h.gust * 0.35 : h.wind;
+    wind = Math.round(clamp01((22 - eff) / 17) * 100);
+  }
+  // Wave height: ≤1 ft ideal; rough by ~5 ft.
+  const seas = h.waveFt == null ? null : Math.round(clamp01((5 - h.waveFt) / 4) * 100);
   // Wave period, judged in context of wave height:
-  //   • small seas (≤2 ft): short period is not uncomfortable → stay generous
+  //   • small seas (≤2.5 ft): short period is tolerable but not "great"
   //   • bigger seas: a longer period is needed to ride comfortably
   let period = null;
   if (h.periodS != null) {
     period = (h.waveFt ?? 0) <= 2.5
-      ? Math.round(70 + clamp01((h.periodS - 1) / 4) * 30)  // calm seas: 4 s→93 (great)
+      ? Math.round(60 + clamp01((h.periodS - 1) / 5) * 35)  // calm seas: ~3.6 s→78
       : Math.round(clamp01((h.periodS - 3) / 5) * 100);     // bigger seas: 3 s→0, 8 s+→100
     period = Math.max(0, Math.min(100, period));
   }
@@ -130,12 +136,12 @@ export function subScores(h) {
 
 export function fishabilityHour(h) {
   const s = subScores(h);
-  // Total is heavily weighted on the three sailing/fishing factors —
-  // wave height, wind, wave period — renormalized over whatever's present.
+  // Wind is weighted highest — it's the safety driver — then wave height,
+  // then period. Renormalized over whatever data is present.
   const terms = [];
-  if (s.seas != null)   terms.push([s.seas, 0.4]);
-  if (s.wind != null)   terms.push([s.wind, 0.35]);
-  if (s.period != null) terms.push([s.period, 0.25]);
+  if (s.wind != null)   terms.push([s.wind, 0.42]);
+  if (s.seas != null)   terms.push([s.seas, 0.36]);
+  if (s.period != null) terms.push([s.period, 0.22]);
   let score;
   if (terms.length) {
     const wsum = terms.reduce((a, [, w]) => a + w, 0);
@@ -151,7 +157,9 @@ export function fishabilityHour(h) {
 // Continuous red→amber→green ramp so neighbouring scores read as
 // neighbouring colours (no hard cliff at a band edge). Solid (alpha 1)
 // for legible badges/gauge.
-const FISH_STOPS = [[35, '#c0392b'], [55, '#d1642b'], [68, '#d98330'], [76, '#9bb03a'], [85, '#4fa64a'], [95, '#63e08a']];
+// Cautious ramp: green requires a genuinely good score (mid scores read
+// amber), matching Windy's more conservative visual read.
+const FISH_STOPS = [[40, '#c0392b'], [58, '#d1642b'], [70, '#d98330'], [82, '#9bb03a'], [90, '#4fa64a'], [97, '#63e08a']];
 export function fishabilityColor(score) {
   if (score == null) return '#7d8ca0';
   return scaleColor(score, FISH_STOPS, 1);
