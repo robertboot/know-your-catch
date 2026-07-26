@@ -140,7 +140,11 @@ export default function OceanHeatmapPanel() {
       service: 'WMS', version: '1.3.0', request: 'GetMap',
       crs: 'EPSG:4326',
       bbox: `${s},${w},${n},${e}`,   // WMS 1.3.0 + EPSG:4326 → lat,lon order
-      width: '2048', height: '928',  // ~matches the region's 21°×9.5° aspect
+      // Request ~one pixel per native ~4km data cell (region is 21°×9.5°),
+      // then let the browser bilinearly upscale it. Asking ERDDAP for a big
+      // image bakes each cell in as a hard block; a small native-res image
+      // stretched with CSS smoothing reads as a continuous gradient.
+      width: '600', height: '272',
       layers: `${cfg.dataset}:${cfg.variable}`,
       styles: '',
       format: 'image/png',
