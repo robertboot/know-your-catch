@@ -738,11 +738,13 @@ function buildRegs() {
       source: 'fisheries.noaa.gov',
     }),
     golden_tilefish: R({
-      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Gulf reef fish — managed in the deep-water grouper/tilefish complex; aggregate limits and seasonal closures may apply. No fixed rec size limit on file. Verify with the agency.' },
+      default: { open: 'Year-round', minSize: null, bagLimit: 20, gear: reefGear, notes: 'Gulf reef fish: open year-round, no minimum size. Counts toward the 20-reef-fish/person/day aggregate. Non-stainless circle hooks required with natural bait. All Gulf state waters (AL, FL Gulf, MS, LA, TX) follow federal Gulf rules.' },
+      fed_satlantic: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'South Atlantic tilefish are stricter — quota- and season-managed. Verify with the agency before keeping.' },
       source: 'fisheries.noaa.gov',
     }),
     blueline_tilefish: R({
-      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Gulf reef fish — managed in the deep-water grouper/tilefish complex; aggregate limits and seasonal closures may apply. No fixed rec size limit on file. Verify with the agency.' },
+      default: { open: 'Year-round', minSize: null, bagLimit: 20, gear: reefGear, notes: 'Gulf reef fish: open year-round, no minimum size. Counts toward the 20-reef-fish/person/day aggregate. Non-stainless circle hooks required with natural bait. All Gulf state waters follow federal Gulf rules.' },
+      fed_satlantic: { open: 'Check current season', minSize: null, bagLimit: 3, notes: 'South Atlantic blueline tilefish is stricter — 3 fish/person/day within the deep-water complex and season-managed. Verify with the agency.' },
       source: 'fisheries.noaa.gov',
     }),
     short_bigeye: R({
@@ -890,6 +892,16 @@ function buildRegs() {
     snowy_grouper: R({
       default: { open: 'Year-round', minSize: null, bagLimit: 4, gear: reefGear, notes: 'Gulf deep-water grouper: open year-round. Counts toward the 4-fish/person/day deep-water grouper aggregate (snowy, yellowedge, warsaw, speckled hind, misty combined). Alabama state waters follow federal deep-water rules.' },
       fed_satlantic: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'South Atlantic snowy grouper is quota-managed with seasonal closures — stricter than the Gulf. Verify with the agency before keeping.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    yellowedge_grouper: R({
+      default: { open: 'Year-round', minSize: null, bagLimit: 4, gear: reefGear, notes: 'Gulf deep-water grouper: open year-round. Counts toward the 4-fish/person/day deep-water grouper aggregate (snowy, yellowedge, warsaw, speckled hind, misty combined). All Gulf state waters follow federal deep-water rules.' },
+      fed_satlantic: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'South Atlantic deep-water grouper is quota-managed with seasonal closures. Verify with the agency.' },
+      source: 'fisheries.noaa.gov',
+    }),
+    speckled_hind: R({
+      default: { open: 'Year-round', minSize: null, bagLimit: 1, gear: reefGear, notes: 'Gulf: 1 speckled hind OR warsaw grouper per VESSEL per day (combined) — very restrictive, effectively 1 per boat. Open year-round. Use a descending device; South Atlantic requires release (no harvest).' },
+      fed_satlantic: { open: 'No harvest', minSize: null, bagLimit: 0, notes: 'South Atlantic: speckled hind must be released — no harvest allowed.' },
       source: 'fisheries.noaa.gov',
     }),
     hogfish: R({
