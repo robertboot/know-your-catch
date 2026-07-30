@@ -888,7 +888,8 @@ function buildRegs() {
       source: 'fisheries.noaa.gov',
     }),
     snowy_grouper: R({
-      default: { open: 'Check current season', minSize: null, bagLimit: null, gear: reefGear, notes: 'Gulf deep-water grouper aggregate. Federal Gulf deep-water grouper aggregate limit applies (typically 4 fish, with snowy/yellowedge/warsaw/speckled hind combined). South Atlantic management is stricter with seasonal closures. Verify with the agency.' },
+      default: { open: 'Year-round', minSize: null, bagLimit: 4, gear: reefGear, notes: 'Gulf deep-water grouper: open year-round. Counts toward the 4-fish/person/day deep-water grouper aggregate (snowy, yellowedge, warsaw, speckled hind, misty combined). Alabama state waters follow federal deep-water rules.' },
+      fed_satlantic: { open: 'Check current season', minSize: null, bagLimit: null, notes: 'South Atlantic snowy grouper is quota-managed with seasonal closures — stricter than the Gulf. Verify with the agency before keeping.' },
       source: 'fisheries.noaa.gov',
     }),
     hogfish: R({
