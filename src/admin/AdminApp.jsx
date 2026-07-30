@@ -954,7 +954,9 @@ function SpeciesForm({ initial, onDone, onCancel }) {
   const [id, setId]                   = useState(initial?.id || '');
   const [commonName, setCommonName]   = useState(initial?.commonName || '');
   const [scientific, setScientific]   = useState(initial?.scientific || '');
-  const [category, setCategory]       = useState(initial?.category || liveCategories[0]?.id || '');
+  // New species default to the "needs category" bucket ('_admin'), never
+  // the first real category (which silently filed everything as Sharks & Rays).
+  const [category, setCategory]       = useState(initial?.category || '_admin');
   const [altNames, setAltNames]       = useState((initial?.altNames || []).join(', '));
   const [keyIds, setKeyIds]           = useState((initial?.keyIds || []).join('\n'));
   const [lookalikes, setLookalikes]   = useState((initial?.lookalikes || []).join(', '));
