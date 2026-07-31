@@ -85,8 +85,8 @@ const P = {
 
 const NAV_ITEMS = [
   { label: 'Features',     href: '#features'    },
+  { label: 'Forecast',     href: '#marine'      },
   { label: 'How it works', href: '#how'         },
-  { label: 'Regulations',  href: '#how'         },
   { label: 'About',        href: '#coming'      },
 ];
 
@@ -1360,6 +1360,37 @@ function Footer() {
    ROOT
    ============================================================ */
 
+function MarineIntel() {
+  const cards = [
+    { icon: TargetIcon, title: 'Fishability grade', body: 'An A–F grade for right now, every hour, and 10 days out — weighted for wind, seas, and swell period and tuned to safe-boating limits.' },
+    { icon: CloudIcon,  title: 'Wind, waves & tide', body: 'Wind and gusts in knots, wave height and period, sea temp, currents, and NOAA tide predictions for your starred spot.' },
+    { icon: MapPinIcon, title: 'Chlorophyll maps', body: 'Find the color: satellite phytoplankton imagery reveals the green-water breaks where bait and gamefish stack up.' },
+    { icon: ChartIcon,  title: 'Sea-temp breaks', body: 'Satellite sea-surface temperature shows the edges and weed lines that concentrate pelagics — free NOAA/NASA data.' },
+  ];
+  return (
+    <section className="rl-section rl-section-alt" id="marine">
+      <div className="rl-container rl-section-narrow">
+        <span className="rl-eyebrow">New · Gulf &amp; Florida Atlantic</span>
+        <h2 className="rl-h2" style={{ marginTop: 12 }}>Know before you go.</h2>
+        <p className="rl-lead-2">
+          Marine forecasts and satellite ocean maps built for our waters — so you fish the right window, in the right water. No paid subscription, no separate app.
+        </p>
+      </div>
+      <div className="rl-container" style={{ marginTop: 40 }}>
+        <div className="rl-features">
+          {cards.map((c) => (
+            <div className="rl-feature" key={c.title}>
+              <div className="rl-feature-icon"><c.icon size={22} /></div>
+              <h3>{c.title}</h3>
+              <p>{c.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function MarketingLanding() {
   const cssRef = useMemo(() => CSS, []);
   return (
@@ -1374,6 +1405,7 @@ export function MarketingLanding() {
         <AnnouncementBanner />
       </div>
       <Hero />
+      <MarineIntel />
       <YourDataYourRules />
       <AiLearnsWaters />
       <ComingSoon />
