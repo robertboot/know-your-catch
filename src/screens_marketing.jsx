@@ -43,9 +43,9 @@ const A = {
   tileFishId:          `${M}tile-fish-id.jpg`,
   tileFishQuiz:        `${M}tile-fish-quiz.jpg`,
   tilePatterns:        `${M}tile-patterns.jpg`,
-  marineForecast:      `${M}marine-forecast.png`,
-  marineChlorophyll:   `${M}marine-chlorophyll.jpg`,
-  marineSeaTemp:       `${M}marine-seatemp.jpg`,
+  marineForecast:      `${M}MARINE-FORECAST.png`,
+  marineChlorophyll:   `${M}MARINE-CHLOROPHYLL.png`,
+  marineSeaTemp:       `${M}MARINE-SEATEMP.png`,
   comingSoonLidar:     `${M}coming-soon-lidar.jpg`,
   ctaMakeEveryTrip:    `${M}cta-make-every-trip-count.jpg`,
   appStoreBadge:       `${M}app-store-badge.svg`,
@@ -1387,20 +1387,20 @@ function MarineIntel() {
           <ImageSlot
             variant="banner"
             src={A.marineForecast}
-            label="marine-forecast.png"
+            label="MARINE-FORECAST.png"
             alt="ReelIntel 10-day fishability outlook in 6-hour blocks — letter grade, bite %, wind, waves, tide."
           />
           <div className="rl-marine-maps">
             <ImageSlot
               variant="banner"
               src={A.marineChlorophyll}
-              label="marine-chlorophyll.jpg"
+              label="MARINE-CHLOROPHYLL.png"
               alt="Satellite chlorophyll map of the Gulf and Florida — the green-water breaks where bait and gamefish stack up."
             />
             <ImageSlot
               variant="banner"
               src={A.marineSeaTemp}
-              label="marine-seatemp.jpg"
+              label="MARINE-SEATEMP.png"
               alt="Satellite sea-surface temperature map of the Gulf and Florida — temperature breaks that concentrate pelagics."
             />
           </div>
