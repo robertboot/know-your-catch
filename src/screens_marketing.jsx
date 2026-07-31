@@ -1139,7 +1139,7 @@ const PRIVACY_CARDS = [
 
 function YourDataYourRules() {
   return (
-    <section className="rl-section" id="features">
+    <section className="rl-section" id="features" style={{ paddingTop: 36 }}>
       <div className="rl-container">
         {/* Top row — shield left, copy right (alternates with adjacent sections) */}
         <div className="rl-priv-top">
@@ -1148,7 +1148,7 @@ function YourDataYourRules() {
           </div>
           <div className="rl-priv-copy">
             <span className="rl-eyebrow rl-eyebrow-line"><LockIcon size={16} /> Your data is yours</span>
-            <h2 className="rl-h2" style={{ marginTop: 14 }}>Your data.<br/><span>Your spots.</span><br/>Your rules.</h2>
+            <h2 className="rl-h2" style={{ marginTop: 14 }}>Your data.<br/><span>Your memories.</span><br/>Export anytime.</h2>
             <p className="rl-lead-2">
               Everything you log belongs to you. ReelIntel learns from your catches to build your personal fishing intelligence — but your exact fishing locations are never shared with anyone.
             </p>
