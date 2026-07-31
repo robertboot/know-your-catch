@@ -636,6 +636,13 @@ function SpeciesTab({ detailView, setDetailView }) {
                         padding: '2px 6px', borderRadius: 4, fontWeight: 800,
                       }}>Deactivated</span>
                     )}
+                    {(!sp.category || sp.category === '_admin') && (
+                      <span style={{
+                        fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase',
+                        background: 'rgba(255,200,87,0.16)', color: '#FFC857', border: '1px solid #FFC857',
+                        padding: '2px 6px', borderRadius: 4, fontWeight: 800,
+                      }}>Needs category</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 10, color: T.inkMute, fontFamily: 'monospace' }}>{sp.id}</div>
                 </div>

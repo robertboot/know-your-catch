@@ -401,7 +401,9 @@ async function fetchSpeciesCoverage() {
     const bundledPhotos = Array.isArray(sp.photos) ? sp.photos : [];
     if (overrides.length === 0 && bundledPhotos.length === 0) missing.photo.push(sp);
     if (!sp.scientific)                                       missing.scientific.push(sp);
-    if (!sp.category)                                         missing.category.push(sp);
+    // Empty OR the '_admin' "needs category" bucket both count as needing
+    // a category (new species default to '_admin' until an admin files them).
+    if (!sp.category || sp.category === '_admin')             missing.category.push(sp);
     // Tier-2 = at least typical length AND edibility populated.
     // Both come from the species-tier-fields migration; blank means
     // the researcher pass hasn't happened for this row yet.
