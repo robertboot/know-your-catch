@@ -43,6 +43,9 @@ const A = {
   tileFishId:          `${M}tile-fish-id.jpg`,
   tileFishQuiz:        `${M}tile-fish-quiz.jpg`,
   tilePatterns:        `${M}tile-patterns.jpg`,
+  marineForecast:      `${M}marine-forecast.png`,
+  marineChlorophyll:   `${M}marine-chlorophyll.jpg`,
+  marineSeaTemp:       `${M}marine-seatemp.jpg`,
   comingSoonLidar:     `${M}coming-soon-lidar.jpg`,
   ctaMakeEveryTrip:    `${M}cta-make-every-trip-count.jpg`,
   appStoreBadge:       `${M}app-store-badge.svg`,
@@ -510,6 +513,8 @@ body { margin: 0; }
 
 /* Feature tiles — 4-up on desktop, 2-up on tablet, stack on phone.
    Reuses the existing rl-feature card style verbatim. */
+.rl-marine-maps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .rl-marine-maps { grid-template-columns: 1fr; } }
 .rl-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 @media (max-width: 1024px) { .rl-features { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px)  { .rl-features { grid-template-columns: 1fr; } }
@@ -1375,6 +1380,31 @@ function MarineIntel() {
         <p className="rl-lead-2">
           Marine forecasts and satellite ocean maps built for our waters — so you fish the right window, in the right water. No paid subscription, no separate app.
         </p>
+      </div>
+      {/* Showcase gallery — forecast banner + the two satellite maps */}
+      <div className="rl-container" style={{ marginTop: 40 }}>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <ImageSlot
+            variant="banner"
+            src={A.marineForecast}
+            label="marine-forecast.png"
+            alt="ReelIntel 10-day fishability outlook in 6-hour blocks — letter grade, bite %, wind, waves, tide."
+          />
+          <div className="rl-marine-maps">
+            <ImageSlot
+              variant="banner"
+              src={A.marineChlorophyll}
+              label="marine-chlorophyll.jpg"
+              alt="Satellite chlorophyll map of the Gulf and Florida — the green-water breaks where bait and gamefish stack up."
+            />
+            <ImageSlot
+              variant="banner"
+              src={A.marineSeaTemp}
+              label="marine-seatemp.jpg"
+              alt="Satellite sea-surface temperature map of the Gulf and Florida — temperature breaks that concentrate pelagics."
+            />
+          </div>
+        </div>
       </div>
       <div className="rl-container" style={{ marginTop: 40 }}>
         <div className="rl-features">
