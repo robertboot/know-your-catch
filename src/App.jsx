@@ -899,6 +899,16 @@ export default function App() {
           });
         }}
         onRetake={() => setStack(st => st.filter(s => s.name !== 'photo_crop' && s.name !== 'photo_analyzing' && s.name !== 'photo_result'))}
+        onCropRetry={() => {
+          // Crop the ORIGINAL photo, then re-run the identify pipeline.
+          // Replace this result with the crop step (CropStep → analyzing
+          // → a fresh photo_result).
+          setStack(st => [...st.slice(0, -1), {
+            name: 'photo_crop',
+            imageDataUrl: screen.originalDataUrl || screen.imageDataUrl,
+            fromCapture: screen.fromCapture,
+          }]);
+        }}
         onManual={() => reset([{ name: 'home' }, { name: 'identify' }, { name: 'categories' }])}
       />;
       break;

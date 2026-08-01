@@ -5,7 +5,7 @@ import {
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
   CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
-  Crosshair, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
+  Crosshair, Crop, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
   Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog,
   Star, StarHalf,
 } from 'lucide-react';
@@ -1857,7 +1857,7 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
   );
 }
 
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew }) {
+export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew, onCropRetry }) {
   const { confidence, candidates } = result || {};
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
@@ -1921,10 +1921,15 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               the confirm flow). Picking one records a model_correction
               (photo labeled with the true species → training signal)
               and routes to catch entry. */}
-          <PrimaryButton onClick={() => setShowPicker(true)}>
-            <Search size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-            Pick the species
-          </PrimaryButton>
+          {onCropRetry && (
+            <PrimaryButton onClick={onCropRetry}>
+              <Crop size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+              Crop to the fish &amp; try again
+            </PrimaryButton>
+          )}
+          <GhostButton onClick={() => setShowPicker(true)} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Search size={16} /> Pick the species
+          </GhostButton>
           <GhostButton onClick={onRetake} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <RotateCcw size={16} /> Try another photo
           </GhostButton>
@@ -2005,8 +2010,42 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   const sciSize    = isTablet ? 22 : 18;
   const ringSize   = isTablet ? 72 : 60;
 
+  const lowConfidence = !isCorrected && top && (top.score || 0) < 0.60;
+
   return (
     <div style={{ padding: '14px 14px 140px', position: 'relative' }}>
+      {/* Low-confidence → prompt a crop-and-retry for a sharper ID. */}
+      {onCropRetry && lowConfidence && (
+        <Card style={{ background: 'rgba(255,200,87,0.12)', borderColor: '#FFC857', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <AlertTriangle size={22} color="#FFC857" style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: T.ink, fontSize: 15 }}>Low confidence — crop for a better ID</div>
+              <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3, lineHeight: 1.5 }}>
+                Tighten the photo to just the fish and re-run — it usually sharpens the match.
+              </div>
+              <button onClick={onCropRetry} style={{
+                marginTop: 8, background: '#FFC857', color: '#062330', border: 'none', borderRadius: 8,
+                padding: '8px 14px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+                <Crop size={15} /> Crop &amp; try again
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
+      {/* Crop is always available, even on a confident match. */}
+      {onCropRetry && !lowConfidence && (
+        <div style={{ textAlign: 'right', marginBottom: 10 }}>
+          <button onClick={onCropRetry} style={{
+            background: 'transparent', border: 'none', color: T.brass, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, padding: 4, display: 'inline-flex', alignItems: 'center', gap: 5,
+          }}>
+            <Crop size={14} /> Crop photo &amp; re-ID
+          </button>
+        </div>
+      )}
       {/* HERO PHOTO — user's photo full-bleed with overlaid identity */}
       <div style={{
         position: 'relative', overflow: 'hidden',
