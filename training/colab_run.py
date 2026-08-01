@@ -323,9 +323,12 @@ import tensorflow as tf
 print(f"[colab_run] TensorFlow {tf.__version__}")
 gpus = tf.config.list_physical_devices("GPU")
 print(f"[colab_run] GPUs: {gpus}")
-if not gpus:
-    print("[colab_run] WARNING: no GPU. Runtime -> Change runtime type -> "
-          "T4 GPU or L4 GPU, then re-run this cell.")
+if not gpus and os.environ.get("REELINTEL_ALLOW_CPU") != "1":
+    die("No GPU detected — a CPU run can't finish 35 epochs before Colab "
+        "disconnects (no bundle would ever be produced). Fix: Runtime -> "
+        "Change runtime type -> T4 GPU (or L4), then Runtime -> Restart "
+        "session, then re-run this cell. (To override anyway, set "
+        "REELINTEL_ALLOW_CPU=1 — not recommended.)")
 
 
 # 7. Run training.
