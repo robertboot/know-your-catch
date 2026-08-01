@@ -7,6 +7,7 @@ import { T, screenSize, containerMaxWidth, chromeHeights, typeScale, cols } from
 import { ScreenSizeContext } from './screen-size.js';
 import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState } from './storage.js';
+import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
 import { migratePhotosToStore } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
@@ -227,6 +228,28 @@ export default function App() {
   // the CURRENT user's data to a PREVIOUS user's Supabase row.
   const authUidRef = useRef(null);
   useEffect(() => { authUidRef.current = session?.user?.id || null; }, [session]);
+
+  // App Review demo account — seed a sample logbook + PBs once so the
+  // reviewer sees a populated app (catches are on-device, so a fresh
+  // sign-in is otherwise empty). Only for DEMO_EMAIL, only when empty.
+  useEffect(() => {
+    const email = session?.user?.email;
+    if (!email || email.toLowerCase() !== DEMO_EMAIL) return;
+    try { if (localStorage.getItem('kyc_demo_seeded') === '1') return; } catch {}
+    setState(prev => {
+      try { localStorage.setItem('kyc_demo_seeded', '1'); } catch {}
+      if ((prev.catchLog || []).length > 0) return prev; // don't clobber real data
+      const seed = buildDemoSeed();
+      const next = {
+        ...prev,
+        anglerName: prev.anglerName || 'Demo Angler',
+        catchLog: seed.catchLog,
+        pbs: { ...prev.pbs, ...seed.pbs },
+      };
+      saveState(next);
+      return next;
+    });
+  }, [session]);
   useEffect(() => {
     const uid = session?.user?.id;
     // Reset the pull guard on sign-out so the next sign-in (even the
