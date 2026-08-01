@@ -240,24 +240,27 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
 export async function identifyPhoto(imageDataUrl, options = {}) {
   const { jurisdictionId = null } = options;
 
-  // Online-first: ask the cloud (Claude vision) for a strong ID. This
-  // also feeds the photo back into training so the on-device model
-  // improves. null = offline / signed-out / error → use on-device.
+  // DeepBlue (on-device) is now the PRIMARY identifier — it outperforms
+  // the cloud vision model, so we run it first and use its result.
+  //   Stages 1–3: detect / preprocess / classify (inside the adapter)
+  //   Stage 4: raw labels → speciesIds
+  //   Stage 5: jurisdiction constraint
+  //   Stage 6: rank + band + shape
+  try {
+    const topK = await classify(imageDataUrl);
+    if (topK && topK.length) {
+      return rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
+    }
+  } catch {
+    // Model not ready (e.g. first launch before it downloads) → fall back.
+  }
+
+  // Cold-start fallback ONLY: cloud vision when DeepBlue is unavailable.
   const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
   if (cloud) return cloud;
 
-  // Stages 1–3: detect / preprocess / classify happen inside the
-  // adapter so runtime specifics stay behind the seam.
-  const topK = await classify(imageDataUrl);
-
-  // Stage 4: raw labels → our speciesIds.
-  const mapped = mapLabelsToSpecies(topK);
-
-  // Stage 5: apply jurisdiction constraint.
-  const constrained = constrainToJurisdiction(mapped, jurisdictionId);
-
-  // Stage 6: rank + band + shape.
-  return rankAndBand(constrained);
+  // Nothing available — return an empty, banded result.
+  return rankAndBand([]);
 }
 
 /* Kept unchanged — surfaced by PhotoAnalyzingScreen while the model
