@@ -60,8 +60,7 @@ create policy "ocean-maps admin delete" on storage.objects
 --    so 6h is comfortably ahead of the data actually changing while
 --    still recovering quickly from a failed run.
 --
---    REPLACE BOTH PLACEHOLDERS BEFORE RUNNING:
---      YOUR_PROJECT_REF  → hfptpsmdfemduhkueyoz
+--    REPLACE ONE PLACEHOLDER BEFORE RUNNING (project ref is filled in):
 --      YOUR_CRON_SECRET  → the CRON_SECRET value set in edge secrets
 ------------------------------------------------------------------
 create extension if not exists pg_cron;
@@ -75,7 +74,7 @@ select cron.schedule(
   '17 */6 * * *',   -- :17 past the hour, every 6h (off the top-of-hour rush)
   $$
   select net.http_post(
-    url     := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/refresh-ocean-maps',
+    url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/refresh-ocean-maps',
     headers := jsonb_build_object(
                  'Content-Type',   'application/json',
                  'x-cron-secret',  'YOUR_CRON_SECRET'
