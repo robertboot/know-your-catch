@@ -2024,7 +2024,6 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
     }
   };
 
-  const heroAspect = isTablet ? '4 / 3' : '3 / 4';
   const nameSize   = isTablet ? 72 : 56;
   const sciSize    = isTablet ? 22 : 18;
   const ringSize   = isTablet ? 72 : 60;
@@ -2076,17 +2075,25 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           </button>
         </div>
       )}
-      {/* HERO PHOTO — user's photo full-bleed with overlaid identity */}
+      {/* HERO PHOTO — user's photo with overlaid identity.
+          No forced aspect ratio: the frame takes the photo's own shape
+          so nothing gets cropped. A fixed 4:3 / 3:4 box with object-fit
+          cover was chopping the head and tail off wide shots, which is
+          exactly the detail the angler is checking the ID against.
+          maxHeight keeps a very tall portrait from pushing the species
+          name and actions off-screen. */}
       <div style={{
         position: 'relative', overflow: 'hidden',
         borderRadius: 14, border: '1.5px solid #5ecdf2',
-        marginBottom: 14, aspectRatio: heroAspect, background: '#0a1420',
+        marginBottom: 14, background: '#0a1420',
         boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
+        display: 'flex',
       }}>
         <img src={imageDataUrl} alt="Your catch" style={{
-          position: 'absolute', inset: 0,
-          width: '100%', height: '100%', objectFit: 'cover',
-          display: 'block',
+          width: '100%', height: 'auto',
+          maxHeight: isTablet ? '62vh' : '58vh',
+          objectFit: 'contain',
+          display: 'block', margin: '0 auto',
         }} />
         <div aria-hidden style={{
           position: 'absolute', bottom: 0, left: 0, right: 0, height: '48%',
