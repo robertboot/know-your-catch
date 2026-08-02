@@ -4430,7 +4430,9 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
       <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         {/* Photo + circular crop-icon affordance */}
         <div style={{ position: 'relative' }}>
-          <img src={workingUrl} alt="Your catch" style={{ width: '100%', maxHeight: 300, objectFit: 'cover', display: 'block', background: '#000' }} />
+          {/* Fit the WHOLE photo (contain) — the model IDs the entire image,
+              so the preview must show all of it, not a cropped-to-fill view. */}
+          <img src={workingUrl} alt="Your catch" style={{ width: '100%', height: 300, objectFit: 'contain', display: 'block', background: '#000' }} />
           <button onClick={() => setCropping(true)} aria-label="Crop photo" style={{
             position: 'absolute', top: 12, right: 12,
             width: 42, height: 42, borderRadius: 999,
