@@ -3441,6 +3441,44 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     }
   };
 
+  // Re-read the (new) first photo's EXIF and drive the catch's location +
+  // time from it. Best-effort: photos saved+downscaled lose their EXIF, so
+  // if none is found we keep the current values rather than wiping them.
+  const refreshFirstPhotoMeta = async (photo) => {
+    try {
+      const dataUrl = typeof photo === 'string' ? photo : await photoAsDataUrl(photo);
+      if (!dataUrl) return;
+      const meta = await exifr.parse(dataUrl, {
+        tiff: true, exif: true, gps: true, translateValues: true, reviveValues: true, sanitize: true, mergeOutput: true,
+        pick: ['latitude', 'longitude', 'DateTimeOriginal', 'CreateDate', 'ModifyDate'],
+      });
+      const gotGps = !!(meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude));
+      const parsed = parseExifDate(meta?.DateTimeOriginal) || parseExifDate(meta?.CreateDate) || parseExifDate(meta?.ModifyDate);
+      if (gotGps) setLoc({ lat: meta.latitude, lon: meta.longitude, error: null, loading: false });
+      if (parsed) setWhen(parsed);
+      if (gotGps || parsed) {
+        setMetaSource('photo');
+        setPhotoExifStatus(gotGps && parsed ? 'gps+time' : gotGps ? 'gps' : 'time');
+      } else {
+        setPhotoExifStatus('none');
+      }
+    } catch { /* leave existing loc/time */ }
+  };
+
+  // Reorder photos (drag-drop on desktop, "Set #1" tap on touch). When the
+  // first photo changes, reload location + time from the new Photo 1.
+  const dragIdx = useRef(null);
+  const reorderPhotos = (from, to) => {
+    if (from == null || to == null || from === to) return;
+    if (from >= photos.length || to >= photos.length) return;
+    const next = [...photos];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    const firstChanged = next[0] !== photos[0];
+    setPhotos(next);
+    if (firstChanged) refreshFirstPhotoMeta(next[0]);
+  };
+
   // On-demand crop for a catch photo. DELIBERATELY not automatic:
   // catch photos are keepsakes — anglers usually want the people in
   // frame, so the whole photo goes in by default. (Fish ID's capture
@@ -3799,8 +3837,25 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             const p = photos[i];
             if (p) {
               return (
-                <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: i === 0 ? `1.5px solid ${T.brass}` : `1px solid ${T.cardEdge}` }}>
-                  <img src={photoThumbUrl(p)} alt={`Catch photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <div key={i}
+                  draggable
+                  onDragStart={() => { dragIdx.current = i; }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); reorderPhotos(dragIdx.current, i); dragIdx.current = null; }}
+                  onDragEnd={() => { dragIdx.current = null; }}
+                  style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', cursor: 'grab', border: i === 0 ? `1.5px solid ${T.brass}` : `1px solid ${T.cardEdge}` }}>
+                  <img src={photoThumbUrl(p)} alt={`Catch photo ${i + 1}`} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {i > 0 && (
+                    <button onClick={() => reorderPhotos(i, 0)} aria-label="Make this Photo 1" title="Make Photo 1 (sets location + time)" style={{
+                      position: 'absolute', bottom: 4, left: 4,
+                      borderRadius: 6, padding: '3px 7px',
+                      background: 'rgba(3, 27, 51, 0.85)', color: '#5ecdf2',
+                      border: '1px solid #5ecdf2', cursor: 'pointer',
+                      fontSize: 10, fontWeight: 800, letterSpacing: 0.6,
+                    }}>
+                      SET #1
+                    </button>
+                  )}
                   {i === 0 && (
                     <div style={{
                       position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -3858,7 +3913,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           })}
         </div>
         <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 10, lineHeight: 1.45, padding: '6px 8px', background: T.parchmentDeep, borderRadius: 6 }}>
-          <strong style={{ color: T.brass }}>Photo 1</strong> sets the catch's location &amp; time. If Photo 1 was taken away from the catch spot (e.g. at the dock), edit the location and time below.
+          <strong style={{ color: T.brass }}>Photo 1</strong> sets the catch's location &amp; time. Drag to reorder, or tap <strong style={{ color: T.brass }}>SET #1</strong> to make another photo first — the location &amp; time reload from it. If Photo 1 was taken away from the spot (e.g. at the dock), edit them below.
         </div>
         {/* Take/Upload buttons removed — you reach this page with a
             photo already, and the dashed ADD tiles above add more.
