@@ -3069,6 +3069,15 @@ export function CatchDetailScreen({ id, state, update, onEdit, onBack }) {
 export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel, onHome, editingId, preselectSpeciesId, prefilledPhoto, aiConfidence, aiIdentifiedSpeciesId, aiWasConfirmed, openUploadOnMount, openSuggestOnMount, confirmPhoto }) {
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
+  // One-time pro tip on the first NEW catch: the first photo sets location + time.
+  const [showPhotoTip, setShowPhotoTip] = useState(() => {
+    if (isEdit) return false;
+    try { return localStorage.getItem('kyc_catch_photo_tip') !== '1'; } catch { return true; }
+  });
+  const dismissPhotoTip = () => {
+    setShowPhotoTip(false);
+    try { localStorage.setItem('kyc_catch_photo_tip', '1'); } catch {}
+  };
   const [speciesId, setSpeciesId] = useState(existing?.speciesId || preselectSpeciesId || '');
   const [length, setLength] = useState(existing?.length != null ? String(existing.length) : '');
   const [weight, setWeight] = useState(existing?.weight != null ? String(existing.weight) : '');
@@ -3739,6 +3748,34 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   return (
     <div style={{ padding: '16px 16px 24px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>{isEdit ? 'Edit catch' : 'Log a catch'}</H1>
+
+      {/* First-catch pro tip — the first photo drives location + time */}
+      {showPhotoTip && (
+        <div style={{
+          position: 'relative', overflow: 'hidden', marginBottom: 14,
+          background: 'radial-gradient(120% 140% at 100% 0%, rgba(25,212,242,0.22) 0%, rgba(25,212,242,0) 55%), linear-gradient(135deg, rgba(94,205,242,0.14) 0%, rgba(6,24,43,0.6) 60%)',
+          border: '1px solid rgba(94,205,242,0.5)', borderRadius: 14,
+          padding: '13px 40px 13px 13px',
+          boxShadow: '0 8px 26px rgba(25,212,242,0.12), inset 0 1px 0 rgba(255,255,255,0.05)',
+        }}>
+          <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+            <MapPinIcon size={20} color="#5ecdf2" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'linear-gradient(90deg,#19D4F2,#5ecdf2)', color: '#062330', fontSize: 10, fontWeight: 900, letterSpacing: 1.4, padding: '3px 9px', borderRadius: 999, marginBottom: 7 }}>PRO TIP</span>
+              <div style={{ fontSize: 15, fontWeight: 900, color: '#f2f8fc' }}>Your first photo sets the spot &amp; time</div>
+              <div style={{ fontSize: 13, color: '#c3d3e0', marginTop: 4, lineHeight: 1.5 }}>
+                The first photo you add logs this catch's <b style={{ color: '#e5edf5' }}>location and time</b> — pulled from that photo's GPS and timestamp. Add your on-the-water shot first; you can fix either below.
+              </div>
+            </div>
+          </div>
+          <button onClick={dismissPhotoTip} aria-label="Dismiss tip" style={{
+            position: 'absolute', top: 9, right: 9, background: 'rgba(3,19,32,0.4)',
+            border: 'none', borderRadius: 999, color: '#9fb4c6', cursor: 'pointer', padding: 4, display: 'inline-flex',
+          }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {aiBadgeConfidence != null && (
         <div style={{
