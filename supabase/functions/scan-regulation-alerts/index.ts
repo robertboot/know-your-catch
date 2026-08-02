@@ -110,19 +110,39 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'server_misconfigured' }, 500);
   }
 
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return jsonResponse({ error: 'no_auth' }, 401);
-  const jwt = authHeader.slice(7);
+  // Two ways in:
+  //   1. x-cron-secret  — headless pg_cron. There is no caller, so this
+  //      path can only do a real send, never a test send.
+  //   2. Bearer <user JWT> — the admin hitting it from the console.
+  //
+  // The cron path exists because this function used to accept ONLY a
+  // user JWT: it resolves the token with getUser() and checks the
+  // resulting email against the admin allowlist. A service_role key is
+  // not a user JWT and carries no email, so the scheduled job could
+  // never have authenticated — it had been failing every day.
+  const CRON_SECRET = Deno.env.get('CRON_SECRET');
+  const cronOk = !!CRON_SECRET && req.headers.get('x-cron-secret') === CRON_SECRET;
+
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
-  if (userErr || !userRes?.user?.email) return jsonResponse({ error: 'invalid_auth' }, 401);
-  const callerEmail = userRes.user.email;
-  const callerId    = userRes.user.id;
-  if (!isAdminEmail(callerEmail)) return jsonResponse({ error: 'forbidden' }, 403);
+  let callerEmail: string | null = null;
+  let callerId: string | null = null;
+
+  if (!cronOk) {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) return jsonResponse({ error: 'no_auth' }, 401);
+    const jwt = authHeader.slice(7);
+    const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
+    if (userErr || !userRes?.user?.email) return jsonResponse({ error: 'invalid_auth' }, 401);
+    callerEmail = userRes.user.email;
+    callerId    = userRes.user.id;
+    if (!isAdminEmail(callerEmail)) return jsonResponse({ error: 'forbidden' }, 403);
+  }
 
   let body: { test_only?: boolean } = {};
   try { body = await req.json(); } catch {}
-  const testOnly = !!body.test_only;
+  // test_only scopes the scan to the caller's own row and redirects the
+  // email to them — meaningless without a caller, so cron ignores it.
+  const testOnly = !cronOk && !!body.test_only;
 
   // Load the current regulation snapshot into a Map keyed by
   // (species_id + '|' + jurisdiction).

@@ -71,7 +71,7 @@ select cron.unschedule('refresh-ocean-maps')
 
 select cron.schedule(
   'refresh-ocean-maps',
-  '17 */6 * * *',   -- :17 past the hour, every 6h (off the top-of-hour rush)
+  '42 */6 * * *',   -- :42, every 6h — staggered off regs-auto-update-hourly (:17)
   $$
   select net.http_post(
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/refresh-ocean-maps',
