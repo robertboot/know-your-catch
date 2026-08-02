@@ -1163,24 +1163,39 @@ export function IdentifyScreen({
       {/* First-run crop tip */}
       {showCropTip && (
         <div style={{
-          position: 'relative', background: 'rgba(94,205,242,0.10)',
-          border: '1px solid rgba(94,205,242,0.45)', borderRadius: 12,
-          padding: isTablet ? '14px 40px 14px 16px' : '12px 38px 12px 14px',
+          position: 'relative', overflow: 'hidden',
+          background: 'radial-gradient(120% 140% at 100% 0%, rgba(25,212,242,0.22) 0%, rgba(25,212,242,0) 55%), linear-gradient(135deg, rgba(94,205,242,0.14) 0%, rgba(6,24,43,0.6) 60%)',
+          border: '1px solid rgba(94,205,242,0.5)', borderRadius: 16,
+          padding: 14, boxShadow: '0 8px 26px rgba(25,212,242,0.12), inset 0 1px 0 rgba(255,255,255,0.05)',
+          display: 'flex', gap: 14, alignItems: 'center',
         }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <Crop size={18} color={accent} strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <div style={{ fontSize: isTablet ? 15 : 14, fontWeight: 800, color: '#e5edf5' }}>Tip: crop for a sharper ID</div>
-              <div style={{ fontSize: isTablet ? 14 : 13, color: '#b9c9d6', marginTop: 4, lineHeight: 1.5 }}>
-                Zoom in on the fish. A tight crop with less background gives a more accurate ID — especially when confidence is low. Just tap <b style={{ color: '#e5edf5' }}>Crop &amp; try again</b>.
-              </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'linear-gradient(90deg,#19D4F2,#5ecdf2)', color: '#062330', fontSize: 10, fontWeight: 900, letterSpacing: 1.4, padding: '3px 9px', borderRadius: 999, marginBottom: 8 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#062330"><path d="M12 2l2.4 6.9H21l-5.3 4 2 6.9L12 15.7 6.3 19.8l2-6.9L3 8.9h6.6z" /></svg>
+              PRO TIP
+            </span>
+            <div style={{ fontSize: isTablet ? 17 : 16, fontWeight: 900, color: '#f2f8fc' }}>Crop for a sharper ID</div>
+            <div style={{ fontSize: isTablet ? 14 : 13, color: '#c3d3e0', marginTop: 5, lineHeight: 1.5 }}>
+              Zoom in on the fish. A tight crop with less background gives a more accurate ID — especially when confidence is low. Just tap{' '}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(25,212,242,0.16)', color: '#a9ecff', border: '1px solid rgba(25,212,242,0.4)', borderRadius: 8, padding: '1px 8px', fontWeight: 800, fontSize: '0.92em', whiteSpace: 'nowrap' }}>✂ Crop &amp; try again</span>.
             </div>
           </div>
+          <svg width={isTablet ? 92 : 84} height={isTablet ? 92 : 84} viewBox="0 0 84 84" fill="none" style={{ flexShrink: 0 }}>
+            <defs><linearGradient id="tipwater" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#0e3a5c" /><stop offset="1" stopColor="#0a2036" /></linearGradient></defs>
+            <rect x="8" y="8" width="68" height="68" rx="12" fill="url(#tipwater)" stroke="rgba(94,205,242,0.25)" />
+            <g transform="translate(42 42)" fill="#5ecdf2">
+              <path d="M-16 0c6-9 18-11 26-4 3-3 7-4 10-4-2 3-2 6 0 8-3 0-7-1-10-4-8 7-20 5-26-4z" opacity="0.95" />
+              <circle cx="9" cy="-1.5" r="1.6" fill="#062330" />
+            </g>
+            <g stroke="#19D4F2" strokeWidth="3" strokeLinecap="round">
+              <path d="M20 28v-8h8" /><path d="M64 28v-8h-8" /><path d="M20 56v8h8" /><path d="M64 56v8h-8" />
+            </g>
+          </svg>
           <button onClick={dismissCropTip} aria-label="Dismiss tip" style={{
-            position: 'absolute', top: 8, right: 8, background: 'transparent',
-            border: 'none', color: '#7d94a8', cursor: 'pointer', padding: 4,
+            position: 'absolute', top: 9, right: 9, background: 'rgba(3,19,32,0.4)',
+            border: 'none', borderRadius: 999, color: '#9fb4c6', cursor: 'pointer', padding: 4, display: 'inline-flex',
           }}>
-            <X size={16} />
+            <X size={14} />
           </button>
         </div>
       )}
