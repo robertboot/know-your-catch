@@ -451,7 +451,14 @@ export async function uploadTrainingImage(file, speciesId, opts = {}) {
    Both land as status='verified' (owner-vetted) and are safe to
    include in the next export.
    Returns { ok, id, storagePath, error }. */
-export async function saveModelFeedback({ file, speciesId, originalSpeciesId, source }) {
+/* trusted: the caller is the admin console, where the person saving IS
+   the reviewer. Everything from the mobile app is untrusted by default.
+
+   An angler's correction is an unreviewed human claim — they can
+   misidentify a fish just as the model can — so corrections land
+   'pending' and wait for admin review before they can train anything.
+   Confirmations (angler agreed with the model) stay 'verified'. */
+export async function saveModelFeedback({ file, speciesId, originalSpeciesId, source, trusted = false }) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
   if (!file || !speciesId) return { ok: false, error: 'missing file or species' };
@@ -477,16 +484,20 @@ export async function saveModelFeedback({ file, speciesId, originalSpeciesId, so
   const up = await uploadBytesSigned(storagePath, file);
   if (!up.ok) return { ok: false, error: up.error };
 
+  // Only stamp reviewed_by / reviewed_at when the row really is
+  // reviewed — stamping a pending row would claim a review that never
+  // happened and mislead whoever audits the queue later.
+  const isVerified = trusted || source === 'model_confirmation';
   const { data, error } = await c.from('training_images').insert({
     id,
     species_id: speciesId,
     storage_path: storagePath,
     source,
-    status: 'verified',
+    status: isVerified ? 'verified' : 'pending',
     original_species_id: originalSpeciesId || null,
     uploaded_by: email,
-    reviewed_by: email,
-    reviewed_at: new Date().toISOString(),
+    reviewed_by: isVerified ? email : null,
+    reviewed_at: isVerified ? new Date().toISOString() : null,
   }).select('id').single();
   if (error) {
     await c.storage.from(BUCKET).remove([storagePath]).catch(() => {});

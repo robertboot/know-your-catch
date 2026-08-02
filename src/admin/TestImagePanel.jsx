@@ -222,6 +222,9 @@ export default function TestImagePanel() {
       speciesId,
       originalSpeciesId,
       source,
+      // Admin console — the person saving is the reviewer, so this
+      // lands verified rather than queuing for review.
+      trusted: true,
     });
     setSaving(false);
     if (!r.ok) {
