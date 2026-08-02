@@ -32,6 +32,10 @@ export const defaultState = {
   // Highest consecutive-correct run in the Fish ID quiz, ever. Beat
   // this to set a new best. Session streak is transient.
   quizBestStreak: 0,
+  // Quiz: when true, drop bag/size-limit questions and ask only
+  // identification + lookalikes. Some anglers want a pure fish-ID
+  // drill without the regulation recall.
+  quizIdOnly: false,
   // Custom species suggested by the user via the Log-a-Catch flow.
   // Each entry: { id: 'custom_XXXX', commonName, scientific, altNames[],
   //   notes, submittedAt, status: 'pending'|'approved'|'rejected'|'merged',

@@ -61,7 +61,16 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
       });
       return photo.dataUrl || null;
     } catch (e) {
-      return null; // user cancelled
+      // Capacitor throws for a plain user-cancel too, so ONLY the known
+      // cancel strings may be swallowed. Everything else — Photos
+      // permission denied, plugin failure, device out of memory/space —
+      // has to surface. Blanket-returning null here is what made the
+      // hero "Select Photo" button look like it did nothing at all.
+      const msg = String((e && e.message) || e || '');
+      if (/cancel/i.test(msg) || /no image picked/i.test(msg)) return null;
+      const err = new Error(msg || 'The camera or photo library did not open.');
+      err.cause = e;
+      throw err;
     }
   }
   // Web fallback: programmatically open a file picker. Prefer camera

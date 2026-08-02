@@ -2104,3 +2104,155 @@ export function CropStep({
     </div>
   );
 }
+
+/* ============================================================
+   COACH BUBBLE — anchored, overlaying pro tip
+   ============================================================
+   Inline tip cards get scrolled past and read as decoration. This
+   floats ABOVE the UI on a dimmed backdrop with a spotlight hole
+   punched over the target element and an arrow aimed at it, so the
+   tip and the thing it describes are impossible to separate.
+
+   The spotlight is a fixed div sized to the target's rect carrying a
+   huge box-shadow spread — everything outside the rect is dimmed,
+   the target itself shows through untouched. No clip-path, no
+   portal, no z-index surgery on the target.
+
+   Usage:
+     const btnRef = useRef(null);
+     <button ref={btnRef}>MAP</button>
+     {show && <CoachBubble targetRef={btnRef} onDismiss={...}>
+       tap <b>MAP</b> to see where you caught them.
+     </CoachBubble>}
+
+   Renders nothing until the target has a real rect, so it's safe to
+   mount alongside a target that hasn't laid out yet. */
+export function CoachBubble({
+  targetRef, children, onDismiss,
+  title = 'PRO TIP',
+  placement = 'auto',   // 'auto' | 'top' | 'bottom'
+  spotlightPad = 6,
+  spotlightRadius = 12,
+}) {
+  const [rect, setRect] = useState(null);
+  const { size } = useScreenSize();
+  const isTablet = size !== 'phone';
+
+  useEffect(() => {
+    const measure = () => {
+      const el = targetRef?.current;
+      if (!el || !el.getBoundingClientRect) { setRect(null); return; }
+      const r = el.getBoundingClientRect();
+      // Zero-size means not laid out (or display:none) — skip.
+      if (!r.width || !r.height) { setRect(null); return; }
+      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+    measure();
+    // Capture phase catches scrolls inside nested containers (the app
+    // scrolls a div, not the window), so the bubble tracks the target.
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    const id = setInterval(measure, 500); // catches late layout / font swap
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+      clearInterval(id);
+    };
+  }, [targetRef]);
+
+  if (!rect) return null;
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const BUBBLE_W = Math.min(isTablet ? 340 : 290, vw - 24);
+  const GAP = 12;
+
+  // Prefer below the target; flip above when there isn't room.
+  const roomBelow = vh - (rect.top + rect.height);
+  const below = placement === 'bottom' ? true
+              : placement === 'top' ? false
+              : roomBelow > 190;
+
+  // Centre on the target, then clamp so the bubble never leaves the
+  // viewport. The arrow stays aimed at the target regardless.
+  const targetCx = rect.left + rect.width / 2;
+  let bubbleLeft = targetCx - BUBBLE_W / 2;
+  bubbleLeft = Math.max(12, Math.min(bubbleLeft, vw - BUBBLE_W - 12));
+  const arrowLeft = Math.max(14, Math.min(targetCx - bubbleLeft - 6, BUBBLE_W - 26));
+
+  const bubbleStyle = below
+    ? { top: rect.top + rect.height + GAP }
+    : { bottom: vh - rect.top + GAP };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 70 }}>
+      {/* Dismiss layer — tap anywhere off the target to close. */}
+      <div onClick={onDismiss} style={{ position: 'absolute', inset: 0 }} />
+
+      {/* Spotlight: dims everything except the target rect. */}
+      <div aria-hidden style={{
+        position: 'fixed',
+        top: rect.top - spotlightPad,
+        left: rect.left - spotlightPad,
+        width: rect.width + spotlightPad * 2,
+        height: rect.height + spotlightPad * 2,
+        borderRadius: spotlightRadius,
+        boxShadow: '0 0 0 9999px rgba(4,12,22,0.72)',
+        pointerEvents: 'none',
+      }} />
+      {/* Pulsing ring on the target so the eye lands there first. */}
+      <div aria-hidden className="kyc-pulse" style={{
+        position: 'fixed',
+        top: rect.top - spotlightPad,
+        left: rect.left - spotlightPad,
+        width: rect.width + spotlightPad * 2,
+        height: rect.height + spotlightPad * 2,
+        borderRadius: spotlightRadius,
+        pointerEvents: 'none',
+      }} />
+
+      <div role="dialog" aria-label={title} style={{
+        position: 'fixed', left: bubbleLeft, width: BUBBLE_W,
+        ...bubbleStyle,
+        background: 'linear-gradient(135deg, rgba(20,62,92,0.98) 0%, rgba(9,30,50,0.98) 100%)',
+        border: '1px solid rgba(94,205,242,0.55)',
+        borderRadius: 14,
+        padding: '12px 34px 13px 13px',
+        boxShadow: '0 18px 44px rgba(0,0,0,0.55)',
+      }}>
+        {/* Arrow — rotated square straddling the bubble edge. */}
+        <div aria-hidden style={{
+          position: 'absolute', left: arrowLeft, width: 12, height: 12,
+          background: below ? 'rgba(20,62,92,0.98)' : 'rgba(9,30,50,0.98)',
+          borderLeft: '1px solid rgba(94,205,242,0.55)',
+          borderTop: '1px solid rgba(94,205,242,0.55)',
+          transform: 'rotate(45deg)',
+          ...(below ? { top: -7 } : { bottom: -7, transform: 'rotate(225deg)' }),
+        }} />
+
+        {title && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: 'linear-gradient(90deg,#19D4F2,#5ecdf2)', color: '#062330',
+            fontSize: 10, fontWeight: 900, letterSpacing: 1.4,
+            padding: '3px 9px', borderRadius: 999, marginBottom: 7,
+          }}>
+            <Sparkles size={11} />
+            {title}
+          </span>
+        )}
+        <div style={{ fontSize: isTablet ? 14.5 : 13.5, color: '#dbe8f2', lineHeight: 1.5 }}>
+          {children}
+        </div>
+
+        <button onClick={onDismiss} aria-label="Dismiss tip" style={{
+          position: 'absolute', top: 6, right: 6,
+          background: 'transparent', border: 'none', color: '#7d94a8',
+          cursor: 'pointer', padding: 6,
+        }}>
+          <X size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}

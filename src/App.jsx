@@ -386,6 +386,7 @@ export default function App() {
   const [splashInitialMode, setSplashInitialMode] = useState('signin');
 
   const [saveError, setSaveError] = useState(null); // 'quota' | 'other' | null
+  const [captureError, setCaptureError] = useState(null); // camera/library failure message
 
   // update() merges patch into state and persists. If localStorage
   // refuses the write (quota or otherwise) we surface a banner so the
@@ -627,7 +628,15 @@ export default function App() {
      lands on catch_entry with photo + top species + confidence pre-
      filled. Fully offline. */
   const startCaptureFlow = async (source = 'prompt') => {
-    const dataUrl = await getPhoto({ source });
+    let dataUrl = null;
+    try {
+      dataUrl = await getPhoto({ source });
+    } catch (e) {
+      // Real failure (permission, plugin, device space) — say so rather
+      // than leaving the button looking inert.
+      setCaptureError(e?.message || 'The camera or photo library did not open.');
+      return;
+    }
     if (!dataUrl) {
       // Native camera denial: drop the angler on catch_entry with no
       // photo so they can still log manually. Chooser cancels stay
@@ -1202,10 +1211,31 @@ export default function App() {
               {saveError === 'quota' ? "Storage is full." : "Couldn't save."}
             </strong>{' '}
             {saveError === 'quota'
-              ? 'Your browser is out of space for the app. Delete some catches or photos to free room, then try again.'
+              ? 'ReelIntel is out of room on this device. Delete some catches or photos to free space, then try again.'
               : 'Your last change may not have persisted. See Settings → Export backup to download what you have.'}
           </div>
           <button onClick={() => setSaveError(null)} aria-label="Dismiss" style={{
+            background: 'transparent', border: 'none', color: T.parchment, cursor: 'pointer', padding: 4,
+          }}>✕</button>
+        </div>
+      )}
+
+      {captureError && (
+        <div role="alert" style={{
+          position: 'fixed', top: 'env(safe-area-inset-top)', left: 0, right: 0,
+          maxWidth: containerMaxWidth(size), margin: '0 auto',
+          zIndex: 60,
+          background: '#3A0F12', borderBottom: `1px solid ${T.closed}`,
+          color: T.parchment, padding: '10px 14px',
+          fontSize: 14, lineHeight: 1.45,
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <div style={{ flex: 1 }}>
+            <strong style={{ color: T.closed }}>Couldn't open the photo picker.</strong>{' '}
+            {captureError}
+            {' '}Check Settings → ReelIntel → Photos on your device, and that there's free space.
+          </div>
+          <button onClick={() => setCaptureError(null)} aria-label="Dismiss" style={{
             background: 'transparent', border: 'none', color: T.parchment, cursor: 'pointer', padding: 4,
           }}>✕</button>
         </div>

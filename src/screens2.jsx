@@ -44,7 +44,7 @@ function CoordsLink({ lat, lon }) {
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
-  PhotoImg, CropStep,
+  PhotoImg, CropStep, CoachBubble,
   inputStyle,
 } from './components.jsx';
 import { AccountSection } from './auth-ui.jsx';
@@ -2230,6 +2230,7 @@ function timeOfDay(sunAlt, dateIso) {
 export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
   // One-time coach mark pointing at the MAP button (first Logbook visit).
+  const mapBtnRef = useRef(null);
   const [showMapHint, setShowMapHint] = useState(() => {
     try { return localStorage.getItem('kyc_logmap_hint') !== '1'; } catch { return true; }
   });
@@ -2365,9 +2366,9 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               <BookOpen size={16} /> LIST
             </button>
             <button
+              ref={mapBtnRef}
               onClick={() => { dismissMapHint(); setView('map'); }}
               aria-pressed={view === 'map'}
-              className={showMapHint && view !== 'map' ? 'kyc-pulse' : undefined}
               style={{
                 flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
                 fontSize: 16, fontWeight: 800, letterSpacing: 0.8,
@@ -2406,30 +2407,13 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
             </button>
           </div>
 
-          {/* One-time coach mark pointing at the MAP button */}
+          {/* One-time coach mark — floats over the UI anchored to the
+              MAP button rather than sitting inline, where it read as
+              just another card and got scrolled past. */}
           {showMapHint && view !== 'map' && (
-            <div style={{ position: 'relative', marginTop: -4, marginBottom: 12 }}>
-              <div aria-hidden style={{
-                position: 'absolute', left: '42%', top: -5, width: 11, height: 11,
-                background: '#0e2c44', borderLeft: '1px solid rgba(94,205,242,0.5)',
-                borderTop: '1px solid rgba(94,205,242,0.5)', transform: 'rotate(45deg)',
-              }} />
-              <div style={{
-                background: '#0e2c44', border: '1px solid rgba(94,205,242,0.5)', borderRadius: 10,
-                padding: '10px 34px 10px 12px', position: 'relative',
-              }}>
-                <div style={{ fontSize: 13, color: '#dbe8f2', fontWeight: 700, lineHeight: 1.45 }}>
-                  <span style={{ color: '#5ecdf2', fontWeight: 900 }}>New — </span>
-                  tap <b style={{ color: '#fff' }}>MAP</b> to see where you caught them.
-                </div>
-                <button onClick={dismissMapHint} aria-label="Dismiss" style={{
-                  position: 'absolute', top: 6, right: 6, background: 'transparent',
-                  border: 'none', color: '#7d94a8', cursor: 'pointer', padding: 4,
-                }}>
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
+            <CoachBubble targetRef={mapBtnRef} onDismiss={dismissMapHint} title="NEW">
+              Tap <b style={{ color: '#fff' }}>MAP</b> to see where you caught them.
+            </CoachBubble>
           )}
 
           {/* Collapsible filters */}
@@ -3070,6 +3054,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   const existing = editingId ? (state.catchLog || []).find(c => c.id === editingId) : null;
   const isEdit = !!existing;
   // One-time pro tip on the first NEW catch: the first photo sets location + time.
+  const photo1Ref = useRef(null);
   const [showPhotoTip, setShowPhotoTip] = useState(() => {
     if (isEdit) return false;
     try { return localStorage.getItem('kyc_catch_photo_tip') !== '1'; } catch { return true; }
@@ -3375,8 +3360,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       cameraRef.current?.click();
       return;
     }
-    const dataUrl = await getPhoto({ cameraOnly: true });
-    if (dataUrl) acceptCameraPhoto(dataUrl);
+    // getPhoto throws on real failures (permission, plugin, device
+    // space) and returns null only on a genuine user cancel.
+    try {
+      const dataUrl = await getPhoto({ cameraOnly: true });
+      if (dataUrl) acceptCameraPhoto(dataUrl);
+    } catch (e) {
+      console.error('[catch-entry] camera failed', e);
+    }
   };
 
   const handleUploadPick = (e) => {
@@ -3788,32 +3779,16 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     <div style={{ padding: '16px 16px 24px' }}>
       <H1 size={22} style={{ marginBottom: 14 }}>{isEdit ? 'Edit catch' : 'Log a catch'}</H1>
 
-      {/* First-catch pro tip — the first photo drives location + time */}
+      {/* First-catch pro tip — anchored over the Photo 1 slot so the
+          "first photo" the copy refers to is the thing spotlit, rather
+          than an inline card the angler scrolls past. */}
       {showPhotoTip && (
-        <div style={{
-          position: 'relative', overflow: 'hidden', marginBottom: 14,
-          background: 'radial-gradient(120% 140% at 100% 0%, rgba(25,212,242,0.22) 0%, rgba(25,212,242,0) 55%), linear-gradient(135deg, rgba(94,205,242,0.14) 0%, rgba(6,24,43,0.6) 60%)',
-          border: '1px solid rgba(94,205,242,0.5)', borderRadius: 14,
-          padding: '13px 40px 13px 13px',
-          boxShadow: '0 8px 26px rgba(25,212,242,0.12), inset 0 1px 0 rgba(255,255,255,0.05)',
-        }}>
-          <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
-            <MapPinIcon size={20} color="#5ecdf2" strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'linear-gradient(90deg,#19D4F2,#5ecdf2)', color: '#062330', fontSize: 10, fontWeight: 900, letterSpacing: 1.4, padding: '3px 9px', borderRadius: 999, marginBottom: 7 }}>PRO TIP</span>
-              <div style={{ fontSize: 15, fontWeight: 900, color: '#f2f8fc' }}>Your first photo sets the spot &amp; time</div>
-              <div style={{ fontSize: 13, color: '#c3d3e0', marginTop: 4, lineHeight: 1.5 }}>
-                The first photo you add logs this catch's <b style={{ color: '#e5edf5' }}>location and time</b> — pulled from that photo's GPS and timestamp. Add your on-the-water shot first; you can fix either below.
-              </div>
-            </div>
-          </div>
-          <button onClick={dismissPhotoTip} aria-label="Dismiss tip" style={{
-            position: 'absolute', top: 9, right: 9, background: 'rgba(3,19,32,0.4)',
-            border: 'none', borderRadius: 999, color: '#9fb4c6', cursor: 'pointer', padding: 4, display: 'inline-flex',
-          }}>
-            <X size={14} />
-          </button>
-        </div>
+        <CoachBubble targetRef={photo1Ref} onDismiss={dismissPhotoTip} spotlightRadius={10}>
+          <b style={{ color: '#f2f8fc' }}>This slot sets the spot &amp; time.</b>{' '}
+          Photo 1 logs this catch's location and time from its GPS and
+          timestamp. Add your on-the-water shot here first — you can fix
+          either below.
+        </CoachBubble>
       )}
 
       {aiBadgeConfidence != null && (
@@ -3839,6 +3814,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             if (p) {
               return (
                 <div key={i}
+                  ref={i === 0 ? photo1Ref : undefined}
                   draggable
                   onDragStart={() => { dragIdx.current = i; }}
                   onDragOver={(e) => e.preventDefault()}
@@ -3892,6 +3868,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             return (
               <button
                 key={i}
+                ref={i === 0 ? photo1Ref : undefined}
                 type="button"
                 onClick={isNext ? () => uploadRef.current?.click() : undefined}
                 disabled={!isNext}
@@ -4717,7 +4694,10 @@ function pickQuizQuestion(state, jurisdiction, prevSpeciesId = null, seenAnchorI
   // With jurisdiction: species 5/8, bag+size 2/8 (1/4), lookalikes 1/8.
   // Without jurisdiction we can't ask reg questions — species 7/8,
   // lookalikes 1/8.
-  const weighted = jurisdiction
+  // quizIdOnly drops the bag/size regulation questions entirely, so the
+  // quiz becomes a pure identification drill (species + lookalikes).
+  const regsOn = !!jurisdiction && !state.quizIdOnly;
+  const weighted = regsOn
     ? [['species', 5], ['bag', 1], ['size', 1], ['lookalikes', 1]]
     : [['species', 7], ['lookalikes', 1]];
   const total = weighted.reduce((s, [, w]) => s + w, 0);
@@ -4812,6 +4792,18 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
     setToastTier(null);
     setQuestion(pickQuizQuestion(state, jurisdiction, question?.species?.id, seenAnchorIds));
   };
+
+  // Turning on "Fish ID only" while a bag/size question is on screen
+  // would otherwise leave the angler staring at the exact question type
+  // they just switched off. Re-roll immediately — but only if they
+  // haven't answered yet, so a graded answer is never yanked away.
+  useEffect(() => {
+    if (!state.quizIdOnly) return;
+    if (selectedKey) return;
+    if (question?.type !== 'bag' && question?.type !== 'size') return;
+    setQuestion(pickQuizQuestion(state, jurisdiction, question?.species?.id, seenAnchorIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.quizIdOnly]);
 
   const pick = (opt) => {
     if (selectedKey) return;
@@ -4959,6 +4951,26 @@ export function QuizScreen({ state, jurisdiction, update, onPickSpecies, onBack 
         <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginBottom: 6, letterSpacing: 0.4 }}>
           {score.full} full · {score.partial} partial · {score.wrong} wrong
         </div>
+      )}
+      {/* ID-only toggle. Regulation recall (bag / size) is the part
+          anglers most often want out of the way — with this on, the
+          quiz is purely identification + lookalikes. Only meaningful
+          when a jurisdiction is set; without one there are no reg
+          questions to suppress. */}
+      {jurisdiction && (
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          marginBottom: isTablet ? 12 : 10, cursor: 'pointer',
+          fontSize: isTablet ? 14 : 12, color: T.inkSoft,
+        }}>
+          <input
+            type="checkbox"
+            checked={!!state.quizIdOnly}
+            onChange={(e) => update({ quizIdOnly: e.target.checked })}
+            style={{ width: 18, height: 18, accentColor: T.brass, cursor: 'pointer' }}
+          />
+          Fish ID only — skip regulation questions
+        </label>
       )}
       <div style={{ fontSize: isTablet ? 15 : 12, color: T.inkMute, marginBottom: isTablet ? 18 : 14 }}>
         {typeLabel}
