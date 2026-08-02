@@ -79,6 +79,10 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
     input.style.left = '-9999px';
     input.style.opacity = '0';
     const cleanup = () => { try { input.remove(); } catch {} };
+    // Cancelling the native picker fires 'cancel' (modern WebKit/Chromium)
+    // but never 'change' — clean up the node and resolve so we don't leak
+    // a hidden input and a pending promise per cancel.
+    input.oncancel = () => { cleanup(); resolve(null); };
     input.onchange = () => {
       const f = input.files && input.files[0];
       if (!f) { cleanup(); return resolve(null); }

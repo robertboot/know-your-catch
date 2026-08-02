@@ -3459,9 +3459,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       if (gotGps || parsed) {
         setMetaSource('photo');
         setPhotoExifStatus(gotGps && parsed ? 'gps+time' : gotGps ? 'gps' : 'time');
-      } else {
-        setPhotoExifStatus('none');
       }
+      // If the new Photo 1 has no EXIF we keep the existing loc/time AND
+      // the existing status — flipping it to 'none' would misrepresent
+      // data we actually retained.
     } catch { /* leave existing loc/time */ }
   };
 
