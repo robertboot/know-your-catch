@@ -35,7 +35,7 @@ import { savePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl } from './pho
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
-  PhotoImg,
+  PhotoImg, CoachBubble,
   inputStyle,
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
@@ -1003,14 +1003,10 @@ export function IdentifyScreen({
   const isTablet = size !== 'phone';
   const fileRef = useRef(null);
   const [q, setQ] = useState('');
-  // One-time crop tip — shown the first time the angler opens Fish ID.
-  const [showCropTip, setShowCropTip] = useState(() => {
-    try { return localStorage.getItem('kyc_cropid_tip_dismissed') !== '1'; } catch { return true; }
-  });
-  const dismissCropTip = () => {
-    setShowCropTip(false);
-    try { localStorage.setItem('kyc_cropid_tip_dismissed', '1'); } catch {}
-  };
+  // The crop tip used to live here, on the pre-scan screen, where it was
+  // pre-education about a button the angler hadn't met yet. It now lives
+  // in PhotoResultScreen anchored to the actual "Crop & try again"
+  // button, so it fires at the moment cropping would help.
 
   // "Scan Another" from the results page lands here and opens the photo
   // picker immediately so the angler can shoot the next fish.
@@ -1160,45 +1156,6 @@ export function IdentifyScreen({
       // — the grid→flex switch is — but a cheap guardrail.
       maxWidth: '100%', boxSizing: 'border-box',
     }}>
-      {/* First-run crop tip */}
-      {showCropTip && (
-        <div style={{
-          position: 'relative', overflow: 'hidden',
-          background: 'radial-gradient(120% 140% at 100% 0%, rgba(25,212,242,0.22) 0%, rgba(25,212,242,0) 55%), linear-gradient(135deg, rgba(94,205,242,0.14) 0%, rgba(6,24,43,0.6) 60%)',
-          border: '1px solid rgba(94,205,242,0.5)', borderRadius: 16,
-          padding: 14, boxShadow: '0 8px 26px rgba(25,212,242,0.12), inset 0 1px 0 rgba(255,255,255,0.05)',
-          display: 'flex', gap: 14, alignItems: 'center',
-        }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'linear-gradient(90deg,#19D4F2,#5ecdf2)', color: '#062330', fontSize: 10, fontWeight: 900, letterSpacing: 1.4, padding: '3px 9px', borderRadius: 999, marginBottom: 8 }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="#062330"><path d="M12 2l2.4 6.9H21l-5.3 4 2 6.9L12 15.7 6.3 19.8l2-6.9L3 8.9h6.6z" /></svg>
-              PRO TIP
-            </span>
-            <div style={{ fontSize: isTablet ? 17 : 16, fontWeight: 900, color: '#f2f8fc' }}>Crop for a sharper ID</div>
-            <div style={{ fontSize: isTablet ? 14 : 13, color: '#c3d3e0', marginTop: 5, lineHeight: 1.5 }}>
-              Zoom in on the fish. A tight crop with less background gives a more accurate ID — especially when confidence is low. Just tap{' '}
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(25,212,242,0.16)', color: '#a9ecff', border: '1px solid rgba(25,212,242,0.4)', borderRadius: 8, padding: '1px 8px', fontWeight: 800, fontSize: '0.92em', whiteSpace: 'nowrap' }}>✂ Crop &amp; try again</span>.
-            </div>
-          </div>
-          <svg width={isTablet ? 92 : 84} height={isTablet ? 92 : 84} viewBox="0 0 84 84" fill="none" style={{ flexShrink: 0 }}>
-            <defs><linearGradient id="tipwater" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#0e3a5c" /><stop offset="1" stopColor="#0a2036" /></linearGradient></defs>
-            <rect x="8" y="8" width="68" height="68" rx="12" fill="url(#tipwater)" stroke="rgba(94,205,242,0.25)" />
-            <g transform="translate(42 42)" fill="#5ecdf2">
-              <path d="M-16 0c6-9 18-11 26-4 3-3 7-4 10-4-2 3-2 6 0 8-3 0-7-1-10-4-8 7-20 5-26-4z" opacity="0.95" />
-              <circle cx="9" cy="-1.5" r="1.6" fill="#062330" />
-            </g>
-            <g stroke="#19D4F2" strokeWidth="3" strokeLinecap="round">
-              <path d="M20 28v-8h8" /><path d="M64 28v-8h-8" /><path d="M20 56v8h8" /><path d="M64 56v8h-8" />
-            </g>
-          </svg>
-          <button onClick={dismissCropTip} aria-label="Dismiss tip" style={{
-            position: 'absolute', top: 9, right: 9, background: 'rgba(3,19,32,0.4)',
-            border: 'none', borderRadius: 999, color: '#9fb4c6', cursor: 'pointer', padding: 4, display: 'inline-flex',
-          }}>
-            <X size={14} />
-          </button>
-        </div>
-      )}
       {/* 1) Search bar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -1919,6 +1876,21 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   const [overrideId, setOverrideId] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const lookalikesRef = useRef(null);
+  // One-time crop tip, anchored to the "Crop & try again" button. Moved
+  // here from the pre-scan Fish ID screen: it now fires at the moment
+  // cropping would actually help — a low-confidence result with the
+  // button on screen — instead of pre-explaining a control the angler
+  // hadn't seen yet. Only fires when that button is rendered, so it
+  // waits for a low-confidence result rather than burning on the first
+  // clean ID.
+  const cropBtnRef = useRef(null);
+  const [showCropTip, setShowCropTip] = useState(() => {
+    try { return localStorage.getItem('kyc_cropid_tip_dismissed') !== '1'; } catch { return true; }
+  });
+  const dismissCropTip = () => {
+    setShowCropTip(false);
+    try { localStorage.setItem('kyc_cropid_tip_dismissed', '1'); } catch {}
+  };
 
   // No confident pick AND no manual override yet — show the
   // couldn't-identify fallback. Once the angler picks a species via
@@ -2071,7 +2043,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3, lineHeight: 1.5 }}>
                 Tighten the photo to just the fish and re-run — it usually sharpens the match.
               </div>
-              <button onClick={onCropRetry} style={{
+              <button ref={cropBtnRef} onClick={() => { dismissCropTip(); onCropRetry?.(); }} style={{
                 marginTop: 8, background: '#FFC857', color: '#062330', border: 'none', borderRadius: 8,
                 padding: '8px 14px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -2081,6 +2053,17 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             </div>
           </div>
         </Card>
+      )}
+      {/* Anchored crop tip. CoachBubble renders nothing until its target
+          has a real rect, so this self-suppresses on confident results
+          where the low-confidence card (and its button) isn't mounted —
+          no extra condition needed here. */}
+      {showCropTip && (
+        <CoachBubble targetRef={cropBtnRef} onDismiss={dismissCropTip} placement="bottom">
+          <b style={{ color: '#f2f8fc' }}>Crop for a sharper ID.</b>{' '}
+          Zoom in so the fish fills the frame — less background gives the
+          model far more to work with.
+        </CoachBubble>
       )}
       {/* Crop is always available, even on a confident match. */}
       {onCropRetry && !lowConfidence && (
