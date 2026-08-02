@@ -2629,14 +2629,37 @@ function CatchMapView({ items, onView }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(null);
+  // onView arrives as an inline arrow from App.jsx, so its identity
+  // changes on every parent render. Holding it in a ref keeps the
+  // marker effect keyed on `items` alone — otherwise every unrelated
+  // state tick cleared the markers and re-ran fitBounds, which is what
+  // made the map look like it kept resetting itself.
+  const onViewRef = useRef(onView);
+  useEffect(() => { onViewRef.current = onView; }, [onView]);
 
   // Init map once on mount.
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
-    const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true }).setView([26.5, -88], 6);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> &middot; &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: 'abcd', maxZoom: 19,
+    const map = L.map(containerRef.current, {
+      zoomControl: true, attributionControl: true,
+      // Keep the map on a single world. Without these, zooming out
+      // repeats the globe side-by-side and the same coastline shows
+      // up several times across the container.
+      worldCopyJump: false,
+      maxBounds: [[-90, -180], [90, 180]],
+      maxBoundsViscosity: 1.0,
+      // Below ~z3 the world is shorter than the container, which
+      // letterboxes the map with empty bands above and below.
+      minZoom: 3,
+    }).setView([26.5, -88], 6);
+    // Esri Ocean Basemap — same bathymetry basemap the location picker
+    // uses, so seafloor ledges and drop-offs read the same everywhere.
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Esri, GEBCO, NOAA, National Geographic, and others',
+      maxZoom: 16, maxNativeZoom: 13, noWrap: true,
+    }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 16, maxNativeZoom: 13, noWrap: true,
     }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
@@ -2647,7 +2670,14 @@ function CatchMapView({ items, onView }) {
   useEffect(() => {
     if (!mapRef.current || !markersRef.current) return;
     markersRef.current.clearLayers();
-    const located = items.filter(c => c.lat != null && c.lon != null);
+    // Range-check before plotting: a single out-of-range or null-island
+    // (0,0) row would stretch fitBounds across the whole globe and zoom
+    // the map out to world scale.
+    const located = items.filter(c =>
+      Number.isFinite(c.lat) && Number.isFinite(c.lon) &&
+      Math.abs(c.lat) <= 90 && Math.abs(c.lon) <= 180 &&
+      !(c.lat === 0 && c.lon === 0)
+    );
     for (const c of located) {
       const s = speciesById(c.speciesId);
       // Pin uses the SPECIES photo so anglers see what's caught where
@@ -2662,18 +2692,22 @@ function CatchMapView({ items, onView }) {
       const m = L.marker([c.lat, c.lon], { icon }).addTo(markersRef.current);
       const popup = `<b style="font-size:13px">${(s && s.commonName) || 'Unknown'}</b><br><span style="color:#A7BECB">${when}</span>${c.length ? `<br>${c.length} in` : ''}${c.moonName ? `<br>${c.moonName} ${Math.round((c.moonIllum||0)*100)}%` : ''}<br><a href="#" style="color:#34C2D6">View</a>`;
       m.bindPopup(popup);
-      if (onView) m.on('popupopen', e => {
+      m.on('popupopen', e => {
         const a = e.popup.getElement().querySelector('a');
-        if (a) a.onclick = ev => { ev.preventDefault(); onView(c.id); };
+        if (a) a.onclick = ev => { ev.preventDefault(); onViewRef.current?.(c.id); };
       });
     }
     if (located.length === 1) mapRef.current.setView([located[0].lat, located[0].lon], 9);
     else if (located.length > 1) {
       mapRef.current.fitBounds(L.latLngBounds(located.map(c => [c.lat, c.lon])), { padding: [40, 40], maxZoom: 11 });
     }
-  }, [items, onView]);
+  }, [items]);
 
-  const located = items.filter(c => c.lat != null && c.lon != null).length;
+  const located = items.filter(c =>
+    Number.isFinite(c.lat) && Number.isFinite(c.lon) &&
+    Math.abs(c.lat) <= 90 && Math.abs(c.lon) <= 180 &&
+    !(c.lat === 0 && c.lon === 0)
+  ).length;
   // On tablet, take over the available viewport: subtract the header,
   // footer, safe-area insets, and a small buffer for the caption line
   // + surrounding filter controls (~120px). On phone we keep the
