@@ -42,7 +42,7 @@ import {
   PhotoAnalyzingScreen, PhotoResultScreen, WeatherForecastScreen,
 } from './screens1.jsx';
 import { OceanMapsScreen } from './screens_ocean.jsx';
-import { getPhoto } from './native.js';
+import { getPhoto, openAppSettings } from './native.js';
 import {
   SpeciesDetailScreen, RegulationsListScreen, RegulationDetailScreen,
   RegulationAlertsScreen,
@@ -634,7 +634,10 @@ export default function App() {
     } catch (e) {
       // Real failure (permission, plugin, device space) — say so rather
       // than leaving the button looking inert.
-      setCaptureError(e?.message || 'The camera or photo library did not open.');
+      setCaptureError({
+        message: e?.message || 'The camera or photo library did not open.',
+        code: e?.code || 'other',
+      });
       return;
     }
     if (!dataUrl) {
@@ -1231,9 +1234,27 @@ export default function App() {
           display: 'flex', alignItems: 'flex-start', gap: 10,
         }}>
           <div style={{ flex: 1 }}>
-            <strong style={{ color: T.closed }}>Couldn't open the photo picker.</strong>{' '}
-            {captureError}
-            {' '}Check Settings → ReelIntel → Photos on your device, and that there's free space.
+            <strong style={{ color: T.closed }}>
+              {captureError.code === 'permission'
+                ? 'ReelIntel needs photo access.'
+                : "Couldn't open the photo picker."}
+            </strong>{' '}
+            {captureError.code === 'permission'
+              ? 'iOS won’t ask a second time once access is denied — turn it back on in Settings.'
+              : `${captureError.message} Check that there's free space on the device.`}
+            {captureError.code === 'permission' && (
+              <button onClick={async () => {
+                const ok = await openAppSettings();
+                if (ok) setCaptureError(null);
+              }} style={{
+                display: 'block', marginTop: 8,
+                background: T.brass, color: T.oceanDeep, border: 'none',
+                borderRadius: 8, padding: '7px 14px',
+                fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              }}>
+                Open Settings
+              </button>
+            )}
           </div>
           <button onClick={() => setCaptureError(null)} aria-label="Dismiss" style={{
             background: 'transparent', border: 'none', color: T.parchment, cursor: 'pointer', padding: 4,

@@ -70,6 +70,11 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
       if (/cancel/i.test(msg) || /no image picked/i.test(msg)) return null;
       const err = new Error(msg || 'The camera or photo library did not open.');
       err.cause = e;
+      // iOS never re-prompts once the user has denied Camera or Photos
+      // access, so a denial is a dead end unless we send them to
+      // Settings. Tag it so the UI can offer that jump.
+      err.code = /denied|not authoriz|permission|restricted/i.test(msg)
+        ? 'permission' : 'other';
       throw err;
     }
   }
@@ -103,4 +108,20 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
     document.body.appendChild(input);
     input.click();
   });
+}
+
+/* Open this app's own page in the iOS Settings app. The only recovery
+   path once Camera/Photos access has been denied — iOS will not show
+   the permission prompt a second time. Returns false on web or if the
+   jump fails, so callers can fall back to written instructions. */
+export async function openAppSettings() {
+  if (!isNative()) return false;
+  try {
+    const { App } = await import('@capacitor/app');
+    await App.openUrl({ url: 'app-settings:' });
+    return true;
+  } catch (e) {
+    console.warn('[native] could not open app settings', e);
+    return false;
+  }
 }
