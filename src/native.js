@@ -73,14 +73,21 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
     input.type = 'file';
     input.accept = 'image/*';
     if (effective === 'camera') input.capture = 'environment';
+    // The input MUST be in the DOM for .click() to open the picker on iOS
+    // Safari / WKWebView — a detached input silently does nothing there.
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    input.style.opacity = '0';
+    const cleanup = () => { try { input.remove(); } catch {} };
     input.onchange = () => {
       const f = input.files && input.files[0];
-      if (!f) return resolve(null);
+      if (!f) { cleanup(); return resolve(null); }
       const r = new FileReader();
-      r.onload = () => resolve(String(r.result));
-      r.onerror = () => resolve(null);
+      r.onload = () => { cleanup(); resolve(String(r.result)); };
+      r.onerror = () => { cleanup(); resolve(null); };
       r.readAsDataURL(f);
     };
+    document.body.appendChild(input);
     input.click();
   });
 }

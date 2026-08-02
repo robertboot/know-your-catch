@@ -2121,7 +2121,7 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
     // Inline SVG pin — Leaflet's default marker PNG doesn't resolve through
     // the bundler (shows a broken image), so use a self-contained divIcon.
     const pinIcon = L.divIcon({
-      className: 'kyc-pin',
+      className: 'kyc-pinmark',
       html: '<svg width="30" height="42" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 8.5 12 24 12 24s12-15.5 12-24C24 5.4 18.6 0 12 0z" fill="#19D4F2" stroke="#062330" stroke-width="1.5"/><circle cx="12" cy="12" r="4.5" fill="#062330"/></svg>',
       iconSize: [30, 42], iconAnchor: [15, 42],
     });

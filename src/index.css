@@ -20,6 +20,9 @@ body {
 .kyc-hscroll::-webkit-scrollbar-thumb { background: #1E3E55; border-radius: 3px; }
 /* Catch-log map pin */
 .kyc-pin { width: 16px; height: 16px; border-radius: 50%; background: #34C2D6; border: 2px solid #061320; box-shadow: 0 0 0 2px #34C2D6, 0 0 6px rgba(52,194,214,0.6); }
+/* Location-picker teardrop pin: a bare SVG marker — strip Leaflet's default
+   white div-icon box so no second square shows under the pin. */
+.kyc-pinmark { background: transparent; border: 0; }
 .kyc-pin-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid #34C2D6; box-shadow: 0 0 6px rgba(0,0,0,0.6); }
 /* Leaflet dark-theme popup */
 .leaflet-container { background: #061320 !important; font-family: inherit !important; }
