@@ -420,6 +420,17 @@ function SpeciesTab({ detailView, setDetailView }) {
   // Species tab now has two sub-panels: the existing species list and
   // the new suggestion queue where user-submitted custom species land.
   const [panel, setPanel] = useState('list');
+  // Pending-suggestion count for the sub-tab badge. Without it the
+  // queue is invisible — the tab looks identical whether there are 0 or
+  // 30 anglers waiting on a species decision.
+  const [pendingSuggestions, setPendingSuggestions] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    listSuggestions({ status: 'pending', limit: 500 })
+      .then(r => { if (alive && r.ok) setPendingSuggestions(r.rows.length); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [panel]);
   // Live categories — used both by SpeciesForm dropdown (already
   // there) and by the "sort by category" ordering.
   const [cats, setCats] = useState(() => getCategories());
@@ -509,8 +520,8 @@ function SpeciesTab({ detailView, setDetailView }) {
     return (
       <>
         <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 12 }}>
-          <SpeciesSubTabBtn active={false}                          onClick={() => setPanel('list')}>Species</SpeciesSubTabBtn>
-          <SpeciesSubTabBtn active={true}                           onClick={() => setPanel('suggestions')}>Suggestions</SpeciesSubTabBtn>
+          <SpeciesSubTabBtn active={false} onClick={() => setPanel('list')}>Species</SpeciesSubTabBtn>
+          <SpeciesSubTabBtn active={true}  onClick={() => setPanel('suggestions')} badge={pendingSuggestions}>Suggestions</SpeciesSubTabBtn>
         </div>
         <SpeciesSuggestionsPanel />
       </>
@@ -551,7 +562,7 @@ function SpeciesTab({ detailView, setDetailView }) {
     <>
       <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 12 }}>
         <SpeciesSubTabBtn active={true}  onClick={() => setPanel('list')}>Species</SpeciesSubTabBtn>
-        <SpeciesSubTabBtn active={false} onClick={() => setPanel('suggestions')}>Suggestions</SpeciesSubTabBtn>
+        <SpeciesSubTabBtn active={false} onClick={() => setPanel('suggestions')} badge={pendingSuggestions}>Suggestions</SpeciesSubTabBtn>
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         <StatusChip
@@ -682,7 +693,7 @@ function SpeciesTab({ detailView, setDetailView }) {
 /* Sub-tab pill for the Species top-level tab (Species / Suggestions).
    Mirrors the pattern TrainingTab uses so the visual language stays
    consistent across the admin. */
-function SpeciesSubTabBtn({ active, onClick, children }) {
+function SpeciesSubTabBtn({ active, onClick, children, badge = 0 }) {
   return (
     <button onClick={onClick} style={{
       background: 'transparent', border: 'none', padding: '10px 14px',
@@ -690,7 +701,19 @@ function SpeciesSubTabBtn({ active, onClick, children }) {
       fontWeight: 700, fontSize: 13, cursor: 'pointer',
       borderBottom: `2px solid ${active ? T.brass : 'transparent'}`,
       marginBottom: -1,
-    }}>{children}</button>
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+    }}>
+      {children}
+      {badge > 0 && (
+        <span style={{
+          background: T.brass, color: T.oceanDeep,
+          fontSize: 11, fontWeight: 900, lineHeight: 1,
+          minWidth: 18, height: 18, borderRadius: 9,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 5px',
+        }}>{badge}</span>
+      )}
+    </button>
   );
 }
 

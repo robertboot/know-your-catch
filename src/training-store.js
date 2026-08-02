@@ -454,10 +454,12 @@ export async function uploadTrainingImage(file, speciesId, opts = {}) {
 /* trusted: the caller is the admin console, where the person saving IS
    the reviewer. Everything from the mobile app is untrusted by default.
 
-   An angler's correction is an unreviewed human claim — they can
-   misidentify a fish just as the model can — so corrections land
-   'pending' and wait for admin review before they can train anything.
-   Confirmations (angler agreed with the model) stay 'verified'. */
+   Nothing an angler submits trains the model until an admin has seen
+   the photo. That covers corrections (their own re-label, which can be
+   wrong) AND confirmations — tapping CONFIRM on a wrong prediction
+   would otherwise bake that error in as ground truth, which is the
+   worst kind of training label because it reinforces a mistake the
+   model already makes. */
 export async function saveModelFeedback({ file, speciesId, originalSpeciesId, source, trusted = false }) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
@@ -487,7 +489,7 @@ export async function saveModelFeedback({ file, speciesId, originalSpeciesId, so
   // Only stamp reviewed_by / reviewed_at when the row really is
   // reviewed — stamping a pending row would claim a review that never
   // happened and mislead whoever audits the queue later.
-  const isVerified = trusted || source === 'model_confirmation';
+  const isVerified = trusted;
   const { data, error } = await c.from('training_images').insert({
     id,
     species_id: speciesId,

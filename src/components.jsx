@@ -4,7 +4,7 @@ import { T } from './theme.js';
 import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
-import { speciesPhoto, shareReport, speciesById } from './helpers.js';
+import { speciesPhoto, shareReport, speciesById, isAnglerVisible } from './helpers.js';
 import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl } from './photos-store.js';
 
 /* ============================================================
@@ -1377,7 +1377,7 @@ export function FavoritePickerModal({ favorites, onDone, onSkip, allowSkip = tru
   };
   const filteredByCategory = useMemo(() => {
     const lower = q.toLowerCase().trim();
-    const matches = SPECIES.filter(s => (s.active !== false) && (!lower
+    const matches = SPECIES.filter(s => isAnglerVisible(s) && (!lower
       || s.commonName.toLowerCase().includes(lower)
       || s.altNames.some(a => a.toLowerCase().includes(lower))));
     const buckets = new Map();

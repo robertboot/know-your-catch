@@ -29,6 +29,28 @@ export function speciesPhoto(id) {
 export const speciesById = (id) => SPECIES.find(s => s.id === id);
 export const jurisdictionById = (id) => JURISDICTIONS.find(j => j.id === id);
 
+/* Single gate for "should an angler ever see this species?" — use it on
+   EVERY user-facing list, picker, search, and quiz pool.
+
+   Three ways a row is admin-only:
+     - active === false          deactivated by the admin
+     - id starts with '_'        the _unassigned "needs species" bucket
+     - category starts with '_'  the _admin "needs category" bucket
+
+   The category check is the one that bites: species-store assigns
+   '_admin' to any cloud row whose category isn't recognised, so a LIVE
+   species with a typo'd category silently becomes angler-visible under
+   a "Misc" header. Each surface used to inline its own subset of these
+   rules, which is how the misc bucket leaked into Search and the
+   species list while Regulations correctly hid it. */
+export function isAnglerVisible(s) {
+  if (!s) return false;
+  if (s.active === false) return false;
+  if (String(s.id || '').startsWith('_')) return false;
+  if (String(s.category || '').startsWith('_')) return false;
+  return true;
+}
+
 // The federal jurisdiction that governs a given jurisdiction's coast.
 // Atlantic-coast waters answer to Federal South Atlantic (SAFMC); all
 // others to Federal Gulf (GMFMC). Accepts an id or a jurisdiction object.

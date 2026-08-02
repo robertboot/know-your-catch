@@ -19,6 +19,7 @@ import {
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
   shareReport, fetchWeatherForTime, PROHIBITED_RE,
+  isAnglerVisible,
 } from './helpers.js';
 
 /* <img> wrapper that falls back to the inline thumb data URL when
@@ -534,7 +535,7 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
       // Admin-only rows never surface to anglers: the misc bucket
       // (_unassigned) and anything on an underscore category (_admin),
       // plus deactivated species.
-      .filter(s => s.active !== false && !String(s.id).startsWith('_') && !String(s.category).startsWith('_'))
+      .filter(isAnglerVisible)
       // Bait fish are excluded from every Regulations surface — their
       // rules are cast-net/bait-harvest guidance, not keep/release
       // compliance. Matches the admin + auto-updater grid filter.
@@ -1097,7 +1098,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
   const rows = useMemo(() => {
     const statusRank = { unknown: 0, closed: 1, upcoming: 2, open: 3 };
     const list = SPECIES
-      .filter(s => s.active !== false)
+      .filter(isAnglerVisible)
       .filter(s => s.category !== 'baitfish') // no bait on regs surfaces
       .map(s => {
         const reg = jurisdiction ? regulationFor(s.id, jurisdiction.id).regulation : null;
@@ -4621,7 +4622,7 @@ function pickSizeLimitQuestion(jurisdiction, units, prevSpeciesId = null) {
    Then shuffled so tier order isn't predictable to the angler. */
 function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   const candidates = SPECIES.filter(s =>
-    s.active !== false
+    isAnglerVisible(s)
     && !seenAnchorIds.has(s.id)
     && Array.isArray(s.lookalikes)
     && s.lookalikes.some(id => speciesById(id))
@@ -4632,11 +4633,11 @@ function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   // Primary lookalike = first resolvable ACTIVE entry in
   // anchor.lookalikes. That's the "canonical" pairing the seed data
   // authors prioritized.
-  const primary = anchor.lookalikes.map(id => speciesById(id)).find(s => s && s.active !== false);
+  const primary = anchor.lookalikes.map(id => speciesById(id)).find(s => isAnglerVisible(s));
   if (!primary) return null;
 
   const sameCatPool = SPECIES.filter(s =>
-    s.active !== false
+    isAnglerVisible(s)
     && s.id !== anchor.id
     && s.id !== primary.id
     && s.category === anchor.category
@@ -4645,7 +4646,7 @@ function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   const sameCatDistractor = _shuffle(sameCatPool)[0];
 
   const otherCatPool = SPECIES.filter(s =>
-    s.active !== false
+    isAnglerVisible(s)
     && s.id !== anchor.id
     && s.id !== primary.id
     && s.category !== anchor.category
@@ -4662,7 +4663,7 @@ function pickLookalikesQuestion(seenAnchorIds = new Set()) {
   seed.push(...otherCatDistractors);
   if (seed.length < 4) {
     const backup = _shuffle(SPECIES.filter(s =>
-      s.active !== false && s.id !== anchor.id && !seed.some(x => x.id === s.id) && !anchor.lookalikes.includes(s.id)
+      isAnglerVisible(s) && s.id !== anchor.id && !seed.some(x => x.id === s.id) && !anchor.lookalikes.includes(s.id)
     ));
     for (const s of backup) {
       if (seed.length >= 4) break;

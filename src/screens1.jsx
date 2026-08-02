@@ -20,7 +20,7 @@ import {
   speciesById, jurisdictionById, federalJurisdictionFor, getComparison,
   formatSize, formatWeight, regStatus, differs, seasonState,
   sunPosition, moonPhase, fetchWeatherForTime, catchPhotos,
-  pbPhotos, buildPBReport, shareReport,
+  pbPhotos, buildPBReport, shareReport, isAnglerVisible,
 } from './helpers.js';
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
@@ -1043,7 +1043,7 @@ export function IdentifyScreen({
 
   // Active species list — same filter Regs / Species screens use.
   const activeSpecies = useMemo(
-    () => SPECIES.filter(s => s.active !== false),
+    () => SPECIES.filter(isAnglerVisible),
     []
   );
   const speciesCount = activeSpecies.length;
@@ -1965,7 +1965,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
 
         {showPicker && (
           <SpeciesPickerModal
-            speciesOptions={SPECIES.filter(s => s.active !== false)}
+            speciesOptions={SPECIES.filter(isAnglerVisible)}
             currentSpeciesId={null}
             onCancel={() => setShowPicker(false)}
             onPick={(sid) => {
@@ -2318,7 +2318,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           saved until CONFIRM or Save to Logbook. */}
       {showPicker && (
         <SpeciesPickerModal
-          speciesOptions={SPECIES.filter(s => s.active !== false && s.id !== displayedId)}
+          speciesOptions={SPECIES.filter(s => isAnglerVisible(s) && s.id !== displayedId)}
           currentSpeciesId={displayedId}
           onCancel={() => setShowPicker(false)}
           onPick={(newSpeciesId) => {
@@ -2456,7 +2456,7 @@ export function CategoryScreen({ catId, state, update, onPick }) {
     update({ favorites: Array.from(next) });
   };
   const list = useMemo(() => {
-    const base = SPECIES.filter(s => s.category === catId && s.active !== false)
+    const base = SPECIES.filter(s => s.category === catId && isAnglerVisible(s))
       .sort((a, b) => a.commonName.localeCompare(b.commonName));
     return base.sort((a, b) => (favSet.has(b.id) ? 1 : 0) - (favSet.has(a.id) ? 1 : 0));
   }, [catId, favSet]);
@@ -2480,7 +2480,7 @@ export function SearchScreen({ state, onPick }) {
   const results = useMemo(() => {
     if (!q.trim()) return [];
     const lower = q.toLowerCase().trim();
-    return SPECIES.filter(s => s.active !== false).map(s => {
+    return SPECIES.filter(isAnglerVisible).map(s => {
       let score = 0; let matchedAlt = null;
       if (s.commonName.toLowerCase().includes(lower)) score += 10;
       if (s.scientific.toLowerCase().includes(lower)) score += 5;
