@@ -1003,6 +1003,14 @@ export function IdentifyScreen({
   const isTablet = size !== 'phone';
   const fileRef = useRef(null);
   const [q, setQ] = useState('');
+  // One-time crop tip — shown the first time the angler opens Fish ID.
+  const [showCropTip, setShowCropTip] = useState(() => {
+    try { return localStorage.getItem('kyc_cropid_tip_dismissed') !== '1'; } catch { return true; }
+  });
+  const dismissCropTip = () => {
+    setShowCropTip(false);
+    try { localStorage.setItem('kyc_cropid_tip_dismissed', '1'); } catch {}
+  };
 
   // "Scan Another" from the results page lands here and opens the photo
   // picker immediately so the angler can shoot the next fish.
@@ -1152,6 +1160,30 @@ export function IdentifyScreen({
       // — the grid→flex switch is — but a cheap guardrail.
       maxWidth: '100%', boxSizing: 'border-box',
     }}>
+      {/* First-run crop tip */}
+      {showCropTip && (
+        <div style={{
+          position: 'relative', background: 'rgba(94,205,242,0.10)',
+          border: '1px solid rgba(94,205,242,0.45)', borderRadius: 12,
+          padding: isTablet ? '14px 40px 14px 16px' : '12px 38px 12px 14px',
+        }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <Crop size={18} color={accent} strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <div style={{ fontSize: isTablet ? 15 : 14, fontWeight: 800, color: '#e5edf5' }}>Tip: crop for a sharper ID</div>
+              <div style={{ fontSize: isTablet ? 14 : 13, color: '#b9c9d6', marginTop: 4, lineHeight: 1.5 }}>
+                Zoom in on the fish. A tight crop with less background gives a more accurate ID — especially when confidence is low. Just tap <b style={{ color: '#e5edf5' }}>Crop &amp; try again</b>.
+              </div>
+            </div>
+          </div>
+          <button onClick={dismissCropTip} aria-label="Dismiss tip" style={{
+            position: 'absolute', top: 8, right: 8, background: 'transparent',
+            border: 'none', color: '#7d94a8', cursor: 'pointer', padding: 4,
+          }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {/* 1) Search bar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
