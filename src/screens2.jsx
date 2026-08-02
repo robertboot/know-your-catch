@@ -2229,6 +2229,14 @@ function timeOfDay(sunAlt, dateIso) {
 
 export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
+  // One-time coach mark pointing at the MAP button (first Logbook visit).
+  const [showMapHint, setShowMapHint] = useState(() => {
+    try { return localStorage.getItem('kyc_logmap_hint') !== '1'; } catch { return true; }
+  });
+  const dismissMapHint = () => {
+    setShowMapHint(false);
+    try { localStorage.setItem('kyc_logmap_hint', '1'); } catch {}
+  };
   // Each list-style filter holds an array of selected values — empty
   // means "no filter on this dimension". pbOnly is a boolean toggle.
   const [filters, setFilters] = useState({ speciesIds: [], moonPhases: [], timesOfDay: [], pbOnly: false });
@@ -2357,14 +2365,15 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               <BookOpen size={16} /> LIST
             </button>
             <button
-              onClick={() => setView('map')}
+              onClick={() => { dismissMapHint(); setView('map'); }}
               aria-pressed={view === 'map'}
+              className={showMapHint && view !== 'map' ? 'kyc-pulse' : undefined}
               style={{
                 flex: 1, padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
                 fontSize: 16, fontWeight: 800, letterSpacing: 0.8,
                 background: view === 'map' ? T.brass : T.parchmentDeep,
                 color: view === 'map' ? T.oceanDeep : T.parchment,
-                border: `2px solid ${view === 'map' ? T.brass : T.cardEdge}`,
+                border: `2px solid ${view === 'map' || (showMapHint && view !== 'map') ? T.brass : T.cardEdge}`,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 boxShadow: view === 'map' ? '0 4px 14px rgba(25,212,242,0.25)' : 'none',
               }}
@@ -2396,6 +2405,32 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               )}
             </button>
           </div>
+
+          {/* One-time coach mark pointing at the MAP button */}
+          {showMapHint && view !== 'map' && (
+            <div style={{ position: 'relative', marginTop: -4, marginBottom: 12 }}>
+              <div aria-hidden style={{
+                position: 'absolute', left: '42%', top: -5, width: 11, height: 11,
+                background: '#0e2c44', borderLeft: '1px solid rgba(94,205,242,0.5)',
+                borderTop: '1px solid rgba(94,205,242,0.5)', transform: 'rotate(45deg)',
+              }} />
+              <div style={{
+                background: '#0e2c44', border: '1px solid rgba(94,205,242,0.5)', borderRadius: 10,
+                padding: '10px 34px 10px 12px', position: 'relative',
+              }}>
+                <div style={{ fontSize: 13, color: '#dbe8f2', fontWeight: 700, lineHeight: 1.45 }}>
+                  <span style={{ color: '#5ecdf2', fontWeight: 900 }}>New — </span>
+                  tap <b style={{ color: '#fff' }}>MAP</b> to see where you caught them.
+                </div>
+                <button onClick={dismissMapHint} aria-label="Dismiss" style={{
+                  position: 'absolute', top: 6, right: 6, background: 'transparent',
+                  border: 'none', color: '#7d94a8', cursor: 'pointer', padding: 4,
+                }}>
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Collapsible filters */}
           {filtersOpen && (

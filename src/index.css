@@ -45,6 +45,10 @@ input[type=number] { -moz-appearance: textfield; }
 /* Cards rise + fade on load (marine forecast dashboard). Staggered via
    inline animation-delay. Respects reduced-motion. */
 @keyframes kyc-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+/* One-time coach highlight — pulsing cyan ring (e.g. the Logbook MAP button). */
+@keyframes kyc-pulse-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(25,212,242,0.55); } 50% { box-shadow: 0 0 0 9px rgba(25,212,242,0); } }
+.kyc-pulse { animation: kyc-pulse-ring 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .kyc-pulse { animation: none; } }
 .kyc-fadeup { animation: kyc-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .kyc-press { transition: transform 0.12s ease; }
 .kyc-press:active { transform: scale(0.97); }
