@@ -16,8 +16,22 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
+import { SUPABASE_URL } from './supabase-client.js';
 
 const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
+
+/* Pre-rendered snapshots written by the refresh-ocean-maps edge
+   function every 6h. Same image for every angler, served static off
+   the CDN instead of making each user wait on an on-demand ERDDAP
+   render. Only the "Latest" view is snapshotted — the −8d/−16d/−24d
+   chips are an explicit opt-in to historical data and still go
+   straight to ERDDAP, slow path and all. */
+const SNAPSHOT_BASE = () =>
+  SUPABASE_URL ? `${SUPABASE_URL}/storage/v1/object/public/ocean-maps` : null;
+const snapshotUrl = (layerKey) => {
+  const base = SNAPSHOT_BASE();
+  return base ? `${base}/${layerKey}-latest.png` : null;
+};
 const GULF_CENTER = [26.0, -88.0];
 const GULF_ZOOM = 5;
 const REGION_BOUNDS = [[22.0, -98.5], [31.5, -77.5]]; // [SW, NE] lat,lon
@@ -89,21 +103,42 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
     const cfg = LAYERS[active];
     setStatus('loading');
     if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
-    const [[s, w], [n, e]] = REGION_BOUNDS;
-    const params = new URLSearchParams({
-      service: 'WMS', version: '1.3.0', request: 'GetMap',
-      crs: 'EPSG:4326', bbox: `${s},${w},${n},${e}`,
-      width: '600', height: '272',
-      layers: `${cfg.dataset}:${cfg.variable}`, styles: '',
-      format: 'image/png', transparent: 'true',
-    });
-    if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
-    const url = `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
-    const layer = L.imageOverlay(url, REGION_BOUNDS, { opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA' });
-    layer.on('load', () => setStatus('ok'));
-    layer.on('error', () => setStatus('error'));
-    layer.addTo(map);
-    overlayRef.current = layer;
+
+    const liveUrl = () => {
+      const [[s, w], [n, e]] = REGION_BOUNDS;
+      const params = new URLSearchParams({
+        service: 'WMS', version: '1.3.0', request: 'GetMap',
+        crs: 'EPSG:4326', bbox: `${s},${w},${n},${e}`,
+        width: '600', height: '272',
+        layers: `${cfg.dataset}:${cfg.variable}`, styles: '',
+        format: 'image/png', transparent: 'true',
+      });
+      if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
+      return `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
+    };
+
+    const addOverlay = (url, onError) => {
+      const layer = L.imageOverlay(url, REGION_BOUNDS, {
+        opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA',
+      });
+      layer.on('load', () => setStatus('ok'));
+      layer.on('error', () => { map.removeLayer(layer); onError?.(); });
+      layer.addTo(map);
+      overlayRef.current = layer;
+    };
+
+    // "Latest" reads the pre-rendered snapshot; if it's missing (bucket
+    // not provisioned yet, or a refresh that never landed) we fall back
+    // to a live ERDDAP render so the screen still works.
+    const snap = !dateISO ? snapshotUrl(cfg.key) : null;
+    if (snap) {
+      addOverlay(snap, () => {
+        setStatus('loading');
+        addOverlay(liveUrl(), () => setStatus('error'));
+      });
+    } else {
+      addOverlay(liveUrl(), () => setStatus('error'));
+    }
   }, [active, dateISO]);
 
   // Add/remove the land mask when toggled (or once GeoJSON arrives).
