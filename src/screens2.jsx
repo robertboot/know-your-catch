@@ -2108,14 +2108,27 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
     if (mapRef.current || !containerRef.current) return;
     const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true })
       .setView([startLat, startLon], startZoom);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-      subdomains: 'abcd', maxZoom: 19,
+    // Esri Ocean Basemap — shows seafloor depth / bathymetry (anglers want
+    // the ledges and drop-offs), with the ocean reference labels on top.
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Esri, GEBCO, NOAA, National Geographic, and others',
+      maxZoom: 16, maxNativeZoom: 13,
     }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 16, maxNativeZoom: 13,
+    }).addTo(map);
+
+    // Inline SVG pin — Leaflet's default marker PNG doesn't resolve through
+    // the bundler (shows a broken image), so use a self-contained divIcon.
+    const pinIcon = L.divIcon({
+      className: 'kyc-pin',
+      html: '<svg width="30" height="42" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 8.5 12 24 12 24s12-15.5 12-24C24 5.4 18.6 0 12 0z" fill="#19D4F2" stroke="#062330" stroke-width="1.5"/><circle cx="12" cy="12" r="4.5" fill="#062330"/></svg>',
+      iconSize: [30, 42], iconAnchor: [15, 42],
+    });
 
     const setPin = (lat, lng) => {
       if (!markerRef.current) {
-        markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+        markerRef.current = L.marker([lat, lng], { draggable: true, icon: pinIcon }).addTo(map);
         markerRef.current.on('dragend', (e) => {
           const ll = e.target.getLatLng();
           setCoords({ lat: ll.lat, lon: ll.lng });
@@ -3022,6 +3035,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       ? { lat: existing.lat, lon: existing.lon, error: null, loading: false }
       : { lat: null, lon: null, error: null, loading: true }
   );
+  // Whether to attach a catch location at all. Default ON; an angler can
+  // turn it off when the coords aren't where the fish was caught (e.g.
+  // the photo was taken at the cleaning table). Off → no lat/lon saved.
+  const [includeLocation, setIncludeLocation] = useState(existing ? existing.lat != null : true);
   const [weather, setWeather] = useState(existing?.weather || null);
   const [wxStatus, setWxStatus] = useState(existing?.weather ? 'ok' : 'idle');
   // `when` is the catch's authoritative timestamp. Defaults to right
@@ -3429,7 +3446,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         : (existing?.status || 'complete'),
       speciesId,
       dateIso: when.toISOString(),
-      lat: loc.lat, lon: loc.lon,
+      lat: includeLocation ? loc.lat : null, lon: includeLocation ? loc.lon : null,
       length: length ? +length : null,
       weight: weight ? +weight : null,
       notes: notes.trim() || null,
@@ -3977,6 +3994,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
           )
         } />
         <DetailRow label="Location" value={
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.inkSoft, cursor: 'pointer' }}>
+              <input type="checkbox" checked={includeLocation} onChange={e => setIncludeLocation(e.target.checked)} style={{ accentColor: T.brass, width: 16, height: 16 }} />
+              Include location
+            </label>
+            {!includeLocation ? (
+              <span style={{ color: T.inkMute, fontSize: 13, textAlign: 'right' }}>Off — no location saved for this catch.</span>
+            ) : (
           editingLoc ? (
             <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} placeholder="Lat" style={{ width: 80, padding: '4px 6px', fontSize: 14, background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`, borderRadius: 4 }} />
@@ -4008,6 +4033,8 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
               </div>
             </span>
           )
+            )}
+          </div>
         } />
         {sun && <DetailRow label="Sun" value={`${sun.altitudeDeg.toFixed(1)}° altitude · ${compassDir(sun.azimuthDeg)} (${sun.azimuthDeg.toFixed(0)}°)`} />}
         <DetailRow label="Moon" value={`${moon.name} · ${Math.round(moon.illumination * 100)}% illum`} />
