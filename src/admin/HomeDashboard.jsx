@@ -34,7 +34,7 @@ import {
   getCategories, refreshCategories,
 } from '../categories-store.js';
 import {
-  adminListRegulations, adminCountStalable, regulationAge,
+  adminListRegulations, adminCountStalable, regulationAge, getCronHealth,
 } from '../regulations-store.js';
 import {
   countsBySpecies, countMyPendingOwnerUploads, classifyCoverage,
@@ -167,7 +167,7 @@ async function fetchModelInfo() {
 }
 
 async function fetchHealth(modelInfo) {
-  const [bundles, lastAi, autoRun] = await Promise.all([
+  const [bundles, lastAi, autoRun, cron] = await Promise.all([
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
       const c = client();
@@ -193,6 +193,7 @@ async function fetchHealth(modelInfo) {
         return data?.[0] || null;
       } catch { return null; }
     })(),
+    getCronHealth().catch(() => null),
   ]);
 
   const prod = modelInfo?.row || null;
@@ -206,6 +207,7 @@ async function fetchHealth(modelInfo) {
     lastAiDraft: lastAi?.drafted_at || null,
     lastAiDraftSpecies: lastAi?.species_id || null,
     autoRun,
+    cron,
   };
 }
 
@@ -881,10 +883,53 @@ function HealthStrip({ data, err, loading }) {
               ? `Checked ${data.autoRun.checked} · published ${data.autoRun.published} · drafted ${data.autoRun.drafted}${data.autoRun.failed ? ` · ${data.autoRun.failed} failed` : ''}`
               : 'Run regulations-auto-update-schema.sql + deploy auto-update-regulations'}
           />
+          <CronTile cron={data.cron} />
         </div>
       )}
     </Section>
   );
+}
+
+/* Cron health. Reads BOTH cron.job_run_details and net._http_response,
+   because they disagree in the case that actually matters: net.http_post
+   is async, so a job reports "succeeded" the moment the request is
+   queued regardless of what the HTTP call then does. Two jobs sat broken
+   for weeks looking healthy by the first measure alone — this tile is
+   keyed off the second. */
+function CronTile({ cron }) {
+  if (!cron) {
+    return (
+      <Tile label="Scheduled jobs" value="UNKNOWN" tone="warn"
+            hint="Run supabase/cron-health-rpc.sql to enable this check" />
+    );
+  }
+  if (cron.error) {
+    return <Tile label="Scheduled jobs" value="ERROR" tone="warn" hint={cron.error} />;
+  }
+
+  const jobs = cron.jobs || [];
+  const http = cron.recentHttp || [];
+  const inactive = jobs.filter(j => !j.active).length;
+  // A queued-but-failed call has a null status_code and an error_msg.
+  const bad = http.filter(r => r.status_code == null || r.status_code >= 400);
+  const lastCall = http[0];
+
+  const tone = bad.length > 0 ? 'warn' : (jobs.length === 0 || inactive > 0 ? 'warn' : 'ok');
+  const value = jobs.length === 0
+    ? 'NONE SCHEDULED'
+    : bad.length > 0
+      ? `${bad.length}/${http.length} FAILING`
+      : `${jobs.length} OK`;
+
+  const hint = jobs.length === 0
+    ? 'No pg_cron jobs found'
+    : bad.length > 0
+      ? `Last error: ${bad[0].error_msg || `HTTP ${bad[0].status_code}`}`
+      : lastCall
+        ? `Last call HTTP ${lastCall.status_code} · ${relativeTime(lastCall.created)}`
+        : 'Scheduled, no calls recorded yet';
+
+  return <Tile label="Scheduled jobs" value={value} tone={tone} hint={hint} />;
 }
 
 /* ---------- Action queue ---------- */

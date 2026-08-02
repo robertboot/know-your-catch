@@ -737,3 +737,24 @@ export async function draftWithAI({ species, jurisdiction }) {
   if (data?.error) return { ok: false, error: data.detail || data.error };
   return { ok: true, draft: data };
 }
+
+/* Cron health for the admin dashboard — see supabase/cron-health-rpc.sql.
+
+   Returns { jobs: [...], recentHttp: [...] } or null.
+
+   The two lists have to be read TOGETHER. cron.job_run_details reports
+   whether the SQL statement ran, but net.http_post is async: it succeeds
+   the instant the request is queued. So a job can read "succeeded"
+   forever while every HTTP call it fires is failing — which is exactly
+   how two jobs stayed broken here for weeks. recentHttp is the half that
+   tells the truth. */
+export async function getCronHealth() {
+  const c = client();
+  if (!c) return null;
+  const { data, error } = await c.rpc('admin_cron_health');
+  if (error) return { error: error.message, jobs: [], recentHttp: [] };
+  return {
+    jobs: Array.isArray(data?.jobs) ? data.jobs : [],
+    recentHttp: Array.isArray(data?.recent_http) ? data.recent_http : [],
+  };
+}
