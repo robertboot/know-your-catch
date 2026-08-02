@@ -18,7 +18,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   ChevronRight, BarChart2, TrendingUp, Trophy, Clock, Calendar,
   Fish, Thermometer, Wind, Waves as WavesIcon, ChevronLeft, Download,
-  MapPin, CloudSun, Grid3x3,
+  MapPin, CloudSun, Grid3x3, Moon, Check, X,
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -422,8 +422,20 @@ export function PatternsScreen({ state, onPickSpecies, onLogCatch }) {
   const catchLog = (state.catchLog || []).filter(c => !c.metaNeedsReview);
   const pbs = state.pbs || {};
   const [drillId, setDrillId] = useState(null);
+  // Species filter — null = all species. Selecting one from the Species
+  // mix filters every chart below to just that fish.
+  const [selectedSpecies, setSelectedSpecies] = useState(null);
 
   const total = catchLog.length;
+  // The catches every chart reads — filtered to the selected species when one
+  // is picked. Gating below stays on the full log (total) so the page unlocks
+  // by overall progress, but the charts pattern the selected fish.
+  const viewLog = useMemo(
+    () => (selectedSpecies ? catchLog.filter(c => c.speciesId === selectedSpecies) : catchLog),
+    [catchLog, selectedSpecies]
+  );
+  const viewTotal = viewLog.length;
+  const selectedName = selectedSpecies ? (speciesById(selectedSpecies)?.commonName || selectedSpecies) : null;
 
   // Species mix — sorted by count, top 5.
   const speciesMix = useMemo(() => {
@@ -514,10 +526,12 @@ export function PatternsScreen({ state, onPickSpecies, onLogCatch }) {
   // At/above the gate: early-read (10..29) or fully unlocked (30+).
   const confident = total >= PATTERNS_CONFIDENT_CATCHES;
 
-  // Hourly + monthly histograms across everything.
-  const hourly  = histogram(catchLog, (c) => hourOf(c.dateIso));
-  const monthly = histogram(catchLog, (c) => monthOf(c.dateIso),
+  // Hourly + monthly + moon-phase histograms across the (optionally
+  // species-filtered) view.
+  const hourly  = histogram(viewLog, (c) => hourOf(c.dateIso));
+  const monthly = histogram(viewLog, (c) => monthOf(c.dateIso),
     { sortKey: 'natural', order: [0,1,2,3,4,5,6,7,8,9,10,11] });
+  const moonly  = histogram(viewLog, (c) => moonBucket(c.moonName));
 
   const doExport = async (kind) => {
     const stamp = new Date().toISOString().slice(0, 10);
@@ -580,34 +594,55 @@ export function PatternsScreen({ state, onPickSpecies, onLogCatch }) {
         </div>
       )}
 
-      {/* Species mix */}
+      {/* Active-filter banner */}
+      {selectedSpecies && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          marginBottom: 12, padding: '10px 12px', borderRadius: 10,
+          background: 'rgba(25,212,242,0.10)', border: `1px solid ${T.brass}`,
+        }}>
+          <div style={{ fontSize: isTablet ? 15 : 13, color: T.ink, fontWeight: 700 }}>
+            <span style={{ color: T.brass }}>Filtered:</span> {selectedName} — {viewTotal} catch{viewTotal === 1 ? '' : 'es'}
+          </div>
+          <button onClick={() => setSelectedSpecies(null)} style={{
+            background: 'transparent', border: `1px solid ${T.brass}`, color: T.brass,
+            borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+          }}>
+            <X size={13} /> All species
+          </button>
+        </div>
+      )}
+
+      {/* Species mix — tap a fish to filter every chart to it */}
       <StatCard title="Species mix" n={total} icon={<Fish size={14} />}>
+        <div style={{ fontSize: 12, color: T.inkMute, marginBottom: 6 }}>Tap a species to pattern it on its own.</div>
         {speciesMix.top5.map((row, i) => {
           const s = speciesById(row.id);
           const label = s?.commonName || row.id;
           const share = Math.round((row.count / total) * 100);
-          const enough = row.count >= THRESHOLD_SPECIES;
+          const isSel = selectedSpecies === row.id;
           return (
             <button key={row.id}
-              onClick={() => enough && setDrillId(row.id)}
-              disabled={!enough}
+              onClick={() => setSelectedSpecies(isSel ? null : row.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                background: 'transparent', border: 'none', padding: '4px 0',
-                cursor: enough ? 'pointer' : 'default', textAlign: 'left',
+                background: isSel ? 'rgba(25,212,242,0.12)' : 'transparent',
+                border: isSel ? `1px solid ${T.brass}` : '1px solid transparent',
+                borderRadius: 8, padding: '5px 6px', cursor: 'pointer', textAlign: 'left',
               }}
             >
               <div style={{ width: 76, fontSize: 14, color: T.ink, fontWeight: 700, textAlign: 'right' }}>{label}</div>
               <div style={{ flex: 1, height: 12, background: T.parchmentDeep, borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{
                   width: `${Math.round((row.count / speciesMix.top5[0].count) * 100)}%`, height: '100%',
-                  background: i === 0 ? T.brass : 'rgba(25, 212, 242, 0.35)',
+                  background: (isSel || i === 0) ? T.brass : 'rgba(25, 212, 242, 0.35)',
                   borderRadius: 4,
                 }} />
               </div>
               <div style={{ width: 82, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                 <span style={{ fontSize: 12, color: T.inkMute }}>{row.count} · {share}%</span>
-                {enough && <ChevronRight size={14} color={T.brass} />}
+                {isSel ? <Check size={14} color={T.brass} /> : <ChevronRight size={14} color={T.inkMute} />}
               </div>
             </button>
           );
@@ -615,7 +650,7 @@ export function PatternsScreen({ state, onPickSpecies, onLogCatch }) {
       </StatCard>
 
       {/* Time of day */}
-      <StatCard title="Best time of day" n={total} icon={<Clock size={14} />}>
+      <StatCard title="Best time of day" n={viewTotal} icon={<Clock size={14} />}>
         {hourly.entries.slice(0, 6).map(e => (
           <Bar key={e.key} label={hourLabel(e.key)} count={e.count}
             ratio={e.count / hourly.max} peak={e.count === hourly.max} />
@@ -623,21 +658,33 @@ export function PatternsScreen({ state, onPickSpecies, onLogCatch }) {
       </StatCard>
 
       {/* Best months */}
-      <StatCard title="Best months" n={total} icon={<Calendar size={14} />}>
+      <StatCard title="Best months" n={viewTotal} icon={<Calendar size={14} />}>
         {monthly.entries.map(e => (
           <Bar key={e.key} label={MONTH_NAMES[e.key]} count={e.count}
             ratio={e.count / monthly.max} peak={e.count === monthly.max} />
         ))}
       </StatCard>
 
+      {/* Best moon phase */}
+      <StatCard title="Best moon phase" n={viewTotal} icon={<Moon size={14} />}>
+        {moonly.entries.length === 0 ? (
+          <div style={{ fontSize: 14, color: T.inkMute, lineHeight: 1.5 }}>
+            No moon phase on your {selectedSpecies ? 'filtered ' : ''}catches yet — it's captured automatically on each new catch.
+          </div>
+        ) : moonly.entries.map(e => (
+          <Bar key={e.key} label={e.key} count={e.count}
+            ratio={e.count / moonly.max} peak={e.count === moonly.max} />
+        ))}
+      </StatCard>
+
       {/* Activity heat grid — month × time of day */}
-      <ActivityHeatGrid catchLog={catchLog} />
+      <ActivityHeatGrid catchLog={viewLog} />
 
       {/* Best weather — conditions you catch most in */}
-      <BestWeatherCard catchLog={catchLog} />
+      <BestWeatherCard catchLog={viewLog} />
 
       {/* Catch hot-spot map */}
-      <CatchHeatMap catchLog={catchLog} />
+      <CatchHeatMap catchLog={viewLog} />
 
       {/* PB progression */}
       {pbTimeline.length >= 2 ? (
