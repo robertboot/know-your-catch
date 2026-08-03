@@ -106,7 +106,30 @@ export async function savePhoto(rawDataUrl) {
       path, data: base64, directory: Directory.Data, recursive: true,
     });
     const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-    entry = { thumb, src: Capacitor.convertFileSrc(uri), path };
+
+    // The thumb goes to disk too. It used to ride inline as base64 on
+    // the entry, which meant every thumbnail was serialised into the
+    // single localStorage state blob — ~30 KB each, three per catch,
+    // against WKWebView's ~5 MB cap. A few dozen catches filled it and
+    // saves started failing with "Storage is full" even though the
+    // full-res photos were sitting safely on the filesystem.
+    const thumbPath = `${PHOTO_DIR}/${id}_t.jpg`;
+    let thumbSrc = null;
+    try {
+      await Filesystem.writeFile({
+        path: thumbPath,
+        data: thumb.replace(/^data:image\/[^;]+;base64,/, ''),
+        directory: Directory.Data, recursive: true,
+      });
+      const t = await Filesystem.getUri({ path: thumbPath, directory: Directory.Data });
+      thumbSrc = Capacitor.convertFileSrc(t.uri);
+    } catch { /* fall back to the full-res src below */ }
+
+    entry = thumbSrc
+      ? { src: Capacitor.convertFileSrc(uri), path, thumbSrc, thumbPath }
+      // Thumb write failed — point the thumb at the full-res file
+      // rather than storing base64 and reintroducing the bloat.
+      : { src: Capacitor.convertFileSrc(uri), path };
   }
 
   // Best-effort cloud upload. Silent if no session or Supabase config.
@@ -186,11 +209,14 @@ export async function photoSignedUrl(p, ttlSeconds = 3600) {
 /* Remove a photo's underlying file if it lives on disk. Safe to call
    on legacy strings / web entries — does nothing then. */
 export async function deletePhoto(p) {
-  if (!NATIVE || !p || typeof p === 'string' || !p.path) return;
-  try {
-    await Filesystem.deleteFile({ path: p.path, directory: Directory.Data });
-  } catch (e) {
-    // File already gone or never existed — not worth surfacing.
+  if (!NATIVE || !p || typeof p === 'string') return;
+  for (const path of [p.path, p.thumbPath]) {
+    if (!path) continue;
+    try {
+      await Filesystem.deleteFile({ path, directory: Directory.Data });
+    } catch (e) {
+      // File already gone or never existed — not worth surfacing.
+    }
   }
 }
 
@@ -199,7 +225,9 @@ export async function deletePhoto(p) {
 export function photoThumbUrl(p) {
   if (!p) return null;
   if (typeof p === 'string') return p;
-  return p.thumb || p.src || null;
+  // thumbSrc (on-disk, current) → thumb (legacy inline base64, still
+  // present until the migration rewrites the entry) → full-res src.
+  return p.thumbSrc || p.thumb || p.src || null;
 }
 
 /* Synchronous full-size URL for <img src=...> / lightbox / share.
@@ -246,12 +274,40 @@ export async function migratePhotosToStore(state) {
 
   const migrateOne = async (entry) => {
     if (!entry) return null;
-    if (typeof entry !== 'string') return entry;
-    if (!entry.startsWith('data:')) return entry;
-    changed = true;
-    // savePhoto owns the downscale — idempotent for already-small
-    // images (single re-encode pass at tier-target dims).
-    return await savePhoto(entry);
+    if (typeof entry === 'string') {
+      if (!entry.startsWith('data:')) return entry;
+      changed = true;
+      // savePhoto owns the downscale — idempotent for already-small
+      // images (single re-encode pass at tier-target dims).
+      return await savePhoto(entry);
+    }
+    // Reclaim: entries saved before thumbs moved to disk still carry a
+    // base64 `thumb`, which is what filled localStorage. Write it out to
+    // a file and drop the inline copy. This is where the "Storage is
+    // full" pressure actually gets released — new saves alone wouldn't
+    // shrink an already-full state blob.
+    if (NATIVE && typeof entry.thumb === 'string' && entry.thumb.startsWith('data:') && !entry.thumbSrc) {
+      const id = entry.path
+        ? entry.path.split('/').pop().replace(/\.jpg$/, '')
+        : newPhotoId();
+      const thumbPath = `${PHOTO_DIR}/${id}_t.jpg`;
+      try {
+        await Filesystem.writeFile({
+          path: thumbPath,
+          data: entry.thumb.replace(/^data:image\/[^;]+;base64,/, ''),
+          directory: Directory.Data, recursive: true,
+        });
+        const t = await Filesystem.getUri({ path: thumbPath, directory: Directory.Data });
+        const { thumb, ...rest } = entry;
+        changed = true;
+        return { ...rest, thumbPath, thumbSrc: Capacitor.convertFileSrc(t.uri) };
+      } catch {
+        // Couldn't write it out — keep the inline thumb rather than
+        // leaving the row with no thumbnail at all.
+        return entry;
+      }
+    }
+    return entry;
   };
 
   const migrateArray = async (arr) => {
