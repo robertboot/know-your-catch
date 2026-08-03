@@ -163,6 +163,24 @@ export function SpeciesPickerModal({
           </button>
         ))}
       </div>
+
+      {/* Always-visible escape hatch. The richer CTA above only fires on
+          a fruitless search, which assumes the angler knows the name to
+          type — the case this is for is precisely when they don't. */}
+      {onRequestSuggest && !showSuggestCta && (
+        <button
+          type="button"
+          onClick={() => onRequestSuggest(query)}
+          style={{
+            display: 'block', width: '100%', marginTop: 12,
+            background: 'transparent', border: 'none',
+            color: '#5ecdf2', fontSize: 13, fontWeight: 700,
+            textDecoration: 'underline', cursor: 'pointer', padding: '6px 0',
+          }}
+        >
+          Fish not in the app? Add it to the database
+        </button>
+      )}
     </ModalShell>
   );
 }
