@@ -125,7 +125,7 @@ export function SpeciesPickerModal({
           </div>
           <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
             You can add it as a custom species and it's usable right away.
-            Robert will review it and merge it into the shared library.
+            We'll review it and merge it into the shared library.
           </div>
           <PrimaryButton
             onClick={() => onRequestSuggest(query)}

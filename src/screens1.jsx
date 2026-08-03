@@ -1978,6 +1978,9 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
               setOverrideId(sid);
               setFeedbackState('unset');
             }}
+            // Dead end otherwise: search a fish we don't carry and the
+            // only option is Cancel.
+            onRequestSuggest={onSuggestNew ? () => { setShowPicker(false); onSuggestNew(); } : undefined}
             title="What species is it?"
           />
         )}
@@ -2328,6 +2331,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             setOverrideId(newSpeciesId);
             setFeedbackState('unset'); // ID changed — re-confirm needed
           }}
+          onRequestSuggest={onSuggestNew ? () => { setShowPicker(false); onSuggestNew(); } : undefined}
           title="What species is it?"
         />
       )}
