@@ -1657,7 +1657,13 @@ export function PhotoAnalyzingScreen({ imageDataUrl, jurisdictionId, onResult })
   return (
     <div style={{ position: 'relative', minHeight: '70vh' }}>
       <div style={{ position: 'relative' }}>
-        <img src={imageDataUrl} alt="Your catch" style={{ width: '100%', display: 'block', maxHeight: '50vh', objectFit: 'cover' }} />
+        {/* contain, not cover — this is the angler's first look at what
+            they just handed the model, and cover cropped portrait shots
+            to a middle band with the head and tail gone. */}
+        <img src={imageDataUrl} alt="Your catch" style={{
+          display: 'block', width: 'auto', maxWidth: '100%',
+          maxHeight: '50vh', objectFit: 'contain', margin: '0 auto',
+        }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(8,38,53,0.0) 40%, rgba(8,38,53,0.85) 100%)' }} />
       </div>
       <div style={{ padding: '20px 18px', background: T.oceanDeep, color: T.parchment }}>
@@ -1902,9 +1908,16 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   if ((!candidates || candidates.length === 0) && !overrideId) {
     return (
       <div style={{ padding: '18px 16px' }}>
+        {/* Show the WHOLE photo. maxHeight + object-fit:cover cropped a
+            portrait shot down to a thin band from its middle, which
+            reads as though the app mangled the import — and this is the
+            one screen where the angler is judging whether the photo was
+            good enough to identify in the first place. */}
         <img src={imageDataUrl} alt="Your catch" style={{
-          width: '100%', maxHeight: 220, objectFit: 'cover',
-          borderRadius: 6, marginBottom: 14, border: `2px solid ${T.cardEdge}`,
+          display: 'block', width: 'auto', maxWidth: '100%',
+          maxHeight: isTablet ? '52vh' : '46vh',
+          objectFit: 'contain', margin: '0 auto 14px',
+          borderRadius: 6, border: `2px solid ${T.cardEdge}`,
         }} />
         {result?.aiNote ? (
           // Recognized, but not one of the app's regulated species — show
