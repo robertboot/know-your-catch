@@ -8,7 +8,9 @@ import { ScreenSizeContext } from './screen-size.js';
 import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState } from './storage.js';
 import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
-import { migratePhotosToStore } from './photos-store.js';
+import {
+  migratePhotosToStore, regenerateThumbs, thumbRegenNeeded, markThumbRegenDone,
+} from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
 import { initModel } from './model-loader.js';
@@ -69,6 +71,11 @@ const currentHashRoute = () =>
 
 export default function App() {
   const [state, setState] = useState(defaultState);
+  // Mirror of the latest state for background jobs (thumbnail regen)
+  // that need to read current state without doing it inside a setState
+  // updater, which StrictMode may invoke twice.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
   const [loaded, setLoaded] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [stack, setStack] = useState([{ name: 'home' }]);
@@ -137,12 +144,37 @@ export default function App() {
     // when the angler hasn't already touched state mid-migration.
     const initialJson = JSON.stringify(s);
     migratePhotosToStore(s).then((migrated) => {
-      if (migrated === s) return;
-      setState(prev => {
-        if (JSON.stringify(prev) !== initialJson) return prev;
-        saveState(migrated);
-        return migrated;
-      });
+      if (migrated !== s) {
+        setState(prev => {
+          if (JSON.stringify(prev) !== initialJson) return prev;
+          saveState(migrated);
+          return migrated;
+        });
+      }
+      // One-time thumbnail regeneration for photos saved before thumbs
+      // moved to disk at 768px. Deferred well past first paint and run
+      // one photo at a time — a fresh install has no photos, so new
+      // users never execute this; only an existing library pays for it,
+      // and it stays off the critical path either way.
+      if (!thumbRegenNeeded()) return;
+      setTimeout(() => {
+        const before = stateRef.current;
+        const beforeJson = JSON.stringify(before);
+        regenerateThumbs(before).then((next) => {
+          if (next === before) { markThumbRegenDone(); return; }
+          setState(prev => {
+            // Regen can take a while on a big library. If the angler
+            // logged or edited a catch meanwhile, drop the result
+            // rather than overwrite their work, and leave the flag
+            // UNSET so the next launch retries — regenerateThumbs skips
+            // entries already at size, so the retry is cheap.
+            if (JSON.stringify(prev) !== beforeJson) return prev;
+            saveState(next);
+            markThumbRegenDone();
+            return next;
+          });
+        }).catch(() => { /* leave unset; retry next launch */ });
+      }, 4000);
     }).catch(() => {});
     // Refresh the regulations feed in the background (no-op until a feed
     // URL is configured; failures are silent — offline-first).
