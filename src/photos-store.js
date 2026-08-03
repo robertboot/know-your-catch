@@ -45,13 +45,22 @@ const PHOTO_DIR = 'photos';
    Thumb: 240 px / 0.65 — cheap to generate, only used for list rows. */
 const WEB_MAX_DIM     = 1600;
 const WEB_QUALITY     = 0.82;
-// 384px @ 0.72 with the stepped high-quality downscale in storage.js
-// — sharp on 3x phone grids (~120-130 CSS px tiles) while staying
-// ~20-40KB per thumb. Was 240/0.65 with a single-pass downscale,
-// which aliased visibly ("pixelated thumbnails"). Full-size display
-// path (photoDisplayUrl) is untouched.
-const THUMB_DIM       = 384;
-const THUMB_QUALITY   = 0.72;
+/* Thumb size is platform-dependent because the STORAGE is.
+
+   NATIVE: thumbs live on the filesystem, so there's no byte budget to
+   respect — 768 @ 0.80 (~80-150 KB) stays sharp on iPad grid tiles,
+   which render several hundred CSS px wide at 2-3x DPR. 384 was chosen
+   back when thumbs rode inline in localStorage's ~5 MB cap; that
+   constraint is gone and 384 visibly softens on tablet.
+
+   WEB: still inline in localStorage, so the old budget still applies —
+   keep 384 @ 0.72.
+
+   Both use the stepped high-quality downscale in storage.js. A single
+   -pass downscale aliased visibly, which is what made thumbnails look
+   pixelated before. Full-size display (photoDisplayUrl) is untouched. */
+const THUMB_DIM       = NATIVE ? 768  : 384;
+const THUMB_QUALITY   = NATIVE ? 0.80 : 0.72;
 
 function newPhotoId() {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
