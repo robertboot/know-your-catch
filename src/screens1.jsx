@@ -818,16 +818,18 @@ export function HomeScreen({
           >
             RECENT CATCHES
           </SectionHead>
+          {/* One horizontal scroller at every size. Tablet used to use a
+              wrapping grid, which turned "recent catches" into a tall
+              block that pushed Today's Conditions off-screen — the strip
+              reads as a strip on phone and should on iPad too. Cards are
+              just wider here. */}
           <div
-            className={isTablet ? undefined : 'kyc-hscroll'}
-            style={isTablet ? {
-              display: 'grid',
-              gridTemplateColumns: screenSize === 'tablet-landscape' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)',
-              gap: 12,
-            } : {
-              display: 'flex', gap: 10,
+            className="kyc-hscroll"
+            style={{
+              display: 'flex', gap: isTablet ? 12 : 10,
               overflowX: 'auto', overflowY: 'hidden',
-              margin: '0 -16px', padding: '0 16px 6px',
+              margin: isTablet ? '0 -22px' : '0 -16px',
+              padding: isTablet ? '0 22px 6px' : '0 16px 6px',
               scrollSnapType: 'x proximity',
             }}
           >
@@ -845,7 +847,7 @@ export function HomeScreen({
                   key={c.id}
                   onClick={() => onViewCatch && onViewCatch(c.id)}
                   style={{
-                    flex: '0 0 132px',
+                    flex: isTablet ? '0 0 190px' : '0 0 132px',
                     background: T.card, border: `1px solid ${T.cardEdge}`,
                     borderRadius: 14, padding: 0, cursor: 'pointer', textAlign: 'left',
                     display: 'flex', flexDirection: 'column',
