@@ -18,7 +18,8 @@ import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
 import { SUPABASE_URL } from './supabase-client.js';
 
-const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
+const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
+const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
 
 /* Pre-rendered snapshots written by the refresh-ocean-maps edge
    function every 6h. Same image for every angler, served static off
@@ -141,12 +142,23 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
         layers: `${cfg.dataset}:${cfg.variable}`, styles: '',
         format: 'image/png', transparent: 'true',
       });
+      if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
+
+      /* SST goes through griddap .transparentPng instead of WMS.
+
+         This ERDDAP's WMS rejects any style override — it answers
+         "STYLE=boxfill/rainbow is invalid (must be \"\")" — and without
+         a style it ignores colorBarMinimum/Maximum too, so the range
+         can't be set at all. That left the whole 29-32 °C summer Gulf
+         pinned at the top of the default scale, solid red. griddap
+         honours .colorBar, which is the only way to fix it. */
       if (cfg.key === 'sst') {
         const [lo, hi] = sstRangeC();
-        params.set('colorBarMinimum', String(lo));
-        params.set('colorBarMaximum', String(hi));
+        const t = dateISO ? `(${dateISO}T12:00:00Z)` : '(last)';
+        const [[sLat, wLon], [nLat, eLon]] = REGION_BOUNDS;
+        const subset = `${cfg.variable}[${t}][(${sLat}):(${nLat})][(${wLon}):(${eLon})]`;
+        return `${ERDDAP_BASE}/griddap/${cfg.dataset}.transparentPng?${subset}&.colorBar=Rainbow|||${lo}|${hi}|`;
       }
-      if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
       return `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
     };
 

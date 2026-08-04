@@ -27,51 +27,74 @@ import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl } from '
    photoThumbUrl both return data URLs, so no double download; the
    two-layer swap is a no-op there. */
 export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
-  const primary = photoDisplayUrl(photo);
+  /* Escalation chain, driven by the <img>'s own onError.
+
+     The previous version probed the primary URL only when a thumb
+     existed AND differed from it:
+
+         const startSrc = thumb || primary || '';
+         if (!primary || primary === startSrc) return;   // bailed
+
+     With no thumb, startSrc IS primary, so it returned immediately and
+     the signed-URL recovery never ran — precisely the case that needs
+     it. Cloud-synced catches (no local file, private bucket, so the raw
+     cloudUrl 403s) rendered a broken image with nothing to rescue them.
+
+     Now every candidate is tried in order and the signed URL is fetched
+     on demand when the cheap ones fail. */
   const thumb   = photoThumbUrl(photo);
-  const [src, setSrc] = React.useState(thumb || primary || '');
-  React.useEffect(() => {
+  const primary = photoDisplayUrl(photo);
+
+  const candidates = React.useMemo(
+    () => [thumb, primary].filter((v, i, a) => v && a.indexOf(v) === i),
+    [thumb, primary],
+  );
+
+  const [idx, setIdx] = React.useState(0);
+  const [signed, setSigned] = React.useState(null);
+  const [failed, setFailed] = React.useState(false);
+
+  // Reset when the photo changes — otherwise a previously-exhausted
+  // chain would leave the next photo showing the placeholder.
+  React.useEffect(() => { setIdx(0); setSigned(null); setFailed(false); }, [thumb, primary]);
+
+  const src = signed || candidates[idx] || null;
+
+  const onError = React.useCallback(() => {
     if (debugTag && typeof console !== 'undefined') {
       // eslint-disable-next-line no-console
-      console.log(`[PhotoImg:${debugTag}]`, {
-        photo, primary: (primary || '').slice ? primary?.slice(0, 60) : primary,
-        thumb: thumb ? '(present)' : '(missing)',
-      });
+      console.warn(`[PhotoImg:${debugTag}] failed`, { idx, src: (src || '').slice(0, 80) });
     }
-    // Always start with the thumb (fast + safe) so we never render
-    // broken. If the primary isn't the same URL, preload it and
-    // upgrade once it succeeds.
-    const startSrc = thumb || primary || '';
-    setSrc(startSrc);
-    if (!primary || primary === startSrc) return;
-    const probe = new Image();
-    let cancelled = false;
-    probe.onload = () => {
-      if (!cancelled) setSrc(primary);
-    };
-    probe.onerror = () => {
-      if (debugTag && typeof console !== 'undefined') {
-        // eslint-disable-next-line no-console
-        console.warn(`[PhotoImg:${debugTag}] primary failed, trying cloudUrl`, {
-          primary: (primary || '').slice ? primary?.slice(0, 80) : primary,
-        });
-      }
-      // Before giving up on the thumb: fetch a short-lived SIGNED url for
-      // the private cloud copy. This is the cross-device sync case — the
-      // entry pulled from another device carries THAT device's
-      // capacitor:// src which can never resolve here, but the private
-      // Supabase copy renders from anywhere via a signed URL. (We never
-      // use a public, auth-free URL — the bucket is private.)
-      photoSignedUrl(photo).then((signed) => {
-        if (!signed || cancelled || signed === primary) return;
-        const cloudProbe = new Image();
-        cloudProbe.onload = () => { if (!cancelled) setSrc(signed); };
-        cloudProbe.src = signed;
-      });
-    };
-    probe.src = primary;
-    return () => { cancelled = true; probe.onload = null; probe.onerror = null; };
-  }, [primary, thumb, debugTag, photo]);
+    if (idx + 1 < candidates.length) { setIdx(idx + 1); return; }
+    if (signed) { setFailed(true); return; }   // signed url failed too
+    // Last resort: a short-lived signed URL for the private cloud copy.
+    // This is the cross-device case — the entry carries the ORIGINATING
+    // device's capacitor:// src, which can never resolve here.
+    photoSignedUrl(photo).then((url) => {
+      if (url) setSigned(url); else setFailed(true);
+    }).catch(() => setFailed(true));
+  }, [idx, candidates.length, signed, photo, src, debugTag]);
+
+  // Nothing renderable — show the same placeholder SpeciesImage uses
+  // rather than a broken-image glyph.
+  if (!src || failed) {
+    return (
+      <div
+        onClick={onClick}
+        className={className}
+        aria-label={alt || 'Photo unavailable'}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(160deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
+          color: T.inkMute,
+          ...style,
+        }}
+      >
+        <ImageOff size={18} strokeWidth={1.6} />
+      </div>
+    );
+  }
+
   return (
     <img
       src={src}
@@ -79,6 +102,7 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
       style={style}
       onClick={onClick}
       className={className}
+      onError={onError}
     />
   );
 }

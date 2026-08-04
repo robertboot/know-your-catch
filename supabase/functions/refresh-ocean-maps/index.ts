@@ -34,7 +34,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const BUCKET = 'ocean-maps';
-const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
+const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
+const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
 
 // Must match REGION_BOUNDS in src/screens_ocean.jsx — [S,W] [N,E].
 const REGION = { south: 22.0, west: -98.5, north: 31.5, east: -77.5 };
@@ -74,6 +75,25 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+/* SST goes through griddap .transparentPng, not WMS.
+
+   This ERDDAP's WMS refuses any style override — it answers
+   "STYLE=boxfill/rainbow is invalid (must be \"\")" — and without a
+   style it also ignores colorBarMinimum/Maximum, so the palette is
+   whatever the dataset defaults to. In late summer that put the entire
+   29-32 °C Gulf at the top of the scale: sampled pixels came back
+   255,0,0 through 139,0,0, pure red with no green or blue channel.
+
+   griddap's .transparentPng renders just the data (no axes or legend,
+   so it drops straight onto the map) and DOES honour .colorBar, which
+   is the only way to fix the range. */
+function sstGriddapUrl(dataset: string, variable: string) {
+  const [lo, hi] = sstRangeC(new Date().getUTCMonth());
+  const subset = `${variable}[(last)][(${REGION.south}):(${REGION.north})][(${REGION.west}):(${REGION.east})]`;
+  // .colorBar = palette|continuous|scale|min|max|nSections
+  return `${ERDDAP_BASE}/griddap/${dataset}.transparentPng?${subset}&.colorBar=Rainbow|||${lo}|${hi}|`;
+}
+
 function wmsUrl(key: string, dataset: string, variable: string, width: number, height: number) {
   const params = new URLSearchParams({
     service: 'WMS', version: '1.3.0', request: 'GetMap',
@@ -83,11 +103,6 @@ function wmsUrl(key: string, dataset: string, variable: string, width: number, h
     layers: `${dataset}:${variable}`, styles: '',
     format: 'image/png', transparent: 'true',
   });
-  if (key === 'sst') {
-    const [lo, hi] = sstRangeC(new Date().getUTCMonth());
-    params.set('colorBarMinimum', String(lo));
-    params.set('colorBarMaximum', String(hi));
-  }
   return `${ERDDAP_WMS}/${dataset}/request?${params.toString()}`;
 }
 
@@ -103,7 +118,7 @@ async function fetchLayer(url: string): Promise<{ ok: true; bytes: Uint8Array } 
     // non-image content-type or a suspiciously tiny payload means the
     // render failed even though the HTTP call "succeeded".
     if (!/image\/png/i.test(ct)) {
-      const head = new TextDecoder().decode(buf.slice(0, 200));
+      const head = new TextDecoder().decode(buf.slice(0, 900));
       return { ok: false, error: `non-image response (${ct}): ${head}` };
     }
     if (buf.byteLength < 1000) return { ok: false, error: `suspiciously small png (${buf.byteLength}B)` };
@@ -162,7 +177,9 @@ Deno.serve(async (req: Request) => {
   let published = 0;
 
   for (const layer of LAYERS) {
-    const url = wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
+    const url = layer.key === 'sst'
+      ? sstGriddapUrl(layer.dataset, layer.variable)
+      : wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
     const got = await fetchLayer(url);
     if (!got.ok) {
       // Leave whatever is already in the bucket alone — a stale image
