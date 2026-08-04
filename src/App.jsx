@@ -682,7 +682,21 @@ export default function App() {
     // Straight to analyzing → catch-entry confirm. No forced crop page:
     // the confirm page already offers an optional Crop button, so the
     // angler is never blocked on framing before seeing the result.
-    push({ name: 'photo_analyzing', imageDataUrl: dataUrl, fromCapture: true });
+    /* Crop FIRST, then identify.
+
+     Measured across three photos: DeepBlue is confidently WRONG whenever
+     the fish doesn't fill the frame (0.75, 0.84, 0.86 — all wrong) and
+     right, often at 0.99, when it does. Cropping is the highest-leverage
+     step in the whole pipeline.
+
+     fd4a302 removed this page to save a tap, which made cropping
+     something the angler only discovers after a wrong answer. Auto-
+     detecting the fish would be better still, but neither Vision
+     saliency nor foreground segmentation can isolate a fish (both select
+     the angler), so the reliable version is: hand them the crop box and
+     let them place it. Skip is still one tap for anyone who doesn't want
+     it. */
+    push({ name: 'photo_crop', imageDataUrl: dataUrl, fromCapture: true });
   };
 
   // Legacy-user "Finish setup" nudge. Fires when the required step
@@ -708,7 +722,7 @@ export default function App() {
     // Fish ID upload → straight to analyzing → results. No manual crop
     // page: the angler wants the answer, not a framing chore. (Crop
     // stays available on the catch-entry confirm page when logging.)
-    onUploadPhoto:(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl }),
+    onUploadPhoto:(dataUrl) => push({ name: 'photo_crop', imageDataUrl: dataUrl }),
     onBrowse:     () => push({ name: 'categories' }),
     onCompare:    () => push({ name: 'species_list' }),
     onRegulations:() => push({ name: 'regulations' }),
@@ -745,7 +759,7 @@ export default function App() {
         jurisdiction={jurisdiction}
         autoScan={screen.autoScan}
         onExitHome={() => reset([{ name: 'home' }])}
-        onPhoto={(dataUrl) => push({ name: 'photo_analyzing', imageDataUrl: dataUrl })}
+        onPhoto={(dataUrl) => push({ name: 'photo_crop', imageDataUrl: dataUrl })}
         onBrowse={() => push({ name: 'categories' })}
         onCategory={(catId) => push({ name: 'category', catId })}
         onSearch={() => push({ name: 'search' })}

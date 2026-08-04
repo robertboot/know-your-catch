@@ -1544,6 +1544,7 @@ export function CropStep({
   onCancel,
   onSkip,
   title = 'Crop to the fish',
+  hint = 'Frame just the fish — head to tail, as little background as possible. This is the single biggest factor in getting the ID right.',
   primaryLabel = 'Use this crop',
   skipLabel = 'Skip crop',
   cancelLabel = 'Retake',
@@ -1918,6 +1919,19 @@ export function CropStep({
           <RotateCcw size={12} /> Reset
         </button>
       </div>
+
+      {/* Says WHY this step exists. Measured: the model is confidently
+          wrong when the fish doesn't fill the frame and right — often at
+          0.99 — when it does. Without this line the crop page reads as
+          an obstacle rather than the thing that makes the ID work. */}
+      {hint && (
+        <div style={{
+          padding: '0 16px 10px', background: 'rgba(0,0,0,0.55)',
+          color: 'rgba(255,255,255,0.72)', fontSize: 13, lineHeight: 1.45,
+        }}>
+          {hint}
+        </div>
+      )}
 
       <div
         ref={containerRef}
