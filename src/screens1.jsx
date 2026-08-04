@@ -2118,12 +2118,30 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
         display: 'flex',
       }}>
-        <img src={imageDataUrl} alt="Your catch" style={{
-          width: '100%', height: 'auto',
-          maxHeight: isTablet ? '62vh' : '58vh',
-          objectFit: 'contain',
-          display: 'block', margin: '0 auto',
-        }} />
+        {/* Photo + the region the model actually scanned. Drawn inside
+            an inline-block wrapper so it shrink-wraps the image exactly
+            — percentage offsets then line up with the pixels, which
+            they would not against a wider flex parent. */}
+        <span style={{ position: 'relative', display: 'inline-block', margin: '0 auto' }}>
+          <img src={imageDataUrl} alt="Your catch" style={{
+            width: 'auto', maxWidth: '100%', height: 'auto',
+            maxHeight: isTablet ? '62vh' : '58vh',
+            objectFit: 'contain', display: 'block',
+          }} />
+          {result?._subjectBox && (
+            <span aria-hidden style={{
+              position: 'absolute',
+              left:   `${result._subjectBox.x * 100}%`,
+              top:    `${result._subjectBox.y * 100}%`,
+              width:  `${result._subjectBox.w * 100}%`,
+              height: `${result._subjectBox.h * 100}%`,
+              border: '2px solid #5ecdf2',
+              borderRadius: 6,
+              boxShadow: '0 0 0 9999px rgba(4,12,22,0.35)',
+              pointerEvents: 'none',
+            }} />
+          )}
+        </span>
         <div aria-hidden style={{
           position: 'absolute', bottom: 0, left: 0, right: 0, height: '48%',
           background: 'linear-gradient(to top, rgba(6,20,36,0.94) 15%, rgba(6,20,36,0.55) 60%, transparent 100%)',

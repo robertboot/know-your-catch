@@ -42,7 +42,7 @@
    ============================================================ */
 
 import { SPECIES, REGULATIONS } from './data.js';
-import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote, lastSubjectFound } from './identify/adapter.js';
+import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote, lastSubjectFound, lastSubjectBox } from './identify/adapter.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
@@ -276,6 +276,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
       localTop = topK[0]?.score || 0;
       cropped = lastSubjectFound();
       local = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
+      local._subjectBox = lastSubjectBox();
     }
   } catch {
     // Model not ready (e.g. first launch before it downloads).
@@ -289,7 +290,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   }
 
   const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
-  if (cloud) return { ...cloud, _diag: `cloud used · ${diagTail()}` };
+  if (cloud) return { ...cloud, _diag: `cloud used · ${diagTail()}`, _subjectBox: lastSubjectBox() };
 
   if (local) {
     return {

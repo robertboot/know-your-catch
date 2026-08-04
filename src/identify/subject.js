@@ -18,8 +18,14 @@ const NATIVE = Capacitor.isNativePlatform();
 
 /* Padding around the detected box. Vision hugs the subject tightly and
    fins/tail tips carry real ID signal, so a bare box can clip exactly
-   the features the model needs. */
-const PAD = 0.08;
+   the features the model needs.
+
+   Kept small on purpose. At 0.08 this added 16% to each dimension, so
+   any box of ~0.80 or wider inflated to the full frame and the crop
+   became a no-op reported as "subject fills frame" — the model was
+   still seeing the whole boat scene while the diagnostic claimed a
+   successful crop. */
+const PAD = 0.03;
 
 let _lastReason = null;
 export function lastSubjectReason() { return _lastReason; }
@@ -41,28 +47,26 @@ export async function detectSubject(imageDataUrl) {
     const r = await SubjectDetector.detect({ image: small });
     if (!r?.found) { _lastReason = 'no subject found'; return null; }
 
+    /* Decide "already tight" from the RAW box, before padding — padding
+       must never be what makes a crop look unnecessary. */
+    if (r.w >= 0.96 && r.h >= 0.96) {
+      _lastReason = 'subject fills frame';
+      return { x: 0, y: 0, w: 1, h: 1 };
+    }
+
     // Pad, then clamp back inside the frame.
     const x = Math.max(0, r.x - PAD);
     const y = Math.max(0, r.y - PAD);
     const w = Math.min(1 - x, r.w + PAD * 2);
     const h = Math.min(1 - y, r.h + PAD * 2);
 
-    /* A box covering the whole frame is SUCCESS, not failure.
 
-       This previously returned null, which is backwards: an
-       already-cropped photo is precisely a fish filling the frame, so
-       re-running ID after a manual crop reported "no subject", skipped
-       the on-device path and went to the cloud — turning a correct
-       DeepBlue answer into a wrong cloud one. Hand back the full frame
-       and let the caller treat it as a good crop. */
-    if (w >= 0.96 && h >= 0.96) {
-      _lastReason = 'subject fills frame';
-      return { x: 0, y: 0, w: 1, h: 1 };
-    }
     // Guard against a degenerate sliver.
     if (w < 0.05 || h < 0.05) { _lastReason = 'box too small'; return null; }
 
-    _lastReason = `box ${w.toFixed(2)}x${h.toFixed(2)}`;
+    // Report the raw box too — if a crop isn't helping, the first thing
+    // to know is how much of the frame Vision actually selected.
+    _lastReason = `box ${w.toFixed(2)}x${h.toFixed(2)} (raw ${r.w.toFixed(2)}x${r.h.toFixed(2)})`;
     return { x, y, w, h };
   } catch (e) {
     // Plugin missing (older build) or Vision threw — not fatal.

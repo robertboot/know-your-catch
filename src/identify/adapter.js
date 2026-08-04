@@ -50,6 +50,12 @@ export function lastSubjectNote() { return _lastSubjectNote; }
 let _lastSubjectFound = false;
 export function lastSubjectFound() { return _lastSubjectFound; }
 
+/* The box itself, so the UI can draw what was selected. Seeing the
+   rectangle is worth more than any diagnostic string — it shows at a
+   glance whether the fish was isolated or the whole scene was. */
+let _lastSubjectBox = null;
+export function lastSubjectBox() { return _lastSubjectBox; }
+
 /* Decode a data URL / URL string into an HTMLImageElement so we can
    rasterize to a fixed size + get pixel bytes. Kept sync to the tab
    we're already on — no Web Workers, matches the admin Test Image
@@ -170,6 +176,7 @@ async function realClassify(imageDataUrl) {
   const box = await detectSubject(imageDataUrl);
   _lastSubjectNote = lastSubjectReason();
   _lastSubjectFound = !!box;
+  _lastSubjectBox = box || null;
   const REGIONS = box
     ? [box]
     : [
