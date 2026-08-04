@@ -15,7 +15,6 @@
    degradation, not a crash. */
 
 import { getReadyModel, getModelInfo, initModel } from '../model-loader.js';
-import { detectSubject, lastSubjectReason } from './subject.js';
 
 /* Kept for the identify pipeline import — populated at build time
    when we bake in the label→speciesId map for edge cases. Empty means
@@ -31,30 +30,22 @@ export const USE_STUB_MODEL = false;
 
 const IMG_SIZE_DEFAULT = 224;
 
-/* Per-region top-1 scores from the last multi-crop run, e.g.
-   "0.11/0.14/0.702/0.38" — full frame, 90%, 70%, 50%. Surfaced on the
-   couldn't-identify screen so a failure shows whether the crops helped
-   at all, instead of us guessing. */
 let _lastCropTrace = null;
 export function lastCropTrace() { return _lastCropTrace; }
 
-/* What subject detection did on the last run — surfaced in the ID
-   diagnostic line so a bad crop is visible rather than inferred. */
-let _lastSubjectNote = null;
-export function lastSubjectNote() { return _lastSubjectNote; }
+/* Auto-crop is removed (see realClassify). These are kept so the ID
+   pipeline and its diagnostic line keep compiling without a scatter of
+   conditionals, and so re-introducing a real fish DETECTOR later is a
+   one-file change rather than a re-wiring. */
+export function lastSubjectNote()  { return 'auto-crop disabled'; }
+export function lastSubjectFound() { return false; }
+export function lastSubjectBox()   { return null; }
 
-/* True when Vision actually isolated a subject (including the
-   "already fills the frame" case). Callers used to infer this by
-   string-matching the note, which is exactly the kind of thing that
-   breaks silently when the wording changes. */
-let _lastSubjectFound = false;
-export function lastSubjectFound() { return _lastSubjectFound; }
 
-/* The box itself, so the UI can draw what was selected. Seeing the
-   rectangle is worth more than any diagnostic string — it shows at a
-   glance whether the fish was isolated or the whole scene was. */
-let _lastSubjectBox = null;
-export function lastSubjectBox() { return _lastSubjectBox; }
+
+
+
+
 
 /* Decode a data URL / URL string into an HTMLImageElement so we can
    rasterize to a fixed size + get pixel bytes. Kept sync to the tab
@@ -166,51 +157,24 @@ async function realClassify(imageDataUrl) {
 
      Cost is N inferences. DeepBlue is small and this runs on the
      analyzing screen which already shows a progress UI. */
-  /* Ask Vision where the fish is first. When it answers, that box IS
-     the crop the angler would have drawn by hand, so classify it alone
-     — averaging it against three arbitrary centre crops would just
-     dilute the one framing we know is right.
+  /* No auto-crop. Two attempts failed for the same reason:
 
-     Only when detection is unavailable (web) or finds nothing do we
-     fall back to the fixed ladder. */
-  const box = await detectSubject(imageDataUrl);
-  _lastSubjectNote = lastSubjectReason();
-  _lastSubjectFound = !!box;
-  _lastSubjectBox = box || null;
-  const REGIONS = box
-    ? [box]
-    : [
-        null,                                   // full frame (letterboxed)
-        { x: 0.05, y: 0.05, w: 0.90, h: 0.90 }, // trim edge clutter
-        { x: 0.15, y: 0.15, w: 0.70, h: 0.70 }, // center 70%
-        { x: 0.25, y: 0.25, w: 0.50, h: 0.50 }, // center 50%
-      ];
+       saliency      → selected ~the whole frame (measured 0.92x0.99)
+       segmentation  → selected the ANGLER (measured 0.77x0.99, full height)
 
-  /* Aggregate by MEAN across crops, not best-single-crop.
+     Saliency finds what stands out and segmentation finds the foreground
+     subject; on a photo of a person holding a fish, both answer "the
+     person". Neither knows what a fish is, so neither can isolate one,
+     and a confidently wrong crop is worse than no crop. Doing this
+     properly needs an object detector trained on labelled fish boxes.
 
-     Taking the highest-scoring crop assumes confidence tracks
-     correctness, and it doesn't: an uncropped grouper scored 0.75 as
-     Cubera Snapper while the correct answer only emerged once the fish
-     filled the frame. One flattering crop shouldn't be able to carry a
-     wrong label. Averaging rewards labels that hold up across several
-     framings, which is a much better proxy for "actually this fish". */
-  const sums = new Map();
-  const trace = [];
-  let passes = 0;
-  for (const region of REGIONS) {
-    const scored = await classifyRegion(tf, model, info, img, size, region);
-    if (!scored || !scored.length) { trace.push('x'); continue; }
-    passes += 1;
-    trace.push(scored[0].score.toFixed(2));
-    for (const { label, score } of scored) {
-      sums.set(label, (sums.get(label) || 0) + score);
-    }
-  }
-  _lastCropTrace = trace.join('/');
-  if (!passes) return [];
-  return [...sums.entries()]
-    .map(([label, total]) => ({ label, score: total / passes }))
-    .sort((a, b) => b.score - a.score);
+     The full frame is still LETTERBOXED rather than squashed — the
+     original code stretched a 3:4 photo into a square, distorting body
+     proportions, which is a primary ID cue. That fix was real and
+     stays. */
+  const REGIONS = [null];
+
+  return await classifyRegion(tf, model, info, img, size, null);
 }
 
 /* One forward pass over a single region. Returns the full label list
