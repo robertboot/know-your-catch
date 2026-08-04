@@ -52,12 +52,6 @@ import { downscaleImageDataUrl } from './storage.js';
    the app already branches on. Conservative on purpose: this is a
    "stay legal" app, so a confidently-wrong ID has real consequences.
    Tune the numbers once real-model accuracy is measured. */
-/* Only applied when Vision actually isolated the fish. A high score on
-   a properly-cropped subject is real signal; the same number on an
-   uncropped scene is not, which is why there is no equivalent floor for
-   the un-cropped path. */
-const CROPPED_TRUST_FLOOR = 0.70;
-
 const BAND = {
   highScore:       0.85,   // top-1 must clear this to earn 'high'
   highMargin:      0.20,   //   AND margin over #2 must clear this
@@ -255,18 +249,9 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
 export async function identifyPhoto(imageDataUrl, options = {}) {
   const { jurisdictionId = null } = options;
 
-  /* Order depends on whether we got a real crop.
-
-     The earlier failure was feeding DeepBlue a whole boat scene: the
-     fish was ~25% of the frame, it answered "Cubera Snapper" at 0.75,
-     and a confidence gate believed it. The score was meaningless
-     because the INPUT was wrong, not because the model is bad — the
-     same photo cropped to the fish gave the right species at 0.85.
-
-     So when Vision hands us a subject box, DeepBlue is being asked the
-     question it's actually good at, and a strong score is worth
-     trusting. Without a box we're back to the old situation, and the
-     cloud goes first. */
+  /* On-device first and, in practice, only. classify() internally asks
+     Vision for a subject box and crops to it, so DeepBlue is handed the
+     fish rather than the whole boat scene. */
   let local = null;
   let localTop = 0;
   let cropped = false;
@@ -285,20 +270,24 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   const diagTail = () =>
     `on-device ${localTop.toFixed(2)} · subject ${lastSubjectNote() || 'n/a'}`;
 
-  if (local && cropped && localTop >= CROPPED_TRUST_FLOOR) {
-    return { ...local, _diag: `${diagTail()} — trusted`, _cropTrace: lastCropTrace() };
-  }
+  /* DeepBlue answers whenever it has an answer.
 
-  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
-  if (cloud) return { ...cloud, _diag: `cloud used · ${diagTail()}`, _subjectBox: lastSubjectBox() };
-
+     The cloud was tried as the stronger identifier and repeatedly wasn't:
+     it got species wrong that DeepBlue had just got right, including on
+     photos DeepBlue handled uncropped. It's kept only for the case where
+     there is no local answer at all — model still downloading on a first
+     launch — and never as a second opinion, because "second opinion"
+     turned into "overrides a correct answer with a wrong one". */
   if (local) {
     return {
       ...local,
-      _diag: `${diagTail()} · cloud skipped: ${lastCloudReason() || 'unknown'}`,
+      _diag: `${diagTail()}${cropped ? ' · cropped' : ''}`,
       _cropTrace: lastCropTrace(),
     };
   }
+
+  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
+  if (cloud) return { ...cloud, _diag: `cloud used (no local model) · ${diagTail()}`, _subjectBox: lastSubjectBox() };
 
   // Nothing available — return an empty, banded result.
   return rankAndBand([]);

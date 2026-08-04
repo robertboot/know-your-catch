@@ -69,7 +69,20 @@ public class SubjectDetectorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        let box = Self.bestBox(from: objectness) ?? Self.bestBox(from: attention)
+        // Preference order:
+        //   1. Foreground instance mask (iOS 17+) — the same segmentation
+        //      behind "lift subject from background". It returns the
+        //      subject's actual silhouette, so the bounding box hugs the
+        //      fish instead of the scene.
+        //   2. Saliency, which in practice kept returning ~the whole
+        //      frame on boat photos (measured 0.92x0.99) and so produced
+        //      no useful crop.
+        var box: CGRect? = nil
+        if #available(iOS 17.0, *) {
+            box = Self.foregroundBox(cgImage: cgImage,
+                                     orientation: Self.cgOrientation(image.imageOrientation))
+        }
+        if box == nil { box = Self.bestBox(from: objectness) ?? Self.bestBox(from: attention) }
 
         guard let rect = box else {
             // No subject found is a legitimate outcome, not an error — the
@@ -86,6 +99,62 @@ public class SubjectDetectorPlugin: CAPPlugin, CAPBridgedPlugin {
             "w": rect.size.width,
             "h": rect.size.height
         ])
+    }
+
+    /// Bounding box of the foreground subject via instance segmentation.
+    ///
+    /// Saliency answers "what stands out", which on a photo of two people
+    /// holding a fish on a boat is essentially everything. Segmentation
+    /// answers "what is the subject", returning a per-pixel mask we can
+    /// tighten a box around — much closer to what Google Lens draws.
+    @available(iOS 17.0, *)
+    private static func foregroundBox(cgImage: CGImage,
+                                      orientation: CGImagePropertyOrientation) -> CGRect? {
+        let req = VNGenerateForegroundInstanceMaskRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
+        do { try handler.perform([req]) } catch { return nil }
+        guard let obs = req.results?.first, !obs.allInstances.isEmpty else { return nil }
+
+        guard let mask = try? obs.generateScaledMaskForImage(forInstances: obs.allInstances,
+                                                             from: handler) else { return nil }
+        CVPixelBufferLockBaseAddress(mask, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(mask, .readOnly) }
+
+        let w = CVPixelBufferGetWidth(mask)
+        let h = CVPixelBufferGetHeight(mask)
+        guard w > 0, h > 0,
+              let base = CVPixelBufferGetBaseAddress(mask) else { return nil }
+        let stride = CVPixelBufferGetBytesPerRow(mask)
+        let ptr = base.assumingMemoryBound(to: UInt8.self)
+
+        // Tighten to the mask's extent. Step a few pixels at a time — this
+        // is a coarse box, not a matte, and scanning every pixel of a large
+        // buffer on the main path isn't worth the accuracy.
+        let step = max(1, min(w, h) / 256)
+        var minX = w, minY = h, maxX = -1, maxY = -1
+        for y in Swift.stride(from: 0, to: h, by: step) {
+            let row = ptr + y * stride
+            for x in Swift.stride(from: 0, to: w, by: step) {
+                if row[x] > 128 {
+                    if x < minX { minX = x }
+                    if x > maxX { maxX = x }
+                    if y < minY { minY = y }
+                    if y > maxY { maxY = y }
+                }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+
+        let rect = CGRect(x: CGFloat(minX) / CGFloat(w),
+                          // Mask rows run top-down; callers expect the same
+                          // bottom-left convention Vision uses elsewhere,
+                          // and detect() flips it once for JS.
+                          y: 1.0 - CGFloat(maxY) / CGFloat(h),
+                          width:  CGFloat(maxX - minX) / CGFloat(w),
+                          height: CGFloat(maxY - minY) / CGFloat(h))
+        if rect.width > 0.97 && rect.height > 0.97 { return nil }
+        if rect.width < 0.05 || rect.height < 0.05 { return nil }
+        return rect
     }
 
     /// UIImage.Orientation → CGImagePropertyOrientation. Vision takes the
