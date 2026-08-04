@@ -80,24 +80,42 @@ public class SubjectDetectorPlugin: CAPPlugin, CAPBridgedPlugin {
         ])
     }
 
-    /// Union of the salient regions, which handles a fish held across two
-    /// people better than picking a single highest-confidence blob.
+    /// Pick the STRONGEST single salient object, not the union of all of
+    /// them.
+    ///
+    /// Union was the first attempt and it fails on exactly the photos this
+    /// exists for: two anglers, rods, a cooler and a fish produce several
+    /// blobs, and their union spans essentially the whole frame — which
+    /// then gets rejected as useless, so no crop happens at all. A held-up
+    /// fish is reliably the highest-confidence object, so take that one.
+    ///
+    /// Boxes are only merged when they overlap substantially, which covers
+    /// a long fish that saliency splits into head and tail halves without
+    /// re-introducing the everything-union problem.
     private static func bestBox(from request: VNRequest) -> CGRect? {
         guard let obs = request.results?.first as? VNSaliencyImageObservation,
               let objects = obs.salientObjects,
               !objects.isEmpty else { return nil }
 
-        // Ignore very low-confidence blobs — they tend to be glare on the
-        // water or a bright patch of sky.
-        let strong = objects.filter { $0.confidence > 0.1 }
-        let use = strong.isEmpty ? objects : strong
+        let sorted = objects.sorted { $0.confidence > $1.confidence }
+        var box = sorted[0].boundingBox
 
-        var union = use[0].boundingBox
-        for o in use.dropFirst() { union = union.union(o.boundingBox) }
+        for other in sorted.dropFirst() {
+            let inter = box.intersection(other.boundingBox)
+            if inter.isNull { continue }
+            let smaller = min(box.width * box.height,
+                              other.boundingBox.width * other.boundingBox.height)
+            guard smaller > 0 else { continue }
+            // Merge only when the overlap is a large share of the smaller
+            // box — i.e. they're plainly parts of one subject.
+            if (inter.width * inter.height) / smaller > 0.35 {
+                box = box.union(other.boundingBox)
+            }
+        }
 
         // A box covering nearly the whole frame tells us nothing, and
         // cropping to it would be a no-op.
-        if union.width > 0.95 && union.height > 0.95 { return nil }
-        return union
+        if box.width > 0.95 && box.height > 0.95 { return nil }
+        return box
     }
 }
