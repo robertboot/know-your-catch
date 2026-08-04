@@ -1556,10 +1556,15 @@ export function CropStep({
   const [zoom, setZoom] = React.useState(1);            // user-controlled multiplier on top of fit
   const [pan, setPan] = React.useState({ x: 0, y: 0 }); // translation in container px
   const [busy, setBusy] = React.useState(false);
-  // Aspect ratio: 1 = square (default), 3/4 = portrait, 4/3 = landscape,
-  // null = free (crop frame is user-shaped via corner drag handles).
-  // Options are exposed as tappable chips above the crop frame.
-  const [aspect, setAspect] = React.useState(1);
+  // Aspect ratio: null = free (default), 1 = square, 3/4 = portrait,
+  // 4/3 = landscape. Options are exposed as tappable chips above the
+  // crop frame.
+  //
+  // Free is the default because fish aren't square: a held-up grouper is
+  // tall and narrow, a kingfish long and flat. Forcing a square meant
+  // either including background to fit the fish, or clipping the fish to
+  // fit the square — and background is exactly what degrades the ID.
+  const [aspect, setAspect] = React.useState(null);
   // Current crop rectangle in container-relative pixels. Named
   // "freeRect" for legacy diff readability, but this is now the
   // single source of truth in every aspect mode — chip switches
