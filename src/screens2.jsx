@@ -1285,7 +1285,7 @@ export function PBsScreen({ state, signedIn, onView, onLogCatch, onViewCatches }
                             scrollSnapAlign: 'start',
                           }}
                         >
-                          <img src={photoThumbUrl(p)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          <PhotoImg photo={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                         </button>
                       ))}
                     </div>
@@ -1578,7 +1578,7 @@ export function PBEntryScreen({ speciesId, edit, state, jurisdiction, update, on
             if (p) {
               return (
                 <div key={i} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
-                  <img src={photoThumbUrl(p)} alt={`PB photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <PhotoImg photo={p} alt={`PB photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   <button onClick={() => removePhotoAt(i)} aria-label="Remove photo" style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 24, height: 24, borderRadius: '50%',
@@ -2551,7 +2551,7 @@ function CatchListView({ items, onView, pbCatchIds, state }) {
                       scrollSnapAlign: 'start',
                     }}
                   >
-                    <img src={photoThumbUrl(p)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <PhotoImg photo={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   </button>
                 ))}
               </div>
@@ -3822,7 +3822,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
                   onDrop={(e) => { e.preventDefault(); reorderPhotos(dragIdx.current, i); dragIdx.current = null; }}
                   onDragEnd={() => { dragIdx.current = null; }}
                   style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', cursor: 'grab', border: i === 0 ? `1.5px solid ${T.brass}` : `1px solid ${T.cardEdge}` }}>
-                  <img src={photoThumbUrl(p)} alt={`Catch photo ${i + 1}`} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <PhotoImg photo={p} alt={`Catch photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   {i > 0 && (
                     <button onClick={() => reorderPhotos(i, 0)} aria-label="Make this Photo 1" title="Make Photo 1 (sets location + time)" style={{
                       position: 'absolute', bottom: 4, left: 4,
