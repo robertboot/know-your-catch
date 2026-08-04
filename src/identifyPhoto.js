@@ -42,7 +42,7 @@
    ============================================================ */
 
 import { SPECIES, REGULATIONS } from './data.js';
-import { classify, LABEL_TO_SPECIES_ID } from './identify/adapter.js';
+import { classify, LABEL_TO_SPECIES_ID, lastCropTrace } from './identify/adapter.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
@@ -179,19 +179,28 @@ function bandForCloudConfidence(conf) {
    Returns the app's standard { confidence, candidates } contract, or
    null to signal "fall back to the on-device pipeline" — for offline,
    signed-out, rate-limited, or any error case. Never throws. */
+let _lastCloudReason = null;
+/* Why the cloud ID didn't run. The function bailed silently on offline,
+   signed-out, rate-limited and error alike, so a missing fallback was
+   indistinguishable from a working one. Surfaced on the
+   couldn't-identify screen. */
+export function lastCloudReason() { return _lastCloudReason; }
+const bail = (why) => { _lastCloudReason = why; return null; };
+
 async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
+  _lastCloudReason = null;
   try {
     // Fast bail before any work: no network, or the app can't reach a
     // signed-in session to authenticate the call.
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return bail('offline');
     const c = client();
-    if (!c) return null;
+    if (!c) return bail('supabase not configured');
     const session = getLastSession();
-    if (!session?.access_token) return null; // signed-out → on-device only
+    if (!session?.access_token) return bail('signed out'); // on-device only
 
     const dataUrl = await downscaleImageDataUrl(imageDataUrl, 1024, 0.8);
     const m = dataUrl.match(/^data:(image\/[a-z0-9+.-]+);base64,/i);
-    if (!m) return null;
+    if (!m) return bail('bad image encoding');
     const mediaType = m[1].toLowerCase();
     const imageBase64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
 
@@ -202,7 +211,7 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
     const { data, error } = await c.functions.invoke('identify-fish', {
       body: { imageBase64, mediaType, speciesList },
     });
-    if (error || !data || data.error) return null;
+    if (error || !data || data.error) return bail(`edge fn: ${error?.message || data?.error || 'no data'}`);
 
     const topId = (typeof data.speciesId === 'string' && SPECIES_BY_ID[data.speciesId])
       ? data.speciesId : null;
@@ -230,8 +239,8 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
     }));
 
     return { confidence: bandForCloudConfidence(conf), candidates, _source: 'ai' };
-  } catch {
-    return null;
+  } catch (e) {
+    return bail(`threw: ${e?.message || e}`);
   }
 }
 
@@ -260,7 +269,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
     if (topK && topK.length) {
       localTop = topK[0]?.score || 0;
       localResult = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
-      if (localTop >= LOCAL_TRUST_FLOOR) return localResult;
+      if (localTop >= LOCAL_TRUST_FLOOR) return { ...localResult, _diag: `local ${localTop.toFixed(2)} — trusted`, _cropTrace: lastCropTrace() };
     }
   } catch {
     // Model not ready (e.g. first launch before it downloads) → fall back.
@@ -271,10 +280,10 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   // is how a cluttered photo produced a wrong species while Claude, which
   // handles those well, was never consulted.
   const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
-  if (cloud) return cloud;
+  if (cloud) return { ...cloud, _diag: `local ${localTop.toFixed(2)} → cloud used`, _cropTrace: lastCropTrace() };
   // Cloud unreachable (offline / signed out) — a weak local guess still
   // beats nothing, and its low band already tells the angler to verify.
-  if (localResult) return localResult;
+  if (localResult) return { ...localResult, _diag: `local ${localTop.toFixed(2)} · cloud skipped: ${lastCloudReason() || 'unknown'}`, _cropTrace: lastCropTrace() };
 
   // Nothing available — return an empty, banded result.
   return rankAndBand([]);

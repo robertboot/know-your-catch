@@ -1919,6 +1919,17 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           objectFit: 'contain', margin: '0 auto 14px',
           borderRadius: 6, border: `2px solid ${T.cardEdge}`,
         }} />
+        {/* Diagnostic line — why the ID went the way it did. Temporary
+            while we chase the wide-photo accuracy problem. */}
+        {(result?._diag || result?._cropTrace) && (
+          <div style={{
+            fontSize: 11, color: T.inkMute, marginBottom: 10,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            wordBreak: 'break-word',
+          }}>
+            {result._diag}{result._cropTrace ? ` · crops ${result._cropTrace}` : ''}
+          </div>
+        )}
         {result?.aiNote ? (
           // Recognized, but not one of the app's regulated species — show
           // what it looks like so the angler isn't left at a dead end,

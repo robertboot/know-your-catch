@@ -30,6 +30,13 @@ export const USE_STUB_MODEL = false;
 
 const IMG_SIZE_DEFAULT = 224;
 
+/* Per-region top-1 scores from the last multi-crop run, e.g.
+   "0.11/0.14/0.702/0.38" — full frame, 90%, 70%, 50%. Surfaced on the
+   couldn't-identify screen so a failure shows whether the crops helped
+   at all, instead of us guessing. */
+let _lastCropTrace = null;
+export function lastCropTrace() { return _lastCropTrace; }
+
 /* Decode a data URL / URL string into an HTMLImageElement so we can
    rasterize to a fixed size + get pixel bytes. Kept sync to the tab
    we're already on — no Web Workers, matches the admin Test Image
@@ -148,11 +155,14 @@ async function realClassify(imageDataUrl) {
   ];
 
   let best = null;
+  const trace = [];
   for (const region of REGIONS) {
     const scored = await classifyRegion(tf, model, info, img, size, region);
-    if (!scored || !scored.length) continue;
+    if (!scored || !scored.length) { trace.push('x'); continue; }
+    trace.push(scored[0].score.toFixed(2));
     if (!best || scored[0].score > best[0].score) best = scored;
   }
+  _lastCropTrace = trace.join('/');
   return best || [];
 }
 
