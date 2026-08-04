@@ -42,7 +42,7 @@
    ============================================================ */
 
 import { SPECIES, REGULATIONS } from './data.js';
-import { classify, LABEL_TO_SPECIES_ID, lastCropTrace } from './identify/adapter.js';
+import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote } from './identify/adapter.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
@@ -52,6 +52,12 @@ import { downscaleImageDataUrl } from './storage.js';
    the app already branches on. Conservative on purpose: this is a
    "stay legal" app, so a confidently-wrong ID has real consequences.
    Tune the numbers once real-model accuracy is measured. */
+/* Only applied when Vision actually isolated the fish. A high score on
+   a properly-cropped subject is real signal; the same number on an
+   uncropped scene is not, which is why there is no equivalent floor for
+   the un-cropped path. */
+const CROPPED_TRUST_FLOOR = 0.70;
+
 const BAND = {
   highScore:       0.85,   // top-1 must clear this to earn 'high'
   highMargin:      0.20,   //   AND margin over #2 must clear this
@@ -249,34 +255,48 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
 export async function identifyPhoto(imageDataUrl, options = {}) {
   const { jurisdictionId = null } = options;
 
-  /* Cloud FIRST whenever it's reachable.
+  /* Order depends on whether we got a real crop.
 
-     464cc4c made DeepBlue primary on the claim that it outperforms the
-     cloud. That holds for tight, well-framed shots — and fails badly on
-     the wide boat photos anglers actually take: a grouper filling ~25%
-     of the frame came back "Cubera Snapper" at 0.75 confidence, wrong,
-     and a 0.45 trust floor happily believed it. Confidence does not
-     track correctness here, so no threshold on the local score can
-     safely gate this.
+     The earlier failure was feeding DeepBlue a whole boat scene: the
+     fish was ~25% of the frame, it answered "Cubera Snapper" at 0.75,
+     and a confidence gate believed it. The score was meaningless
+     because the INPUT was wrong, not because the model is bad — the
+     same photo cropped to the fish gave the right species at 0.85.
 
-     DeepBlue remains the offline path and the fallback, which is where
-     it genuinely earns its place. */
-  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
-  if (cloud) return { ...cloud, _diag: `cloud used` };
-
+     So when Vision hands us a subject box, DeepBlue is being asked the
+     question it's actually good at, and a strong score is worth
+     trusting. Without a box we're back to the old situation, and the
+     cloud goes first. */
+  let local = null;
+  let localTop = 0;
+  let cropped = false;
   try {
     const topK = await classify(imageDataUrl);
     if (topK && topK.length) {
-      const localTop = topK[0]?.score || 0;
-      const local = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
-      return {
-        ...local,
-        _diag: `on-device ${localTop.toFixed(2)} · cloud skipped: ${lastCloudReason() || 'unknown'}`,
-        _cropTrace: lastCropTrace(),
-      };
+      localTop = topK[0]?.score || 0;
+      cropped = !!(lastSubjectNote() || '').startsWith('box ');
+      local = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
     }
   } catch {
     // Model not ready (e.g. first launch before it downloads).
+  }
+
+  const diagTail = () =>
+    `on-device ${localTop.toFixed(2)} · subject ${lastSubjectNote() || 'n/a'}`;
+
+  if (local && cropped && localTop >= CROPPED_TRUST_FLOOR) {
+    return { ...local, _diag: `${diagTail()} — trusted`, _cropTrace: lastCropTrace() };
+  }
+
+  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
+  if (cloud) return { ...cloud, _diag: `cloud used · ${diagTail()}` };
+
+  if (local) {
+    return {
+      ...local,
+      _diag: `${diagTail()} · cloud skipped: ${lastCloudReason() || 'unknown'}`,
+      _cropTrace: lastCropTrace(),
+    };
   }
 
   // Nothing available — return an empty, banded result.

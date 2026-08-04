@@ -15,6 +15,7 @@
    degradation, not a crash. */
 
 import { getReadyModel, getModelInfo, initModel } from '../model-loader.js';
+import { detectSubject, lastSubjectReason } from './subject.js';
 
 /* Kept for the identify pipeline import — populated at build time
    when we bake in the label→speciesId map for edge cases. Empty means
@@ -36,6 +37,11 @@ const IMG_SIZE_DEFAULT = 224;
    at all, instead of us guessing. */
 let _lastCropTrace = null;
 export function lastCropTrace() { return _lastCropTrace; }
+
+/* What subject detection did on the last run — surfaced in the ID
+   diagnostic line so a bad crop is visible rather than inferred. */
+let _lastSubjectNote = null;
+export function lastSubjectNote() { return _lastSubjectNote; }
 
 /* Decode a data URL / URL string into an HTMLImageElement so we can
    rasterize to a fixed size + get pixel bytes. Kept sync to the tab
@@ -147,12 +153,23 @@ async function realClassify(imageDataUrl) {
 
      Cost is N inferences. DeepBlue is small and this runs on the
      analyzing screen which already shows a progress UI. */
-  const REGIONS = [
-    null,                                  // full frame (letterboxed)
-    { x: 0.05, y: 0.05, w: 0.90, h: 0.90 }, // trim edge clutter
-    { x: 0.15, y: 0.15, w: 0.70, h: 0.70 }, // center 70%
-    { x: 0.25, y: 0.25, w: 0.50, h: 0.50 }, // center 50%
-  ];
+  /* Ask Vision where the fish is first. When it answers, that box IS
+     the crop the angler would have drawn by hand, so classify it alone
+     — averaging it against three arbitrary centre crops would just
+     dilute the one framing we know is right.
+
+     Only when detection is unavailable (web) or finds nothing do we
+     fall back to the fixed ladder. */
+  const box = await detectSubject(imageDataUrl);
+  _lastSubjectNote = lastSubjectReason();
+  const REGIONS = box
+    ? [box]
+    : [
+        null,                                   // full frame (letterboxed)
+        { x: 0.05, y: 0.05, w: 0.90, h: 0.90 }, // trim edge clutter
+        { x: 0.15, y: 0.15, w: 0.70, h: 0.70 }, // center 70%
+        { x: 0.25, y: 0.25, w: 0.50, h: 0.50 }, // center 50%
+      ];
 
   /* Aggregate by MEAN across crops, not best-single-crop.
 
