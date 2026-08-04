@@ -836,7 +836,6 @@ export function HomeScreen({
             {recentCatches.map(c => {
               const s = c.speciesId ? speciesById(c.speciesId) : null;
               const cp = catchPhotos(c);
-              const thumb = cp.length > 0 ? photoThumbUrl(cp[0]) : null;
               const when = new Date(c.dateIso);
               const dateLabel = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
               const sizeLabel = c.length != null
@@ -860,8 +859,12 @@ export function HomeScreen({
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     overflow: 'hidden',
                   }}>
-                    {thumb ? (
-                      <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    {cp.length > 0 ? (
+                      // PhotoImg, not a raw <img>: cloud-synced catches
+                      // have no local file, and photoThumbUrl is
+                      // synchronous so it can't mint a signed URL for the
+                      // private bucket. Same fix the logbook grid got.
+                      <PhotoImg photo={cp[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     ) : s ? (
                       <SpeciesImage species={s} size={80} />
                     ) : (
