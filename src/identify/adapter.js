@@ -43,6 +43,13 @@ export function lastCropTrace() { return _lastCropTrace; }
 let _lastSubjectNote = null;
 export function lastSubjectNote() { return _lastSubjectNote; }
 
+/* True when Vision actually isolated a subject (including the
+   "already fills the frame" case). Callers used to infer this by
+   string-matching the note, which is exactly the kind of thing that
+   breaks silently when the wording changes. */
+let _lastSubjectFound = false;
+export function lastSubjectFound() { return _lastSubjectFound; }
+
 /* Decode a data URL / URL string into an HTMLImageElement so we can
    rasterize to a fixed size + get pixel bytes. Kept sync to the tab
    we're already on — no Web Workers, matches the admin Test Image
@@ -162,6 +169,7 @@ async function realClassify(imageDataUrl) {
      fall back to the fixed ladder. */
   const box = await detectSubject(imageDataUrl);
   _lastSubjectNote = lastSubjectReason();
+  _lastSubjectFound = !!box;
   const REGIONS = box
     ? [box]
     : [

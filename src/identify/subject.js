@@ -47,8 +47,18 @@ export async function detectSubject(imageDataUrl) {
     const w = Math.min(1 - x, r.w + PAD * 2);
     const h = Math.min(1 - y, r.h + PAD * 2);
 
-    // A box that's already almost the whole frame isn't worth cropping to.
-    if (w >= 0.96 && h >= 0.96) { _lastReason = 'box ~= full frame'; return null; }
+    /* A box covering the whole frame is SUCCESS, not failure.
+
+       This previously returned null, which is backwards: an
+       already-cropped photo is precisely a fish filling the frame, so
+       re-running ID after a manual crop reported "no subject", skipped
+       the on-device path and went to the cloud — turning a correct
+       DeepBlue answer into a wrong cloud one. Hand back the full frame
+       and let the caller treat it as a good crop. */
+    if (w >= 0.96 && h >= 0.96) {
+      _lastReason = 'subject fills frame';
+      return { x: 0, y: 0, w: 1, h: 1 };
+    }
     // Guard against a degenerate sliver.
     if (w < 0.05 || h < 0.05) { _lastReason = 'box too small'; return null; }
 

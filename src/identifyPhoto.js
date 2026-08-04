@@ -42,7 +42,7 @@
    ============================================================ */
 
 import { SPECIES, REGULATIONS } from './data.js';
-import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote } from './identify/adapter.js';
+import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote, lastSubjectFound } from './identify/adapter.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
@@ -274,7 +274,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
     const topK = await classify(imageDataUrl);
     if (topK && topK.length) {
       localTop = topK[0]?.score || 0;
-      cropped = !!(lastSubjectNote() || '').startsWith('box ');
+      cropped = lastSubjectFound();
       local = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
     }
   } catch {
