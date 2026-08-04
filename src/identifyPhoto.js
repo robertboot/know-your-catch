@@ -52,13 +52,6 @@ import { downscaleImageDataUrl } from './storage.js';
    the app already branches on. Conservative on purpose: this is a
    "stay legal" app, so a confidently-wrong ID has real consequences.
    Tune the numbers once real-model accuracy is measured. */
-/* Below this top-1 score DeepBlue's answer isn't trusted on its own and
-   the cloud is consulted first. Sits just under the 'medium' band —
-   anything at or above it is a real signal; below it is a guess, and a
-   guess is what produced confident-looking misidentifications on
-   uncropped photos. */
-const LOCAL_TRUST_FLOOR = 0.45;
-
 const BAND = {
   highScore:       0.85,   // top-1 must clear this to earn 'high'
   highMargin:      0.20,   //   AND margin over #2 must clear this
@@ -256,34 +249,35 @@ async function tryCloudIdentify(imageDataUrl, jurisdictionId) {
 export async function identifyPhoto(imageDataUrl, options = {}) {
   const { jurisdictionId = null } = options;
 
-  // DeepBlue (on-device) is now the PRIMARY identifier — it outperforms
-  // the cloud vision model, so we run it first and use its result.
-  //   Stages 1–3: detect / preprocess / classify (inside the adapter)
-  //   Stage 4: raw labels → speciesIds
-  //   Stage 5: jurisdiction constraint
-  //   Stage 6: rank + band + shape
-  let localResult = null;
-  let localTop = 0;
+  /* Cloud FIRST whenever it's reachable.
+
+     464cc4c made DeepBlue primary on the claim that it outperforms the
+     cloud. That holds for tight, well-framed shots — and fails badly on
+     the wide boat photos anglers actually take: a grouper filling ~25%
+     of the frame came back "Cubera Snapper" at 0.75 confidence, wrong,
+     and a 0.45 trust floor happily believed it. Confidence does not
+     track correctness here, so no threshold on the local score can
+     safely gate this.
+
+     DeepBlue remains the offline path and the fallback, which is where
+     it genuinely earns its place. */
+  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
+  if (cloud) return { ...cloud, _diag: `cloud used` };
+
   try {
     const topK = await classify(imageDataUrl);
     if (topK && topK.length) {
-      localTop = topK[0]?.score || 0;
-      localResult = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
-      if (localTop >= LOCAL_TRUST_FLOOR) return { ...localResult, _diag: `local ${localTop.toFixed(2)} — trusted`, _cropTrace: lastCropTrace() };
+      const localTop = topK[0]?.score || 0;
+      const local = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
+      return {
+        ...local,
+        _diag: `on-device ${localTop.toFixed(2)} · cloud skipped: ${lastCloudReason() || 'unknown'}`,
+        _cropTrace: lastCropTrace(),
+      };
     }
   } catch {
-    // Model not ready (e.g. first launch before it downloads) → fall back.
+    // Model not ready (e.g. first launch before it downloads).
   }
-
-  // DeepBlue wasn't confident (or isn't available). Ask the cloud before
-  // answering — a weak on-device guess used to be returned as-is, which
-  // is how a cluttered photo produced a wrong species while Claude, which
-  // handles those well, was never consulted.
-  const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
-  if (cloud) return { ...cloud, _diag: `local ${localTop.toFixed(2)} → cloud used`, _cropTrace: lastCropTrace() };
-  // Cloud unreachable (offline / signed out) — a weak local guess still
-  // beats nothing, and its low band already tells the angler to verify.
-  if (localResult) return { ...localResult, _diag: `local ${localTop.toFixed(2)} · cloud skipped: ${lastCloudReason() || 'unknown'}`, _cropTrace: lastCropTrace() };
 
   // Nothing available — return an empty, banded result.
   return rankAndBand([]);

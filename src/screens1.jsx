@@ -2203,6 +2203,19 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
       {/* Save to Logbook / Scan Another buttons removed — Save catch is
           now the floppy icon superimposed on the photo above. */}
 
+      {/* Diagnostic line — which identifier answered, and the
+          per-crop scores when it was the on-device one. Temporary
+          while the wide-photo accuracy problem is being chased. */}
+      {(result?._diag || result?._cropTrace) && (
+        <div style={{
+          fontSize: 11, color: T.inkMute, marginBottom: 10,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          wordBreak: 'break-word',
+        }}>
+          {result._diag}{result._cropTrace ? ` · crops ${result._cropTrace}` : ''}
+        </div>
+      )}
+
       {/* WHY THIS MATCH FITS — species-authored ID cues */}
       {keyIds.length > 0 && (
         <div style={{

@@ -154,16 +154,31 @@ async function realClassify(imageDataUrl) {
     { x: 0.25, y: 0.25, w: 0.50, h: 0.50 }, // center 50%
   ];
 
-  let best = null;
+  /* Aggregate by MEAN across crops, not best-single-crop.
+
+     Taking the highest-scoring crop assumes confidence tracks
+     correctness, and it doesn't: an uncropped grouper scored 0.75 as
+     Cubera Snapper while the correct answer only emerged once the fish
+     filled the frame. One flattering crop shouldn't be able to carry a
+     wrong label. Averaging rewards labels that hold up across several
+     framings, which is a much better proxy for "actually this fish". */
+  const sums = new Map();
   const trace = [];
+  let passes = 0;
   for (const region of REGIONS) {
     const scored = await classifyRegion(tf, model, info, img, size, region);
     if (!scored || !scored.length) { trace.push('x'); continue; }
+    passes += 1;
     trace.push(scored[0].score.toFixed(2));
-    if (!best || scored[0].score > best[0].score) best = scored;
+    for (const { label, score } of scored) {
+      sums.set(label, (sums.get(label) || 0) + score);
+    }
   }
   _lastCropTrace = trace.join('/');
-  return best || [];
+  if (!passes) return [];
+  return [...sums.entries()]
+    .map(([label, total]) => ({ label, score: total / passes }))
+    .sort((a, b) => b.score - a.score);
 }
 
 /* One forward pass over a single region. Returns the full label list
