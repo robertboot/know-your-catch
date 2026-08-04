@@ -40,13 +40,22 @@ The two Vision approaches fail for one reason worth remembering:
 subject, and on a photo of a person holding a fish both answer "the
 person".** Neither knows what a fish is.
 
+## The flow (as of build 171)
+
+Photo → **crop step** → identify. Cropping happens BEFORE the ID, not as
+a remedy after a wrong one. Don't "streamline" it away again — fd4a302
+did exactly that to save a tap and it cost accuracy.
+
 ## What is actually true
 
 - **DeepBlue is accurate when the fish fills the frame** and unreliable
   when it doesn't. A grouper at ~25% of frame returned Cubera Snapper at
   0.75; the same photo cropped by hand gave Black Grouper at 0.85.
-- **Manual crop works.** The "Crop & try again" button is the reliable
-  path and should stay prominent.
+- **Manual crop works, and is now the default step.** Measured on three
+  photos: 0.75/0.84/0.86 wrong uncropped; 0.85/0.99 correct cropped. One
+  (a tan grouper) stayed wrong even cropped at 0.52 — cropping raises the
+  ceiling, it doesn't guarantee correctness where training coverage is
+  thin.
 - **Aspect must be preserved.** The original `drawImage(img,0,0,size,size)`
   squashed 3:4 into a square, distorting body proportions — a primary ID
   cue. `imageToRgb` now letterboxes with neutral grey. Keep this.
