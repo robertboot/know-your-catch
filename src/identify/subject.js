@@ -11,6 +11,7 @@
    and the caller falls back to its fixed crop ladder. */
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { downscaleImageDataUrl } from '../storage.js';
 
 const SubjectDetector = registerPlugin('SubjectDetector');
 const NATIVE = Capacitor.isNativePlatform();
@@ -28,7 +29,16 @@ export async function detectSubject(imageDataUrl) {
   _lastReason = null;
   if (!NATIVE) { _lastReason = 'web (no Vision)'; return null; }
   try {
-    const r = await SubjectDetector.detect({ image: imageDataUrl });
+    /* Downscale before crossing the bridge.
+
+       Two reasons. A 4032x3024 camera JPEG is a ~5 MB base64 string and
+       marshalling that per identification is slow. And the canvas
+       re-encode BAKES IN the EXIF rotation, emitting an upright image
+       with no orientation flag — so Vision and the JS crop are provably
+       looking at the same pixels. Saliency doesn't benefit from more
+       than ~1024px. */
+    const small = await downscaleImageDataUrl(imageDataUrl, 1024, 0.85);
+    const r = await SubjectDetector.detect({ image: small });
     if (!r?.found) { _lastReason = 'no subject found'; return null; }
 
     // Pad, then clamp back inside the frame.

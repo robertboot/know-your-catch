@@ -52,7 +52,15 @@ public class SubjectDetectorPlugin: CAPPlugin, CAPBridgedPlugin {
         // a second try before giving up.
         let objectness = VNGenerateObjectnessBasedSaliencyImageRequest()
         let attention  = VNGenerateAttentionBasedSaliencyImageRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        // Orientation MUST be passed. A .cgImage is the raw sensor buffer;
+        // iPhone portrait shots are stored landscape with a rotation flag,
+        // and the JS side draws through <img>, which applies that flag.
+        // Analysing the unrotated buffer returns a box in a different
+        // coordinate space than the crop it feeds, so the crop lands in
+        // the wrong place — or spans the frame and gets discarded.
+        let handler = VNImageRequestHandler(cgImage: cgImage,
+                                            orientation: Self.cgOrientation(image.imageOrientation),
+                                            options: [:])
 
         do {
             try handler.perform([objectness, attention])
@@ -78,6 +86,22 @@ public class SubjectDetectorPlugin: CAPPlugin, CAPBridgedPlugin {
             "w": rect.size.width,
             "h": rect.size.height
         ])
+    }
+
+    /// UIImage.Orientation → CGImagePropertyOrientation. Vision takes the
+    /// latter; UIKit reports the former, and they are not the same enum.
+    private static func cgOrientation(_ o: UIImage.Orientation) -> CGImagePropertyOrientation {
+        switch o {
+        case .up:            return .up
+        case .down:          return .down
+        case .left:          return .left
+        case .right:         return .right
+        case .upMirrored:    return .upMirrored
+        case .downMirrored:  return .downMirrored
+        case .leftMirrored:  return .leftMirrored
+        case .rightMirrored: return .rightMirrored
+        @unknown default:    return .up
+        }
     }
 
     /// Pick the STRONGEST single salient object, not the union of all of
