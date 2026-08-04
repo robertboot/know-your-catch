@@ -10,6 +10,7 @@ import { loadState, saveState, defaultState } from './storage.js';
 import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
 import {
   migratePhotosToStore, regenerateThumbs, thumbRegenNeeded, markThumbRegenDone,
+  initPhotoPaths,
 } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
@@ -76,6 +77,11 @@ export default function App() {
   // updater, which StrictMode may invoke twice.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+  // photoThumbUrl() reads a module-level base URI resolved asynchronously
+  // at boot. Nothing about that resolution is React state, so without an
+  // explicit nudge the first render's thumbnails would stay broken until
+  // some unrelated update happened to re-render.
+  const [, setPhotoPathsReady] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [stack, setStack] = useState([{ name: 'home' }]);
@@ -143,7 +149,12 @@ export default function App() {
     // in the new shape are skipped. Only swaps in the migrated state
     // when the angler hasn't already touched state mid-migration.
     const initialJson = JSON.stringify(s);
-    migratePhotosToStore(s).then((migrated) => {
+    // Resolve the Data-directory base BEFORE anything reads or writes a
+    // thumbnail — photoThumbUrl needs it to rebuild URLs, and the
+    // migration below writes thumb files.
+    initPhotoPaths()
+      .then(() => setPhotoPathsReady(true))
+      .then(() => migratePhotosToStore(s)).then((migrated) => {
       if (migrated !== s) {
         setState(prev => {
           if (JSON.stringify(prev) !== initialJson) return prev;

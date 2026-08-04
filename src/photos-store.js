@@ -29,6 +29,27 @@ import { getLastSession } from './auth.js';
 const NATIVE = Capacitor.isNativePlatform();
 const PHOTO_DIR = 'photos';
 
+/* Base capacitor:// URI for Directory.Data, resolved once at boot.
+
+   Persisting a RESOLVED capacitor:// URI is a trap on iOS: the path
+   contains the app container UUID, which changes on every install, so
+   any URI baked into saved state dies at the next app update. That is
+   exactly what happened to thumbnails — the full-size path survived
+   only because photoDisplayUrl falls back to cloudUrl.
+
+   So thumbnails now persist the RELATIVE path and this base is joined
+   at render time. */
+let _dataUriBase = null;
+
+export async function initPhotoPaths() {
+  if (!NATIVE || _dataUriBase) return;
+  try {
+    const { uri } = await Filesystem.getUri({ path: PHOTO_DIR, directory: Directory.Data });
+    // uri ends with /<PHOTO_DIR>; keep the parent so paths join cleanly.
+    _dataUriBase = uri.replace(new RegExp(`/${PHOTO_DIR}$`), '');
+  } catch { /* thumbs fall back to other sources below */ }
+}
+
 /* Photo quality strategy.
 
    NATIVE (iOS): DO NOT re-encode the full-res photo. Capacitor's
@@ -234,9 +255,15 @@ export async function deletePhoto(p) {
 export function photoThumbUrl(p) {
   if (!p) return null;
   if (typeof p === 'string') return p;
-  // thumbSrc (on-disk, current) → thumb (legacy inline base64, still
-  // present until the migration rewrites the entry) → full-res src.
-  return p.thumbSrc || p.thumb || p.src || null;
+  // Rebuild from the relative path + the base resolved this launch.
+  // Never trust a persisted thumbSrc first: it may carry a dead
+  // container UUID from a previous install.
+  if (p.thumbPath && _dataUriBase) {
+    return Capacitor.convertFileSrc(`${_dataUriBase}/${p.thumbPath}`);
+  }
+  // thumb = legacy inline base64 (pre-migration entries).
+  // cloudUrl before src: a stale capacitor:// src fails the same way.
+  return p.thumb || p.thumbSrc || p.cloudUrl || p.src || null;
 }
 
 /* Synchronous full-size URL for <img src=...> / lightbox / share.
