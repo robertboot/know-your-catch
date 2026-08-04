@@ -36,6 +36,34 @@ const GULF_CENTER = [26.0, -88.0];
 const GULF_ZOOM = 5;
 const REGION_BOUNDS = [[22.0, -98.5], [31.5, -77.5]]; // [SW, NE] lat,lon
 
+/* SST colour range, in °C, by month.
+
+   Fixed defaults saturated: the Gulf sits at 29-32 °C through late
+   summer while the palette topped out around 31.7 °C, so the entire
+   basin rendered solid red and the temperature BREAKS — the whole point
+   of the layer — were invisible. A season-aware window keeps the
+   gradient spread across whatever the water is actually doing.
+
+   Month index 0-11. Gulf of America / Florida Atlantic figures. */
+function sstRangeC(date = new Date()) {
+  const m = date.getMonth();
+  if (m >= 5 && m <= 8)  return [27, 32];   // Jun-Sep, peak summer
+  if (m >= 3 && m <= 4)  return [22, 29];   // Apr-May, warming
+  if (m >= 9 && m <= 10) return [22, 29];   // Oct-Nov, cooling
+  return [14, 24];                          // Dec-Mar, winter
+}
+
+const cToF = (c) => Math.round(c * 9 / 5 + 32);
+
+/* Legend labels derived from the same range the tiles are rendered
+   with — hardcoding them is how they drift out of sync with the
+   imagery. */
+function sstLegendStops() {
+  const [lo, hi] = sstRangeC();
+  return Array.from({ length: 6 }, (_, i) =>
+    `${cToF(lo + ((hi - lo) * i) / 5)}°`);
+}
+
 const LAYERS = {
   chl: {
     key: 'chl', label: 'Chlorophyll',
@@ -48,7 +76,7 @@ const LAYERS = {
     key: 'sst', label: 'Sea temp',
     dataset: 'jplMURSST41', variable: 'analysed_sst',
     units: '°F (approx)',
-    legendStops: ['68°', '72°', '77°', '82°', '86°', '89°'],
+    legendStops: sstLegendStops(),
     blurb: 'Warm-to-cool edges (temperature breaks) concentrate pelagics. Look for tight color gradients, not just the warmest water.',
   },
 };
@@ -113,6 +141,11 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
         layers: `${cfg.dataset}:${cfg.variable}`, styles: '',
         format: 'image/png', transparent: 'true',
       });
+      if (cfg.key === 'sst') {
+        const [lo, hi] = sstRangeC();
+        params.set('colorBarMinimum', String(lo));
+        params.set('colorBarMaximum', String(hi));
+      }
       if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
       return `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
     };

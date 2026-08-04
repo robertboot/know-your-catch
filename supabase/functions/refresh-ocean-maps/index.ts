@@ -53,6 +53,20 @@ const LAYERS = [
   { key: 'sst', dataset: 'jplMURSST41',             variable: 'analysed_sst' },
 ];
 
+/* SST colour range in °C, by month. Must stay in sync with sstRangeC()
+   in src/screens_ocean.jsx, which draws the legend.
+
+   ERDDAP's default range saturated: the Gulf runs 29-32 °C through late
+   summer against a palette topping out near 31.7 °C, so the whole basin
+   rendered solid red and the temperature BREAKS the layer exists to show
+   were invisible. */
+function sstRangeC(month: number): [number, number] {
+  if (month >= 5 && month <= 8)  return [27, 32];  // Jun-Sep
+  if (month >= 3 && month <= 4)  return [22, 29];  // Apr-May
+  if (month >= 9 && month <= 10) return [22, 29];  // Oct-Nov
+  return [14, 24];                                 // Dec-Mar
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -60,7 +74,7 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-function wmsUrl(dataset: string, variable: string, width: number, height: number) {
+function wmsUrl(key: string, dataset: string, variable: string, width: number, height: number) {
   const params = new URLSearchParams({
     service: 'WMS', version: '1.3.0', request: 'GetMap',
     crs: 'EPSG:4326',
@@ -69,6 +83,11 @@ function wmsUrl(dataset: string, variable: string, width: number, height: number
     layers: `${dataset}:${variable}`, styles: '',
     format: 'image/png', transparent: 'true',
   });
+  if (key === 'sst') {
+    const [lo, hi] = sstRangeC(new Date().getUTCMonth());
+    params.set('colorBarMinimum', String(lo));
+    params.set('colorBarMaximum', String(hi));
+  }
   return `${ERDDAP_WMS}/${dataset}/request?${params.toString()}`;
 }
 
@@ -143,7 +162,7 @@ Deno.serve(async (req: Request) => {
   let published = 0;
 
   for (const layer of LAYERS) {
-    const url = wmsUrl(layer.dataset, layer.variable, width, height);
+    const url = wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
     const got = await fetchLayer(url);
     if (!got.ok) {
       // Leave whatever is already in the bucket alone — a stale image
