@@ -48,12 +48,36 @@ function loadImage(src) {
    tf.browser.fromPixels' int32 route so the tflite runtime never has
    to insert an int32→uint8 conversion op (which hangs on Safari's
    CPU fallback). */
-function imageToRgb(img, size) {
+/* region (optional): { x, y, w, h } in 0..1 of the source image, so a
+   caller can classify a sub-crop without re-encoding the photo.
+
+   Aspect is PRESERVED (letterboxed), not squashed. This used to be
+   drawImage(img, 0, 0, size, size), which stretched a 3:4 portrait into
+   a square — body proportions are a primary ID cue, so the model was
+   being handed a distorted fish. */
+function imageToRgb(img, size, region) {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, size, size);
+  // Neutral grey padding — black would read as a dark object.
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, size, size);
+
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  const sx = region ? Math.max(0, Math.round(region.x * iw)) : 0;
+  const sy = region ? Math.max(0, Math.round(region.y * ih)) : 0;
+  const sw = region ? Math.max(1, Math.round(region.w * iw)) : iw;
+  const sh = region ? Math.max(1, Math.round(region.h * ih)) : ih;
+
+  const scale = Math.min(size / sw, size / sh);
+  const dw = Math.max(1, Math.round(sw * scale));
+  const dh = Math.max(1, Math.round(sh * scale));
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sx, sy, sw, sh,
+    Math.round((size - dw) / 2), Math.round((size - dh) / 2), dw, dh);
   const rgba = ctx.getImageData(0, 0, size, size).data;
   const pixelCount = size * size;
   const rgb = new Uint8Array(pixelCount * 3);
@@ -99,7 +123,43 @@ async function realClassify(imageDataUrl) {
   const tf = await import('@tensorflow/tfjs');
   const img = await loadImage(imageDataUrl);
   const size = info.input_size || IMG_SIZE_DEFAULT;
-  const rgb = imageToRgb(img, size);
+
+  /* Multi-crop ensemble.
+
+     A fish is typically a small part of a boat photo — 20-25% of the
+     frame is normal. Squeezed into a 224px input that leaves ~50px of
+     actual fish, which is why confidence collapses on wide shots and
+     jumps the moment the angler crops manually. DeepBlue also trained
+     on iNaturalist photos, which are tight and fish-centric, so a wide
+     scene is out of distribution for it.
+
+     So do the crop for them: classify the full frame plus a few
+     interior regions and keep whichever scores highest. Center crops
+     because a held-up fish is nearly always centred; the wide 90%
+     variant just trims boat clutter at the edges.
+
+     Cost is N inferences. DeepBlue is small and this runs on the
+     analyzing screen which already shows a progress UI. */
+  const REGIONS = [
+    null,                                  // full frame (letterboxed)
+    { x: 0.05, y: 0.05, w: 0.90, h: 0.90 }, // trim edge clutter
+    { x: 0.15, y: 0.15, w: 0.70, h: 0.70 }, // center 70%
+    { x: 0.25, y: 0.25, w: 0.50, h: 0.50 }, // center 50%
+  ];
+
+  let best = null;
+  for (const region of REGIONS) {
+    const scored = await classifyRegion(tf, model, info, img, size, region);
+    if (!scored || !scored.length) continue;
+    if (!best || scored[0].score > best[0].score) best = scored;
+  }
+  return best || [];
+}
+
+/* One forward pass over a single region. Returns the full label list
+   sorted best-first, or [] on failure. */
+async function classifyRegion(tf, model, info, img, size, region) {
+  const rgb = imageToRgb(img, size, region);
   // float16/float32 models want a float32 [0,255] tensor (the model's
   // Rescaling layer divides by 255 internally). Legacy INT8 models took
   // uint8, fed here as int32. Default to the legacy path when the

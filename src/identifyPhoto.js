@@ -52,6 +52,13 @@ import { downscaleImageDataUrl } from './storage.js';
    the app already branches on. Conservative on purpose: this is a
    "stay legal" app, so a confidently-wrong ID has real consequences.
    Tune the numbers once real-model accuracy is measured. */
+/* Below this top-1 score DeepBlue's answer isn't trusted on its own and
+   the cloud is consulted first. Sits just under the 'medium' band —
+   anything at or above it is a real signal; below it is a guess, and a
+   guess is what produced confident-looking misidentifications on
+   uncropped photos. */
+const LOCAL_TRUST_FLOOR = 0.45;
+
 const BAND = {
   highScore:       0.85,   // top-1 must clear this to earn 'high'
   highMargin:      0.20,   //   AND margin over #2 must clear this
@@ -246,18 +253,28 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   //   Stage 4: raw labels → speciesIds
   //   Stage 5: jurisdiction constraint
   //   Stage 6: rank + band + shape
+  let localResult = null;
+  let localTop = 0;
   try {
     const topK = await classify(imageDataUrl);
     if (topK && topK.length) {
-      return rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
+      localTop = topK[0]?.score || 0;
+      localResult = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
+      if (localTop >= LOCAL_TRUST_FLOOR) return localResult;
     }
   } catch {
     // Model not ready (e.g. first launch before it downloads) → fall back.
   }
 
-  // Cold-start fallback ONLY: cloud vision when DeepBlue is unavailable.
+  // DeepBlue wasn't confident (or isn't available). Ask the cloud before
+  // answering — a weak on-device guess used to be returned as-is, which
+  // is how a cluttered photo produced a wrong species while Claude, which
+  // handles those well, was never consulted.
   const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
   if (cloud) return cloud;
+  // Cloud unreachable (offline / signed out) — a weak local guess still
+  // beats nothing, and its low band already tells the angler to verify.
+  if (localResult) return localResult;
 
   // Nothing available — return an empty, banded result.
   return rankAndBand([]);
