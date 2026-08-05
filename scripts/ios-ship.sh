@@ -38,6 +38,16 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
   exit 1
 fi
 
+# Parity checks first — they cost a second and catch the class of bug
+# that shipped twice: a list duplicated across the app and an edge
+# function, drifting silently. Failing here beats finding out from a
+# user that two whole regions have no regulation data.
+echo "→ Parity checks"
+node "$ROOT/scripts/check-parity.mjs" || {
+  echo "ERROR: parity check failed — fix the above before shipping." >&2
+  exit 1
+}
+
 # Re-sync the web bundle. ios:build sets KYC_BASE=./ so the WKWebView
 # can resolve assets at capacitor://localhost/.
 echo "→ Re-syncing web bundle"

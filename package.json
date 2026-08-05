@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0-beta.1",
   "type": "module",
-  "description": "ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
+  "description": "ReelIntel \u2014 identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -22,7 +22,8 @@
     "android:build": "KYC_BASE=./ KYC_ADMIN=false vite build && find dist/marketing -type f ! -name 'tile-*' -delete && (find dist/marketing -type d -empty -delete 2>/dev/null || true)",
     "android:sync": "npm run android:build && cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "check": "node scripts/check-parity.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

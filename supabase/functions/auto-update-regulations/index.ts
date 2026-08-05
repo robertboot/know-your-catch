@@ -92,6 +92,13 @@ RULES:
    legal failure for a real person.
 3. Federal vs state waters differ; research exactly the jurisdiction
    given. Gulf red snapper state seasons are delegated per-state.
+3a. COAST MATTERS WITHIN A STATE. Florida sets different rules for its
+   Gulf and Atlantic coasts for many species (seatrout, snook, red
+   snapper seasons, grouper closures). "Florida Atlantic State Waters"
+   means the ATLANTIC side only — do not copy the Gulf regulation. If
+   FWC publishes one statewide rule for the species, say so explicitly
+   in sourceNote. The same split applies federally: Gulf (GMFMC) and
+   South Atlantic (SAFMC) councils set separate seasons and limits.
 4. HMS species (tunas, billfish, most sharks): NOAA HMS rules apply
    in all jurisdictions; note it in sourceNote.
 5. sourceUrl must be the real page you drew the season from — it

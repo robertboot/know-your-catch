@@ -15,10 +15,12 @@ export const ANTHROPIC_VERSION  = '2023-06-01';
 export const JURISDICTIONS = [
   { id: 'al_state', name: 'Alabama State Waters',      agency: 'Alabama DCNR', regsUrl: 'https://www.outdooralabama.com/fishing/saltwater-fishing' },
   { id: 'fl_state', name: 'Florida Gulf State Waters', agency: 'FWC',          regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
+  { id: 'fl_atlantic', name: 'Florida Atlantic State Waters', agency: 'FWC',    regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
   { id: 'ms_state', name: 'Mississippi State Waters',  agency: 'MDMR',         regsUrl: 'https://dmr.ms.gov/' },
   { id: 'la_state', name: 'Louisiana State Waters',    agency: 'LDWF',         regsUrl: 'https://www.wlf.louisiana.gov/' },
   { id: 'tx_state', name: 'Texas State Waters',        agency: 'TPWD',         regsUrl: 'https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing' },
   { id: 'fed_gulf', name: 'Federal Gulf Waters',       agency: 'NOAA / GMFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico' },
+  { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', agency: 'NOAA / SAFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-south-atlantic' },
 ];
 
 // Plausibility bounds — any numeric outside these is dropped to null
