@@ -11,6 +11,36 @@ a single edit can compile for one and break the other:
 - `npm run ios:build` — the app bundle (`KYC_ADMIN=false`). Catches app-screen breakage.
 - `npm run web:build` — the marketing + admin bundle (`KYC_ADMIN=true`, 4 GB heap). Catches admin breakage.
 
+## Pre-ship checklist
+
+Run through this every time. Each item is here because skipping it
+shipped a real bug.
+
+1. **`npm run check`** — parity checks. Also runs automatically as the
+   first step of `npm run ios:ship`, so it can't be skipped there, but
+   run it early rather than finding out at ship time. It asserts:
+     - every jurisdiction in `src/data.js` also exists in the
+       regulations edge function (and vice versa)
+     - no screen re-inlines `active !== false` instead of
+       `isAnglerVisible()`
+     - no raw `<img src={photoThumbUrl(...)}>` — must use `PhotoImg`
+2. **Did I change a list that exists in two places?** Jurisdictions,
+   species categories, model labels, cron job definitions. If the second
+   copy isn't covered by `check-parity.mjs`, add a rule for it there —
+   don't rely on a comment saying "must match".
+3. **Did I fix a bug at ONE call site?** Grep for the pattern across the
+   repo. Thumbnails were fixed at four sites and broken at a fifth;
+   Home's Recent Catches then needed its own build.
+4. **Did I change an edge function?** It needs deploying separately —
+   `git push` does not deploy it. Cron-called functions need
+   `--no-verify-jwt`.
+5. **Did I change something only verifiable on device?** Say what was
+   verified and what wasn't. "Archive succeeded" means it compiled, not
+   that it works.
+6. **Bump the iOS build number** to last-shipped + 0 before `ios:ship`
+   (the script adds 1). A `git pull` often resets `project.pbxproj` to a
+   stale number and Apple rejects duplicates.
+
 ## Steps
 
 1. Make the edit.
