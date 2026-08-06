@@ -128,7 +128,12 @@ Final message: the JSON object only.`;
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+        // max_uses 3, not 5: search results come back as input tokens
+        // and dominate the per-pair cost. A single species/jurisdiction
+        // pair is answered by the agency page plus a cross-check; the
+        // 4th and 5th searches mostly re-read what the first three
+        // already returned.
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
       }),
     });
   } catch (e) {

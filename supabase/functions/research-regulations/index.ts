@@ -200,8 +200,11 @@ Your FINAL message must be the JSON object only.`;
         // Server-side web search — the whole point: current-year
         // seasons live on agency pages, not in training data. The
         // API runs searches server-side and the model cites what it
-        // found. max_uses caps runaway search loops per draft.
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+        // found. max_uses caps runaway search loops per draft — and
+        // caps cost: results return as input tokens and dominate the
+        // per-draft bill. Three is enough for one species/jurisdiction
+        // pair (agency page + cross-check).
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
       }),
     });
   } catch (e) {
