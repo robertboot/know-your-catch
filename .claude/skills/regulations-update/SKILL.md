@@ -31,6 +31,20 @@ Two halves, deliberately split so **publication stays human-gated**:
 UI uses federal fallback when a state feed is missing (no "CONFIRM SOURCE" pill).
 Don't hardcode closures in the UI — drive them from feed data.
 
+## The grid, and what it costs
+The updater rotates over **live species × `JURISDICTIONS`** — as of
+2026-08-06 that is **164 × 8 = 1312 pairs**, not the "95 × 6 ≈ 570" the
+schema comment still claims. Anything reasoning about coverage or
+cadence must recompute this, never trust the comment.
+
+The hourly schedule is the **largest line on the Anthropic bill**, and
+it costs the same at zero users as at ten thousand. Before changing its
+cadence — or adding any scheduled API call — read
+[[api-cost-control]]. Short version: while pairs are unchecked, hourly
+is doing real first-pass work; once coverage hits 100% every run is a
+re-check and the schedule should drop to a seasonal rotation. The admin
+Home **Regs coverage** tile says which phase you are in.
+
 ## Standing up the cron (owed manual steps)
 Run `regulations-auto-update-schema.sql` after replacing `YOUR_PROJECT_REF` and
 `YOUR_CRON_SECRET`; set `supabase secrets set CRON_SECRET=<random>`; deploy the

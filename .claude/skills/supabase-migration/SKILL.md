@@ -26,3 +26,42 @@ in the sandbox).
 - Feeds: `npm run validate-feeds` (`regulations/validate.mjs`).
 - Photos: `npm run validate-photos` (`photos/validate.mjs`).
 Run the relevant validator before shipping data changes.
+
+## Handing SQL to the user
+
+The user pastes whole messages into the SQL editor. Twice in one
+session a **prose line was copied in with the SQL** and Postgres
+rejected it:
+
+```
+ERROR: 42601: syntax error at or near "And"
+LINE 20: And per-jurisdiction, to confirm the two new regions ...
+```
+
+Both times the SQL was fine. So:
+
+- **One statement per message**, and nothing between fences. Explanation
+  goes above the fence or in a later message — never between two
+  queries.
+- If two results are needed, **merge them into one statement**
+  (`group by rollup (...)`, a `union all`, a CTE) rather than sending
+  two blocks.
+- **Never ask for a column containing a secret.** `cron.job.command`
+  holds `CRON_SECRET`; select `jobid, jobname, schedule, active` and
+  leave `command` out, so it cannot land in chat.
+- Quote reserved words used as aliases — `count(*) as "rows"`.
+
+## Gotchas that fail silently
+
+- **PostgREST caps unbounded selects at 1000 rows.** A grid already past
+  1300 will read as 1000 with no error and no warning — an
+  under-report, not a failure. Use explicit `.range(0, 9999)` on any
+  select that could exceed it.
+- **`cron.job` is owned by `supabase_admin`** in newer projects.
+  `update cron.job ...` gives `42501: permission denied for table job`
+  from the SQL editor. `cron.schedule()` with the same jobname
+  overwrites, but needs the full command re-supplied — including the
+  secret, which the user must paste themselves.
+- **pg_net is async** — see [[regulations-update]] and the cron health
+  RPC. `cron.job_run_details` says "succeeded" the moment a request is
+  queued; the truth is in `net._http_response`.

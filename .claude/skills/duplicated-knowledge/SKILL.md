@@ -41,6 +41,14 @@ else?* Then either
 | Photo resolution | `PhotoImg` in `components.jsx` | yes — check rejects raw `<img>` |
 | SST colour range | `src/screens_ocean.jsx`, `supabase/functions/refresh-ocean-maps` | **no** — add a rule if it drifts |
 | Species categories | `src/data.js` + live Supabase `species` table | **no** — cloud overlay assigns `_admin` on mismatch |
+| Updater grid definition | `adminRegsCoverage()` in `regulations-store.js`, `auto-update-regulations/index.ts` | **no** — both must filter live species by `is_active !== false` and exclude `category === 'bait'`; if they drift the coverage tile reports progress against a grid the cron isn't working |
+
+A fourth instance of the same shape, worth naming because it was a
+*comment* that drifted rather than code: `regulations-auto-update-schema.sql`
+still says the grid is "95 species × 6 jurisdictions ≈ 570 pairs". It is
+164 × 8 = 1312. Nothing broke, but any cadence or cost estimate taken
+from that comment is wrong by 2.3×. Stale comments about magnitudes are
+duplicated knowledge too.
 
 ## When adding a check
 
