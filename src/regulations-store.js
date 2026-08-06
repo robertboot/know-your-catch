@@ -758,3 +758,69 @@ export async function getCronHealth() {
     recentHttp: Array.isArray(data?.recent_http) ? data.recent_http : [],
   };
 }
+
+/** First-pass coverage of the auto-updater's grid: how many
+    (species × jurisdiction) pairs it has researched at least once.
+
+    This is the number that decides the cron cadence. While pairs are
+    still unchecked the hourly schedule is doing real first-pass work;
+    once it hits 100% every further run is a re-check, and the schedule
+    should drop to a slow seasonal rotation. Left hourly past that point
+    it re-researches the whole grid every ~11 days forever, which is
+    where the Anthropic bill goes.
+
+    Grid definition is kept in step with auto-update-regulations:
+    the LIVE species table (not bundled SPECIES), is_active !== false,
+    excluding the bait category, crossed with JURISDICTIONS. */
+export async function adminRegsCoverage() {
+  const c = client();
+  if (!c) return { ok: false, error: 'not-configured' };
+  try {
+    const [spRes, regRes] = await Promise.all([
+      c.from('species').select('id, is_active, category').range(0, 9999),
+      // Explicit range: PostgREST caps unbounded selects at 1000 rows,
+      // and the grid is already past 1300 — the default would silently
+      // under-report coverage.
+      c.from('regulations').select('species_id, jurisdiction_id, last_checked_at').range(0, 9999),
+    ]);
+    if (spRes.error)  return { ok: false, error: spRes.error.message };
+    if (regRes.error) return { ok: false, error: regRes.error.message };
+
+    const speciesIds = new Set(
+      (spRes.data || [])
+        .filter(s => s.is_active !== false && s.category !== 'bait')
+        .map(s => s.id)
+    );
+    const jurIds = JURISDICTIONS.map(j => j.id);
+    const totalPairs = speciesIds.size * jurIds.length;
+
+    const perJur = new Map(jurIds.map(id => [id, { checked: 0, oldest: null }]));
+    let checked = 0;
+    for (const r of regRes.data || []) {
+      if (!r.last_checked_at) continue;
+      if (!speciesIds.has(r.species_id)) continue;   // retired species
+      const slot = perJur.get(r.jurisdiction_id);
+      if (!slot) continue;                            // retired jurisdiction
+      checked += 1;
+      slot.checked += 1;
+      if (!slot.oldest || r.last_checked_at < slot.oldest) slot.oldest = r.last_checked_at;
+    }
+
+    return {
+      ok: true,
+      totalPairs,
+      checked,
+      neverChecked: Math.max(0, totalPairs - checked),
+      speciesCount: speciesIds.size,
+      jurisdictionCount: jurIds.length,
+      perJurisdiction: jurIds.map(id => ({
+        id,
+        checked: perJur.get(id).checked,
+        neverChecked: Math.max(0, speciesIds.size - perJur.get(id).checked),
+        oldest: perJur.get(id).oldest,
+      })),
+    };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'coverage query failed' };
+  }
+}

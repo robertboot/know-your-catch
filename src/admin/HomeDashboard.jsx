@@ -35,6 +35,7 @@ import {
 } from '../categories-store.js';
 import {
   adminListRegulations, adminCountStalable, regulationAge, getCronHealth,
+  adminRegsCoverage,
 } from '../regulations-store.js';
 import {
   countsBySpecies, countMyPendingOwnerUploads, classifyCoverage,
@@ -167,7 +168,7 @@ async function fetchModelInfo() {
 }
 
 async function fetchHealth(modelInfo) {
-  const [bundles, lastAi, autoRun, cron] = await Promise.all([
+  const [bundles, lastAi, autoRun, cron, coverage] = await Promise.all([
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
       const c = client();
@@ -194,6 +195,7 @@ async function fetchHealth(modelInfo) {
       } catch { return null; }
     })(),
     getCronHealth().catch(() => null),
+    adminRegsCoverage().catch(() => null),
   ]);
 
   const prod = modelInfo?.row || null;
@@ -208,6 +210,7 @@ async function fetchHealth(modelInfo) {
     lastAiDraftSpecies: lastAi?.species_id || null,
     autoRun,
     cron,
+    coverage: coverage?.ok ? coverage : null,
   };
 }
 
@@ -884,9 +887,45 @@ function HealthStrip({ data, err, loading }) {
               : 'Run regulations-auto-update-schema.sql + deploy auto-update-regulations'}
           />
           <CronTile cron={data.cron} />
+          <RegsCoverageTile cov={data.coverage} />
         </div>
       )}
     </Section>
+  );
+}
+
+/* First-pass coverage of the auto-updater grid — and the trigger for
+   changing the cron cadence.
+
+   While pairs are unchecked, hourly runs are doing first-pass work and
+   the schedule earns its cost. At 100% every further run is a re-check:
+   left hourly it re-researches all ~1300 pairs every ~11 days, forever,
+   with web-search results billed as input tokens each time. That is the
+   single largest line on the Anthropic bill, so this tile goes 'ok' —
+   meaning "time to act" — precisely when coverage completes. */
+function RegsCoverageTile({ cov }) {
+  if (!cov) {
+    return (
+      <Tile label="Regs coverage" value="—" tone="neutral"
+            hint="Could not read the pair grid" />
+    );
+  }
+  const { checked, totalPairs, neverChecked, speciesCount, jurisdictionCount } = cov;
+  const pct = totalPairs ? Math.round((checked / totalPairs) * 100) : 0;
+  const done = neverChecked === 0;
+  // 120 pairs/day at batch 5 hourly. Rough, but it answers "how long
+  // until I can throttle this".
+  const daysLeft = done ? 0 : Math.ceil(neverChecked / 120);
+
+  return (
+    <Tile
+      label="Regs coverage"
+      value={`${pct}%`}
+      tone={done ? 'ok' : 'neutral'}
+      hint={done
+        ? `First pass COMPLETE — switch cron to seasonal (${speciesCount}×${jurisdictionCount})`
+        : `${checked}/${totalPairs} pairs · ${neverChecked} left · ~${daysLeft}d at 120/day`}
+    />
   );
 }
 
