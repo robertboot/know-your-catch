@@ -25,11 +25,58 @@ const RESET_REDIRECT = (() => {
   return `${o}/reset-password`;
 })();
 
+/* Offline credential marker.
+
+   THE BUG THIS EXISTS FOR: an angler offshore with no signal could not
+   get past the sign-in gate. Supabase access tokens expire after ~1
+   hour; on expiry `getSession()` tries to refresh, the refresh needs
+   network, and with none it resolves to `null`. App.jsx gates the
+   ENTIRE app on a truthy session, so a expired-token-plus-no-signal
+   combination locked the angler out of their own locally-stored
+   catches — on a boat, which is exactly where the app is for.
+
+   So "is this device signed in" is tracked separately from "do we hold
+   a live token". This flag is app-owned rather than read out of
+   supabase-js's storage key, because that key's name is an internal
+   detail (`sb-<ref>-auth-token`) that we should not depend on.
+
+   It is NOT a security control. It gates local, on-device data only —
+   every cloud read still carries a real token and is enforced by RLS
+   server-side. A stale flag grants access to nothing but the angler's
+   own phone. */
+const LS_AUTHED_KEY = 'kyc.authedOnce';
+
+export function markAuthedLocally(email) {
+  try {
+    localStorage.setItem(LS_AUTHED_KEY, JSON.stringify({
+      email: email || null, at: new Date().toISOString(),
+    }));
+  } catch {}
+}
+export function clearAuthedLocally() {
+  try { localStorage.removeItem(LS_AUTHED_KEY); } catch {}
+}
+/** True when this device has completed a sign-in that was never
+    followed by an explicit sign-out. Survives token expiry, offline
+    launches, and app restarts. */
+export function hasLocalCredential() {
+  try { return !!localStorage.getItem(LS_AUTHED_KEY); } catch { return false; }
+}
+export function localCredentialEmail() {
+  try { return JSON.parse(localStorage.getItem(LS_AUTHED_KEY) || 'null')?.email || null; }
+  catch { return null; }
+}
+
 let _lastSession = null;
 const listeners = new Set();
 
 function notify(session) {
   _lastSession = session;
+  // Any live session re-arms the offline marker. This also migrates
+  // anglers who signed in on a build before the marker existed —
+  // otherwise they'd carry no marker and hit the same offshore lockout
+  // the first time their token expired without signal.
+  if (session) markAuthedLocally(session.user?.email || null);
   for (const fn of listeners) { try { fn(session); } catch {} }
 }
 
@@ -52,6 +99,7 @@ export async function signInWithPassword({ email, password }) {
   try {
     const { data, error } = await c.auth.signInWithPassword({ email: trimmed, password });
     if (error) return { ok: false, error: error.message || String(error) };
+    if (data.session) markAuthedLocally(trimmed);
     return { ok: true, session: data.session };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
@@ -71,6 +119,7 @@ export async function signUp({ email, password }) {
       options: { emailRedirectTo: RESET_REDIRECT },
     });
     if (error) return { ok: false, error: error.message || String(error) };
+    if (data.session) markAuthedLocally(trimmed);
     return { ok: true, session: data.session, needsConfirmation: !data.session };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
@@ -108,11 +157,17 @@ export async function updatePassword({ password }) {
   }
 }
 
-/** Sign out — clears the Supabase session. Local data untouched. */
+/** Sign out — clears the Supabase session. Local data untouched.
+
+    Clears the offline marker FIRST and unconditionally: signOut() hits
+    the network, and if that call fails offline we still want the
+    device treated as signed out. Leaving the marker on a failed
+    sign-out would leave the angler in the app after asking to leave. */
 export async function signOut() {
+  clearAuthedLocally();
   const c = client();
   if (!c) return;
-  await c.auth.signOut();
+  try { await c.auth.signOut(); } catch {}
 }
 
 // Boot-time: seed the current session + wire Supabase's own auth

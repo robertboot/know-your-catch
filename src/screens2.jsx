@@ -3,7 +3,7 @@ import {
   Search, ChevronRight, AlertTriangle, Plus, Pencil, Trophy, Camera, Trash2, Mail,
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
   SlidersHorizontal, Sparkles, ShieldCheck, ShieldAlert, ShieldQuestion,
-  MapPin as MapPinIcon, Crop as CropIcon, Calendar as CalendarIcon, Fish as FishIcon,
+  MapPin as MapPinIcon, Calendar as CalendarIcon, Fish as FishIcon,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -3122,6 +3122,16 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   //   { dataUrl, meta: {source:'photo'|'device'|'none', lat?, lon?, time?},
   //     idStatus: 'running'|'done', idSpeciesId, idConfidence }
   const [pendingConfirm, setPendingConfirm] = useState(null);
+  // Photo #1 crops BEFORE it identifies. Cropping to the fish is what
+  // makes DeepBlue accurate — handed a whole boat scene it reads the
+  // background as much as the subject. So the crop is a required first
+  // step here, exactly as in the Fish-ID flow.
+  //
+  // The crop feeds the CLASSIFIER ONLY. The catch stores the full
+  // original frame: an angler crops tight to a fish's flank to get the
+  // ID right, and they should not lose the photo they actually took.
+  // { dataUrl, meta } while the crop step is open.
+  const [pendingCrop, setPendingCrop] = useState(null);
   // True when the angler confirmed a photo WITHOUT usable metadata
   // and hasn't manually entered location+time yet. Saved on the
   // catch; drives the 'needs details' badge and excludes the catch
@@ -3131,9 +3141,13 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   // Open the confirmation overlay for a first photo. Runs Fish ID in
   // the background and patches the overlay state when it lands.
-  const openPhotoConfirm = (dataUrl, meta) => {
+  //
+  // idDataUrl is what the classifier sees (the crop); dataUrl is what
+  // the catch keeps (the full frame). They are deliberately different —
+  // see pendingCrop above.
+  const openPhotoConfirm = (dataUrl, meta, idDataUrl) => {
     setPendingConfirm({ dataUrl, meta, idStatus: 'running', idSpeciesId: null, idConfidence: null });
-    identifyPhoto(dataUrl, { jurisdictionId: jurisdiction?.id || null }).then((res) => {
+    identifyPhoto(idDataUrl || dataUrl, { jurisdictionId: jurisdiction?.id || null }).then((res) => {
       const cands = (res?.candidates || []).slice(0, 5);
       const top = cands[0] || null;
       setPendingConfirm(pc => pc && pc.dataUrl === dataUrl ? {
@@ -3247,11 +3261,16 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
 
   // Overlay resolution: apply the (possibly cropped) photo, the
   // metadata decision, and the species pick to the form in one shot.
-  const resolvePhotoConfirm = async ({ finalDataUrl, useMeta, speciesPick, suggestNew, quick, editField }) => {
+  const resolvePhotoConfirm = async ({ useMeta, speciesPick, suggestNew, quick, editField }) => {
     const pc = pendingConfirm;
     setPendingConfirm(null);
     if (!pc) return;
-    const entry = await savePhoto(finalDataUrl || pc.dataUrl);
+    // ALWAYS the original frame, never the crop. The crop exists to
+    // give the classifier a clean subject; it is not an edit to the
+    // angler's photo. (This used to save `finalDataUrl || pc.dataUrl`,
+    // which meant cropping for a better ID silently destroyed the rest
+    // of the shot.)
+    const entry = await savePhoto(pc.dataUrl);
     setPhotos(p => [entry, ...p].slice(0, 3));
     setPhotoSource(pc.meta.source === 'device' ? 'camera' : 'upload');
     if (useMeta && pc.meta.source === 'photo') {
@@ -3330,9 +3349,10 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     if (!rawDataUrl || photos.length >= 3) return;
     const isFirst = photos.length === 0;
     if (isFirst) {
-      // Photo 1 drives the record — stop at the confirmation overlay
-      // (device GPS + capture time are the metadata on offer).
-      openPhotoConfirm(rawDataUrl, { source: 'device', time: new Date() });
+      // Photo 1 drives the record — crop to the fish, then the
+      // confirmation overlay (device GPS + capture time are the
+      // metadata on offer).
+      setPendingCrop({ dataUrl: rawDataUrl, meta: { source: 'device', time: new Date() } });
       return;
     }
     const entry = await savePhoto(rawDataUrl);
@@ -3407,13 +3427,13 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         const parsed = parseExifDate(meta?.DateTimeOriginal)
           || parseExifDate(meta?.CreateDate)
           || parseExifDate(meta?.ModifyDate);
-        openPhotoConfirm(dataUrl, (gotGps || parsed) ? {
+        setPendingCrop({ dataUrl, meta: (gotGps || parsed) ? {
           source: 'photo',
           lat: gotGps ? meta.latitude : null,
           lon: gotGps ? meta.longitude : null,
           time: parsed || null,
-        } : { source: 'none' });
-      }).catch(() => openPhotoConfirm(dataUrl, { source: 'none' }));
+        } : { source: 'none' } });
+      }).catch(() => setPendingCrop({ dataUrl, meta: { source: 'none' } }));
     };
     reader.readAsDataURL(f);
   };
@@ -3904,8 +3924,32 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         </div>
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleCameraPick} style={{ display: 'none' }} />
         <input ref={uploadRef} type="file" accept="image/*" multiple onChange={handleUploadPick} style={{ display: 'none' }} />
+        {/* Photo-1 crop — runs BEFORE the confirm overlay and feeds the
+            classifier only; the catch keeps the full frame. Cancel
+            means "don't crop", not "don't add the photo": identifying
+            the whole frame is weaker but still better than dropping
+            the angler back to an empty form. */}
+        {pendingCrop && (
+          <CropStep
+            imageSrc={pendingCrop.dataUrl}
+            title="Select the fish"
+            hint="Drag the frame around just the fish — head to tail, as little background as possible. This is the single biggest factor in getting the ID right. Your full photo is still saved."
+            primaryLabel="Identify"
+            cancelLabel="Skip"
+            onCancel={() => {
+              const pc = pendingCrop;
+              setPendingCrop(null);
+              openPhotoConfirm(pc.dataUrl, pc.meta);
+            }}
+            onConfirm={({ dataUrl }) => {
+              const pc = pendingCrop;
+              setPendingCrop(null);
+              openPhotoConfirm(pc.dataUrl, pc.meta, dataUrl || null);
+            }}
+          />
+        )}
         {/* Photo-1 confirmation overlay — metadata verdict + species
-            confirm + optional crop, blocking until the angler decides. */}
+            confirm, blocking until the angler decides. */}
         {pendingConfirm && (
           <PhotoConfirmOverlay
             pc={pendingConfirm}
@@ -4339,8 +4383,6 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
    can never slip in silently and poison Patterns/analysis.
    ============================================================ */
 function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onResolve, onCancel, onHome }) {
-  const [workingUrl, setWorkingUrl] = useState(pc.dataUrl); // cropped or original
-  const [cropping, setCropping] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
   const [suggestNew, setSuggestNew] = useState(false);
@@ -4368,9 +4410,9 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
 
   // LOG CATCH → into the full details form (species/loc/time prefilled).
   // editField jumps straight to the Location or Date editor on the form.
-  const logCatch = (editField) => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew, editField });
+  const logCatch = (editField) => onResolve({ useMeta: hasMeta, speciesPick: chosenId, suggestNew, editField });
   // QUICK CONFIRM → save immediately as a 'quick' catch + reminder.
-  const quickConfirm = () => onResolve({ finalDataUrl: workingUrl, useMeta: hasMeta, speciesPick: chosenId, suggestNew, quick: true });
+  const quickConfirm = () => onResolve({ useMeta: hasMeta, speciesPick: chosenId, suggestNew, quick: true });
 
   const rowStyle = {
     display: 'flex', alignItems: 'center', gap: 12,
@@ -4411,16 +4453,11 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
         <div style={{ position: 'relative' }}>
           {/* Fit the WHOLE photo (contain) — the model IDs the entire image,
               so the preview must show all of it, not a cropped-to-fill view. */}
-          <img src={workingUrl} alt="Your catch" style={{ width: '100%', height: 300, objectFit: 'contain', display: 'block', background: '#000' }} />
-          <button onClick={() => setCropping(true)} aria-label="Crop photo" style={{
-            position: 'absolute', top: 12, right: 12,
-            width: 42, height: 42, borderRadius: 999,
-            background: 'rgba(3, 27, 51, 0.7)', color: T.ink,
-            border: `1px solid rgba(255,255,255,0.25)`, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <CropIcon size={18} />
-          </button>
+          {/* The FULL frame — that is what gets saved. Cropping happens
+              on the step before this one and only feeds the classifier,
+              so showing the crop here would misrepresent the photo the
+              angler is about to keep. */}
+          <img src={pc.dataUrl} alt="Your catch" style={{ width: '100%', height: 300, objectFit: 'contain', display: 'block', background: '#000' }} />
         </div>
 
         <div style={{ padding: 14 }}>
@@ -4524,20 +4561,6 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
           </button>
         </div>
       </div>
-
-      {cropping && (
-        <CropStep
-          imageSrc={workingUrl}
-          title="Crop photo"
-          primaryLabel="Use crop"
-          cancelLabel="Cancel"
-          onCancel={() => setCropping(false)}
-          onConfirm={({ dataUrl }) => {
-            if (dataUrl) setWorkingUrl(dataUrl);
-            setCropping(false);
-          }}
-        />
-      )}
 
       {pickerOpen && (
         <SpeciesPickerModal

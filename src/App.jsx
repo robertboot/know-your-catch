@@ -18,7 +18,10 @@ import { initModel } from './model-loader.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { fetchRegulations, subscribe as subscribeRegulations } from './regulations-store.js';
-import { subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword } from './auth.js';
+import {
+  subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword,
+  hasLocalCredential,
+} from './auth.js';
 import {
   pullAll as cloudPullAll,
   syncChanges as cloudSyncChanges,
@@ -217,7 +220,15 @@ export default function App() {
   useEffect(() => {
     if (modelKickedRef.current) return;
     const name = stack[stack.length - 1]?.name;
-    const wantsModel = ['identify', 'photo_crop', 'photo_analyzing', 'photo_result', 'identify_confirm']
+    // catch_entry belongs here: logging a catch from Home runs Fish ID
+    // on the first photo (openPhotoConfirm in screens2), and it was
+    // missing from this list. An angler who only ever logged catches
+    // that way never warmed the model, so it was never cached to
+    // Filesystem — and offline, with nothing cached, DeepBlue can't
+    // load at all and identifyPhoto falls through to the cloud.
+    // Any screen that can reach identifyPhoto has to be listed here.
+    const wantsModel = ['identify', 'photo_crop', 'photo_analyzing', 'photo_result',
+                        'identify_confirm', 'catch_entry']
       .includes(name);
     if (!wantsModel) return;
     modelKickedRef.current = true;
@@ -418,7 +429,11 @@ export default function App() {
   // gate.
   useEffect(() => {
     if (!loaded) return;
-    if (!session) return;
+    // Same admittance rule as the render gate below. Gating this on a
+    // live `session` alone left an offline angler stuck on the splash
+    // forever: the gate would have let them through, but nothing ever
+    // dismissed the splash covering it.
+    if (!session && !hasLocalCredential()) return;
     const t = setTimeout(() => setShowSplash(false), 2200);
     return () => clearTimeout(t);
   }, [loaded, session]);
@@ -514,16 +529,30 @@ export default function App() {
   // App-wide session gate: the splash renders whenever we're loading
   // OR the angler is signed out. There is no signed-out branch inside
   // the app itself — Settings, Home, Logbook etc. all render only
-  // when session is truthy. This makes it structurally impossible for
-  // any screen to show a stale "Sign in" affordance to a signed-in
+  // when the angler is admitted. This makes it structurally impossible
+  // for any screen to show a stale "Sign in" affordance to a signed-in
   // user, or to show real data to a signed-out one.
-  if (showSplash || !loaded || !session) {
-    const showLogin = loaded && !session;
+  //
+  // Admittance is NOT "do we hold a live token". Supabase access
+  // tokens expire hourly and refreshing one needs network, so gating
+  // on `session` alone locked anglers out of their own local catches
+  // whenever they were offshore with an expired token — the single
+  // place the app most has to work. hasLocalCredential() is the
+  // durable half: this device signed in and never signed out.
+  //
+  // Cloud features degrade on their own from here. Every network call
+  // already bails on a missing token (see tryCloudIdentify's 'signed
+  // out' bail and cloudsync), and RLS enforces access server-side, so
+  // admitting an angler on the offline marker exposes nothing beyond
+  // what is already on their phone.
+  const admitted = !!session || hasLocalCredential();
+  if (showSplash || !loaded || !admitted) {
+    const showLogin = loaded && !admitted;
     return (
       <>
         <SplashScreen
           showLogin={showLogin}
-          onContinue={() => loaded && session && setShowSplash(false)}
+          onContinue={() => loaded && admitted && setShowSplash(false)}
           onSignIn={() => { setSplashInitialMode('signin'); setSplashSignInOpen(true); }}
           onCreateAccount={() => { setSplashInitialMode('signup'); setSplashSignInOpen(true); }}
         />
