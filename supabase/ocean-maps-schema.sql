@@ -77,6 +77,10 @@ select cron.schedule(
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/refresh-ocean-maps',
     headers := jsonb_build_object(
                  'Content-Type',   'application/json',
+                 -- anon key clears the gateway verify_jwt check; the
+                 -- function still authenticates on x-cron-secret. Without
+                 -- it the scheduled POST 401s before the function runs.
+                 'Authorization',  'Bearer YOUR_ANON_KEY',
                  'x-cron-secret',  'YOUR_CRON_SECRET'
                ),
     body    := '{}'::jsonb

@@ -5,10 +5,16 @@
 -- auto-update-regulations edge function with a shared secret.
 --
 -- BEFORE RUNNING: replace the two placeholders in the cron block
--- at the bottom:
---   YOUR_PROJECT_REF — from your Supabase project URL
+-- at the bottom (project ref hfptpsmdfemduhkueyoz is already filled in):
+--   YOUR_ANON_KEY    — dashboard ▸ Project Settings ▸ API ▸ anon public.
+--                      Clears the gateway's JWT check so the scheduled
+--                      POST isn't rejected with 401 before the function
+--                      runs. Safe to embed (same key shipped in the app).
 --   YOUR_CRON_SECRET — the same value you set with:
 --     supabase secrets set CRON_SECRET=<random string>
+--
+-- NOTE: to fix jobs that are ALREADY failing with 401, run
+-- supabase/cron-fix.sql — it reschedules all three cron jobs at once.
 
 -- 1) Check-tracking columns.
 alter table public.regulations
@@ -62,9 +68,15 @@ select cron.schedule(
   '17 * * * *',   -- hh:17 every hour, off the top-of-hour rush
   $$
   select net.http_post(
-    url     := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/auto-update-regulations',
+    url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/auto-update-regulations',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
+      -- The anon key is a valid project JWT: it clears the gateway's
+      -- verify_jwt check so the request reaches the function, which then
+      -- authenticates for real on x-cron-secret. Without it the gateway
+      -- 401s before the function runs. (Alternative: deploy the function
+      -- --no-verify-jwt and drop this line.)
+      'Authorization', 'Bearer YOUR_ANON_KEY',
       'x-cron-secret', 'YOUR_CRON_SECRET'
     ),
     body    := '{"batch": 5}'::jsonb
