@@ -162,8 +162,22 @@ export async function savePhoto(rawDataUrl) {
       : { src: Capacitor.convertFileSrc(uri), path };
   }
 
-  // Best-effort cloud upload. Silent if no session or Supabase config.
-  await uploadToCloud(entry, full);
+  // Best-effort cloud upload — deliberately NOT awaited.
+  //
+  // This used to be `await uploadToCloud(...)`, which contradicted the
+  // doc comment above ("fire-and-forget after the local write so a slow
+  // network never blocks the save") and broke the app on exactly the
+  // network the app is built for. A Supabase Storage upload has no
+  // client timeout, so on a weak offshore signal it can hang for
+  // minutes — and savePhoto's promise hung with it. Symptoms: LOG CATCH
+  // did nothing at all, and before the overlay was made to wait for the
+  // save, the photo silently vanished instead.
+  //
+  // The local write above is what makes a catch durable. The upload is
+  // an optimisation for cross-device sync, and it mutates `entry` with
+  // cloudPath when (if) it lands. A catch saved before that mutation
+  // still renders from its local file, and cloudsync re-uploads later.
+  uploadToCloud(entry, full).catch(() => { /* local copy is authoritative */ });
   return entry;
 }
 
