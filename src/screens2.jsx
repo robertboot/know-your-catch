@@ -3184,6 +3184,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   // ID right, and they should not lose the photo they actually took.
   // { dataUrl, meta } while the crop step is open.
   const [pendingCrop, setPendingCrop] = useState(null);
+  // Set when writing photo #1 to disk fails. Shown inside the confirm
+  // overlay, which stays open so the photo isn't lost.
+  const [photoSaveError, setPhotoSaveError] = useState(null);
   // True when the angler confirmed a photo WITHOUT usable metadata
   // and hasn't manually entered location+time yet. Saved on the
   // catch; drives the 'needs details' badge and excludes the catch
@@ -3248,9 +3251,19 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
     if (!prefilledPhoto) return;
     let cancelled = false;
     (async () => {
-      const entry = await savePhoto(prefilledPhoto);
-      if (cancelled) return;
-      setPhotos(p => p.map(slot => slot === prefilledPhoto ? entry : slot));
+      try {
+        const entry = await savePhoto(prefilledPhoto);
+        if (cancelled) return;
+        setPhotos(p => p.map(slot => slot === prefilledPhoto ? entry : slot));
+      } catch (e) {
+        // The raw data URL stays in `photos` as a placeholder string
+        // rather than a PhotoEntry — it renders, but it is NOT on disk
+        // and won't survive the save. Say so instead of letting the
+        // angler believe the photo is attached.
+        if (cancelled) return;
+        console.error('[catch-entry] savePhoto failed (prefilled)', e);
+        setPhotoSaveError("That photo couldn't be saved to this device. Re-add it before saving the catch.");
+      }
     })();
     return () => { cancelled = true; };
   }, [prefilledPhoto]);
@@ -3315,14 +3328,34 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
   // metadata decision, and the species pick to the form in one shot.
   const resolvePhotoConfirm = async ({ useMeta, speciesPick, suggestNew, quick, editField }) => {
     const pc = pendingConfirm;
-    setPendingConfirm(null);
     if (!pc) return;
     // ALWAYS the original frame, never the crop. The crop exists to
     // give the classifier a clean subject; it is not an edit to the
     // angler's photo. (This used to save `finalDataUrl || pc.dataUrl`,
     // which meant cropping for a better ID silently destroyed the rest
     // of the shot.)
-    const entry = await savePhoto(pc.dataUrl);
+    //
+    // Save BEFORE dismissing the overlay, and treat a failure as a
+    // failure. The overlay used to close first and call savePhoto with
+    // no try/catch: any write failure — a full disk being the likely
+    // one — rejected into nothing, setPhotos never ran, and the angler
+    // landed on the details form with their photo silently gone. The
+    // photo is the one part of a catch that cannot be re-entered from
+    // memory, so it must never disappear without saying so.
+    let entry;
+    try {
+      entry = await savePhoto(pc.dataUrl);
+    } catch (e) {
+      console.error('[catch-entry] savePhoto failed', e);
+      setPhotoSaveError(
+        /quota|full|space/i.test(e?.message || '')
+          ? 'Not enough space to save that photo. Free up storage and try again.'
+          : "That photo couldn't be saved. Try again."
+      );
+      return; // overlay stays open — the photo is still in hand
+    }
+    setPendingConfirm(null);
+    setPhotoSaveError(null);
     setPhotos(p => [entry, ...p].slice(0, 3));
     setPhotoSource(pc.meta.source === 'device' ? 'camera' : 'upload');
     if (useMeta && pc.meta.source === 'photo') {
@@ -3407,9 +3440,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       setPendingCrop({ dataUrl: rawDataUrl, meta: { source: 'device', time: new Date() } });
       return;
     }
-    const entry = await savePhoto(rawDataUrl);
-    setPhotos(p => [...p, entry].slice(0, 3));
-    setPhotoSource('camera');
+    try {
+      const entry = await savePhoto(rawDataUrl);
+      setPhotos(p => [...p, entry].slice(0, 3));
+      setPhotoSource('camera');
+    } catch (e) {
+      console.error('[catch-entry] savePhoto failed (photo 2/3)', e);
+      setPhotoSaveError("That photo couldn't be saved. Try again.");
+    }
   };
 
   const handleCameraPick = async (e) => {
@@ -3458,6 +3496,9 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       Promise.all(instant.map((f) => savePhoto(f))).then((entries) => {
         setPhotos(p => [...p, ...entries].slice(0, 3));
         setPhotoSource('upload');
+      }).catch((e) => {
+        console.error('[catch-entry] savePhoto failed (batch upload)', e);
+        setPhotoSaveError("Those photos couldn't be saved. Try again.");
       });
     }
     if (!wasEmpty) return;
@@ -4005,6 +4046,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         {pendingConfirm && (
           <PhotoConfirmOverlay
             pc={pendingConfirm}
+            saveError={photoSaveError}
             resolveSpecies={resolveSpecies}
             speciesOptions={speciesSorted}
             units={state.units}
@@ -4434,7 +4476,7 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
    picks one of the explicit Confirm actions — so wrong metadata
    can never slip in silently and poison Patterns/analysis.
    ============================================================ */
-function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onResolve, onCancel, onHome }) {
+function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, units, onResolve, onCancel, onHome }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
   const [suggestNew, setSuggestNew] = useState(false);
@@ -4583,6 +4625,19 @@ function PhotoConfirmOverlay({ pc, resolveSpecies, speciesOptions, units, onReso
 
       {/* ---------- BOTTOM: primary LOG CATCH + quiet quick-confirm link ---------- */}
       <div style={{ marginTop: 14, paddingBottom: 8 }}>
+        {/* Photo write failed — the overlay deliberately stays open so
+            the shot isn't lost. Loud, because the alternative the
+            angler experienced was the photo vanishing in silence. */}
+        {saveError && (
+          <div style={{
+            marginBottom: 10, padding: '10px 12px', borderRadius: 10,
+            background: 'rgba(220, 76, 70, 0.15)',
+            border: '1px solid rgba(220, 76, 70, 0.5)',
+            color: T.ink, fontSize: 14, fontWeight: 600,
+          }}>
+            {saveError}
+          </div>
+        )}
         <button onClick={() => logCatch()} style={{
           width: '100%', background: T.brass, color: T.oceanDeep, border: 'none',
           borderRadius: 14, padding: '16px', cursor: 'pointer',
