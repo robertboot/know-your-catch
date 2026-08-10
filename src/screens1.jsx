@@ -57,6 +57,7 @@ export function SplashScreen({
   showLogin = false,
   onSignIn,
   onCreateAccount,
+  onBrowse,
 }) {
   const showCTAs = !!showLogin;
   return (
@@ -98,6 +99,21 @@ export function SplashScreen({
             marginTop: 10, padding: '0 12px',
           }}>
             Sign in syncs your catches, PBs, and photos across your iPhone and iPad.
+          </div>
+          {onBrowse && (
+            <button
+              onClick={onBrowse}
+              style={{
+                marginTop: 6, background: 'transparent', border: 'none',
+                color: T.brass, fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                textDecoration: 'underline', textUnderlineOffset: 3, padding: 8,
+              }}
+            >
+              Continue without an account
+            </button>
+          )}
+          <div style={{ fontSize: 11.5, color: T.inkMute, textAlign: 'center', lineHeight: 1.5, padding: '0 12px' }}>
+            Browse species, regulations, and the forecast free — no sign-in needed.
           </div>
         </div>
       ) : (

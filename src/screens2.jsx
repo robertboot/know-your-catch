@@ -1863,7 +1863,7 @@ function FeatureEmailPrefsCard() {
   );
 }
 
-export function SettingsScreen({ state, jurisdiction, update, session, syncStatus, lastSyncedAt, onForceSync, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount }) {
+export function SettingsScreen({ state, jurisdiction, update, session, syncStatus, lastSyncedAt, onForceSync, onChangeJurisdiction, onShowDisclaimer, onEditFavorites, onEditAccount, onSignIn, onDeleted }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
   const setUnits = (u) => update({ units: u });
@@ -1944,6 +1944,8 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         lastSyncedAt={lastSyncedAt}
         onForceSync={onForceSync}
         initialEmail={state.anglerEmail}
+        onSignIn={onSignIn}
+        onDeleted={onDeleted}
       />
       {/* Waters row sits directly below Account — this is the only
           place jurisdiction can be changed. Home shows a read-only

@@ -6,7 +6,7 @@ import {
 import { T, screenSize, containerMaxWidth, chromeHeights, typeScale, cols } from './theme.js';
 import { ScreenSizeContext } from './screen-size.js';
 import { DISCLAIMER_VERSION } from './data.js';
-import { loadState, saveState, defaultState } from './storage.js';
+import { loadState, saveState, defaultState, clearState } from './storage.js';
 import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
 import {
   migratePhotosToStore, regenerateThumbs, thumbRegenNeeded, markThumbRegenDone,
@@ -20,7 +20,7 @@ import { refreshCategories, subscribe as subscribeCategories } from './categorie
 import { fetchRegulations, subscribe as subscribeRegulations } from './regulations-store.js';
 import {
   subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword,
-  hasLocalCredential,
+  hasLocalCredential, hasGuestAccess, markGuestAccess,
 } from './auth.js';
 import {
   pullAll as cloudPullAll,
@@ -140,10 +140,13 @@ export default function App() {
     // → favorites → profile. Each step is gated on the flag set by
     // the previous step so an existing user who already accepted
     // the disclaimer never sees intro or disclaimer again.
+    // NOTE: account/profile registration is deliberately NOT in this
+    // forced chain — species, regs, and the forecast must be reachable
+    // with no sign-up (App Store 5.1.1(v)). Sign-in is offered on the
+    // splash and prompted only when an account-based feature is used.
     if (!s.onboardingIntroSeen && !s.disclaimerAcceptedVersion) setShowIntro(true);
     else if (!s.disclaimerAcceptedVersion) setShowDisclaimer(true);
     else if (!s.jurisdiction) setShowJur(true);
-    else if (!s.onboardingAccountComplete) setShowAccount(true);
     else if (!s.onboardingFavoritesComplete) setShowFavorites(true);
     else if (!s.onboardingProfileDone) setShowProfileSetup(true);
 
@@ -425,18 +428,17 @@ export default function App() {
     };
   }, []);
 
-  // Splash-dismiss timer. Only auto-dismisses when a session exists
-  // (returning signed-in angler gets a 2.2s hold before home). If no
-  // session, the splash stays up with sign-in CTAs — there is no
-  // "continue without signing in" path; session presence IS the app
-  // gate.
+  // Splash-dismiss timer. Auto-dismisses for a returning signed-in
+  // angler OR a returning guest (both already admitted) after a 2.2s
+  // hold. A brand-new, not-yet-admitted user stays on the splash with
+  // the Sign in / Create account / Continue-without-an-account CTAs.
   useEffect(() => {
     if (!loaded) return;
     // Same admittance rule as the render gate below. Gating this on a
     // live `session` alone left an offline angler stuck on the splash
     // forever: the gate would have let them through, but nothing ever
     // dismissed the splash covering it.
-    if (!session && !hasLocalCredential()) return;
+    if (!session && !hasLocalCredential() && !hasGuestAccess()) return;
     const t = setTimeout(() => setShowSplash(false), 2200);
     return () => clearTimeout(t);
   }, [loaded, session]);
@@ -548,7 +550,11 @@ export default function App() {
   // out' bail and cloudsync), and RLS enforces access server-side, so
   // admitting an angler on the offline marker exposes nothing beyond
   // what is already on their phone.
-  const admitted = !!session || hasLocalCredential();
+  // Admittance: a real session, a durable local credential, OR the
+  // angler chose "Browse without an account". Guest access is what
+  // keeps non-account content (species, regs, forecast) reachable with
+  // no forced registration — App Store guideline 5.1.1(v).
+  const admitted = !!session || hasLocalCredential() || hasGuestAccess();
   if (showSplash || !loaded || !admitted) {
     const showLogin = loaded && !admitted;
     return (
@@ -558,6 +564,7 @@ export default function App() {
           onContinue={() => loaded && admitted && setShowSplash(false)}
           onSignIn={() => { setSplashInitialMode('signin'); setSplashSignInOpen(true); }}
           onCreateAccount={() => { setSplashInitialMode('signup'); setSplashSignInOpen(true); }}
+          onBrowse={() => { markGuestAccess(); setShowSplash(false); }}
         />
         {splashSignInOpen && (
           <SignInModal
@@ -1142,7 +1149,15 @@ export default function App() {
                 onChangeJurisdiction={() => setShowJur(true)}
                 onShowDisclaimer={() => { setDisclaimerReadOnly(true); setShowDisclaimer(true); }}
                 onEditFavorites={() => setShowFavorites(true)}
-                onEditAccount={() => setShowAccount(true)} />;
+                onEditAccount={() => setShowAccount(true)}
+                onSignIn={() => setShowSignInModal(true)}
+                onDeleted={() => {
+                  // Account + cloud data are gone server-side and auth
+                  // markers cleared; wipe local app data and hard-reload
+                  // to a clean, signed-out splash.
+                  try { clearState(); } catch {}
+                  window.location.reload();
+                }} />;
       break;
     default:
       body = <HomeScreen {...homeProps} />;
@@ -1243,7 +1258,7 @@ export default function App() {
           {!isHome && (
             <SyncPill
               status={session ? syncStatus : 'signed_out'}
-              onClick={() => session ? push({ name: 'settings' }) : setShowSignInModal(true)}
+              onClick={() => push({ name: 'settings' })}
             />
           )}
           {/* Home header: sign-in chip when signed-out so a new user
@@ -1420,7 +1435,6 @@ export default function App() {
             setShowIntro(false);
             if (!state.disclaimerAcceptedVersion) setShowDisclaimer(true);
             else if (!state.jurisdiction) setShowJur(true);
-            else if (!state.onboardingAccountComplete) setShowAccount(true);
             else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
             else if (!state.onboardingProfileDone) setShowProfileSetup(true);
           }}
@@ -1435,7 +1449,6 @@ export default function App() {
             update({ disclaimerAcceptedVersion: DISCLAIMER_VERSION });
             setShowDisclaimer(false);
             if (!state.jurisdiction) setShowJur(true);
-            else if (!state.onboardingAccountComplete) setShowAccount(true);
             else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
             else if (!state.onboardingProfileDone) setShowProfileSetup(true);
           }}
@@ -1448,8 +1461,8 @@ export default function App() {
           onPick={(id) => {
             update({ jurisdiction: id });
             setShowJur(false);
-            if (!state.onboardingAccountComplete) setShowAccount(true);
-            else if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+            if (!state.onboardingFavoritesComplete) setShowFavorites(true);
+            else if (!state.onboardingProfileDone) setShowProfileSetup(true);
           }}
           onClose={() => state.jurisdiction && setShowJur(false)}
           canCancel={!!state.jurisdiction}
@@ -1461,7 +1474,7 @@ export default function App() {
         <AccountSetupModal
           initialName={state.anglerName}
           initialEmail={state.anglerEmail}
-          allowDismiss={state.onboardingAccountComplete}
+          allowDismiss
           onDismiss={() => setShowAccount(false)}
           onSave={({ name, email }) => {
             update({ anglerName: name, anglerEmail: email, onboardingAccountComplete: true });

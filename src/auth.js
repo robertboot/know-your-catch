@@ -67,6 +67,23 @@ export function localCredentialEmail() {
   catch { return null; }
 }
 
+/* Guest access — the angler chose "Browse without an account" on the
+   splash. Non-account features (species, regulations, forecast, maps)
+   are free to use with no registration (App Store 5.1.1(v)); cloud
+   sync / logbook backup still prompt sign-in on demand. Cleared the
+   moment a real sign-in lands so we don't keep a guest marker around a
+   signed-in device. */
+const LS_GUEST_KEY = 'kyc.guestAccess';
+export function markGuestAccess() {
+  try { localStorage.setItem(LS_GUEST_KEY, new Date().toISOString()); } catch {}
+}
+export function clearGuestAccess() {
+  try { localStorage.removeItem(LS_GUEST_KEY); } catch {}
+}
+export function hasGuestAccess() {
+  try { return !!localStorage.getItem(LS_GUEST_KEY); } catch { return false; }
+}
+
 let _lastSession = null;
 const listeners = new Set();
 
@@ -76,7 +93,7 @@ function notify(session) {
   // anglers who signed in on a build before the marker existed —
   // otherwise they'd carry no marker and hit the same offshore lockout
   // the first time their token expired without signal.
-  if (session) markAuthedLocally(session.user?.email || null);
+  if (session) { markAuthedLocally(session.user?.email || null); clearGuestAccess(); }
   for (const fn of listeners) { try { fn(session); } catch {} }
 }
 
@@ -168,6 +185,35 @@ export async function signOut() {
   const c = client();
   if (!c) return;
   try { await c.auth.signOut(); } catch {}
+}
+
+/** Permanently delete the signed-in user's account and all cloud data.
+    Invokes the `delete-account` edge function with the caller's JWT;
+    the function verifies the token, purges the user's rows + storage
+    with the service role, then removes the auth user. On success we
+    clear every local auth marker so the device is fully signed out.
+    Returns { ok, error? }. The caller is responsible for wiping local
+    app state (catches/PBs/photos) and returning to the splash. */
+export async function deleteAccount() {
+  const c = client();
+  if (!c) return { ok: false, error: 'Supabase is not configured.' };
+  try {
+    const { data: sessionData } = await c.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return { ok: false, error: 'You are not signed in.' };
+    const { data, error } = await c.functions.invoke('delete-account', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error) return { ok: false, error: error.message || String(error) };
+    if (data && data.ok === false) return { ok: false, error: data.error || 'Deletion failed.' };
+    // Fully sign out locally — the auth user is gone server-side.
+    clearAuthedLocally();
+    clearGuestAccess();
+    try { await c.auth.signOut(); } catch {}
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 // Boot-time: seed the current session + wire Supabase's own auth
