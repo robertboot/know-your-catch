@@ -120,7 +120,10 @@ export default function App() {
   // Bell badge count — active + not-dismissed notifications
   // (announcements + launch emails). The drawer reads the same
   // hook internally so both stay in sync.
-  const { unreadCount: inboxUnread } = useAnnouncementInbox();
+  const { unreadCount: inboxUnread } = useAnnouncementInbox({
+    jurisdictionId: state?.jurisdiction || null,
+    favorites: state?.favorites || null,
+  });
 
   // Load persisted state on mount.
   useEffect(() => {
@@ -1531,6 +1534,8 @@ export default function App() {
       <NotificationsDrawer
         open={showNotifications}
         onClose={() => setShowNotifications(false)}
+        jurisdictionId={jurisdiction?.id || null}
+        favorites={state?.favorites || null}
       />
 
       {/* User-triggered sign in / sign up from Home header + SyncPill.

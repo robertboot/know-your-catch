@@ -21,6 +21,28 @@ export const JURISDICTIONS = [
   { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', short: 'FED-SA', agency: 'NOAA / SAFMC', boundary: 'Beyond state waters', coast: 'atlantic', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-south-atlantic' },
 ];
 
+// The high-interest species anglers get season-change alerts for by
+// default (in addition to whatever they've starred). Curated for the
+// Gulf + Florida target audience — the fish people actually plan trips
+// around. Season "opens soon" / "closes soon" notifications fan out
+// over this set for the user's selected waters (see season-alerts.js).
+// Kept distinct from screens1's FEATURED_IDS, which is a shorter Home
+// carousel curation; this is the wider "notify me" pool.
+export const POPULAR_SPECIES_IDS = [
+  // Snappers
+  'red_snapper', 'mangrove_snapper', 'vermilion_snapper', 'lane_snapper',
+  'mutton_snapper', 'yellowtail_snapper',
+  // Groupers
+  'gag_grouper', 'red_grouper', 'black_grouper', 'scamp',
+  // Jacks + reef
+  'greater_amberjack', 'gray_triggerfish',
+  // Mackerels + pelagics
+  'king_mackerel', 'spanish_mackerel', 'cobia', 'mahi', 'wahoo',
+  // Inshore
+  'red_drum', 'spotted_seatrout', 'sheepshead', 'gulf_flounder',
+  'southern_flounder', 'black_drum', 'tripletail',
+];
+
 export const CATEGORIES = [
   // Rebuilt from the Gulf_Fish master sheet (scientific-name keyed).
   { id: 'sharks_rays', name: 'Sharks and Rays' },

@@ -10,7 +10,7 @@
 
    The bell badge is the count of active + not-dismissed items. */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { X, Bell, Mail, Megaphone, ShieldAlert } from 'lucide-react';
+import { X, Bell, Mail, Megaphone, ShieldAlert, CalendarClock } from 'lucide-react';
 import { T } from './theme.js';
 import { getLastSession, subscribe } from './auth.js';
 import { useScreenSize } from './screen-size.js';
@@ -19,6 +19,7 @@ import {
   loadDismissedIds, markDismissed, markManyDismissed,
 } from './announcements-store.js';
 import { listRegulationAlerts } from './regulation-alerts-store.js';
+import { seasonAlertInboxItems } from './season-alerts.js';
 import { speciesById, jurisdictionById } from './helpers.js';
 
 const POLL_INTERVAL_MS = 60_000;
@@ -34,7 +35,7 @@ function labelForFeature(slug) {
 /* Shared hook powering both the bell badge and the drawer.
    Fetches on mount + on window focus + on a slow poll so the badge
    ticks up without a full page reload. */
-export function useAnnouncementInbox() {
+export function useAnnouncementInbox({ jurisdictionId = null, favorites = null } = {}) {
   const [session,      setSession]     = useState(getLastSession());
   const [announcements, setAnnouncements] = useState([]);
   const [launchEmails,  setLaunchEmails]  = useState([]);
@@ -65,14 +66,23 @@ export function useAnnouncementInbox() {
     };
   }, [refresh]);
 
+  // Season open/close alerts — computed locally (offline) from the
+  // selected waters + the angler's alert species pool. Recomputed only
+  // when the jurisdiction or starred set changes.
+  const favKey = (favorites || []).join(',');
+  const seasonItems = useMemo(
+    () => seasonAlertInboxItems(jurisdictionId, favorites || []),
+    [jurisdictionId, favKey],
+  );
+
   // Reload dismissed IDs from LS on every refresh — the Home banner
   // may have dismissed a row before the drawer opened.
   useEffect(() => {
     setDismissedIds(loadDismissedIds());
-  }, [announcements, launchEmails, regAlerts]);
+  }, [announcements, launchEmails, regAlerts, seasonItems]);
 
   const items = useMemo(() => {
-    const out = [];
+    const out = [...seasonItems];
     for (const a of announcements) {
       out.push({
         id: `announcement:${a.id}`,
@@ -111,7 +121,7 @@ export function useAnnouncementInbox() {
       });
     }
     return out.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
-  }, [announcements, launchEmails, regAlerts]);
+  }, [announcements, launchEmails, regAlerts, seasonItems]);
 
   const active   = items.filter(i => !dismissed.has(i.dismissKey));
   const cleared  = items.filter(i =>  dismissed.has(i.dismissKey));
@@ -136,10 +146,10 @@ export function useAnnouncementInbox() {
 
 /* Modal drawer — full-screen on phone, centered card on wider
    viewports. Renders on top via a fixed overlay + inner card. */
-export default function NotificationsDrawer({ open, onClose }) {
+export default function NotificationsDrawer({ open, onClose, jurisdictionId = null, favorites = null }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
-  const { active, cleared, dismiss, dismissAll } = useAnnouncementInbox();
+  const { active, cleared, dismiss, dismissAll } = useAnnouncementInbox({ jurisdictionId, favorites });
   if (!open) return null;
 
   const drawerMaxWidth  = isTablet ? 620 : 640;
@@ -254,9 +264,15 @@ export default function NotificationsDrawer({ open, onClose }) {
 
 function InboxRow({ item, onDismiss, cleared, isTablet = false }) {
   const Icon =
-    item.kind === 'launch'    ? Mail
-  : item.kind === 'reg_alert' ? ShieldAlert
-  :                             Megaphone;
+    item.kind === 'launch'       ? Mail
+  : item.kind === 'reg_alert'    ? ShieldAlert
+  : item.kind === 'season_alert' ? CalendarClock
+  :                                Megaphone;
+  // Opening = brand cyan/green, closing = amber warning.
+  const iconColor = cleared ? T.inkMute
+    : item.kind === 'season_alert'
+      ? (item.seasonKind === 'closing' ? T.warn : T.open)
+      : T.brass;
   const stampDisplay = item.stamp
     ? new Date(item.stamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : '';
@@ -270,7 +286,7 @@ function InboxRow({ item, onDismiss, cleared, isTablet = false }) {
       opacity: cleared ? 0.55 : 1,
       boxSizing: 'border-box',
     }}>
-      <Icon size={isTablet ? 20 : 16} color={cleared ? T.inkMute : T.brass} style={{ marginTop: 2, flexShrink: 0 }} />
+      <Icon size={isTablet ? 20 : 16} color={iconColor} style={{ marginTop: 2, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: isTablet ? 16 : 13, fontWeight: 700, color: T.ink,

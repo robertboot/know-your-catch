@@ -4,6 +4,7 @@ import {
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
   SlidersHorizontal, Sparkles, ShieldCheck, ShieldAlert, ShieldQuestion,
   MapPin as MapPinIcon, Calendar as CalendarIcon, Fish as FishIcon,
+  CalendarClock, CalendarX2,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -19,7 +20,7 @@ import {
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
   shareReport, fetchWeatherForTime, PROHIBITED_RE,
-  isAnglerVisible,
+  isAnglerVisible, seasonTransition,
 } from './helpers.js';
 
 /* <img> wrapper that falls back to the inline thumb data URL when
@@ -762,8 +763,9 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
   const isLandscape = size === 'tablet-landscape';
   const buckets = useMemo(() => {
     const favSet = new Set(state?.favorites || []);
-    if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], favSet };
+    if (!jurisdiction) return { yourClosed: [], otherClosed: [], yourUnknown: [], otherUnknown: [], opening: [], closing: [], favSet };
     const yourClosed = [], otherClosed = [], yourUnknown = [], otherUnknown = [];
+    const opening = [], closing = [];
     for (const s of SPECIES) {
       if (s.active === false || String(s.id).startsWith('_') || String(s.category).startsWith('_')) continue; // admin-only rows never surface
       if (s.category === 'baitfish') continue; // no bait on regs surfaces
@@ -771,13 +773,23 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
       const status = reg ? seasonState(reg.open).status : 'unknown';
       const isFav = favSet.has(s.id);
       const row = { s, reg };
+      // Imminent open/close transitions get their own priority buckets
+      // (an opening-soon species is 'upcoming', a closing-soon one is
+      // 'open', so neither collides with the closed/unknown buckets).
+      const tr = reg ? seasonTransition(reg.open) : null;
+      if (tr?.kind === 'opening') opening.push({ ...row, tr, isFav });
+      else if (tr?.kind === 'closing') closing.push({ ...row, tr, isFav });
       if (status === 'closed') (isFav ? yourClosed : otherClosed).push(row);
       else if (status === 'unknown') (isFav ? yourUnknown : otherUnknown).push(row);
     }
     [yourClosed, otherClosed, yourUnknown, otherUnknown].forEach(list =>
       list.sort((a, b) => a.s.commonName.localeCompare(b.s.commonName))
     );
-    return { yourClosed, otherClosed, yourUnknown, otherUnknown, favSet };
+    // Starred first, then soonest, then name.
+    const byFavThenDays = (a, b) => (Number(b.isFav) - Number(a.isFav)) || (a.tr.days - b.tr.days) || a.s.commonName.localeCompare(b.s.commonName);
+    opening.sort(byFavThenDays);
+    closing.sort(byFavThenDays);
+    return { yourClosed, otherClosed, yourUnknown, otherUnknown, opening, closing, favSet };
   }, [jurisdiction, state?.favorites]);
 
   const hasAnyFavorites = buckets.favSet.size > 0;
@@ -792,6 +804,9 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
   const chevronSize  = isTablet ? 20 : 14;
   const pillSize     = isTablet ? 'large' : 'small';
 
+  const fmtTrDate = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const daysPhrase = (d) => d <= 0 ? 'today' : d === 1 ? 'tomorrow' : d <= 14 ? `in ${d} days` : `in ${Math.round(d / 7)} weeks`;
+
   const renderRow = ({ s, reg }, opts = {}) => (
     <Card key={s.id} onClick={() => onPick(s.id)} style={{ display: 'flex', gap: rowGap, alignItems: 'center', padding: rowPad, borderColor: opts.accentBorder || T.cardEdge }}>
       <SpeciesImage species={s} size={isTablet ? rowImgSize : (opts.imgSize || 38)} />
@@ -800,7 +815,9 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
           <span style={{ fontFamily: 'Georgia, serif', fontSize: rowNameSize, fontWeight: 600, color: T.ink }}>{s.commonName}</span>
           {buckets.favSet.has(s.id) && <Star size={isTablet ? 16 : 12} fill={T.brass} color={T.brass} />}
         </div>
-        {opts.showSeason && <div style={{ fontSize: rowMetaSize, color: T.inkMute, marginTop: isTablet ? 4 : 2 }}>{cleanSeason(reg?.open) || 'Season closed'}</div>}
+        {opts.note
+          ? <div style={{ fontSize: rowMetaSize, color: opts.noteColor || T.inkSoft, marginTop: isTablet ? 4 : 2, fontWeight: 700 }}>{opts.note}</div>
+          : opts.showSeason && <div style={{ fontSize: rowMetaSize, color: T.inkMute, marginTop: isTablet ? 4 : 2 }}>{cleanSeason(reg?.open) || 'Season closed'}</div>}
       </div>
       <StatusPill status={opts.status} size={pillSize} />
       <ChevronRight size={chevronSize} color={T.brass} />
@@ -811,6 +828,39 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
     <div style={{ padding: isTablet ? '22px 22px' : '16px 16px' }}>
       <H1 size={isTablet ? (isLandscape ? 30 : 28) : 22} style={{ marginBottom: 4 }}>Regulation Alerts</H1>
       {jurisdiction && <div style={{ fontSize: isTablet ? 16 : 13, color: T.brassDeep, fontWeight: 600, marginBottom: isTablet ? 18 : 14 }}>{jurisdiction.name}</div>}
+
+      {/* Imminent openings — the "plan a trip" signal (gag grouper,
+          greater amberjack). Highest-value alert, so it leads. */}
+      {buckets.opening.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
+            <CalendarClock size={isTablet ? 18 : 14} color={T.open} />
+            <SectionLabel style={{ color: T.open, flex: 1 }}>Opening soon ({buckets.opening.length})</SectionLabel>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+            {buckets.opening.map(row => renderRow(row, {
+              status: 'upcoming', accentBorder: T.warn, imgSize: 40,
+              note: `Opens ${fmtTrDate(row.tr.date)} · ${daysPhrase(row.tr.days)}`, noteColor: T.brassDeep,
+            }))}
+          </div>
+        </>
+      )}
+
+      {/* Imminent closings — "get out before it shuts". */}
+      {buckets.closing.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
+            <CalendarX2 size={isTablet ? 18 : 14} color={T.warn} />
+            <SectionLabel style={{ color: T.warn, flex: 1 }}>Closing soon ({buckets.closing.length})</SectionLabel>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+            {buckets.closing.map(row => renderRow(row, {
+              status: 'open', accentBorder: T.warn, imgSize: 40,
+              note: `Closes ${fmtTrDate(row.tr.date)} · ${daysPhrase(row.tr.days)}`, noteColor: T.warn,
+            }))}
+          </div>
+        </>
+      )}
 
       {/* PRIORITY: Your starred fish that are closed right now. */}
       {hasAnyFavorites && (
