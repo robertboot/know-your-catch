@@ -194,14 +194,22 @@ export function seasonState(open, today = new Date()) {
   const openRanges = ranges.filter(r => !closedRanges.includes(r));
 
   const activeClosure = closedRanges.find(r => inRange(today, r));
-  if (activeClosure)
-    return { status: 'closed', reason: `Closed until ${fmtDate(addDay(activeClosure.b))}` };
+  if (activeClosure) {
+    // A closure whose reopening is only a few weeks out reads as an
+    // upcoming season ("Opens soon"), not a flat "Closed" — anglers
+    // plan trips around imminent openers (gag grouper, greater
+    // amberjack reopening Sept 1). Farther-off reopenings stay closed.
+    const reopen = addDay(activeClosure.b);
+    if (reopen - today <= OPENS_SOON_DAYS * DAY_MS)
+      return { status: 'upcoming', reason: `Opens ${fmtDate(reopen)}`, opensOn: reopen.toISOString() };
+    return { status: 'closed', reason: `Closed until ${fmtDate(reopen)}`, opensOn: reopen.toISOString() };
+  }
 
   if (openRanges.length) {
     if (openRanges.some(r => inRange(today, r)))
       return { status: 'open', reason: cleanSeason(open) };
     const next = openRanges.filter(r => today < r.a).sort((x, y) => x.a - y.a)[0];
-    if (next) return { status: 'upcoming', reason: `Opens ${fmtDate(next.a)}` };
+    if (next) return { status: 'upcoming', reason: `Opens ${fmtDate(next.a)}`, opensOn: next.a.toISOString() };
     return { status: 'closed', reason: 'Season has ended for this year' };
   }
 
@@ -226,13 +234,17 @@ export function seasonState(open, today = new Date()) {
     const a = bareDates[0].d, b = bareDates[bareDates.length - 1].d;
     const isClosureWindow = closedAt >= 0 && closedAt < bareDates[0].idx;
     if (isClosureWindow) {
-      // Inside the stated closure → closed until the reopen date;
-      // outside it → open.
-      if (today >= a && today < b)
-        return { status: 'closed', reason: `Closed — reopens ${fmtDate(b)}` };
+      // Inside the stated closure → closed until the reopen date (or
+      // "Opens soon" when the reopening is only weeks away); outside
+      // it → open.
+      if (today >= a && today < b) {
+        if (b - today <= OPENS_SOON_DAYS * DAY_MS)
+          return { status: 'upcoming', reason: `Opens ${fmtDate(b)}`, opensOn: b.toISOString() };
+        return { status: 'closed', reason: `Closed — reopens ${fmtDate(b)}`, opensOn: b.toISOString() };
+      }
       return { status: 'open', reason: 'Open (outside the stated closure)' };
     }
-    if (today < a)  return { status: 'upcoming', reason: `Opens ${fmtDate(a)}` };
+    if (today < a)  return { status: 'upcoming', reason: `Opens ${fmtDate(a)}`, opensOn: a.toISOString() };
     if (today <= b) return { status: 'open', reason: cleanSeason(open) };
     return { status: 'closed', reason: 'Season has ended for this year' };
   }
@@ -253,7 +265,7 @@ export function seasonState(open, today = new Date()) {
         else if (today - d > half) d = mkDate(opensM[1], +opensM[2], year + 1);
       }
       if (d) return today < d
-        ? { status: 'upcoming', reason: `Opens ${fmtDate(d)}` }
+        ? { status: 'upcoming', reason: `Opens ${fmtDate(d)}`, opensOn: d.toISOString() }
         : { status: 'open', reason: `Open since ${fmtDate(d)}` };
     }
   }
@@ -279,6 +291,63 @@ export function seasonState(open, today = new Date()) {
 const CLOSURE_VOCAB_RE = /closed|closure|prohibit|no\s+(?:retention|harvest|take)/;
 const BARE_DATE_RE = new RegExp(`${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'ig');
 const OPENS_RE = new RegExp(`opens?\\s+${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`, 'i');
+
+// Season-transition windows. A closure reopening within OPENS_SOON_DAYS
+// reads as "Opens soon" (upcoming) instead of a flat closure; an open
+// window whose last legal day falls within CLOSES_SOON_DAYS is
+// "closing soon". Both feed the badges and the season-change alerts.
+export const OPENS_SOON_DAYS = 45;
+export const CLOSES_SOON_DAYS = 30;
+const DAY_MS = 86400000;
+
+// Last legal day of the current open period, or null when the species
+// is open with no dated close ahead (year-round / no scheduled
+// closure). Considers the end of an active open window AND the start of
+// the next scheduled closure, whichever comes first.
+function nextCloseDate(raw, today) {
+  const year = today.getUTCFullYear();
+  const ranges = parseRanges(raw, year);
+  if (!ranges.length) return null;
+  const closedAt = String(raw).toLowerCase().search(CLOSURE_VOCAB_RE);
+  const closedRanges = closedAt < 0 ? [] : ranges.filter(r => r.idx >= closedAt);
+  const openRanges = ranges.filter(r => !closedRanges.includes(r));
+  const cands = [];
+  const activeOpen = openRanges.find(r => today >= r.a && today <= r.b);
+  if (activeOpen) cands.push(activeOpen.b);
+  for (const r of closedRanges) {
+    // Last open day is the day before the closure starts.
+    if (r.a > today) cands.push(new Date(r.a.getTime() - DAY_MS));
+  }
+  if (!cands.length) return null;
+  cands.sort((x, y) => x - y);
+  return cands[0];
+}
+
+/* Near-term season change for badges + season-change alerts:
+     { kind: 'opening', date, days }  — closed now, reopens within OPENS_SOON_DAYS
+     { kind: 'closing', date, days }  — open now, closes within CLOSES_SOON_DAYS
+     null                             — no imminent change
+   `date` is ISO; `days` is whole days from `today` (>= 0). */
+export function seasonTransition(open, today = new Date(), opts = {}) {
+  const opensSoon = opts.opensSoonDays ?? OPENS_SOON_DAYS;
+  const closesSoon = opts.closesSoonDays ?? CLOSES_SOON_DAYS;
+  const st = seasonState(open, today);
+  if (st.status === 'upcoming' && st.opensOn) {
+    const d = new Date(st.opensOn);
+    const days = Math.ceil((d - today) / DAY_MS);
+    if (days >= 0 && days <= opensSoon) return { kind: 'opening', date: st.opensOn, days };
+    return null;
+  }
+  if (st.status === 'open') {
+    const d = nextCloseDate(String(open), today);
+    if (d) {
+      const days = Math.ceil((d - today) / DAY_MS);
+      if (days >= 0 && days <= closesSoon) return { kind: 'closing', date: d.toISOString(), days };
+    }
+    return null;
+  }
+  return null;
+}
 
 function addDay(d) { return new Date(d.getTime() + 86400000); }
 function fmtDate(d) {
