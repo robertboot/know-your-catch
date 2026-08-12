@@ -42,6 +42,33 @@ one build.
 - Print the numbers you're reasoning about — box dimensions, scores,
   which branch ran. "It didn't work" is not data; `raw 0.77x0.99` is.
 
+## Read the symptom's SHAPE before guessing a cause
+
+The symptom often names the failure mode on its own:
+
+| Symptom | What it means | Not |
+|---|---|---|
+| Button does nothing, no error, no crash | a promise that never settles — a **hang** | a failure |
+| Thing silently vanishes, flow continues | a rejected promise nobody caught | a hang |
+| Wrong answer, high confidence | model/data problem | a routing or threshold problem |
+
+This distinction was the whole 2026-08-10 catch-photo bug. `savePhoto`
+awaited a Supabase Storage upload with no timeout, so on a weak signal
+it hung forever. Two builds saw two different faces of the same line:
+
+- overlay closed *before* the save → the photo vanished silently
+- overlay made to wait for the save → LOG CATCH looked like a dead button
+
+The first fix made the failure visible without fixing what was failing —
+correct, but treating the symptom. The dead button was the clue that
+said *hang*, and a hang points at an `await`, not at error handling.
+
+**When a local-first operation depends on the network, ask what happens
+with one bar of signal — not zero.** Offline is the easy case; code
+usually short-circuits on `navigator.onLine === false`. A slow, alive
+connection is the one that hangs, and it's the one anglers actually have
+on a boat.
+
 ## Before claiming a fix works
 
 - Say what was verified and how. "Archive succeeded" proves it compiled,

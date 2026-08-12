@@ -42,6 +42,21 @@ else?* Then either
 | SST colour range | `src/screens_ocean.jsx`, `supabase/functions/refresh-ocean-maps` | **no** — add a rule if it drifts |
 | Species categories | `src/data.js` + live Supabase `species` table | **no** — cloud overlay assigns `_admin` on mismatch |
 | Updater grid definition | `adminRegsCoverage()` in `regulations-store.js`, `auto-update-regulations/index.ts` | **no** — both must filter live species by `is_active !== false` and exclude `category === 'bait'`; if they drift the coverage tile reports progress against a grid the cron isn't working |
+| **Model preprocessing** | `imageToRgb()` in `src/identify/adapter.js`, `build_datasets()` in `training/train_fish_id.py` | **no** — and it silently drifted for months. See below. |
+
+The preprocessing pair is the most expensive instance so far, because
+it degraded accuracy rather than breaking anything. The app letterboxed
+(aspect preserved, `#808080` pad); the trainer squashed to a square. No
+error, no crash — just a model trained on distorted body proportions and
+served undistorted ones, which is precisely the feature that separates
+lookalike species. Fixed 2026-08-12; `PAD_VALUE = 128.0` and `#808080`
+are now the two halves of one constant, in two languages, with nothing
+checking them.
+
+**Cross-language duplication is the dangerous kind.** A parity check can
+grep two JS files or a JS file and a TS file. JS vs Python vs a training
+notebook is where these hide, and where the failure is a quality
+regression rather than an exception.
 
 A fourth instance of the same shape, worth naming because it was a
 *comment* that drifted rather than code: `regulations-auto-update-schema.sql`

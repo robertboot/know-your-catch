@@ -51,6 +51,32 @@ Both times the SQL was fine. So:
   leave `command` out, so it cannot land in chat.
 - Quote reserved words used as aliases — `count(*) as "rows"`.
 
+## Never hand over a paste-whole block with placeholders in it
+
+On 2026-08-12 a runbook block beginning
+`export SERVICE_ROLE_KEY="paste-real-key"` was pasted verbatim, so
+
+    supabase secrets set CRON_SECRET="paste-real-secret"
+
+ran and overwrote the live cron secret. Every scheduled job would have
+403'd. Robert pastes blocks whole — that is the normal way to use a
+runbook, and the instruction was the wrong shape.
+
+He has also said plainly: *"I do not have the ability to paste within
+your code."* So when a value must be substituted:
+
+1. **Substitute it myself** and hand back the finished artifact. The
+   anon key is in `.env.local`; the project ref and URLs are known.
+2. Or emit a command that fills itself in and lands ready-to-paste:
+
+       sed -e "s|PASTE_ANON_KEY|$ANON|g" supabase/cron-fix.sql | pbcopy
+
+3. Only a genuine secret he alone holds is ever a placeholder — and then
+   it is the ONLY one in the block, called out on its own line.
+
+Corollary: if a step needs a tool he may not have, check first. `psql`
+is not installed on his Mac; the Supabase SQL Editor is the route.
+
 ## Gotchas that fail silently
 
 - **PostgREST caps unbounded selects at 1000 rows.** A grid already past
