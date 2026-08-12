@@ -30,6 +30,11 @@ from pathlib import Path
 
 
 IMG_SIZE = 224
+# Padding value used when letterboxing to a square. MUST match the app's
+# imageToRgb() in src/identify/adapter.js, which fills the canvas with
+# #808080 before drawing. Grey rather than black because black padding
+# reads to the model as a large dark object.
+PAD_VALUE = 128.0
 BATCH_SIZE = 32
 DEFAULT_EPOCHS = 35          # was 20 — fine-tuning needs longer to converge
 FROZEN_EPOCHS = 8            # was 5 — let the head settle before unfreezing
@@ -66,18 +71,41 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
     import tensorflow as tf
     from tensorflow.keras import layers
 
+    # LETTERBOX, don't squash.
+    #
+    # image_dataset_from_directory(image_size=...) does a plain resize,
+    # which stretches a 4:3 photo into a square and distorts body
+    # proportions. The APP does not do that — imageToRgb() in
+    # src/identify/adapter.js scales by min(size/w, size/h) and pads the
+    # remainder with #808080. So training on squashed fish and then
+    # serving letterboxed fish was a train/serve skew, and it distorted
+    # the single most discriminative feature the model has: body shape.
+    # Barracuda vs king mackerel is a proportions call.
+    #
+    # Load at native resolution (image_size=None), then letterbox here.
+    # resize_with_pad pads with ZEROS, so shift by -PAD_VALUE before and
+    # +PAD_VALUE after: the padding lands on exactly the grey the app
+    # uses, and real pixels are unchanged.
+    def letterbox(x):
+        x = tf.cast(x, tf.float32) - PAD_VALUE
+        x = tf.image.resize_with_pad(x, IMG_SIZE, IMG_SIZE, method="bilinear")
+        return x + PAD_VALUE
+
     def make(split):
-        return tf.keras.utils.image_dataset_from_directory(
+        ds = tf.keras.utils.image_dataset_from_directory(
             data_root / split,
             labels="inferred",
             label_mode="int",
             class_names=labels,
             color_mode="rgb",
-            batch_size=BATCH_SIZE,
-            image_size=(IMG_SIZE, IMG_SIZE),
+            batch_size=None,        # per-image: sizes differ until letterboxed
+            image_size=None,        # native resolution — no squash
             shuffle=(split == "train"),
             seed=seed,
         )
+        return (ds.map(lambda x, y: (letterbox(x), y),
+                       num_parallel_calls=tf.data.AUTOTUNE)
+                  .batch(BATCH_SIZE))
 
     train_ds = make("train")
     val_ds   = make("val")
@@ -87,10 +115,15 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
     # every batch so they actually mutate the pixels.
     augment = tf.keras.Sequential([
         layers.RandomFlip("horizontal"),
-        layers.RandomRotation(0.10),
-        layers.RandomZoom(0.10),
+        # 0.028, not 0.10. Keras expresses the factor as a fraction of a
+        # FULL TURN, so 0.10 meant +/-36 degrees — a tilt no angler's
+        # photo ever has. That spends model capacity learning poses that
+        # never occur at inference. +/-10 degrees covers real handheld
+        # variation.
+        layers.RandomRotation(0.028, fill_mode="constant", fill_value=PAD_VALUE),
+        layers.RandomZoom(0.10, fill_mode="constant", fill_value=PAD_VALUE),
         layers.RandomContrast(0.20),
-        layers.RandomBrightness(0.20),
+        layers.RandomBrightness(0.20, value_range=(0.0, 255.0)),
     ], name="augment")
 
     autotune = tf.data.AUTOTUNE
@@ -166,20 +199,72 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
     metrics dump. class_weight balances rare vs common species."""
     import tensorflow as tf
 
+    # Label smoothing calibrates confidence.
+    #
+    # Without it this model returns 0.75 and 0.86 on species it has
+    # WRONG — measured, repeatedly. identifyPhoto.js bands those numbers
+    # into high/medium/low and shows the angler a percentage, so an
+    # overconfident head doesn't just look bad, it defeats the
+    # thresholds. Smoothing costs a little raw top-1 and buys
+    # probabilities that mean what they say.
+    #
+    # SparseCategoricalCrossentropy has no label_smoothing argument, so
+    # labels are one-hot encoded in the dataset and the categorical loss
+    # is used instead.
+    LABEL_SMOOTHING = 0.05
+    num_classes = model.output_shape[-1]
+
+    # class_weight= on fit() expects INTEGER labels, so it cannot be
+    # combined with the one-hot targets label smoothing needs. Fold the
+    # weights into the dataset as per-sample weights instead — same
+    # effect, and it survives the switch. Dropping this silently would
+    # have un-balanced every rare species in the set.
+    weight_lookup = None
+    if class_weight:
+        table = tf.constant([float(class_weight.get(i, 1.0)) for i in range(num_classes)],
+                            dtype=tf.float32)
+        weight_lookup = lambda y: tf.gather(table, tf.cast(y, tf.int32))
+
+    def prepare(ds, weighted):
+        def fn(x, y):
+            oh = tf.one_hot(tf.cast(y, tf.int32), num_classes)
+            if weighted and weight_lookup is not None:
+                return x, oh, weight_lookup(y)
+            return x, oh
+        return ds.map(fn, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Weight the training set only. Weighting val would distort the
+    # metric the callbacks stop on.
+    train_ds = prepare(train_ds, weighted=True)
+    val_ds   = prepare(val_ds,   weighted=False)
+    loss = tf.keras.losses.CategoricalCrossentropy(label_smoothing=LABEL_SMOOTHING)
+
+    # Fresh callbacks PER STAGE. Reusing one list across both fit()
+    # calls carried stage-1 state into stage 2: EarlyStopping's patience
+    # counter and best-weights snapshot came from the frozen-backbone
+    # run, so stage 2 could restore stage-1 weights or stop early
+    # against a baseline that no longer applied. Monitor val_accuracy
+    # rather than the default val_loss — with label smoothing the loss
+    # floor shifts, and accuracy is what we actually care about.
+    def make_callbacks():
+        return [
+            tf.keras.callbacks.ReduceLROnPlateau(
+                monitor="val_accuracy", mode="max",
+                patience=3, factor=0.5, verbose=1),
+            tf.keras.callbacks.EarlyStopping(
+                monitor="val_accuracy", mode="max",
+                patience=5, restore_best_weights=True, verbose=1),
+        ]
+
     # Stage 1: head only.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-3),
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+        loss=loss,
         metrics=["accuracy"],
     )
-    callbacks = [
-        tf.keras.callbacks.ReduceLROnPlateau(patience=3, factor=0.5, verbose=1),
-        tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True, verbose=1),
-    ]
     h1 = model.fit(
         train_ds, validation_data=val_ds,
-        epochs=FROZEN_EPOCHS, callbacks=callbacks,
-        class_weight=class_weight, verbose=2,
+        epochs=FROZEN_EPOCHS, callbacks=make_callbacks(), verbose=2,
     )
 
     # Stage 2: unfreeze last N layers of the backbone.
@@ -188,13 +273,13 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
         layer.trainable = False
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-4),  # lower LR post-unfreeze
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+        loss=loss,
         metrics=["accuracy"],
     )
     h2 = model.fit(
         train_ds, validation_data=val_ds,
         epochs=max(1, epochs - FROZEN_EPOCHS),
-        callbacks=callbacks, class_weight=class_weight, verbose=2,
+        callbacks=make_callbacks(), verbose=2,
     )
 
     history = {
