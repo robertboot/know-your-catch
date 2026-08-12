@@ -82,7 +82,7 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
     # the single most discriminative feature the model has: body shape.
     # Barracuda vs king mackerel is a proportions call.
     #
-    # Load at native resolution (image_size=None), then letterbox here.
+    # Load at native resolution, then letterbox here.
     # resize_with_pad pads with ZEROS, so shift by -PAD_VALUE before and
     # +PAD_VALUE after: the padding lands on exactly the grey the app
     # uses, and real pixels are unchanged.
@@ -91,20 +91,45 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
         x = tf.image.resize_with_pad(x, IMG_SIZE, IMG_SIZE, method="bilinear")
         return x + PAD_VALUE
 
+    # image_dataset_from_directory REQUIRES image_size and always resizes
+    # to it, so it cannot hand us native-resolution images to letterbox.
+    # (image_size=None raises "Expected a tuple of 2 integers".) Build the
+    # file list ourselves instead — this also keeps the label index pinned
+    # to `labels` order, which is what class_names= was doing.
+    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+    def file_list(split):
+        paths, targets = [], []
+        for idx, name in enumerate(labels):
+            d = data_root / split / name
+            if not d.is_dir():
+                continue
+            for p in sorted(d.iterdir()):
+                if p.suffix.lower() in IMAGE_EXTS:
+                    paths.append(str(p))
+                    targets.append(idx)
+        return paths, targets
+
     def make(split):
-        ds = tf.keras.utils.image_dataset_from_directory(
-            data_root / split,
-            labels="inferred",
-            label_mode="int",
-            class_names=labels,
-            color_mode="rgb",
-            batch_size=None,        # per-image: sizes differ until letterboxed
-            image_size=None,        # native resolution — no squash
-            shuffle=(split == "train"),
-            seed=seed,
-        )
-        return (ds.map(lambda x, y: (letterbox(x), y),
-                       num_parallel_calls=tf.data.AUTOTUNE)
+        paths, targets = file_list(split)
+        if not paths:
+            raise SystemExit(f"no images found under {data_root / split}")
+        print(f"  {split}: {len(paths)} images across {len(labels)} species", flush=True)
+
+        ds = tf.data.Dataset.from_tensor_slices((paths, targets))
+        if split == "train":
+            ds = ds.shuffle(len(paths), seed=seed, reshuffle_each_iteration=True)
+
+        def load(path, y):
+            img = tf.io.decode_image(tf.io.read_file(path), channels=3,
+                                     expand_animations=False)
+            img = letterbox(img)
+            # decode_image returns an unknown static shape; the model's
+            # Input layer needs a concrete one.
+            img.set_shape([IMG_SIZE, IMG_SIZE, 3])
+            return img, y
+
+        return (ds.map(load, num_parallel_calls=tf.data.AUTOTUNE)
                   .batch(BATCH_SIZE))
 
     train_ds = make("train")
