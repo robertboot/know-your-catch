@@ -33,9 +33,11 @@ Re-running is always safe. No flags needed — it self-targets and de-dupes.
 ## Config knobs (top of the script)
 
 - `TARGET_PER_SPECIES = 750` — per-species ceiling; lower it to fetch fewer.
-- `SUPABASE_URL` / `SUPABASE_ANON_KEY` — fill both to pull the **live** species
-  list (includes admin-added species). Blank → bundled built-in list only.
-  Use the anon / `sb_publishable_...` key (public), never the service_role key.
+- Species list is the **live admin list by default**: project URL is pre-filled
+  and the anon key auto-resolves from env (`SUPABASE_ANON_KEY` /
+  `VITE_SUPABASE_ANON_KEY`) or the repo's `../.env.local`. No editing needed if
+  `.env.local` exists. Falls back to the bundled built-in list only if no key is
+  found. Never put the service_role key here — anon/publishable only.
 - `ALLOWED` licenses: `cc0`, `cc-by`, `cc-by-nc`. `MAX_PAGES`, `SLEEP_BETWEEN_CALLS`
   are polite-API limits — leave them.
 - `SKIP_COMMON` — common names to skip (e.g. a folder finished under another name).

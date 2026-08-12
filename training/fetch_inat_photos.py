@@ -31,11 +31,33 @@ MAX_PAGES = 12                # iNat pages per species (200 obs/page)
 SLEEP_BETWEEN_CALLS = 1.0    # be a good API citizen
 ALLOWED = {"cc0", "cc-by", "cc-by-nc"}   # photo licenses we keep
 
-# Fill these from your .env.local to fetch the LIVE species list
-# (includes species you added through the admin). Leave blank to use
-# the bundled fallback list below.
-SUPABASE_URL = ""       # e.g. https://abcdefgh.supabase.co
-SUPABASE_ANON_KEY = ""
+# The LIVE admin species list is the default. The project URL is
+# pre-filled; the anon key is resolved automatically from (in order):
+#   1. env var  SUPABASE_ANON_KEY  or  VITE_SUPABASE_ANON_KEY
+#   2. the repo's ../.env.local     (VITE_SUPABASE_ANON_KEY=...)
+# The anon key is public (same one shipped in the app) — never put the
+# service_role key here. If no key is found it falls back to the bundled
+# list, but the whole point is to match the admin, so keep .env.local.
+def _resolve_anon_key():
+    for var in ("SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"):
+        v = os.environ.get(var)
+        if v:
+            return v.strip()
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env.local")
+    try:
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("VITE_SUPABASE_ANON_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return ""
+
+SUPABASE_URL = (os.environ.get("SUPABASE_URL")
+                or os.environ.get("VITE_SUPABASE_URL")
+                or "https://hfptpsmdfemduhkueyoz.supabase.co")
+SUPABASE_ANON_KEY = _resolve_anon_key()
 
 # Species to skip — add common names here for folders you've already
 # finished under a different folder name (e.g. "Scamp" if your folder
