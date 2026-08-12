@@ -26,7 +26,7 @@ import urllib.request
 BASE_DIR = os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/Reel Intel/Fish ID Model"
 )
-TARGET_PER_SPECIES = 750     # stop a species once its images/ has this many
+TARGET_PER_SPECIES = 1000    # stop a species once its images/ has this many
 MAX_PAGES = 12                # iNat pages per species (200 obs/page)
 SLEEP_BETWEEN_CALLS = 1.0    # be a good API citizen
 ALLOWED = {"cc0", "cc-by", "cc-by-nc"}   # photo licenses we keep
@@ -235,25 +235,34 @@ def http_json(url, headers=None):
 
 
 def load_species():
-    """Live species from Supabase (matches admin, incl. user-added);
-    bundled fallback when creds are blank or the fetch fails."""
-    if SUPABASE_URL and SUPABASE_ANON_KEY:
-        try:
-            url = (SUPABASE_URL.rstrip("/")
-                   + "/rest/v1/species?select=common_name,scientific,is_active")
-            rows = http_json(url, {
-                "apikey": SUPABASE_ANON_KEY,
-                "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
-            })
-            live = [(r["common_name"], r.get("scientific") or "")
-                    for r in rows if r.get("is_active") is not False]
-            if live:
-                print(f"Species list: {len(live)} from Supabase (live)")
-                return live
-        except Exception as e:
-            print(f"Live species fetch failed ({e}) — using bundled list")
-    print(f"Species list: {len(BUNDLED)} bundled")
-    return list(BUNDLED)
+    """Live species from Supabase — the current admin list (incl.
+    user-added, minus deactivated). Hard-stops rather than silently
+    using the stale bundled list, so a run is always against admin."""
+    if not SUPABASE_ANON_KEY:
+        raise SystemExit(
+            "No Supabase anon key found. Set SUPABASE_ANON_KEY (or "
+            "VITE_SUPABASE_ANON_KEY), or add VITE_SUPABASE_ANON_KEY to "
+            "../.env.local, so the fetch uses the live ADMIN species list.\n"
+            "(Refusing to fall back to the bundled list to avoid fetching "
+            "the wrong species set.)")
+    url = (SUPABASE_URL.rstrip("/")
+           + "/rest/v1/species?select=common_name,scientific,is_active")
+    try:
+        rows = http_json(url, {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+        })
+    except Exception as e:
+        raise SystemExit(
+            f"Could not load the live admin species list ({e}). "
+            "Check your network / anon key. Not falling back to the "
+            "bundled list.")
+    live = [(r["common_name"], r.get("scientific") or "")
+            for r in rows if r.get("is_active") is not False]
+    if not live:
+        raise SystemExit("Admin species list came back empty — aborting.")
+    print(f"Species list: {len(live)} from Supabase (LIVE admin list)")
+    return live
 
 
 def count_images(img_dir):
