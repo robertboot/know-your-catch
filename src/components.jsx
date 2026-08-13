@@ -1060,17 +1060,34 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
   // time can go stale between installs; the inline thumb never does.
   const current = list[idx];
   const primary = photoDisplayUrl(current) || current;
+  const thumb   = photoThumbUrl(current);
   const [imgSrc, setImgSrc] = useState(primary);
-  const fellBackRef = useRef(false);
+  const [failed, setFailed] = useState(false);
+  // Escalation chain, mirroring PhotoImg: display URL → inline thumb →
+  // signed cloud URL → graceful placeholder. A stale capacitor:// path
+  // OR a truncated local file now recovers to the cloud copy instead of
+  // rendering the browser's broken-image glyph; only when every source
+  // fails do we show a placeholder.
+  const stepRef = useRef(0); // 0=primary, 1=thumb, 2=signed
   useEffect(() => {
     setImgSrc(primary);
-    fellBackRef.current = false;
+    setFailed(false);
+    stepRef.current = 0;
   }, [primary]);
   const onImgError = () => {
-    if (fellBackRef.current) return;
-    fellBackRef.current = true;
-    const thumb = photoThumbUrl(current);
-    if (thumb && thumb !== imgSrc) setImgSrc(thumb);
+    if (stepRef.current === 0 && thumb && thumb !== imgSrc) {
+      stepRef.current = 1;
+      setImgSrc(thumb);
+      return;
+    }
+    if (stepRef.current <= 1) {
+      stepRef.current = 2;
+      photoSignedUrl(current)
+        .then((url) => { if (url) setImgSrc(url); else setFailed(true); })
+        .catch(() => setFailed(true));
+      return;
+    }
+    setFailed(true);
   };
 
   useEffect(() => {
@@ -1186,29 +1203,46 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      <img
-        src={imgSrc}
-        alt={alt || ''}
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-        onError={onImgError}
-        draggable={false}
-        style={{
-          maxWidth: '100%',
-          maxHeight: (caption || hasMany) ? '78vh' : '90vh',
-          objectFit: 'contain', display: 'block',
-          borderRadius: 8,
-          transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
-          transformOrigin: 'center center',
-          transition: pointersRef.current.size === 0 ? 'transform 160ms ease' : 'none',
-          touchAction: 'none',
-          WebkitUserSelect: 'none', userSelect: 'none',
-          cursor: scale > 1 ? 'grab' : 'zoom-in',
-        }}
-      />
+      {failed ? (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 12, padding: 40, textAlign: 'center',
+            maxWidth: '100%', maxHeight: (caption || hasMany) ? '78vh' : '90vh',
+            color: T.inkMute,
+          }}
+        >
+          <ImageOff size={48} color={T.inkMute} />
+          <div style={{ fontSize: 15, color: T.inkSoft, lineHeight: 1.5, maxWidth: 280 }}>
+            This photo isn’t available on this device. Open the catch and re-add the photo to restore it.
+          </div>
+        </div>
+      ) : (
+        <img
+          src={imgSrc}
+          alt={alt || ''}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          onError={onImgError}
+          draggable={false}
+          style={{
+            maxWidth: '100%',
+            maxHeight: (caption || hasMany) ? '78vh' : '90vh',
+            objectFit: 'contain', display: 'block',
+            borderRadius: 8,
+            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+            transformOrigin: 'center center',
+            transition: pointersRef.current.size === 0 ? 'transform 160ms ease' : 'none',
+            touchAction: 'none',
+            WebkitUserSelect: 'none', userSelect: 'none',
+            cursor: scale > 1 ? 'grab' : 'zoom-in',
+          }}
+        />
+      )}
 
       {hasMany && (
         <>
