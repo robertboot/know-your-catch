@@ -298,6 +298,137 @@ def existing_hashes(img_dir):
     return seen
 
 
+# Resolved taxon ids, so 168 species don't re-ask for the same lookup.
+_TAXON_CACHE = {}
+
+# Names where iNat's taxonomy genuinely disagrees with ours and no rule
+# can safely bridge the gap. Each entry is a decision someone made by
+# looking it up — NOT a fuzzy match. Anything not listed here and not
+# matched by the passes below is skipped rather than guessed at.
+# Each value is (taxon_id, the name iNat should report for it). The
+# second half is the point: these overrides exist precisely BECAUSE
+# iNat's name differs from ours, so checking the id against our own name
+# would flag every correct entry.
+TAXON_OVERRIDES = {
+    # iNat lumps Atlantic sailfish into the Indo-Pacific species; most
+    # authorities now treat them as one circumtropical species.
+    "istiophorus albicans": (119719, "Istiophorus platypterus"),
+    # Gulf sturgeon: we carry it as a subspecies of A. oxyrinchus,
+    # iNat elevated it to full species as A. desotoi.
+    "acipenser oxyrinchus desotoi": (1316440, "Acipenser desotoi"),
+}
+
+# Every id above is verified at import time. An override is a hand-typed
+# integer, which is exactly the kind of thing that is confidently wrong —
+# the first draft of this table pointed Atlantic Sailfish at a green alga
+# and Gulf Sturgeon at a mite, and nothing downstream would have noticed.
+def verify_overrides():
+    """Check each override still names the taxon we think it does.
+    Network-dependent, so failures warn rather than abort — an offline
+    run should not be blocked by a sanity check."""
+    for name, (tid, expect) in TAXON_OVERRIDES.items():
+        try:
+            d = http_json(f"https://api.inaturalist.org/v1/taxa/{tid}")
+            got = ((d.get("results") or [{}])[0].get("name") or "?")
+        except Exception as e:
+            print(f"  ! could not verify override {name} -> {tid}: {e}")
+            continue
+        if got.strip().lower() != expect.strip().lower():
+            print(f"  !! OVERRIDE WRONG: {name} -> {tid} is '{got}', "
+                  f"expected '{expect}'")
+
+
+def resolve_taxon(scientific):
+    """Return (taxon_id, resolved_inat_name), or (None, None).
+
+    We used to pass `taxon_name=<scientific>` straight to the
+    observations endpoint. That parameter is a FUZZY NAME SEARCH, and
+    when it mis-resolves iNat returns a full page of confidently-wrong
+    observations rather than an error or an empty set. On 2026-08-14
+    `Sarda sarda` (Atlantic Bonito) came back as `Regalecus glesne` —
+    the oarfish — and 1000 oarfish photos had been downloaded into the
+    Atlantic Bonito folder and trained on. Nothing in the fetch log
+    looked wrong.
+
+    So: resolve the name to an id here, verify the id's own name matches
+    what we asked for, and let the caller filter by taxon_id instead.
+    A species we cannot resolve is SKIPPED, never guessed at — a missing
+    species costs recall, a mislabelled one corrupts the model.
+    """
+    key = (scientific or "").strip().lower()
+    if not key:
+        return (None, None)
+    if key in _TAXON_CACHE:
+        return _TAXON_CACHE[key]
+
+    if key in TAXON_OVERRIDES:
+        tid, expect = TAXON_OVERRIDES[key]
+        print(f"  · {scientific} → {expect} (id {tid}, manual override)")
+        _TAXON_CACHE[key] = (tid, expect)
+        return _TAXON_CACHE[key]
+
+    # "Anchoa spp." / "Doryteuthis spp." are genus-level ON PURPOSE —
+    # the app groups those as one class because anglers do. Strip the
+    # marker and accept the genus, which the binomial path forbids.
+    genus_only = key.endswith(" spp.") or key.endswith(" sp.") or " " not in key
+    lookup = re.sub(r"\s+sp{1,2}\.$", "", key).strip()
+
+    q = urllib.parse.urlencode({"q": lookup, "rank": "species,subspecies,genus"})
+    try:
+        data = http_json(f"https://api.inaturalist.org/v1/taxa?{q}")
+    except Exception as e:
+        print(f"  ! taxon lookup failed for {scientific}: {e}")
+        _TAXON_CACHE[key] = (None, None)
+        return _TAXON_CACHE[key]
+
+    results = data.get("results") or []
+    parts = lookup.split(" ")
+    # Last word for a trinomial too: we carry Gulf sturgeon as
+    # "Acipenser oxyrinchus desotoi", and the epithet that identifies it
+    # is desotoi, not oxyrinchus.
+    want_epithet = parts[-1] if len(parts) > 1 else None
+
+    def take(t, why):
+        tid = t.get("id")
+        if why:
+            print(f"  · {scientific} resolved to {t.get('name')} (id {tid}) — {why}")
+        _TAXON_CACHE[key] = (tid, t.get("name"))
+        return _TAXON_CACHE[key]
+
+    # Genus-level request: take the genus taxon itself.
+    if genus_only:
+        for t in results:
+            if ((t.get("name") or "").strip().lower() == lookup
+                    and t.get("rank") == "genus"):
+                return take(t, "genus-level class, as intended")
+
+    # Pass 1: exact binomial. Ranked first deliberately — iNat returns
+    # the GENUS ahead of the species for a query like "Sarda sarda", and
+    # a first-match-wins loop silently widens the fetch to every sibling
+    # species in that genus.
+    for t in results:
+        if (t.get("name") or "").strip().lower() == lookup:
+            return take(t, None)
+
+    # Pass 2: same species epithet under a different genus. iNat
+    # reclassifies constantly — Epinephelus drummondhayi is Hyporthodus
+    # drummondhayi there now — and that is a rename, not another fish.
+    if want_epithet:
+        for t in results:
+            name = (t.get("name") or "").strip().lower()
+            bits = name.split(" ")
+            if len(bits) == 2 and bits[1] == want_epithet:
+                return take(t, "genus renamed upstream")
+
+    # A bare genus is NOT accepted for a binomial query: it would pull
+    # every sibling species under our species' label. Better to fetch
+    # nothing and see the skip in the log.
+    got = ", ".join((t.get("name") or "?") for t in results[:3])
+    print(f"  ! {scientific} did not resolve (closest: {got or 'nothing'}) — SKIPPING")
+    _TAXON_CACHE[key] = (None, None)
+    return _TAXON_CACHE[key]
+
+
 def fetch_species(common, scientific):
     if common in SKIP_COMMON:
         print(f"— {common}: in SKIP_COMMON, skipping")
@@ -312,6 +443,13 @@ def fetch_species(common, scientific):
     have = count_images(img_dir)
     if have >= TARGET_PER_SPECIES:
         print(f"— {common}: already has {have} images, skipping")
+        return
+
+    # Resolve BEFORE creating any folder — an unresolvable name must not
+    # leave an empty directory behind that later looks like a real class.
+    taxon_id, resolved_name = resolve_taxon(scientific)
+    if not taxon_id:
+        print(f"— {common}: could not resolve '{scientific}', skipping")
         return
 
     os.makedirs(img_dir, exist_ok=True)
@@ -329,6 +467,13 @@ def fetch_species(common, scientific):
     skipped_license = 0
     already = 0
     dup_content = 0
+    mismatched = 0
+    # Genus of the taxon iNat ACTUALLY gave us, not of the name we asked
+    # with. Those differ whenever iNat has renamed or lumped a species
+    # (Epinephelus drummondhayi is Hyporthodus drummondhayi there), and
+    # comparing against our own name would reject every photo for those
+    # species while looking like a legitimate empty result.
+    want_genus = (resolved_name or scientific).strip().lower().split(" ")[0]
     slug = re.sub(r"[^a-z0-9]+", "_", common.lower()).strip("_")
     # Byte-content de-dupe: seed with what's already on disk, then reject
     # any fresh download whose pixels match something we already have.
@@ -340,7 +485,7 @@ def fetch_species(common, scientific):
         if have + saved >= TARGET_PER_SPECIES:
             break
         q = urllib.parse.urlencode({
-            "taxon_name": scientific,
+            "taxon_id": taxon_id,
             "quality_grade": "research",
             "photos": "true",
             "photo_license": ",".join(sorted(ALLOWED)),
@@ -361,6 +506,16 @@ def fetch_species(common, scientific):
             if have + saved >= TARGET_PER_SPECIES:
                 break
             obs_id = obs.get("id")
+            # Second gate, deliberately redundant with taxon_id above.
+            # The oarfish incident cost 1000 photos and a training run
+            # precisely because one silent filter failure had nothing
+            # behind it. This one reads the label off the observation we
+            # were actually handed, so a filter that stops working can
+            # only ever yield zero photos, never wrong ones.
+            obs_genus = ((obs.get("taxon") or {}).get("name") or "").strip().lower().split(" ")[0]
+            if obs_genus and obs_genus != want_genus:
+                mismatched += 1
+                continue
             coords = (obs.get("geojson") or {}).get("coordinates")
             for p in obs.get("photos") or []:
                 if have + saved >= TARGET_PER_SPECIES:
@@ -422,10 +577,12 @@ def fetch_species(common, scientific):
     if dup_content:
         print(f"  ({dup_content} byte-identical duplicate(s) discarded)")
     print(f"  done: +{saved} new, {skipped_license} skipped (license), "
-          f"{already} already had → total ~{have + saved}")
+          f"{already} already had, {mismatched} wrong-taxon rejected "
+          f"→ total ~{have + saved}")
 
 
 def main():
+    verify_overrides()
     species = load_species()
     print(f"Base folder: {BASE_DIR}")
     for i, (common, scientific) in enumerate(species, 1):

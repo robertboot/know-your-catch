@@ -20,3 +20,5 @@ APP_REVIEW_NOTES.md
 # Python bytecode
 __pycache__/
 *.pyc
+# Supabase CLI scratch
+supabase/.temp/
