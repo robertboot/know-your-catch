@@ -100,3 +100,46 @@ before telling Robert to start a run:
 ## Owed manual steps (agent can't do these)
 Deploy the edge function; run `training-exports-schema.sql` /
 `models-published-schema.sql`; run Colab; Import + Promote in the admin.
+
+## The dataset can be wrong while everything looks right
+
+Two incidents on 2026-08-14 put ~1400 photos of the wrong animal into
+training. Neither produced an error, an empty result, or an odd log line.
+Both were found only by comparing what a folder CLAIMED against what was
+actually in it.
+
+**iNat's `taxon_name` is a fuzzy name search.** When it mis-resolves it
+returns a full page of confidently-wrong observations. `Sarda sarda`
+(Atlantic Bonito) came back as *Regalecus glesne* — the oarfish — and
+999 oarfish photos trained as bonito. `fetch_inat_photos.py` now
+resolves to a `taxon_id`, verifies it, and filters by id. A name that
+will not resolve is SKIPPED: a missing species costs recall, a
+mislabelled one corrupts the model.
+
+Order the resolution rules strictest-first. iNat ranks the GENUS above
+the species for a query like "Sarda sarda", so a first-match-wins loop
+silently widens the fetch to every sibling in that genus.
+
+**Our own species table can carry the wrong scientific name.**
+"Yelloweye Snapper" held Vermilion Snapper's binomial, so its folder
+filled with Vermilion photos. No taxon audit can catch this — the name
+resolved perfectly, it was just the wrong name. The detectable signature
+is one scientific name on two active species rows:
+
+    select scientific, count(*), array_agg(common_name)
+    from species where is_active
+    group by scientific having count(*) > 1;
+
+**Before any retrain, run `training/audit_taxa.py`** (read-only; reports
+which folders hold the wrong fish) and the query above. `dedupe_photos.py`
+previews by default and quarantines to `_dupes/` rather than deleting.
+
+Quarantine, never delete — `_wrong-taxon/`, `_dupes/`. A folder you can
+still inspect is how you confirm what actually happened; a deleted one
+is a guess forever.
+
+Cross-species duplicate photos are mostly harmless: the trainer builds
+classes from the admin export manifest, not by walking the photo root,
+so stale folders from older species names never reach training. Check
+which classes the manifest actually contains before assuming a
+disk-level collision matters.
