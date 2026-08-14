@@ -13,3 +13,6 @@ build/
 .env
 .env.local
 .vite
+
+# Local App Store review notes (contains demo creds — never commit)
+APP_REVIEW_NOTES.md
