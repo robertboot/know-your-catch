@@ -15,6 +15,7 @@ and never re-downloads a photo id it already has.
 """
 
 import csv
+import hashlib
 import json
 import os
 import re
@@ -271,6 +272,32 @@ def count_images(img_dir):
     return sum(1 for f in os.listdir(img_dir) if f.lower().endswith(".jpg"))
 
 
+def _sha256(path, chunk=1 << 20):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(chunk), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def existing_hashes(img_dir):
+    """Content hashes of images already on disk. iNaturalist serves the
+    same physical photo under many photo IDs, so skipping only by photo
+    ID lets byte-identical duplicates through. Hashing what's already
+    there lets us drop a fresh download that duplicates an existing image
+    even though its photo ID (and filename) is new."""
+    seen = set()
+    if not os.path.isdir(img_dir):
+        return seen
+    for f in os.listdir(img_dir):
+        if f.lower().endswith(".jpg"):
+            try:
+                seen.add(_sha256(os.path.join(img_dir, f)))
+            except OSError:
+                pass
+    return seen
+
+
 def fetch_species(common, scientific):
     if common in SKIP_COMMON:
         print(f"— {common}: in SKIP_COMMON, skipping")
@@ -301,7 +328,11 @@ def fetch_species(common, scientific):
     saved = 0
     skipped_license = 0
     already = 0
+    dup_content = 0
     slug = re.sub(r"[^a-z0-9]+", "_", common.lower()).strip("_")
+    # Byte-content de-dupe: seed with what's already on disk, then reject
+    # any fresh download whose pixels match something we already have.
+    seen_hashes = existing_hashes(img_dir)
 
     print(f"\n=== {common} ({scientific}) — have {have}, "
           f"targeting {TARGET_PER_SPECIES} ===")
@@ -352,6 +383,21 @@ def fetch_species(common, scientific):
                 except Exception as e:
                     print(f"  photo {pid}: download failed — {e}")
                     continue
+                # Reject byte-identical duplicates (same image, new photo
+                # ID). Remove the file we just wrote and move on.
+                try:
+                    digest = _sha256(fpath)
+                except OSError:
+                    digest = None
+                if digest is not None and digest in seen_hashes:
+                    try:
+                        os.remove(fpath)
+                    except OSError:
+                        pass
+                    dup_content += 1
+                    continue
+                if digest is not None:
+                    seen_hashes.add(digest)
                 writer.writerow({
                     "photo_id": pid,
                     "observation_id": obs_id,
@@ -373,6 +419,8 @@ def fetch_species(common, scientific):
         time.sleep(SLEEP_BETWEEN_CALLS)
 
     mf.close()
+    if dup_content:
+        print(f"  ({dup_content} byte-identical duplicate(s) discarded)")
     print(f"  done: +{saved} new, {skipped_license} skipped (license), "
           f"{already} already had → total ~{have + saved}")
 
