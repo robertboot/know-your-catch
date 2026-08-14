@@ -2008,7 +2008,7 @@ function SwipeReviewPanel() {
               }}
             >
               {(cropPreview[current.id] || urls[current.id])
-                ? <img src={cropPreview[current.id] || urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                ? <img src={cropPreview[current.id] || urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>Loading photo…</div>}
 
               {/* Crop button — top-right. stopPropagation so grabbing it
