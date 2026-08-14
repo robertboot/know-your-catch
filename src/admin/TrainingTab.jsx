@@ -2008,6 +2008,13 @@ function SwipeReviewPanel() {
               }}
             >
               {(cropPreview[current.id] || urls[current.id])
+                // objectFit MUST stay 'contain', not 'cover'. This card is a
+                // species-verification surface: cover crops the overflowing
+                // axis, and on a long fish in a portrait frame that removes
+                // the head or tail — exactly the features the reviewer needs
+                // to tell a king mackerel from a barracuda. Letterboxing
+                // against the card's black background wastes a little space
+                // and shows the whole animal.
                 ? <img src={cropPreview[current.id] || urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>Loading photo…</div>}
 
