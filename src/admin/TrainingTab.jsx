@@ -2020,20 +2020,29 @@ function SwipeReviewPanel() {
 
               {/* Crop button — top-right. stopPropagation so grabbing it
                   doesn't start a swipe. */}
+              {/* Crop button. It sits ON the draggable card, whose
+                  pointerdown captures the pointer and starts a swipe —
+                  so a near-miss tap becomes a drag and the button never
+                  fires. Defences: (1) a large 56×56 target, (2) stop the
+                  pointerdown from reaching the card (no swipe, no
+                  capture), and (3) act on pointerup, which survives the
+                  micro-movement that would cancel a synthetic click. */}
               <button
-                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => { e.stopPropagation(); }}
+                onPointerUp={(e) => { e.stopPropagation(); if (urls[current.id]) setCropOpen(true); }}
                 onClick={(e) => { e.stopPropagation(); if (urls[current.id]) setCropOpen(true); }}
                 aria-label="Crop photo"
                 style={{
-                  position: 'absolute', top: 12, right: 12,
-                  width: 42, height: 42, borderRadius: 999,
-                  background: cropPreview[current.id] ? T.brass : 'rgba(3,27,51,0.7)',
+                  position: 'absolute', top: 6, right: 6,
+                  width: 56, height: 56, borderRadius: 999,
+                  background: cropPreview[current.id] ? T.brass : 'rgba(3,27,51,0.72)',
                   color: cropPreview[current.id] ? T.oceanDeep : T.ink,
-                  border: `1px solid ${cropPreview[current.id] ? T.brass : 'rgba(255,255,255,0.25)'}`,
+                  border: `1px solid ${cropPreview[current.id] ? T.brass : 'rgba(255,255,255,0.3)'}`,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  touchAction: 'none', zIndex: 5,
                 }}
               >
-                <CropIcon size={18} />
+                <CropIcon size={20} />
               </button>
 
               {/* Species label chip */}
