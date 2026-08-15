@@ -1677,10 +1677,17 @@ export function CropStep({
     return () => { cancelled = true; };
   }, [imageSrc]);
 
-  // Fit scale so the image maxes-out inside the container at zoom=1.
+  // Fit scale so the image maxes-out inside the container at zoom=1,
+  // leaving a gutter on every side. Without the gutter the fitted photo
+  // touches the container edge, and since the crop box seeds to the full
+  // photo bounds, the corner/edge handles land against the screen edge
+  // and can't be grabbed. FIT_PAD reserves room for them.
+  const FIT_PAD = 20; // px gutter around the fitted photo
   const fitScale = React.useMemo(() => {
     if (!natural || !container.w || !container.h) return 1;
-    return Math.min(container.w / natural.w, container.h / natural.h);
+    const availW = Math.max(1, container.w - FIT_PAD * 2);
+    const availH = Math.max(1, container.h - FIT_PAD * 2);
+    return Math.min(availW / natural.w, availH / natural.h);
   }, [natural, container]);
   const totalScale = fitScale * zoom;
 
