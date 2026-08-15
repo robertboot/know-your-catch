@@ -1978,11 +1978,15 @@ function SwipeReviewPanel() {
               </div>
             )}
             <div
+              onClick={() => { if (!busy && urls[current.id]) setCropOpen(true); }}
+              role="button"
+              aria-label="Crop photo"
               style={{
                 position: 'absolute', inset: 0,
                 borderRadius: 16, overflow: 'hidden',
                 border: `1px solid ${T.cardEdge}`, background: '#000',
                 boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
+                cursor: urls[current.id] ? 'pointer' : 'default',
               }}
             >
               {(cropPreview[current.id] || urls[current.id])
@@ -1996,18 +2000,12 @@ function SwipeReviewPanel() {
                 ? <img src={cropPreview[current.id] || urls[current.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.inkMute, fontSize: 13 }}>Loading photo…</div>}
 
-              {/* Crop button — top-right. stopPropagation so grabbing it
-                  doesn't start a swipe. */}
-              {/* Crop button. It sits ON the draggable card, whose
-                  pointerdown captures the pointer and starts a swipe —
-                  so a near-miss tap becomes a drag and the button never
-                  fires. Defences: (1) a large 56×56 target, (2) stop the
-                  pointerdown from reaching the card (no swipe, no
-                  capture), and (3) act on pointerup, which survives the
-                  micro-movement that would cancel a synthetic click. */}
+              {/* Crop button — a visible affordance in the corner that
+                  doubles as the applied-crop indicator (brass when a crop
+                  is set). Tapping anywhere on the photo also opens crop;
+                  stopPropagation keeps this button's tap from double-firing
+                  the card's onClick. */}
               <button
-                onPointerDown={(e) => { e.stopPropagation(); }}
-                onPointerUp={(e) => { e.stopPropagation(); if (urls[current.id]) setCropOpen(true); }}
                 onClick={(e) => { e.stopPropagation(); if (urls[current.id]) setCropOpen(true); }}
                 aria-label="Crop photo"
                 style={{

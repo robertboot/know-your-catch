@@ -1658,9 +1658,15 @@ export function CropStep({
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // Load natural image dimensions.
+  // Load natural image dimensions. Reset the crop + view on a new image
+  // so it re-seeds to THAT photo's full bounds (see the seed effect) —
+  // otherwise switching photos would keep the previous rect/zoom.
   React.useEffect(() => {
     let cancelled = false;
+    setFreeRect(null);
+    setNatural(null);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
     const img = new Image();
     img.onload = () => {
       if (cancelled) return;
@@ -1678,31 +1684,44 @@ export function CropStep({
   }, [natural, container]);
   const totalScale = fitScale * zoom;
 
-  // Default rect for the CURRENT aspect, centered in the container.
-  // Used to seed on first measure and as the pre-seed render
-  // fallback. Depends on aspect deliberately — it always describes
-  // "where a fresh crop for this aspect would go".
+  // Default rect for the CURRENT aspect. It must track the DISPLAYED
+  // PHOTO, not the container: the image is letterboxed inside the
+  // container (fit-scaled + centered), so a container-based default
+  // spills outside a smaller/differently-shaped photo — the handles end
+  // up over black bars, off the image. So for Free we seed the crop to
+  // the full photo bounds; for a locked aspect, the largest centered
+  // rect of that aspect that fits inside the photo. Falls back to the
+  // container only before the image's natural size is known.
   const containerDefault = React.useMemo(() => {
     if (!container.w || !container.h) return null;
-    const pad = 0.8;
-    const availW = container.w * pad;
-    const availH = container.h * pad;
+    let availW, availH, baseX, baseY;
+    if (natural && fitScale) {
+      // Displayed photo rect at fit (zoom=1, pan=0).
+      const dispW = natural.w * fitScale;
+      const dispH = natural.h * fitScale;
+      availW = dispW; availH = dispH;
+      baseX = (container.w - dispW) / 2;
+      baseY = (container.h - dispH) / 2;
+    } else {
+      availW = container.w; availH = container.h;
+      baseX = 0; baseY = 0;
+    }
     let cw, ch;
     if (aspect == null) {
-      cw = availW; ch = availH;
+      cw = availW; ch = availH;                    // full photo
     } else {
       if (availW / aspect <= availH) { cw = availW; ch = availW / aspect; }
       else                            { ch = availH; cw = availH * aspect; }
     }
-    cw = Math.max(80, Math.round(cw));
-    ch = Math.max(80, Math.round(ch));
+    cw = Math.max(40, Math.round(cw));
+    ch = Math.max(40, Math.round(ch));
     return {
       w: cw,
       h: ch,
-      x: Math.round((container.w - cw) / 2),
-      y: Math.round((container.h - ch) / 2),
+      x: Math.round(baseX + (availW - cw) / 2),
+      y: Math.round(baseY + (availH - ch) / 2),
     };
-  }, [container.w, container.h, aspect]);
+  }, [container.w, container.h, aspect, natural, fitScale]);
 
   // Seed cropRect once when the container is first measured. Later
   // aspect-chip taps flow through the effect below — they REshape the
@@ -1711,9 +1730,11 @@ export function CropStep({
   // Square crop off-center keeps that position; tapping Free after
   // Portrait inherits the Portrait rect and lets the user fine-tune.
   React.useEffect(() => {
-    if (!containerDefault) return;
+    // Wait for the photo's natural size so the first seed uses the real
+    // photo bounds, not the pre-load container fallback.
+    if (!containerDefault || !natural) return;
     setFreeRect(prev => prev == null ? containerDefault : prev);
-  }, [containerDefault]);
+  }, [containerDefault, natural]);
 
   // Adapt the current rect to a new aspect (or leave alone for Free),
   // preserving center point + roughly the same size. Runs every time
