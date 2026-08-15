@@ -1731,12 +1731,12 @@ function ReviewTile({ row, url: urlProp, selected, focused, onClick, onToggle, o
 }
 
 /* ============================================================
-   Swipe review — gamified, mobile-first mass verification.
-   One pending photo at a time as a card:
-     swipe RIGHT  → approve (verified)
-     swipe LEFT   → reject
+   Review — mobile-first mass verification. One pending photo at a
+   time as a card, decided with buttons (or keyboard):
+     ✓ Keep   → approve (verified)     [key →]
+     ✕ Reject → reject                 [key ←]
      "Correct the species" button → picker → recategorize + verify
-   Built for fast thumb-driven passes over big folder imports.
+   Built for fast passes over big folder imports.
    ============================================================ */
 function SwipeReviewPanel() {
   const [speciesId, setSpeciesId] = useState('__all__');
@@ -1755,9 +1755,8 @@ function SwipeReviewPanel() {
   const [menuOpen, setMenuOpen] = useState(false); // collapse controls on mobile
   const [cropOpen, setCropOpen] = useState(false);
   const [cropPreview, setCropPreview] = useState({}); // row.id → cropped dataUrl
-  // Drag state for the top card.
-  const [drag, setDrag] = useState({ x: 0, active: false });
-  const startX = useRef(0);
+  // Kept only so record()/doUndo() can reset it; the card no longer moves.
+  const [, setDrag] = useState({ x: 0, active: false });
   const cardUrl = useRef(new Map()); // row.id → signed url cache
 
   // Misc bucket first, then active species A→Z. _unassigned is the
@@ -1874,19 +1873,6 @@ function SwipeReviewPanel() {
     bg(restoreTrainingRows([{ id: row.id, status: statusFilter, species_id: row.species_id, rejection_reason: null }]));
   };
 
-  // Pointer drag on the top card.
-  const THRESHOLD = 90;
-  const onDown = (e) => { if (busy) return; startX.current = e.clientX; setDrag({ x: 0, active: true }); e.currentTarget.setPointerCapture?.(e.pointerId); };
-  const onMove = (e) => { if (!drag.active) return; setDrag(d => ({ ...d, x: e.clientX - startX.current })); };
-  const onUp = () => {
-    if (!drag.active) return;
-    const x = drag.x;
-    // Swipe LEFT = keep/approve, swipe RIGHT = reject.
-    if (x < -THRESHOLD) doApprove(current);
-    else if (x > THRESHOLD) doReject(current);
-    else setDrag({ x: 0, active: false });
-  };
-
   // Keyboard: ← reject, → approve, c correct, u undo.
   useEffect(() => {
     const onKey = (e) => {
@@ -1903,7 +1889,6 @@ function SwipeReviewPanel() {
 
   const remaining = rows.length - idx;
   const curSpecies = current ? SPECIES.find(s => s.id === current.species_id) : null;
-  const rot = drag.x / 18; // deg
 
   return (
     <div style={{ display: 'grid', gap: 12, maxWidth: 460, margin: '0 auto' }}>
@@ -1962,7 +1947,7 @@ function SwipeReviewPanel() {
             </GhostButton>
             {statusFilter === 'verified' && (
               <div style={{ fontSize: 11, color: T.inkMute, lineHeight: 1.5 }}>
-                Audit pass — swipe right to keep, left to reject a bad one, or correct a mislabel.
+                Audit pass — ✓ keep, ✕ reject a bad one, or correct a mislabel.
               </div>
             )}
           </div>
@@ -1993,17 +1978,10 @@ function SwipeReviewPanel() {
               </div>
             )}
             <div
-              onPointerDown={onDown}
-              onPointerMove={onMove}
-              onPointerUp={onUp}
-              onPointerCancel={onUp}
               style={{
                 position: 'absolute', inset: 0,
                 borderRadius: 16, overflow: 'hidden',
                 border: `1px solid ${T.cardEdge}`, background: '#000',
-                transform: `translateX(${drag.x}px) rotate(${rot}deg)`,
-                transition: drag.active ? 'none' : 'transform 200ms ease-out',
-                cursor: 'grab', touchAction: 'pan-y',
                 boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
               }}
             >
@@ -2053,25 +2031,10 @@ function SwipeReviewPanel() {
               }}>
                 {curSpecies?.commonName || current.species_id}
               </div>
-
-              {/* Swipe intent overlays — LEFT = keep, RIGHT = reject. */}
-              <div aria-hidden style={{
-                position: 'absolute', top: 16, left: 16,
-                border: `3px solid ${T.open}`, color: T.open,
-                padding: '4px 12px', borderRadius: 8, fontWeight: 900, fontSize: 22, letterSpacing: 1,
-                transform: 'rotate(-12deg)', opacity: Math.max(0, Math.min(1, -drag.x / THRESHOLD)),
-              }}>KEEP</div>
-              <div aria-hidden style={{
-                position: 'absolute', top: 16, right: 16,
-                border: `3px solid ${T.closed}`, color: T.closed,
-                padding: '4px 12px', borderRadius: 8, fontWeight: 900, fontSize: 22, letterSpacing: 1,
-                transform: 'rotate(12deg)', opacity: Math.max(0, Math.min(1, drag.x / THRESHOLD)),
-              }}>NOPE</div>
             </div>
           </div>
 
-          {/* Action buttons — keep (left) / correct / reject (right) so
-              they line up with the swipe directions. */}
+          {/* Action buttons — keep (left) / correct / reject (right). */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
             <button onClick={() => doApprove(current)} disabled={busy} aria-label="Keep" style={circleBtn(T.open)}>✓</button>
             <button onClick={() => setPickerOpen(true)} disabled={busy} style={{
@@ -2081,7 +2044,7 @@ function SwipeReviewPanel() {
             <button onClick={() => doReject(current)} disabled={busy} aria-label="Reject" style={circleBtn(T.closed)}>✕</button>
           </div>
           <div style={{ fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
-            Swipe LEFT to keep, RIGHT to reject · keys ← ✓ · → ✕ · C correct · U undo
+            ✓ keep · ✕ reject · keys ← ✓ · → ✕ · C correct · U undo
           </div>
         </>
       )}
@@ -2127,7 +2090,7 @@ function SwipeReviewPanel() {
             setCropOpen(false);
             const id = current.id;
             // Show the cropped view immediately; persist the bbox so the
-            // export applies it. Status stays put — still swipe to decide.
+            // export applies it. Status stays put — still decide via buttons.
             if (dataUrl) setCropPreview(m => ({ ...m, [id]: dataUrl }));
             if (bbox) saveCropBbox(id, bbox).then(r => { if (!r.ok) setError(r.error || 'crop save failed'); });
           }}
