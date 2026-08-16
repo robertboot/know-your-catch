@@ -241,7 +241,18 @@ export async function photoSignedUrl(p, ttlSeconds = 3600) {
   try {
     const c = client();
     if (!c) return null;
-    const { data, error } = await c.storage.from(CATCH_PHOTOS_BUCKET).createSignedUrl(path, ttlSeconds);
+    // Bounded, deliberately. This is the LAST link in PhotoImg's
+    // escalation chain: if it never settles, the component never reaches
+    // setFailed(true) and the angler is left staring at WebKit's broken
+    // -image glyph forever instead of the graceful placeholder. A
+    // Supabase Storage call has no client timeout of its own, and one
+    // bar of signal offshore is exactly where it stalls — so an
+    // unbounded await here is a hang, not a slow load.
+    const { data, error } = await Promise.race([
+      c.storage.from(CATCH_PHOTOS_BUCKET).createSignedUrl(path, ttlSeconds),
+      new Promise((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('signed-url timeout') }), 8000)),
+    ]);
     if (error || !data?.signedUrl) return null;
     _signedCache.set(path, { url: data.signedUrl, exp: now + ttlSeconds * 1000 });
     return data.signedUrl;
