@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Fish, Search, ChevronRight, AlertTriangle, Plus, Pencil, BookOpen,
+  Fish, Search, ChevronRight, AlertTriangle, Plus, Pencil, BookOpen, Calendar,
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
@@ -2622,25 +2622,87 @@ export function SearchScreen({ state, onPick }) {
    Renders a random PB with photo, key stats, and Share + Shuffle
    controls. Falls back to the old static entry-point button when
    the angler has no PBs on file yet. */
+// Moon-name → glyph, for the "lunar connection" line on each PB card.
+const PB_MOON_GLYPH = {
+  'New Moon': '🌑', 'Waxing Crescent': '🌒', 'First Quarter': '🌓',
+  'Waxing Gibbous': '🌔', 'Full Moon': '🌕', 'Waning Gibbous': '🌖',
+  'Last Quarter': '🌗', 'Waning Crescent': '🌘',
+};
+
+// Time-of-day from a REAL timestamp (never a date-only value — the
+// caller only ever passes a stored dateIso that carries a clock time).
+function pbTimeOfDay(dateIso) {
+  if (!dateIso) return null;
+  const d = new Date(dateIso);
+  if (isNaN(d.getTime())) return null;
+  const h = d.getHours();
+  const clock = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const part = h < 5 ? 'Night' : h < 8 ? 'Dawn' : h < 11 ? 'Morning'
+    : h < 14 ? 'Midday' : h < 17 ? 'Afternoon' : h < 20 ? 'Dusk' : 'Night';
+  return `${clock} · ${part}`;
+}
+
+// Compact weather line from a stored weather snapshot: "82° · 11 kt SE · 30% cloud".
+function pbWeatherLine(w) {
+  if (!w) return null;
+  const parts = [];
+  if (w.tempF != null) parts.push(`${Math.round(w.tempF)}°`);
+  if (w.windMph != null) {
+    const kt = Math.round(w.windMph * 0.868976);
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const dir = w.windDir != null ? ` ${dirs[Math.round((w.windDir % 360) / 45) % 8]}` : '';
+    parts.push(`${kt} kt${dir}`);
+  }
+  if (w.cloudPct != null) parts.push(`${Math.round(w.cloudPct)}% cloud`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+// Fill in time / weather / moon for a PB. PBs store only a date, so we
+// (1) borrow the matching catch's richer snapshot when one exists, and
+// (2) always derive the moon phase from the date itself (deterministic,
+// works for every PB even with nothing else on file).
+function pbEnrich(id, pb, catchLog) {
+  const day = pb.date || (pb.dateIso ? pb.dateIso.slice(0, 10) : null);
+  let dateIso = pb.dateIso || null;
+  let weather = pb.weather || null;
+  let moonName = pb.moonName || null;
+  let moonIllum = pb.moonIllum != null ? pb.moonIllum : null;
+  if ((!dateIso || !weather || !moonName) && Array.isArray(catchLog) && day) {
+    const m = catchLog.find(c => c && c.speciesId === id && c.dateIso && c.dateIso.slice(0, 10) === day);
+    if (m) {
+      dateIso = dateIso || m.dateIso || null;
+      weather = weather || m.weather || null;
+      moonName = moonName || m.moonName || null;
+      if (moonIllum == null && m.moonIllum != null) moonIllum = m.moonIllum;
+    }
+  }
+  if ((!moonName || moonIllum == null) && day) {
+    const mp = moonPhase(new Date(`${day}T12:00:00`));
+    if (!moonName) moonName = mp.name;
+    if (moonIllum == null) moonIllum = mp.illumination;
+  }
+  return { dateIso, weather, moonName, moonIllum };
+}
+
 function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
   const pbs = state?.pbs || {};
+  const catchLog = state?.catchLog || [];
+  const units = state.units;
+  const anglerName = state.anglerName || '';
   const ids = useMemo(() => Object.keys(pbs), [pbs]);
-  // Pick a random PB; a shuffle counter forces a new pick without
-  // reshuffling every render.
-  const [shuffle, setShuffle] = useState(0);
-  const currentId = useMemo(() => {
-    if (ids.length === 0) return null;
-    return ids[Math.floor(Math.random() * ids.length)];
-    // shuffle dep is intentional to reroll
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shuffle, ids]);
-  const [sharing, setSharing] = useState(false);
+  const [sharingId, setSharingId] = useState(null);
+
+  // Newest trophy first — mirrors the Recent Catches strip's ordering.
+  const entries = useMemo(() => ids
+    .map(id => ({ id, pb: pbs[id], sp: speciesById(id) }))
+    .sort((a, b) => String(b.pb?.date || '').localeCompare(String(a.pb?.date || ''))),
+    [ids, pbs]);
 
   // Zero-PB case: keep the compact button so onboarding is unchanged.
-  if (!currentId) {
+  if (ids.length === 0) {
     return (
       <button onClick={onPBs} style={{
-        marginTop: 14, width: '100%',
+        marginTop: 18, width: '100%',
         background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 18,
         padding: '16px 14px', cursor: 'pointer', textAlign: 'left',
         display: 'flex', alignItems: 'center', gap: 14,
@@ -2655,207 +2717,162 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
     );
   }
 
-  const pb = pbs[currentId];
-  const sp = speciesById(currentId);
-  const photos = pbPhotos(pb);
-  const photo = photos[0] || null;
-  const photoUrl = photo ? photoDisplayUrl(photo) : null;
-  const anglerName = state.anglerName || '';
-  const units = state.units;
-
-  // Runtime dump: raw pb.photos / pb.photo / resolved URL / typeof.
-  // This is the trace we need to see when the spotlight fails to show
-  // a photo — one line, per render, so we can diff against Catch
-  // Detail (which uses the same PhotoImg + same resolver now).
-  useEffect(() => {
-    if (typeof console === 'undefined') return;
-    // eslint-disable-next-line no-console
-    console.log('[PBSpotlight] resolve', {
-      pbId: currentId,
-      hasPhotosArray: Array.isArray(pb.photos),
-      photosLen: Array.isArray(pb.photos) ? pb.photos.length : null,
-      firstEntryType: photo ? typeof photo : 'null',
-      firstEntryShape: photo && typeof photo === 'object'
-        ? Object.keys(photo)
-        : (typeof photo === 'string' ? photo.slice(0, 24) + '…' : null),
-      legacyPhotoField: pb.photo ? (typeof pb.photo === 'string' ? pb.photo.slice(0, 24) + '…' : Object.keys(pb.photo)) : null,
-      resolvedUrl: photoUrl ? (photoUrl.slice ? photoUrl.slice(0, 80) + '…' : String(photoUrl).slice(0, 80)) : null,
-    });
-  }, [currentId, photo, photoUrl, pb]);
-  const primary = pb.primaryMetric === 'weight'
-    ? { val: formatWeight(pb.weight, units), label: 'Weight' }
-    : { val: formatSize(pb.length, units), label: 'Length' };
-  const secondary = pb.primaryMetric === 'weight'
-    ? { val: formatSize(pb.length, units), label: 'Length' }
-    : { val: formatWeight(pb.weight, units), label: 'Weight' };
-  const dateLabel = pb.date
-    ? new Date(pb.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-    : null;
-
-  const doShare = async (e) => {
+  const doShare = async (e, id) => {
     e.stopPropagation();
-    if (sharing || !sp) return;
-    setSharing(true);
+    const pb = pbs[id];
+    const sp = speciesById(id);
+    if (sharingId || !sp || !pb) return;
+    setSharingId(id);
     try {
+      const photos = pbPhotos(pb);
       const text = buildPBReport({ anglerName, species: sp, pb, units });
       const dataUrls = (await Promise.all(photos.slice(0, 3).map(photoAsDataUrl))).filter(Boolean);
       await shareReport({
         title: `${(anglerName || 'My').trim() || 'My'} ${sp.commonName} PB`,
         text, photoDataUrls: dataUrls,
-        fileName: `pb-${currentId}`,
+        fileName: `pb-${id}`,
       });
     } finally {
-      setSharing(false);
+      setSharingId(null);
     }
   };
 
-  const doShuffle = (e) => {
-    e.stopPropagation();
-    if (ids.length <= 1) return;
-    setShuffle(n => n + 1);
-  };
-
-  const openDetail = () => onView && onView(currentId);
+  const cardW = isTablet ? 300 : 250;
 
   return (
-    <div style={{
-      marginTop: 14,
-      background: T.card, border: `1px solid ${T.brass}55`, borderRadius: 18,
-      overflow: 'hidden', position: 'relative',
-      boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.05) inset',
-    }}>
-      {/* Header row — clickable to open PB detail. */}
-      <button onClick={openDetail} style={{
-        width: '100%', background: 'transparent', border: 'none',
-        padding: isTablet ? '14px 18px 8px' : '12px 14px 6px',
-        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-        textAlign: 'left',
-      }}>
-        <Trophy size={isTablet ? 24 : 20} color={T.brass} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+    <div style={{ marginTop: 20 }}>
+      {/* Celebratory header — a trophy badge + oversized title so the
+          section reads as an achievement, not a list item. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div style={{
+          width: isTablet ? 48 : 42, height: isTablet ? 48 : 42, borderRadius: 13,
+          background: `linear-gradient(145deg, ${T.brass}, ${T.brass}bb)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          boxShadow: `0 4px 16px ${T.brass}44`,
+        }}>
+          <Trophy size={isTablet ? 27 : 23} color={T.oceanDeep} strokeWidth={2} />
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: isTablet ? 14 : 11, fontWeight: 800, color: T.brass, letterSpacing: 1.4 }}>
-            PERSONAL BEST SPOTLIGHT
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: isTablet ? 22 : 18, fontWeight: 900, color: T.ink, letterSpacing: 1 }}>
+              PERSONAL BESTS
+            </span>
+            <Sparkles size={isTablet ? 19 : 16} color={T.brass} />
           </div>
-          <div style={{ fontSize: isTablet ? 11 : 10, color: T.inkMute, marginTop: 2 }}>
-            {ids.length} on file · showing 1 at random
+          <div style={{ fontSize: isTablet ? 13 : 11.5, color: T.inkMute, marginTop: 2, fontWeight: 600 }}>
+            {ids.length} {ids.length === 1 ? 'trophy' : 'trophies'} on the board
           </div>
         </div>
-        <ChevronRight size={isTablet ? 20 : 18} color={T.brass} />
-      </button>
+        <button onClick={onPBs} style={{
+          background: 'transparent', border: 'none', color: T.brass,
+          fontSize: isTablet ? 12 : 11, fontWeight: 800, letterSpacing: 1.2,
+          cursor: 'pointer', padding: 0, whiteSpace: 'nowrap', flexShrink: 0,
+        }}>VIEW ALL</button>
+      </div>
 
-      {/* Media + stats */}
-      <button onClick={openDetail} style={{
-        width: '100%', background: 'transparent', border: 'none',
-        padding: 0, cursor: 'pointer', textAlign: 'left',
-        display: isTablet ? 'flex' : 'block', gap: isTablet ? 18 : 0,
-      }}>
-        <div style={{
-          width: isTablet ? '45%' : '100%',
-          // Explicit aspect-ratio gives the container a real height
-          // so the <img> height:100% resolves — the earlier layout
-          // set only min-height on the flex parent, which meant the
-          // img could collapse to 0 tall and the photo never showed.
-          aspectRatio: isTablet ? '4 / 3' : '4 / 3',
-          background: T.parchmentDeep,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-        }}>
-          {photo
-            ? <PhotoImg
-                photo={photo}
-                debugTag="PBSpotlight"
-                style={{
-                  width: '100%', height: '100%',
-                  objectFit: 'cover', objectPosition: 'center',
-                  display: 'block',
-                }}
-              />
-            : <Fish size={isTablet ? 72 : 56} color={T.inkMute} strokeWidth={1.3} />}
-        </div>
-        <div style={{
-          flex: isTablet ? 1 : undefined,
-          padding: isTablet ? '18px 20px' : '14px 16px',
-        }}>
-          <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 24 : 20, fontWeight: 700, color: T.ink }}>
-            {sp ? sp.commonName : (currentId || 'Unknown species')}
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 8, flexWrap: 'wrap',
-          }}>
-            <div>
-              <div style={{ fontSize: isTablet ? 11 : 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>
-                {primary.label.toUpperCase()}
-              </div>
-              <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 32 : 26, fontWeight: 800, color: T.brass, marginTop: 2 }}>
-                {primary.val || '—'}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: isTablet ? 11 : 10, letterSpacing: 1.4, color: T.inkMute, fontWeight: 700 }}>
-                {secondary.label.toUpperCase()}
-              </div>
-              <div style={{ fontSize: isTablet ? 16 : 14, fontWeight: 700, color: T.ink, marginTop: 2 }}>
-                {secondary.val || '—'}
-              </div>
-            </div>
-          </div>
-          {dateLabel && (
-            <div style={{ fontSize: isTablet ? 13 : 11, color: T.inkSoft, marginTop: 8 }}>
-              {dateLabel}{pb.location ? ` · ${pb.location}` : ''}
-            </div>
-          )}
-        </div>
-      </button>
+      {/* Horizontally-scrollable trophy strip — one rich card per PB,
+          just like Recent Catches but taller and detail-heavy. */}
+      <div
+        className="kyc-hscroll"
+        style={{
+          display: 'flex', gap: isTablet ? 12 : 10,
+          overflowX: 'auto', overflowY: 'hidden',
+          margin: isTablet ? '0 -22px' : '0 -16px',
+          padding: isTablet ? '0 22px 6px' : '0 16px 6px',
+          scrollSnapType: 'x proximity',
+        }}
+      >
+        {entries.map(({ id, pb, sp }) => {
+          const photos = pbPhotos(pb);
+          const photo = photos[0] || null;
+          const primary = pb.primaryMetric === 'weight'
+            ? formatWeight(pb.weight, units) : formatSize(pb.length, units);
+          const secondary = pb.primaryMetric === 'weight'
+            ? formatSize(pb.length, units) : formatWeight(pb.weight, units);
+          const info = pbEnrich(id, pb, catchLog);
+          const dateLabel = pb.date
+            ? new Date(`${pb.date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+            : null;
+          const timeLabel = pbTimeOfDay(info.dateIso);
+          const weatherLabel2 = pbWeatherLine(info.weather);
+          const moonLabel = info.moonName
+            ? `${info.moonName}${info.moonIllum != null ? ` · ${Math.round(info.moonIllum * 100)}% lit` : ''}`
+            : null;
 
-      {/* Actions row */}
-      <div style={{
-        display: 'flex', gap: 8,
-        padding: isTablet ? '12px 20px 16px' : '10px 14px 14px',
-        borderTop: `1px solid ${T.cardEdge}`,
-      }}>
-        <button
-          onClick={doShare}
-          disabled={sharing}
-          style={{
-            flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
-            padding: isTablet ? '12px 14px' : '10px 12px', borderRadius: 8,
-            fontSize: isTablet ? 14 : 12.5, fontWeight: 800, letterSpacing: 0.8,
-            cursor: sharing ? 'not-allowed' : 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            opacity: sharing ? 0.7 : 1,
-          }}
-        >
-          <Share2 size={isTablet ? 18 : 15} /> {sharing ? 'Sharing…' : 'Share'}
-        </button>
-        <button
-          onClick={doShuffle}
-          disabled={ids.length <= 1}
-          aria-label="Shuffle to another PB"
-          style={{
-            background: 'transparent', color: T.brass,
-            border: `1.5px solid ${T.brass}`,
-            padding: isTablet ? '12px 14px' : '10px 12px', borderRadius: 8,
-            fontSize: isTablet ? 14 : 12.5, fontWeight: 800, letterSpacing: 0.8,
-            cursor: ids.length <= 1 ? 'not-allowed' : 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            opacity: ids.length <= 1 ? 0.5 : 1,
-          }}
-        >
-          <Shuffle size={isTablet ? 18 : 15} /> Shuffle
-        </button>
-        <button
-          onClick={openDetail}
-          style={{
-            background: 'transparent', color: T.brass, border: `1.5px solid ${T.brass}`,
-            padding: isTablet ? '12px 14px' : '10px 12px', borderRadius: 8,
-            fontSize: isTablet ? 14 : 12.5, fontWeight: 800, letterSpacing: 0.8,
-            cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}
-        >
-          View all
-        </button>
+          const line = (icon, text, key) => text ? (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ flexShrink: 0, width: 15, display: 'inline-flex', justifyContent: 'center' }}>{icon}</span>
+              <span style={{ fontSize: isTablet ? 12.5 : 11.5, color: T.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+            </div>
+          ) : null;
+
+          return (
+            <button
+              key={id}
+              onClick={() => onView && onView(id)}
+              style={{
+                flex: `0 0 ${cardW}px`, width: cardW,
+                background: T.card, border: `1px solid ${T.brass}55`,
+                borderRadius: 16, padding: 0, cursor: 'pointer', textAlign: 'left',
+                display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                scrollSnapAlign: 'start',
+                boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.04) inset',
+              }}
+            >
+              {/* Photo with the headline metric + a share affordance. */}
+              <div style={{
+                position: 'relative', width: '100%', aspectRatio: '4 / 3',
+                background: T.parchmentDeep,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+              }}>
+                {photo
+                  ? <PhotoImg photo={photo} alt={sp ? sp.commonName : ''} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                  : <Fish size={isTablet ? 64 : 52} color={T.inkMute} strokeWidth={1.3} />}
+                {/* Headline metric badge */}
+                <div style={{
+                  position: 'absolute', left: 8, bottom: 8,
+                  background: 'rgba(3,27,51,0.82)', borderRadius: 10,
+                  padding: '3px 10px', display: 'flex', alignItems: 'baseline', gap: 5,
+                }}>
+                  <span style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 22 : 19, fontWeight: 800, color: T.brass }}>
+                    {primary || '—'}
+                  </span>
+                  {secondary && <span style={{ fontSize: isTablet ? 11 : 10, color: T.ink, opacity: 0.85 }}>{secondary}</span>}
+                </div>
+                {/* Share this trophy */}
+                <button
+                  onClick={(e) => doShare(e, id)}
+                  disabled={sharingId === id}
+                  aria-label={`Share ${sp ? sp.commonName : ''} personal best`}
+                  style={{
+                    position: 'absolute', top: 8, right: 8,
+                    width: 34, height: 34, borderRadius: 999,
+                    background: 'rgba(3,27,51,0.72)', color: T.ink,
+                    border: '1px solid rgba(255,255,255,0.28)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: sharingId === id ? 'default' : 'pointer',
+                    opacity: sharingId === id ? 0.6 : 1,
+                  }}
+                >
+                  <Share2 size={15} />
+                </button>
+              </div>
+
+              {/* Species + enriched detail stack. */}
+              <div style={{ padding: isTablet ? '12px 14px 14px' : '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: isTablet ? 19 : 17, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {sp ? sp.commonName : (id || 'Unknown species')}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {line(<Calendar size={13} color={T.inkMute} />, dateLabel ? `${dateLabel}${pb.location ? ` · ${pb.location}` : ''}` : null, 'date')}
+                  {line(<Sun size={13} color={T.brass} />, timeLabel, 'time')}
+                  {line(<Wind size={13} color={T.brass} />, weatherLabel2, 'wx')}
+                  {line(<span style={{ fontSize: 13, lineHeight: 1 }}>{PB_MOON_GLYPH[info.moonName] || '🌙'}</span>, moonLabel, 'moon')}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
