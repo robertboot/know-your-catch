@@ -307,9 +307,27 @@ export function photoDisplayUrl(p) {
   // resolves to nothing and the load fails, kicking us back to the
   // pixelated thumb. If we also have a cloudUrl, prefer it — the
   // Supabase public URL works from anywhere including the origin device.
-  const srcIsDeviceLocal = typeof p.src === 'string' && p.src.startsWith('capacitor://');
-  if (srcIsDeviceLocal && p.cloudUrl) return p.cloudUrl;
-  return p.src || p.cloudUrl || p.thumb || null;
+  // Device-local FIRST, rebuilt from the relative path + the base
+  // resolved this launch — same rule photoThumbUrl already follows.
+  //
+  // This used to hand back p.cloudUrl whenever src was capacitor://,
+  // which inverted the priority: a photo sitting on THIS device was
+  // rendered from the network. That breaks two ways. Offline — the
+  // primary environment, a boat — it cannot load at all. Online it
+  // still 403s, because catch-photos is a private bucket and cloudUrl
+  // is the raw unsigned URL (PhotoImg's own comment says as much). So
+  // the common case fell all the way through to the signed-URL lookup
+  // for a file that was on disk the whole time.
+  //
+  // Never trust a persisted p.src: it carries the container UUID from
+  // the install that wrote it, and iOS changes that on every reinstall.
+  if (p.path && _dataUriBase) {
+    return Capacitor.convertFileSrc(`${_dataUriBase}/${p.path}`);
+  }
+  // No local file — this entry came from another device. cloudUrl is
+  // the only thing that can resolve here; PhotoImg escalates to a
+  // signed URL when the raw one 403s.
+  return p.cloudUrl || p.src || p.thumb || null;
 }
 
 /* Read a photo's bytes back as a data URL — only needed when handing
