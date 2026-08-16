@@ -613,6 +613,14 @@ const _fmtDate = (iso) => {
   return d.toLocaleDateString('en-US', { dateStyle: 'medium' });
 };
 
+/* The public marketing link that rides on every share. Point it at the
+   reelintel.ai landing page (not the raw App Store URL): the site routes
+   iOS to the App Store, works on any platform the share lands on, and
+   most messengers render it as a rich preview card. Single source of
+   truth — every share footer + the shareReport safety net use this. */
+export const SHARE_URL = 'https://reelintel.ai';
+const _SHARE_CTA = `📲 Get ReelIntel → ${SHARE_URL}`;
+
 /* PB report. Format is fixed per Section 6 spec:
 
      🏆 Personal Best Catch
@@ -647,8 +655,8 @@ export function buildPBReport({ anglerName, species, pb, units }) {
   if (jur)      lines.push(`📍 Waters: ${jur.name}`);
   if (dateStr)  lines.push(`📅 Date: ${dateStr}`);
   lines.push('');
-  lines.push('Shared with ReelIntel');
-  lines.push('Fish smarter. Catch more.');
+  lines.push('Shared with ReelIntel · Fish smarter. Catch more.');
+  lines.push(_SHARE_CTA);
   _assertNoLeak(lines);
   return lines.join('\n');
 }
@@ -682,8 +690,8 @@ export function buildCatchReport({ anglerName, species, c, units }) {
   if (jur)     lines.push(`📍 Waters: ${jur.name}`);
   if (dateStr) lines.push(`📅 Date: ${dateStr}`);
   lines.push('');
-  lines.push('Shared with ReelIntel');
-  lines.push('Fish smarter. Catch more.');
+  lines.push('Shared with ReelIntel · Fish smarter. Catch more.');
+  lines.push(_SHARE_CTA);
   _assertNoLeak(lines);
   return lines.join('\n');
 }
@@ -738,24 +746,32 @@ export async function dataUrlToFile(dataUrl, name) {
    by the caller). fileName is the stem — index appended per photo. */
 export async function shareReport({ title, text, photoDataUrls = [], fileName = 'catch' }) {
   const urls = (Array.isArray(photoDataUrls) ? photoDataUrls : []).filter(Boolean).slice(0, 3);
+  // Marketing safety net: every share must carry the app link. The
+  // report builders already append it; this covers any caller (species,
+  // forecast) whose text doesn't. Kept IN the text — not a separate
+  // navigator.share `url` — so it survives image shares and the
+  // clipboard fallback alike, and messengers still auto-preview it.
+  const shareText = /reelintel\.ai/i.test(text || '')
+    ? text
+    : `${(text || '').trimEnd()}\n\n${_SHARE_CTA}`;
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
       if (urls.length && navigator.canShare) {
         const files = (await Promise.all(urls.map((u, i) => dataUrlToFile(u, `${fileName}-${i + 1}.jpg`))))
           .filter(Boolean);
-        if (files.length && navigator.canShare({ files, text, title })) {
-          await navigator.share({ files, text, title });
+        if (files.length && navigator.canShare({ files, text: shareText, title })) {
+          await navigator.share({ files, text: shareText, title });
           return 'shared';
         }
       }
-      await navigator.share({ text, title });
+      await navigator.share({ text: shareText, title });
       return 'shared';
     } catch (e) {
       if (e && e.name === 'AbortError') return 'cancelled';
     }
   }
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(shareText);
     return 'copied';
   } catch {
     return 'failed';
