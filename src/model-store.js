@@ -193,8 +193,18 @@ export async function publishPromotedModel() {
     input_dtype:     prod.labels_json?.input_dtype      ?? 'uint8',
     labels:          prod.labels_json?.labels          || [],
     excluded_species:prod.labels_json?.excluded_species || [],
-    min_confidence:  prod.labels_json?.min_confidence  ?? 0.6,
+    // Confidence bands — the ONE authoritative config. These four keys
+    // are read at runtime by identifyPhoto.js getBands(); its in-code
+    // BAND_FALLBACK holds the SAME four values, so manifest and runtime
+    // agree by construction. The defaults deliberately preserve the
+    // historical intended behaviour (medium floor 0.40) rather than the
+    // stale 0.6 that shipped before — retuning happens AFTER we have
+    // held-out test metrics, not here. A trained bundle may override any
+    // key via labels_json.
+    min_confidence:  prod.labels_json?.min_confidence  ?? 0.40,
     high_confidence: prod.labels_json?.high_confidence ?? 0.85,
+    high_margin:     prod.labels_json?.high_margin     ?? 0.20,
+    lookalike_floor: prod.labels_json?.lookalike_floor ?? 0.25,
     published_at:    new Date().toISOString(),
   };
   const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], {
