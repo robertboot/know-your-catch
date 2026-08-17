@@ -754,6 +754,47 @@ export async function shareReport({ title, text, photoDataUrls = [], fileName = 
   const shareText = /reelintel\.ai/i.test(text || '')
     ? text
     : `${(text || '').trimEnd()}\n\n${_SHARE_CTA}`;
+
+  // NATIVE (iOS/Android) FIRST — via the Capacitor Share plugin.
+  // navigator.share() in WKWebView requires a live user-activation, but
+  // the caller does async work (resolving photo data URLs) BEFORE we get
+  // here, so by now the gesture has lapsed and iOS aborts the sheet — the
+  // "flickers but never opens" bug. The bridge plugin has no such
+  // constraint, so it opens reliably. Photos are written to the cache dir
+  // and shared as file:// URIs.
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (Capacitor?.isNativePlatform?.()) {
+      let files;
+      if (urls.length) {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        files = [];
+        for (let i = 0; i < urls.length; i++) {
+          const comma = urls[i].indexOf(',');
+          const base64 = comma >= 0 ? urls[i].slice(comma + 1) : urls[i];
+          const path = `share/${fileName}-${i + 1}.jpg`;
+          try {
+            await Filesystem.writeFile({ path, data: base64, directory: Directory.Cache, recursive: true });
+            const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+            files.push(uri);
+          } catch { /* skip a photo that won't write; still share the text */ }
+        }
+      }
+      const { Share } = await import('@capacitor/share');
+      await Share.share({
+        title,
+        text: shareText,
+        ...(files && files.length ? { files } : {}),
+        dialogTitle: title,
+      });
+      return 'shared';
+    }
+  } catch (e) {
+    // A user cancel is a normal outcome; anything else falls through to
+    // the web navigator.share / clipboard paths below.
+    if (e && /cancel|abort/i.test(String(e.message || e))) return 'cancelled';
+  }
+
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
       if (urls.length && navigator.canShare) {
