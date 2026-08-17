@@ -158,7 +158,12 @@ def merge(report, manifest):
     # so the manifest stays internally consistent.
     groups_map = dict(manifest.get("groups", {}))
     species_map = dict(species_of)
-    stripped = [i for i in assignments if str(species_of.get(i, "")).startswith("_")]
+    # Match on the species MAP (what preflight reads via species.values()),
+    # unioned with anything reachable from assignments — so a synthetic id
+    # can't hide in one map and slip past.
+    strip_ids = {i for i, sp in species_map.items() if str(sp).startswith("_")}
+    strip_ids |= {i for i in assignments if str(species_of.get(i, "")).startswith("_")}
+    stripped = sorted(strip_ids)
     for i in stripped:
         assignments.pop(i, None)
         groups_map.pop(i, None)
