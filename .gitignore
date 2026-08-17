@@ -22,3 +22,5 @@ __pycache__/
 *.pyc
 # Supabase CLI scratch
 supabase/.temp/
+# Generated audit artifacts — large, regenerable, not source of truth
+training/near_duplicate_report.json

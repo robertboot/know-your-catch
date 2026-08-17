@@ -43,22 +43,46 @@
 
 import { SPECIES, REGULATIONS } from './data.js';
 import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote, lastSubjectFound, lastSubjectBox } from './identify/adapter.js';
+import { getModelInfo } from './model-loader.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
 
-/* Confidence-band thresholds. Computed from a numeric top-1 score +
-   the margin over #2, then translated to the string bands the rest of
-   the app already branches on. Conservative on purpose: this is a
-   "stay legal" app, so a confidently-wrong ID has real consequences.
-   Tune the numbers once real-model accuracy is measured. */
-const BAND = {
+/* Confidence-band thresholds — ONE authoritative source.
+   See getBands(): the published model manifest wins when it carries
+   thresholds, these are the fallback for a model that predates them.
+
+   The published manifest already shipped min_confidence: 0.6 and
+   high_confidence: 0.85, and this file ignored both in favour of its
+   own hardcoded numbers. Two configs that disagree is worse than
+   either one alone — retuning the manifest silently did nothing.
+
+   NOTE the values below deliberately preserve TODAY's behaviour
+   (0.40 medium floor), not the manifest's 0.6. Changing thresholds is
+   a separate, measured exercise; this change is only about there
+   being a single place that decides. */
+const BAND_FALLBACK = {
   highScore:       0.85,   // top-1 must clear this to earn 'high'
   highMargin:      0.20,   //   AND margin over #2 must clear this
   mediumScore:     0.40,   // top-1 (or a competitor) must clear this
   lookalikeFloor:  0.25,   // #2 above this triggers lookalike collision
-  outOfRangePenalty: 0.5,  // multiplier for jurisdiction-missing species
 };
+
+/* Resolve the active thresholds. Manifest values override the
+   fallback per-key, so a model can ship one threshold without having
+   to restate all of them. */
+export function getBands() {
+  let info = null;
+  try { info = getModelInfo(); } catch { /* model not loaded yet */ }
+  const b = { ...BAND_FALLBACK };
+  if (info && typeof info === 'object') {
+    if (Number.isFinite(info.high_confidence)) b.highScore = info.high_confidence;
+    if (Number.isFinite(info.high_margin))     b.highMargin = info.high_margin;
+    if (Number.isFinite(info.min_confidence))  b.mediumScore = info.min_confidence;
+    if (Number.isFinite(info.lookalike_floor)) b.lookalikeFloor = info.lookalike_floor;
+  }
+  return b;
+}
 
 const SPECIES_BY_ID = Object.fromEntries(SPECIES.map((s) => [s.id, s]));
 
@@ -84,18 +108,32 @@ function mapLabelsToSpecies(topK) {
     .filter(Boolean);
 }
 
-/* Stage 5 — Constrain to the angler's current jurisdiction.
-   REGULATIONS[speciesId][jurisdictionId] being present is our proxy
-   for "this species is caught here." Out-of-range candidates are
-   penalized rather than dropped so a genuinely rare catch can still
-   surface at low confidence instead of vanishing. */
-function constrainToJurisdiction(candidates, jurisdictionId) {
+/* Stage 5 — ANNOTATE with jurisdiction coverage. Does NOT rescore.
+
+   This used to multiply the score by 0.5 whenever
+   REGULATIONS[speciesId][jurisdictionId] was missing, treating "we
+   have no regulation row for this pair" as evidence against the fish
+   being that species. Those are unrelated facts. Regulation coverage
+   measures how far OUR research has got, not what is swimming in the
+   water — and coverage is partial by construction (measured: only 60
+   of the 116 model species have a bundled row for a given
+   jurisdiction). So more than half the model's classes were having
+   their probability halved for a bookkeeping gap.
+
+   The damage was not merely reordering. A halved 0.7 becomes 0.35,
+   which falls under the medium floor, and the pipeline then returned
+   an EMPTY candidate list — the angler saw no suggestion at all for a
+   fish the model had identified correctly.
+
+   Identification and regulation availability are now separate
+   concerns: the flag rides along for the UI to show "regulations
+   unavailable for your waters", and the score is untouched. */
+function annotateJurisdiction(candidates, jurisdictionId) {
   if (!jurisdictionId) return candidates;
-  return candidates.map((c) => {
-    const inRange = !!REGULATIONS[c.speciesId]?.[jurisdictionId];
-    if (inRange) return c;
-    return { ...c, score: c.score * BAND.outOfRangePenalty, outOfRange: true };
-  });
+  return candidates.map((c) => ({
+    ...c,
+    outOfRange: !REGULATIONS[c.speciesId]?.[jurisdictionId],
+  }));
 }
 
 /* Evidence — pull the species' key ID cues from the local dataset.
@@ -113,41 +151,46 @@ function evidenceFor(speciesId, outOfRange) {
    lookalike also scored above the floor, downgrade to medium so the
    UI presents them side-by-side. Prevents the "confidently wrong
    snapper" failure mode. */
-function lookalikeCollision(top, rest) {
+function lookalikeCollision(top, rest, band) {
   if (!top) return false;
   const lookalikes = new Set(SPECIES_BY_ID[top.speciesId]?.lookalikes || []);
   return rest.some(
-    (c) => lookalikes.has(c.speciesId) && c.score >= BAND.lookalikeFloor
+    (c) => lookalikes.has(c.speciesId) && c.score >= band.lookalikeFloor
   );
 }
 
 /* Stage 6 — Rank, band, and shape into the public contract. */
 function rankAndBand(candidates) {
+  const band = getBands();
   const sorted = candidates.slice().sort((a, b) => b.score - a.score);
-  if (sorted.length === 0) return { confidence: 'low', candidates: [] };
+  // Genuinely nothing to say — the model returned no mappable label.
+  if (sorted.length === 0) {
+    return { confidence: 'low', candidates: [], notConfident: true };
+  }
 
   const top = sorted[0];
   const rest = sorted.slice(1);
   const margin = top.score - (rest[0]?.score ?? 0);
-  const collision = lookalikeCollision(top, rest);
+  const collision = lookalikeCollision(top, rest, band);
 
   const shape = (c) => ({
     speciesId: c.speciesId,
     score: c.score,
     evidence: evidenceFor(c.speciesId, c.outOfRange),
+    outOfRange: !!c.outOfRange,
   });
 
   if (
-    top.score >= BAND.highScore &&
-    margin      >= BAND.highMargin &&
+    top.score >= band.highScore &&
+    margin     >= band.highMargin &&
     !collision
   ) {
     return { confidence: 'high', candidates: [shape(top)] };
   }
 
   if (
-    top.score >= BAND.mediumScore ||
-    (rest[0] && rest[0].score >= BAND.mediumScore)
+    top.score >= band.mediumScore ||
+    (rest[0] && rest[0].score >= band.mediumScore)
   ) {
     return {
       confidence: 'medium',
@@ -155,7 +198,23 @@ function rankAndBand(candidates) {
     };
   }
 
-  return { confidence: 'low', candidates: [] };
+  // LOW — under the floor, but NOT silent.
+  //
+  // This used to return `candidates: []`, so an angler whose photo
+  // scored 0.39 saw exactly what someone photographing an empty deck
+  // saw: nothing. The model had an opinion and the pipeline threw it
+  // away, which is why "it doesn't even give a suggestion" was a
+  // reported symptom.
+  //
+  // The candidates now ride along with notConfident: true. The band is
+  // still 'low', so every existing caller that branches on confidence
+  // keeps its current behaviour and CANNOT mistake these for a
+  // reliable ID — it has to opt in by reading notConfident.
+  return {
+    confidence: 'low',
+    notConfident: true,
+    candidates: sorted.slice(0, 3).map(shape),
+  };
 }
 
 /* Map a raw 0..1 cloud confidence to the app's string band. Slightly
@@ -260,7 +319,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
     if (topK && topK.length) {
       localTop = topK[0]?.score || 0;
       cropped = lastSubjectFound();
-      local = rankAndBand(constrainToJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
+      local = rankAndBand(annotateJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
       local._subjectBox = lastSubjectBox();
     }
   } catch {

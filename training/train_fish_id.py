@@ -55,6 +55,24 @@ def unzip_export(zip_path: Path, work_dir: Path) -> tuple[Path, dict]:
     return work_dir, manifest
 
 
+def _decode_upright(path_bytes):
+    """Decode a JPEG/PNG applying its EXIF Orientation tag, returning
+    uint8 HWC RGB.
+
+    Shared by the training pipeline and tests/test_exif_parity.py, so
+    the property being asserted is the one actually used.
+    """
+    import numpy as np
+    from PIL import Image, ImageOps
+
+    p = path_bytes.decode("utf-8") if isinstance(path_bytes, bytes) else str(path_bytes)
+    with Image.open(p) as im:
+        im = ImageOps.exif_transpose(im)      # the whole point
+        if im.mode != "RGB":
+            im = im.convert("RGB")
+        return np.asarray(im, dtype=np.uint8)
+
+
 def build_datasets(data_root: Path, labels: list[str], seed: int):
     """train_ds, val_ds — image_dataset_from_directory over the
     train/ and val/ subdirs. class_names is pinned to `labels` so
@@ -121,8 +139,23 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
             ds = ds.shuffle(len(paths), seed=seed, reshuffle_each_iteration=True)
 
         def load(path, y):
-            img = tf.io.decode_image(tf.io.read_file(path), channels=3,
-                                     expand_animations=False)
+            # EXIF orientation is applied HERE, not by decode_image.
+            #
+            # tf.io.decode_image ignores the EXIF Orientation tag; a
+            # browser <img> (which is what the app decodes with) applies
+            # it. An iPhone photo tagged Orientation=6 therefore trained
+            # on its side and served upright — a train/serve skew on the
+            # single most discriminative feature the model has, body
+            # shape, and invisible in every metric because train and val
+            # were skewed identically.
+            #
+            # Pillow's exif_transpose is the reference implementation of
+            # the tag, so decoding through it means both pipelines see
+            # the same physical pixels. numpy_function because this is
+            # not expressible in graph ops.
+            img = tf.numpy_function(_decode_upright, [path], tf.uint8,
+                                    name="decode_exif_upright")
+            img.set_shape([None, None, 3])
             img = letterbox(img)
             # decode_image returns an unknown static shape; the model's
             # Input layer needs a concrete one.
@@ -134,6 +167,15 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
 
     train_ds = make("train")
     val_ds   = make("val")
+    # TEST is optional so an old export without a test/ dir still runs.
+    # When present it is returned UNAUGMENTED and is never handed to
+    # fit(), so it cannot leak into early stopping or LR scheduling.
+    test_ds = None
+    try:
+        test_ds = make("test").prefetch(tf.data.AUTOTUNE)
+    except SystemExit:
+        print("  test: no test/ split in this export — test metrics will be null",
+              flush=True)
 
     # Composed augmentation pipeline — kept as separate layers so
     # each keeps its own PRNG state, invoked with training=True on
@@ -156,7 +198,7 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
         lambda x, y: (augment(x, training=True), y),
         num_parallel_calls=autotune,
     )
-    return train_ds.prefetch(autotune), val_ds.prefetch(autotune)
+    return train_ds.prefetch(autotune), val_ds.prefetch(autotune), test_ds
 
 
 def build_model(num_classes: int):
@@ -219,7 +261,8 @@ def compute_class_weights(data_root: Path, labels: list[str]):
     return weights, counts
 
 
-def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
+def train(model, base, train_ds, val_ds, epochs: int, class_weight=None,
+          ckpt_dir: Path = None):
     """Two-stage fine-tune. Returns the training history for the
     metrics dump. class_weight balances rare vs common species."""
     import tensorflow as tf
@@ -271,8 +314,20 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
     # against a baseline that no longer applied. Monitor val_accuracy
     # rather than the default val_loss — with label smoothing the loss
     # floor shifts, and accuracy is what we actually care about.
-    def make_callbacks():
-        return [
+    # Per-epoch learning rate, which Keras does not put in history.
+    class LRLogger(tf.keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            lr = self.model.optimizer.learning_rate
+            try:
+                lr = float(tf.keras.backend.get_value(lr))
+            except Exception:
+                lr = float(lr) if isinstance(lr, (int, float)) else None
+            if logs is not None and lr is not None:
+                logs["lr"] = lr
+
+    def make_callbacks(stage):
+        cbs = [
+            LRLogger(),
             tf.keras.callbacks.ReduceLROnPlateau(
                 monitor="val_accuracy", mode="max",
                 patience=3, factor=0.5, verbose=1),
@@ -280,6 +335,20 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
                 monitor="val_accuracy", mode="max",
                 patience=5, restore_best_weights=True, verbose=1),
         ]
+        # Persistent checkpoints — a Colab disconnect used to destroy the
+        # whole run, because the only save happened AFTER training and
+        # the runtime disk is wiped the instant the session drops.
+        if ckpt_dir is not None:
+            cbs.append(tf.keras.callbacks.ModelCheckpoint(
+                filepath=str(ckpt_dir / f"best_stage{stage}.keras"),
+                monitor="val_accuracy", mode="max",
+                save_best_only=True, verbose=1))
+            cbs.append(tf.keras.callbacks.ModelCheckpoint(
+                filepath=str(ckpt_dir / "latest.keras"),
+                save_best_only=False, verbose=0))
+            cbs.append(tf.keras.callbacks.CSVLogger(
+                str(ckpt_dir / f"history_stage{stage}.csv"), append=True))
+        return cbs
 
     # Stage 1: head only.
     model.compile(
@@ -289,7 +358,7 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
     )
     h1 = model.fit(
         train_ds, validation_data=val_ds,
-        epochs=FROZEN_EPOCHS, callbacks=make_callbacks(), verbose=2,
+        epochs=FROZEN_EPOCHS, callbacks=make_callbacks(1), verbose=2,
     )
 
     # Stage 2: unfreeze last N layers of the backbone.
@@ -304,8 +373,19 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
     h2 = model.fit(
         train_ds, validation_data=val_ds,
         epochs=max(1, epochs - FROZEN_EPOCHS),
-        callbacks=make_callbacks(), verbose=2,
+        callbacks=make_callbacks(2), verbose=2,
     )
+
+    # FULL per-epoch curves, not just the final number. Without these
+    # there is no way to tell overfitting from underfitting after the
+    # fact, and every past run threw them away.
+    def curves(h):
+        keys = ("loss", "val_loss", "accuracy", "val_accuracy", "lr")
+        return {k: [float(v) for v in h.history.get(k, [])] for k in keys}
+
+    c1, c2 = curves(h1), curves(h2)
+    va = c1["val_accuracy"] + c2["val_accuracy"]
+    best_idx = int(max(range(len(va)), key=lambda i: va[i])) if va else None
 
     history = {
         "stage1_epochs": len(h1.history.get("loss", [])),
@@ -313,53 +393,110 @@ def train(model, base, train_ds, val_ds, epochs: int, class_weight=None):
         "stage2_val_accuracy_final": (
             h2.history.get("val_accuracy", [None])[-1]
         ),
+        "total_epochs": len(va),
+        # Index into the CONCATENATED curve, so it is comparable across
+        # the stage boundary.
+        "best_epoch": best_idx,
+        "best_val_accuracy": (va[best_idx] if best_idx is not None else None),
+        "stage1": c1,
+        "stage2": c2,
     }
     return history
 
 
-def evaluate(model, val_ds, labels: list[str]):
-    """Per-species accuracy + confusion matrix from the val split."""
+def _metrics_from_counts(y_true, y_pred, probs, labels):
+    """Full metric block from raw predictions. Shared by the float and
+    quantized evaluators so the two can never drift apart."""
     import numpy as np
     from sklearn.metrics import confusion_matrix
 
-    all_y, all_yhat = [], []
-    for x, y in val_ds:
-        pred = model.predict(x, verbose=0)
-        all_y.extend(y.numpy().tolist())
-        all_yhat.extend(pred.argmax(axis=1).tolist())
-
-    all_y = np.array(all_y)
-    all_yhat = np.array(all_yhat)
     n = len(labels)
-    cm = confusion_matrix(all_y, all_yhat, labels=list(range(n)))
+    y_true = np.asarray(y_true); y_pred = np.asarray(y_pred)
+    cm = confusion_matrix(y_true, y_pred, labels=list(range(n)))
+
+    tp = np.diag(cm).astype(float)
+    support = cm.sum(axis=1).astype(float)      # true instances per class
+    predicted = cm.sum(axis=0).astype(float)    # predicted instances per class
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        precision = np.where(predicted > 0, tp / predicted, np.nan)
+        recall    = np.where(support   > 0, tp / support,   np.nan)
+        f1 = np.where((precision + recall) > 0,
+                      2 * precision * recall / (precision + recall), np.nan)
+
+    # Macro averages over classes that actually APPEAR in this split.
+    # Averaging in zeros for absent classes would report a number that
+    # says more about the split than the model.
+    present = support > 0
+    def macro(a):
+        vals = a[present]
+        vals = vals[~np.isnan(vals)]
+        return float(vals.mean()) if vals.size else None
 
     per_species = {}
     for i, label in enumerate(labels):
-        support = int(cm[i].sum())
-        correct = int(cm[i, i])
         per_species[label] = {
-            "support": support,
-            "correct": correct,
-            "accuracy": correct / support if support else None,
+            "support":   int(support[i]),
+            "correct":   int(tp[i]),
+            "accuracy":  (float(tp[i] / support[i]) if support[i] else None),
+            "precision": (None if np.isnan(precision[i]) else float(precision[i])),
+            "recall":    (None if np.isnan(recall[i])    else float(recall[i])),
+            "f1":        (None if np.isnan(f1[i])        else float(f1[i])),
         }
 
-    overall = float((all_y == all_yhat).mean()) if len(all_y) else None
+    top1 = float((y_true == y_pred).mean()) if len(y_true) else None
+
+    # Top-3: needs the probability matrix, which the quantized path also
+    # supplies. None when unavailable rather than silently 0.
+    top3 = None
+    if probs is not None and len(probs):
+        P = np.asarray(probs)
+        k = min(3, P.shape[1])
+        topk = np.argpartition(-P, k - 1, axis=1)[:, :k]
+        top3 = float(np.mean([y_true[i] in topk[i] for i in range(len(y_true))]))
 
     return {
-        "overall_accuracy": overall,
-        "per_species": per_species,
+        "top1_accuracy": top1,
+        "top3_accuracy": top3,
+        "balanced_accuracy": macro(recall),   # macro-recall, by definition
+        "macro_precision": macro(precision),
+        "macro_recall":    macro(recall),
+        "macro_f1":        macro(f1),
+        "per_species":     per_species,
         "confusion_matrix": cm.tolist(),
         "confusion_labels": labels,
+        "n_samples": int(len(y_true)),
+        "n_classes_present": int(present.sum()),
     }
 
 
-def evaluate_tflite(tflite_path: Path, val_ds, labels: list[str]):
-    """Run the QUANTIZED .tflite over the val split and return its
-    accuracy. This is what actually ships to the phone — INT8 post-
-    training quantization can cost a few points versus the float Keras
-    model, and until now nobody measured it, so the admin's headline
-    accuracy overstated real-world performance. Feeds uint8 or float
-    inputs to match whatever dtype the converter produced."""
+def evaluate(model, ds, labels: list[str]):
+    """Full metric block for the FLOAT Keras model over one split."""
+    import numpy as np
+
+    all_y, all_pred, all_prob = [], [], []
+    for x, y in ds:
+        p = model.predict(x, verbose=0)
+        all_y.extend(y.numpy().tolist())
+        all_pred.extend(p.argmax(axis=1).tolist())
+        all_prob.append(p)
+
+    probs = np.concatenate(all_prob, axis=0) if all_prob else None
+    m = _metrics_from_counts(all_y, all_pred, probs, labels)
+    # Back-compat key — the admin evaluation view reads overall_accuracy.
+    m["overall_accuracy"] = m["top1_accuracy"]
+    return m
+
+
+def evaluate_tflite(tflite_path: Path, ds, labels: list[str]):
+    """Run the QUANTIZED .tflite over a split and return the SAME full
+    metric block as evaluate(). This is what actually ships to the
+    phone; float16 stays within a hair of the float model but that is a
+    claim worth re-measuring every run rather than assuming.
+
+    Returns a dict (was: a bare float). Callers wanting the old scalar
+    should read ["top1_accuracy"].
+    """
     import numpy as np
     import tensorflow as tf
 
@@ -369,20 +506,21 @@ def evaluate_tflite(tflite_path: Path, val_ds, labels: list[str]):
     out = interp.get_output_details()[0]
     in_dtype = inp["dtype"]
 
-    correct = total = 0
-    for x, y in val_ds:
+    all_y, all_pred, all_prob = [], [], []
+    for x, y in ds:
         for img, label in zip(x.numpy(), y.numpy()):
-            # img is float [0,255]; feed uint8 if the model expects it,
-            # else float32 (dynamic-range fallback path).
             sample = np.clip(img, 0, 255)
             sample = sample.astype(np.uint8) if in_dtype == np.uint8 else sample.astype(np.float32)
             interp.set_tensor(inp["index"], np.expand_dims(sample, 0))
             interp.invoke()
             pred = interp.get_tensor(out["index"])[0]
-            if int(np.argmax(pred)) == int(label):
-                correct += 1
-            total += 1
-    return (correct / total) if total else None
+            all_y.append(int(label))
+            all_pred.append(int(np.argmax(pred)))
+            all_prob.append(pred)
+
+    if not all_y:
+        return None
+    return _metrics_from_counts(all_y, all_pred, np.asarray(all_prob), labels)
 
 
 def compute_lookalike_group_confusion(metrics: dict, groups: list[list[str]]):
@@ -533,12 +671,21 @@ def main():
 
     class_weight, _ = compute_class_weights(data_root, labels)
 
-    train_ds, val_ds = build_datasets(data_root, labels, args.seed)
+    train_ds, val_ds, test_ds = build_datasets(data_root, labels, args.seed)
     model, base = build_model(num_classes=len(labels))
     print(model.summary())
 
+    # Parameter counts — previously only printed to stdout and lost.
+    params = {
+        "total": int(model.count_params()),
+        "trainable_at_build": int(sum(
+            __import__("numpy").prod(w.shape) for w in model.trainable_weights)),
+    }
+
+    ckpt_dir = out_dir / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
     history = train(model, base, train_ds, val_ds, epochs=args.epochs,
-                    class_weight=class_weight)
+                    class_weight=class_weight, ckpt_dir=ckpt_dir)
 
     # Checkpoint the trained Keras model BEFORE quantization. If the
     # TFLite converter later throws, the trained weights are still
@@ -548,11 +695,12 @@ def main():
     print(f"Checkpointing trained model → {keras_ckpt}")
     model.save(keras_ckpt)
 
-    print("Evaluating on val split…")
+    print("Evaluating FLOAT model on val split…")
     metrics = evaluate(model, val_ds, labels)
     metrics["lookalike_group_confusion"] = compute_lookalike_group_confusion(
         metrics, LOOKALIKE_GROUP_SEEDS,
     )
+    metrics["history"] = history
     metrics["training"] = history
     metrics["input_size"] = IMG_SIZE
     metrics["seed"] = args.seed
@@ -566,16 +714,41 @@ def main():
     # it can differ from the float number above. Surface both so the
     # admin's headline reflects real on-device accuracy, not the float
     # model's. Also record kept per-species train counts for the worklist.
-    print("Evaluating the quantized .tflite (shipped model)…")
-    metrics["quantized_accuracy"] = evaluate_tflite(tflite_path, val_ds, labels)
+    print("Evaluating the quantized .tflite on val…")
+    q_val = evaluate_tflite(tflite_path, val_ds, labels)
+
+    # ---- TEST SET: the only numbers that were never optimised against.
+    # Computed LAST, once, after every decision (early stopping, LR
+    # schedule, model selection, quantization) has already been made.
+    test_float = test_quant = None
+    if test_ds is not None:
+        print("Evaluating FLOAT model on HELD-OUT TEST split…")
+        test_float = evaluate(model, test_ds, labels)
+        print("Evaluating quantized .tflite on HELD-OUT TEST split…")
+        test_quant = evaluate_tflite(tflite_path, test_ds, labels)
+    else:
+        print("No test split present — test metrics will be null. Re-export "
+              "with an observation-aware 80/10/10 split to populate them.")
+
+    metrics["validation"] = {"float": {k: v for k, v in metrics.items()
+                                       if k not in ("validation",)},
+                             "quantized": q_val}
+    metrics["test"] = {"float": test_float, "quantized": test_quant}
+    # Back-compat scalars the admin view already reads.
+    metrics["quantized_accuracy"] = (q_val or {}).get("top1_accuracy")
     metrics["float_accuracy"] = metrics["overall_accuracy"]
+    metrics["test_accuracy"] = (test_float or {}).get("top1_accuracy")
+    metrics["test_quantized_accuracy"] = (test_quant or {}).get("top1_accuracy")
+    metrics["params"] = params
     metrics["train_counts"] = {l: train_counts[l] for l in labels}
     metrics["min_images"] = args.min_images
+    metrics["split_manifest"] = manifest.get("split_manifest_version")
 
-    # Quantize succeeded — the .keras checkpoint has served its
-    # purpose. Drop it so the artifacts dir stays lean.
-    if keras_ckpt.exists():
-        keras_ckpt.unlink()
+    # The .keras checkpoint is KEPT. It used to be deleted here "so the
+    # artifacts dir stays lean", which meant a successful run left no
+    # way to re-quantize, re-evaluate, or resume without retraining from
+    # scratch — and Colab wipes its disk on disconnect. Disk is cheap;
+    # a lost 40-minute GPU run is not.
 
     (out_dir / "fish_id_labels.json").write_text(json.dumps({
         "labels": labels,
@@ -589,14 +762,26 @@ def main():
     }, indent=2))
     (out_dir / "fish_id_metrics.json").write_text(json.dumps(metrics, indent=2))
 
+    # Per-epoch curves also written standalone so they survive even if
+    # metrics.json is regenerated.
+    (out_dir / "fish_id_history.json").write_text(json.dumps(history, indent=2))
+
     print(f"\nArtifacts written to {out_dir}:")
     print(f"  fish_id_model.tflite    ({tflite_path.stat().st_size / 1024:.0f} KB)")
     print(f"  fish_id_labels.json")
     print(f"  fish_id_metrics.json")
-    qa = metrics.get("quantized_accuracy")
-    print(f"\nFloat val accuracy:     {metrics['overall_accuracy']:.3f}")
-    print(f"Quantized (shipped):    {qa:.3f}" if qa is not None else
-          "Quantized (shipped):    n/a")
+    def fmt(v):
+        return f"{v:.4f}" if isinstance(v, float) else "n/a"
+    print(f"\n  VALIDATION  float top1 {fmt(metrics.get('float_accuracy'))}  "
+          f"quantized top1 {fmt(metrics.get('quantized_accuracy'))}")
+    if test_float:
+        print(f"  TEST        float top1 {fmt(test_float.get('top1_accuracy'))}  "
+              f"top3 {fmt(test_float.get('top3_accuracy'))}  "
+              f"macroF1 {fmt(test_float.get('macro_f1'))}  "
+              f"balanced {fmt(test_float.get('balanced_accuracy'))}")
+        print(f"  TEST (tflite) top1 {fmt((test_quant or {}).get('top1_accuracy'))}")
+    else:
+        print("  TEST        n/a — export has no test split")
 
 
 if __name__ == "__main__":

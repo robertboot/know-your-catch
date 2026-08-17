@@ -331,6 +331,34 @@ if not gpus and os.environ.get("REELINTEL_ALLOW_CPU") != "1":
         "REELINTEL_ALLOW_CPU=1 — not recommended.)")
 
 
+# 6b. PREFLIGHT — refuse to burn GPU hours on a dataset that is known
+#     to be broken. Every check corresponds to a failure that has
+#     actually shipped on this project. Fetched from the same branch as
+#     the trainer so it cannot drift from it.
+PREFLIGHT_URL = (
+    "https://raw.githubusercontent.com/robertboot/know-your-catch/"
+    f"{BRANCH}/training/preflight.py"
+)
+PREFLIGHT_PATH = "/content/preflight.py"
+if os.environ.get("REELINTEL_SKIP_PREFLIGHT") == "1":
+    print("[colab_run] WARNING: preflight SKIPPED by REELINTEL_SKIP_PREFLIGHT=1")
+else:
+    try:
+        urlretrieve(PREFLIGHT_URL, PREFLIGHT_PATH)
+    except Exception as e:
+        print(f"[colab_run] WARNING: could not fetch preflight.py ({e}) — "
+              "continuing without it.")
+    else:
+        print("[colab_run] Running preflight checks...")
+        pf = subprocess.run([sys.executable, "-u", PREFLIGHT_PATH],
+                            capture_output=True, text=True)
+        print(pf.stdout)
+        if pf.returncode != 0:
+            die("preflight FAILED — dataset is not safe to train on. Fix the "
+                "items above, or set REELINTEL_SKIP_PREFLIGHT=1 to override "
+                "(not recommended).")
+
+
 # 7. Run training.
 cmd = [
     sys.executable, "-u", SCRIPT_PATH,
@@ -363,6 +391,12 @@ for name in ("fish_id_model.tflite", "fish_id_labels.json", "fish_id_metrics.jso
     if not p.exists():
         die(f"training finished but {p} is missing.")
     print(f"[colab_run] artifact ok: {p} ({p.stat().st_size / 1024:.0f} KB)")
+# Optional extras — present since the history/checkpoint work, absent on
+# older trainers, so their absence is a note rather than a failure.
+for name in ("fish_id_history.json", "trained_model.keras"):
+    p = OUT_DIR / name
+    print(f"[colab_run] {'artifact ok' if p.exists() else 'absent (older trainer)'}: "
+          f"{name}")
 
 
 # 9. Zip the three artifacts.
@@ -370,6 +404,11 @@ print(f"[colab_run] Building bundle {BUNDLE_ZIP.name}...")
 with zipfile.ZipFile(BUNDLE_ZIP, "w", zipfile.ZIP_DEFLATED) as z:
     for name in ("fish_id_model.tflite", "fish_id_labels.json", "fish_id_metrics.json"):
         z.write(OUT_DIR / name, arcname=name)
+    # Per-epoch curves ride along so overfitting can be diagnosed after
+    # the fact. Previously only three summary numbers survived a run.
+    hist = OUT_DIR / "fish_id_history.json"
+    if hist.exists():
+        z.write(hist, arcname="fish_id_history.json")
 print(f"[colab_run] Bundle: {BUNDLE_ZIP} "
       f"({BUNDLE_ZIP.stat().st_size / 1024:.0f} KB)")
 

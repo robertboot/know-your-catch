@@ -55,6 +55,16 @@ function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
+    // Apply the EXIF Orientation tag — the default, stated explicitly
+    // because the training pipeline now depends on it.
+    //
+    // 'from-image' is the HTML default, so this changes nothing at
+    // runtime; it exists so that anyone setting it to 'none' has to
+    // notice they are breaking parity with training/train_fish_id.py's
+    // _decode_upright(), which applies the tag via PIL. Both sides must
+    // hand the model the same physical pixels.
+    // See tests/test_exif_parity.py.
+    try { img.style.imageOrientation = 'from-image'; } catch { /* older WebView */ }
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('image decode failed'));
     img.src = src;

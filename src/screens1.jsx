@@ -1924,7 +1924,13 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   // "Pick the species", overrideId is set and we fall through to the
   // main results view (labelled YOUR PICK) so they can CONFIRM / Save
   // the same way Report Wrong ID lands them.
-  if ((!candidates || candidates.length === 0) && !overrideId) {
+  // `notConfident` is set when the model scored under the medium floor.
+  // It now arrives WITH its top candidates rather than an empty list, so
+  // this guard must test the flag as well — otherwise a 0.39 guess would
+  // fall through to the main results view and be presented as an ID.
+  // Low-confidence picks are shown below as possibilities, never as an
+  // answer.
+  if (((!candidates || candidates.length === 0) || result?.notConfident) && !overrideId) {
     return (
       <div style={{ padding: '18px 16px' }}>
         {/* Show the WHOLE photo. maxHeight + object-fit:cover cropped a
@@ -1972,10 +1978,35 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <AlertTriangle size={22} color="#c66" />
               <div>
-                <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Couldn't identify confidently</div>
+                <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Not confident</div>
                 <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
                   The image was too uncertain to commit to a species. Try a clearer photo, or identify manually.
                 </div>
+                {/* The model's best guesses, shown ONLY as possibilities.
+                    Previously these were discarded entirely, so a 0.39
+                    top-1 looked identical to a photo of an empty deck.
+                    Deliberately plain text with no confirm action — the
+                    angler must still pick, so nothing here can be
+                    mistaken for an identification. */}
+                {Array.isArray(candidates) && candidates.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, letterSpacing: 1.2, color: T.inkMute, fontWeight: 700 }}>
+                      CLOSEST MATCHES — LOW CONFIDENCE
+                    </div>
+                    {candidates.slice(0, 3).map((c) => {
+                      const sp = speciesById(c.speciesId);
+                      return (
+                        <div key={c.speciesId} style={{
+                          fontSize: 14, color: T.inkSoft, marginTop: 4,
+                          display: 'flex', justifyContent: 'space-between', gap: 10,
+                        }}>
+                          <span>{sp ? sp.commonName : c.speciesId}</span>
+                          <span style={{ color: T.inkMute }}>{Math.round((c.score || 0) * 100)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </Card>
