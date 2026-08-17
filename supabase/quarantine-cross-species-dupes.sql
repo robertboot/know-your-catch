@@ -6,8 +6,9 @@
 -- verified set for human review. NOTHING IS DELETED and NO LABEL IS
 -- CHOSEN. Re-running is a safe no-op (only status='verified' rows change).
 --
--- Source: supabase/quarantine-cross-species-dupes.sql
---         (its trailing verification query was truncated; rebuilt here).
+-- rejection_reason uses the EXISTING enum value 'duplicate'
+-- (training_reject_reason: blurry | multiple | not_fish | duplicate | other).
+-- No new enum value, no schema change.
 
 -- 1) The authoritative conflict id set, defined ONCE.
 create temp table _xspecies_conflict_ids (id uuid primary key);
@@ -2306,13 +2307,13 @@ insert into _xspecies_conflict_ids (id) values
 -- 2) Quarantine ONLY currently-verified conflict rows. Idempotent.
 update training_images t
 set status = 'rejected',
-    rejection_reason = 'cross-species duplicate — needs review'
+    rejection_reason = 'duplicate'
 from _xspecies_conflict_ids q
 where t.id = q.id
   and t.status = 'verified';
 
 -- 3) Verify (one row):
---    still_verified        -> expect 0  (none left reachable by training)
+--    still_verified        -> expect 0    (none left reachable by training)
 --    conflict_rows_present -> expect 2289 (nothing deleted; all survive)
 select
   (select count(*) from training_images t
