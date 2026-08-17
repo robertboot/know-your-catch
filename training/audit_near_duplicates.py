@@ -124,6 +124,17 @@ def main():
         "groups_crossing_species": len(cross_species),
         "cross_split_groups": cross_split,
         "cross_species_groups": cross_species[:500],
+        # EVERY multi-member near-dup group (compact) so merge_near_dup_splits.py
+        # can treat near-dup groups as a grouping constraint alongside
+        # observations and consolidate each connected component into ONE split
+        # in a single deterministic pass — without a within-split group later
+        # becoming a NEW cross-split leak.
+        "all_groups": [
+            {"dhash": h,
+             "members": [{"training_id": m["training_id"], "split": m["split"]}
+                         for m in members]}
+            for h, members in groups.items()
+        ],
     }, indent=1))
 
     print(f"\nimages hashed              : {scanned}")
