@@ -16,7 +16,7 @@
  *   node make_export.mjs
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
@@ -147,16 +147,24 @@ async function main() {
   if (signed.error) die(`manifest signed url: ${signed.error.message}`);
   const exportUrl = signed.data.signedUrl;
 
+  const cell =
+`import os, urllib.request
+os.environ["REELINTEL_EXPORT_URL"] = ${JSON.stringify(exportUrl)}
+urllib.request.urlretrieve(
+  "https://raw.githubusercontent.com/robertboot/know-your-catch/claude/upload-app-assets-NUxRr/training/colab_run.py",
+  "/content/colab_run.py")
+exec(open("/content/colab_run.py").read())
+`;
+  const cellPath = path.join(HERE, 'colab_cell.py');
+  writeFileSync(cellPath, cell);
+
   console.log('\n=================== EXPORT READY ===================');
   console.log(`photos: ${out.photos.length}  |  train ${res.counts.train} / val ${res.counts.val} / test ${res.counts.test}`);
   console.log(`manifest: ${EXPORT_BUCKET}/${key}`);
-  console.log('\nPaste this ONE cell into a GPU Colab (Runtime → T4), then run it:\n');
-  console.log('import os, urllib.request');
-  console.log(`os.environ["REELINTEL_EXPORT_URL"] = ${JSON.stringify(exportUrl)}`);
-  console.log('urllib.request.urlretrieve(');
-  console.log('  "https://raw.githubusercontent.com/robertboot/know-your-catch/claude/upload-app-assets-NUxRr/training/colab_run.py",');
-  console.log('  "/content/colab_run.py")');
-  console.log('exec(open("/content/colab_run.py").read())');
+  console.log(`\nColab cell written to: ${cellPath}`);
+  console.log('Copy it CLEANLY to your clipboard (avoids copy-paste corruption):');
+  console.log('    cat training/colab_cell.py | pbcopy');
+  console.log('then paste into a fresh GPU Colab cell (Runtime → T4) and run.');
   console.log('====================================================\n');
 }
 
