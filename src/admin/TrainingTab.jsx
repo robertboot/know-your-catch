@@ -2485,7 +2485,15 @@ function ExportPanel() {
       const manifest = {
         version: 2, // v2 = signed-URL manifest (no bundled photo bytes)
         created_at: new Date().toISOString(),
+        // Split provenance: this export's train/val/test come verbatim
+        // from training/split_manifest_v1.json (observation-aware,
+        // 80/10/10). Recorded so preflight can confirm the downloaded
+        // dataset matches the authoritative split.
+        split_source: 'split_manifest_v1.json',
+        split_manifest_version: plan.manifestVersion,
         split_seed: plan.splitSeed,
+        split_counts: plan.splitCounts,   // { train, val, test }
+        grouping: plan.grouping,
         thresholds: {
           min_train_threshold: MIN_TRAIN_THRESHOLD,
           adequate_threshold:  ADEQUATE_THRESHOLD,
@@ -2495,8 +2503,11 @@ function ExportPanel() {
         excluded: plan.excluded,
         counts: plan.counts,
         // photos[] is what colab_run.py iterates. Every row is
-        // self-contained — Colab just downloads url → path.
+        // self-contained — Colab just downloads url → path. `id` is the
+        // training_images id (== the split-manifest key) so preflight can
+        // cross-check the actual export against split_manifest_v1.json.
         photos: plan.plan.map((p, i) => ({
+          id: p.id,
           path: `${p.split}/${p.species_id}/${p.filename}`,
           species_id: p.species_id,
           split: p.split,
@@ -2579,8 +2590,17 @@ function ExportPanel() {
               )}
             </div>
             <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8, lineHeight: 1.55 }}>
-              85/15 train/val split, deterministic (seed <code style={{ background: T.parchmentDeep, padding: '1px 5px', borderRadius: 3 }}>{plan.splitSeed}</code>).
-              ZIP layout: <code>train/{'{species_id}'}/*.jpg</code>, <code>val/{'{species_id}'}/*.jpg</code>, <code>manifest.json</code>.
+              Observation-aware, persistent <strong>80/10/10 train/val/test</strong> split from
+              {' '}<code style={{ background: T.parchmentDeep, padding: '1px 5px', borderRadius: 3 }}>split_manifest_v1.json</code>
+              {' '}— whole iNaturalist observations stay in one split, so no near-duplicate frame leaks across sets.
+              {plan.splitCounts && (
+                <>
+                  {' '}This export: <span style={{ color: T.brass, fontWeight: 700 }}>{plan.splitCounts.train.toLocaleString()}</span> train ·
+                  {' '}<span style={{ color: T.brass, fontWeight: 700 }}>{plan.splitCounts.val.toLocaleString()}</span> val ·
+                  {' '}<span style={{ color: T.brass, fontWeight: 700 }}>{plan.splitCounts.test.toLocaleString()}</span> test.
+                </>
+              )}
+              {' '}Layout: <code>train/</code>, <code>val/</code>, <code>test/</code> <code>{'{species_id}'}/*.jpg</code> + <code>manifest.json</code>.
             </div>
           </>
         )}

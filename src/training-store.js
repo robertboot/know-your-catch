@@ -11,6 +11,7 @@ import { getLastSession } from './auth.js';
 import { ensureSpeciesRow } from './species-store.js';
 import { SPECIES } from './data.js';
 import { downscaleImageDataUrl } from './storage.js';
+import { applySplitManifest, describeSplitFailure, SPLIT_MANIFEST_RAW_URL } from './training-split.js';
 
 const BUCKET = 'training-photos';
 
@@ -912,52 +913,29 @@ export async function inatIdentifyPhoto(storagePath) {
    Phase 3 — Export
    ============================================================
    Fetch every verified training image, filter out excluded species,
-   deterministic-shuffle within each species, 85/15 split, and hand
-   back an object shape the Coverage UI can drive JSZip with. */
+   then assign train/val/test from the AUTHORITATIVE observation-aware
+   split (training/split_manifest_v1.json, via make_split.py). The old
+   per-species 85/15 random-by-image split is gone: it leaked because
+   several photos of one iNaturalist observation could land on both
+   sides, and it produced no held-out test set. The manifest is keyed by
+   training_images.id, which is exactly what we fetch here, so we look up
+   the split by id and never invent a second identity. FAIL CLOSED: any
+   verified image the manifest doesn't cover aborts the export. */
 
-/* Deterministic seeded PRNG (mulberry32). Same seed → same shuffle
-   → reproducible splits across export runs. */
-function mulberry32(seed) {
-  return function() {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = seed;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/* Fisher–Yates shuffle with a seeded PRNG. Mutates in place. */
-function shuffleInPlace(arr, seed) {
-  const rng = mulberry32(seed);
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-/* Simple string hash → 32-bit int for the shuffle seed. */
-function hashSeed(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/* Group verified images by species, apply the coverage-tier filter,
-   split each species 85/15 with a deterministic seed. Returns:
+/* Group verified images by species, apply the coverage-tier filter, then
+   apply the manifest split. Returns:
      {
-       plan: [{ species_id, storage_path, split: 'train'|'val', filename }],
-       counts: { species_id: { verified, train, val } },
+       plan: [{ id, species_id, storage_path, crop_bbox,
+                split: 'train'|'val'|'test', filename, group }],
+       counts: { species_id: { verified, train, val, test } },
+       splitCounts: { train, val, test },
        excluded: [species_id, ...]     // classifyCoverage → 'excluded'
        species: [species_id, ...]      // classifyCoverage NOT 'excluded'
+       manifestVersion, grouping, splitSeed
      }
-   Does NOT download bytes — that's the caller's job so a big export
-   can stream through JSZip without exhausting memory. */
-export async function planExport({ splitSeed = 'reelintel-v1' } = {}) {
+   On failure returns { ok:false, error, missing?, groupOverlap? }.
+   Does NOT download bytes — that's the caller's job. */
+export async function planExport({ manifestUrl = SPLIT_MANIFEST_RAW_URL } = {}) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
 
@@ -987,37 +965,78 @@ export async function planExport({ splitSeed = 'reelintel-v1' } = {}) {
 
   const species = [];
   const excluded = [];
-  const counts = {};
-  const plan = [];
-
+  // Build the flat list of images we intend to export (coverage-filtered),
+  // with a stable synthetic filename per species so the on-disk tree is
+  // tidy. Split is assigned below, from the manifest, by id.
+  const images = [];
+  const verifiedPerSpecies = {};
   const speciesIds = [...bySpecies.keys()].sort();
   for (const sid of speciesIds) {
     const list = bySpecies.get(sid);
     const tier = classifyCoverage(list.length);
     if (tier === 'excluded') { excluded.push(sid); continue; }
-
-    // Deterministic split — seed combines the export seed + species id
-    // so re-running an export produces the same split.
-    shuffleInPlace(list, hashSeed(`${splitSeed}::${sid}`));
-    const valCount   = Math.max(1, Math.round(list.length * 0.15));
-    const trainCount = list.length - valCount;
-    counts[sid] = { verified: list.length, train: trainCount, val: valCount };
     species.push(sid);
-
+    verifiedPerSpecies[sid] = list.length;
     list.forEach((row, i) => {
-      const split = i < trainCount ? 'train' : 'val';
       const seq = String(i).padStart(4, '0');
-      const ext = row.storage_path.split('.').pop() || 'jpg';
-      const filename = `${sid}_${seq}.${ext}`;
-      plan.push({
+      const ext = (row.storage_path.split('.').pop() || 'jpg');
+      images.push({
+        id: row.id,
         species_id: sid,
         storage_path: row.storage_path,
         crop_bbox: row.crop_bbox,
-        split,
-        filename,
+        filename: `${sid}_${seq}.${ext}`,
       });
     });
   }
 
-  return { ok: true, plan, counts, excluded, species, splitSeed };
+  // Fetch the authoritative split manifest — the SAME file colab_run.py
+  // downloads, so the export and the training run agree by construction.
+  let manifest;
+  try {
+    const resp = await fetch(`${manifestUrl}${manifestUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, { cache: 'no-store' });
+    if (!resp.ok) {
+      return { ok: false, error: `split manifest fetch failed: HTTP ${resp.status} from ${manifestUrl}` };
+    }
+    manifest = await resp.json();
+  } catch (e) {
+    return { ok: false, error: `split manifest fetch failed: ${e?.message || e}` };
+  }
+  if (!manifest || typeof manifest.assignments !== 'object') {
+    return { ok: false, error: 'split manifest is missing its assignments map' };
+  }
+
+  // Assign + verify (fail-closed). This is the ONE place the split is
+  // decided; the returned plan is what the export manifest carries.
+  const res = applySplitManifest(images, manifest);
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: describeSplitFailure(res),
+      missing: res.missing,
+      groupOverlap: res.groupOverlap,
+    };
+  }
+
+  // Per-species counts, now including test.
+  const counts = {};
+  for (const sid of species) {
+    counts[sid] = { verified: verifiedPerSpecies[sid], train: 0, val: 0, test: 0 };
+  }
+  for (const p of res.plan) counts[p.species_id][p.split] += 1;
+
+  return {
+    ok: true,
+    plan: res.plan,
+    counts,
+    splitCounts: res.counts,
+    excluded,
+    species,
+    manifestVersion: manifest.version ?? null,
+    grouping: manifest.grouping || 'inat observation id where recoverable, else per-image singleton',
+    fractions: manifest.fractions || { train: 0.8, val: 0.1, test: 0.1 },
+    // Kept for the export-row metadata + Colab snippet; the salt is the
+    // manifest's identity, replacing the old shuffle seed.
+    splitSeed: manifest.salt || 'split_manifest_v1',
+  };
 }

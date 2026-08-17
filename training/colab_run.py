@@ -340,6 +340,22 @@ PREFLIGHT_URL = (
     f"{BRANCH}/training/preflight.py"
 )
 PREFLIGHT_PATH = "/content/preflight.py"
+# preflight.py reads these from its own directory (/content here). Fetch
+# the SAME committed files the export was built against so preflight can
+# (a) verify the split manifest and (b) cross-check that THIS export's
+# train/val/test matches it — the whole point of wiring the export to
+# split_manifest_v1.json. The export manifest itself is already at
+# /content/manifest.json (downloaded in step 1).
+for _name in ("split_manifest_v1.json", "cross_species_conflicts.json"):
+    _url = ("https://raw.githubusercontent.com/robertboot/know-your-catch/"
+            f"{BRANCH}/training/{_name}")
+    try:
+        urlretrieve(_url, f"/content/{_name}")
+        print(f"[colab_run] fetched {_name} for preflight.")
+    except Exception as e:
+        print(f"[colab_run] WARNING: could not fetch {_name} ({e}) — "
+              "preflight may skip a check.")
+os.environ.setdefault("REELINTEL_EXPORT_MANIFEST", str(manifest_path))
 if os.environ.get("REELINTEL_SKIP_PREFLIGHT") == "1":
     print("[colab_run] WARNING: preflight SKIPPED by REELINTEL_SKIP_PREFLIGHT=1")
 else:

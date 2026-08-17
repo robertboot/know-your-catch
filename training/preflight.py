@@ -20,6 +20,7 @@ CHECKS
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -93,6 +94,85 @@ def check_group_overlap(man):
         record("no split leakage", OK,
                f"0 groups shared across train/val/test "
                f"({len(per['train'])}/{len(per['val'])}/{len(per['test'])} groups)")
+
+
+def find_export_manifest():
+    """The actual export Colab downloads. colab_run.py fetches it to
+    /content/manifest.json before training; a standalone repo run has
+    none (it's a runtime artifact)."""
+    for c in (os.environ.get("REELINTEL_EXPORT_MANIFEST"),
+              "/content/manifest.json", str(HERE / "manifest.json")):
+        if c and Path(c).exists():
+            return Path(c)
+    return None
+
+
+def check_export_matches_split(man):
+    """Close the false-green gap: prove the dataset Colab will actually
+    download carries the SAME train/val/test as split_manifest_v1.json.
+    Before the export was wired to the manifest, preflight validated the
+    manifest while the export shipped a different 85/15 split."""
+    ep = find_export_manifest()
+    if ep is None:
+        record("export matches split manifest", WARN,
+               "no export manifest found — standalone run, cannot cross-check")
+        return
+    if not man:
+        record("export matches split manifest", FAIL, "skipped — no split manifest")
+        return
+    try:
+        exp = json.loads(ep.read_text())
+    except Exception as e:
+        record("export matches split manifest", FAIL, f"unreadable export manifest: {e}")
+        return
+    photos = exp.get("photos") or []
+    if not photos:
+        record("export matches split manifest", FAIL, "export manifest has no photos")
+        return
+
+    assign = man["assignments"]
+    groups = man.get("groups", {})
+    no_id = 0
+    missing = []
+    mismatched = []
+    counts = {"train": 0, "val": 0, "test": 0}
+    group_splits = defaultdict(set)
+    for p in photos:
+        iid = p.get("id")
+        got = p.get("split")
+        if not iid:
+            no_id += 1
+            continue
+        want = assign.get(iid)
+        if want is None:
+            missing.append(iid)
+            continue
+        if got != want:
+            mismatched.append((iid, got, want))
+        if got in counts:
+            counts[got] += 1
+        group_splits[groups.get(iid, f"self:{iid}")].add(got)
+
+    overlap = [g for g, s in group_splits.items() if len(s) > 1]
+    absent = [s for s in ("train", "val", "test") if counts[s] == 0]
+    problems = []
+    if no_id:
+        problems.append(f"{no_id} exported photos have no id (old export format)")
+    if missing:
+        problems.append(f"{len(missing)} exported photos not in split manifest (e.g. {missing[:3]})")
+    if mismatched:
+        problems.append(f"{len(mismatched)} split mismatches (e.g. {mismatched[:2]})")
+    if overlap:
+        problems.append(f"{len(overlap)} observation groups cross splits in the export")
+    if absent:
+        problems.append(f"export missing split(s): {', '.join(absent)}")
+    if problems:
+        record("export matches split manifest", FAIL, "; ".join(problems))
+    else:
+        record("export matches split manifest", OK,
+               f"{len(photos)} photos — train/val/test "
+               f"{counts['train']}/{counts['val']}/{counts['test']}, "
+               f"0 mismatch, 0 group overlap")
 
 
 def check_cross_species_dupes(man):
@@ -182,6 +262,7 @@ def main():
     print("=" * 64)
     man = check_manifest()
     check_group_overlap(man)
+    check_export_matches_split(man)
     check_cross_species_dupes(man)
     check_label_mapping(man)
     check_exif()
