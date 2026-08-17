@@ -25,8 +25,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from train_fish_id import _decode_upright  # noqa: E402
-
 
 def make_rotated_jpeg(tmp: Path) -> Path:
     """A 40x20 landscape image (so orientation is unambiguous) written
@@ -61,6 +59,17 @@ def main():
         from PIL import Image  # noqa: F401
     except ImportError:
         print("SKIP: Pillow not installed — cannot author a fixture.")
+        return 0
+
+    # Imported lazily: _decode_upright lives in train_fish_id, which pulls
+    # numpy/TensorFlow. Those are present in Colab (where preflight runs
+    # before training) but not on a plain Mac. Skip cleanly there instead
+    # of crashing with an empty-output FAIL.
+    try:
+        from train_fish_id import _decode_upright
+    except Exception as e:
+        print(f"SKIP: cannot import _decode_upright ({e}) — needs the training "
+              f"deps (numpy/TensorFlow); this check runs in Colab.")
         return 0
 
     with tempfile.TemporaryDirectory() as td:

@@ -151,8 +151,23 @@ def merge(report, manifest):
             reassigned += 1
         consolidated += 1
 
+    # Drop synthetic, non-trainable labels ('_unassigned' and any other
+    # '_'-prefixed bucket). They carry no species, the export already
+    # excludes them under the coverage floor, and preflight rightly FAILs
+    # if they linger in the manifest. Removed from all three id-keyed maps
+    # so the manifest stays internally consistent.
+    groups_map = dict(manifest.get("groups", {}))
+    species_map = dict(species_of)
+    stripped = [i for i in assignments if str(species_of.get(i, "")).startswith("_")]
+    for i in stripped:
+        assignments.pop(i, None)
+        groups_map.pop(i, None)
+        species_map.pop(i, None)
+
     new_manifest = dict(manifest)
     new_manifest["assignments"] = assignments
+    new_manifest["groups"] = groups_map
+    new_manifest["species"] = species_map
     counts = {s: 0 for s in SPLITS}
     for s in assignments.values():
         if s in counts:
@@ -160,6 +175,7 @@ def merge(report, manifest):
     stats = {
         "components_consolidated": consolidated,
         "images_reassigned": reassigned,
+        "stripped_non_species": len(stripped),
         "flagged": flagged,
         "counts": counts,
     }
@@ -172,10 +188,13 @@ def _selftest():
     # c: train/val-only near-dup {c1(train), c2(val), c3(train)} -> majority train
     manifest = {
         "assignments": {"a1": "test", "a2": "train", "b1": "train",
-                        "c1": "train", "c2": "val", "c3": "train", "z1": "train"},
+                        "c1": "train", "c2": "val", "c3": "train", "z1": "train",
+                        "u1": "train"},
         "groups": {"a1": "self:a1", "a2": "inat:9", "b1": "inat:9",
-                   "c1": "self:c1", "c2": "self:c2", "c3": "self:c3", "z1": "self:z1"},
-        "species": {k: "sp" for k in ["a1", "a2", "b1", "c1", "c2", "c3", "z1"]},
+                   "c1": "self:c1", "c2": "self:c2", "c3": "self:c3",
+                   "z1": "self:z1", "u1": "self:u1"},
+        "species": {**{k: "sp" for k in ["a1", "a2", "b1", "c1", "c2", "c3", "z1"]},
+                    "u1": "_unassigned"},
     }
     report = {"all_groups": [
         {"dhash": "1", "members": [{"training_id": "a1", "split": "test"},
@@ -189,6 +208,8 @@ def _selftest():
     assert a["a1"] == a["a2"] == a["b1"] == "test", a          # obs group followed to test
     assert a["c1"] == a["c2"] == a["c3"] == "train", a         # majority train
     assert a["z1"] == "train", "untouched image changed"
+    assert "u1" not in a, "_unassigned not stripped"           # non-species dropped
+    assert st["stripped_non_species"] == 1, st
     assert st["images_reassigned"] == 3, st                    # a2, b1, c2
     # verify NO cross-split remains
     grp = {"test": {"a1", "a2", "b1"}, "train": {"c1", "c2", "c3", "z1"}}
@@ -209,6 +230,7 @@ def main():
     print(f"cross-split groups (audit before): {before}")
     print(f"components consolidated : {stats['components_consolidated']}")
     print(f"images reassigned       : {stats['images_reassigned']}")
+    print(f"non-species dropped     : {stats['stripped_non_species']}  (_-prefixed, e.g. _unassigned)")
     print(f"new split counts        : train {stats['counts']['train']} / "
           f"val {stats['counts']['val']} / test {stats['counts']['test']}")
     if stats["flagged"]:

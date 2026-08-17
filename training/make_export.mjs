@@ -74,6 +74,9 @@ async function main() {
   const species = [], excluded = [], images = [], verifiedPerSpecies = {};
   for (const sid of [...bySpecies.keys()].sort()) {
     const list = bySpecies.get(sid);
+    // Synthetic, non-trainable buckets ('_unassigned' etc.) carry no
+    // species — never export them, regardless of count.
+    if (sid.startsWith('_')) { excluded.push(sid); continue; }
     if (list.length < MIN_TRAIN_THRESHOLD) { excluded.push(sid); continue; }
     species.push(sid);
     verifiedPerSpecies[sid] = list.length;
