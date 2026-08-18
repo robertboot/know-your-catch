@@ -1629,8 +1629,6 @@ export function ResetPasswordPage() {
 
 /* Every download CTA on the page points here. */
 const TESTER_APP_URL = APP_STORE_URL;
-/* Apple's deep link that opens the write-a-review sheet directly. */
-const TESTER_REVIEW_URL = `${APP_STORE_URL}?action=write-review`;
 
 /* Tester spots. SPOTS_TOTAL is the promise in the copy; the claimed
    count is read from the backend when the tester_feedback table exists
@@ -1640,14 +1638,6 @@ const TESTER_REVIEW_URL = `${APP_STORE_URL}?action=write-review`;
 const TESTER_SPOTS_TOTAL = 25;
 const TESTER_SPOTS_CLAIMED_FALLBACK = 0;
 
-function StarIcon({ size = 22, color = P.accent }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
-         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />
-    </svg>
-  );
-}
 function AppleIcon({ size = 19, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
@@ -1785,13 +1775,6 @@ const TESTERS_CSS = `
   transition: width 600ms ease;
 }
 .rl-tt-fine { font-size: 12.5px; color: ${P.inkMute}; margin: 12px 0 0; }
-
-/* ---- review strip ---- */
-.rl-tt-review {
-  display: flex; align-items: center; justify-content: space-between; gap: 26px; flex-wrap: wrap;
-  border: 1px solid ${P.border}; border-radius: 18px; padding: 28px 30px; background: ${P.bgAlt};
-}
-.rl-tt-review p { margin: 0; max-width: 620px; }
 
 /* ---- feedback form ---- */
 .rl-tt-form { display: grid; gap: 16px; max-width: 760px; margin: 0 auto; }
@@ -2090,26 +2073,6 @@ export function TestersPage() {
         </div>
       </section>
 
-      {/* ---------- REVIEW (separate from the reward) ---------- */}
-      <section className="rl-tt-sec rl-tt-sec-alt" style={{ paddingTop: 0, background: 'transparent' }}>
-        <div className="rl-container">
-          <div className="rl-tt-review">
-            <div>
-              <h3 className="rl-tt-h2" style={{ fontSize: 'clamp(21px, 2.6vw, 28px)', marginBottom: 8 }}>
-                Used it enough to have an opinion?
-              </h3>
-              <p style={{ color: P.inkSoft, fontSize: 15, lineHeight: 1.6 }}>
-                An honest App Store review helps other anglers find ReelIntel and helps us
-                understand what’s working. Once you’ve spent some time in the app, I’d
-                appreciate your feedback there too.
-              </p>
-            </div>
-            <a className="rl-tt-cta rl-tt-cta-ghost" href={TESTER_REVIEW_URL} target="_blank" rel="noreferrer">
-              <StarIcon size={17} /> Review ReelIntel on the App Store →
-            </a>
-          </div>
-        </div>
-      </section>
 
 
 
