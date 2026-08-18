@@ -207,15 +207,29 @@ def check_cross_species_dupes(man):
 # species; it was a hard FAIL locally and a silent WARN on Colab, which
 # is exactly the false green this gate exists to prevent.
 def _structurally_bad_labels(used):
-    bad = []
+    """Split into (blocking, cosmetic).
+
+    Only a leading/trailing underscore is BLOCKING: that is the
+    placeholder shape (`_unassigned`), which is not a fish and must
+    never train as a class.
+
+    Spaces and capitals are NOT blocking. 'Rainbow Runner', 'Red Hind'
+    and 'skipjack tuna' are real, active, single-row species carrying
+    266/226/2 verified images — there is no snake_case counterpart to
+    consolidate into. An earlier version of this check failed the run on
+    them, which blocked a perfectly good dataset over a naming
+    convention. Untidy ids are worth reporting, not worth refusing to
+    train on.
+    """
+    blocking, cosmetic = [], []
     for l in sorted(used):
         if l.startswith("_") or l.endswith("_"):
-            bad.append(f"{l} (placeholder/underscore-bounded)")
+            blocking.append(f"{l} (placeholder — not a species)")
         elif " " in l:
-            bad.append(f"{l} (contains a space — id should be snake_case)")
+            cosmetic.append(f"{l} (space in id)")
         elif l != l.lower():
-            bad.append(f"{l} (not lowercase)")
-    return bad
+            cosmetic.append(f"{l} (not lowercase)")
+    return blocking, cosmetic
 
 
 def check_label_mapping(man):
@@ -235,16 +249,18 @@ def check_label_mapping(man):
         # active species, but can still reject the ones that cannot be
         # one. Reported as FAIL when structurally bad, WARN otherwise —
         # never silently PASS.
-        structural = _structurally_bad_labels(used)
-        if structural:
+        blocking, cosmetic = _structurally_bad_labels(used)
+        if blocking:
             record("labels map to species", FAIL,
-                   f"no creds, but {len(structural)} label(s) are structurally "
-                   f"invalid: {'; '.join(structural[:4])}")
+                   f"no creds, but {len(blocking)} placeholder label(s) must "
+                   f"not train: {'; '.join(blocking[:4])}")
         else:
+            note = (f" ({len(cosmetic)} untidy id(s): "
+                    f"{', '.join(cosmetic[:3])})" if cosmetic else "")
             record("labels map to species", WARN,
                    f"no creds to reach the species table — {len(used)} labels "
-                   f"pass a structural check only. Set SUPABASE_URL + "
-                   f"SUPABASE_ANON_KEY for the full check.")
+                   f"pass a structural check only{note}. Set SUPABASE_URL + "
+                   f"SUPABASE_ANON_KEY in the Colab cell for the full check.")
         record("scientific names resolved", WARN, "no creds to verify")
         return
     req = urllib.request.Request(
