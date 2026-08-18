@@ -359,6 +359,18 @@ os.environ.setdefault("REELINTEL_EXPORT_MANIFEST", str(manifest_path))
 if os.environ.get("REELINTEL_SKIP_PREFLIGHT") == "1":
     print("[colab_run] WARNING: preflight SKIPPED by REELINTEL_SKIP_PREFLIGHT=1")
 else:
+    # Fetch the EXIF test alongside preflight. Colab pulls preflight.py
+    # standalone, so training/tests/ does not exist there and the check
+    # failed with "test file missing" — a message about our packaging,
+    # not about the dataset, that nonetheless blocked a clean run.
+    try:
+        os.makedirs("/content/tests", exist_ok=True)
+        urlretrieve(
+            "https://raw.githubusercontent.com/robertboot/know-your-catch/"
+            f"{BRANCH}/training/tests/test_exif_parity.py",
+            "/content/tests/test_exif_parity.py")
+    except Exception as e:
+        print(f"[colab_run] WARNING: could not fetch EXIF test ({e})")
     try:
         urlretrieve(PREFLIGHT_URL, PREFLIGHT_PATH)
     except Exception as e:

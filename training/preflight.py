@@ -200,11 +200,52 @@ def check_cross_species_dupes(man):
                f"all {len(ids)} conflicted images quarantined out of the split")
 
 
+# Labels that are structurally invalid regardless of what the species
+# table says. Checked WITHOUT credentials so a Colab run — which has no
+# .env.local — still catches them. `_unassigned` is a real placeholder
+# that reached the verified set and would otherwise have trained as a
+# species; it was a hard FAIL locally and a silent WARN on Colab, which
+# is exactly the false green this gate exists to prevent.
+def _structurally_bad_labels(used):
+    bad = []
+    for l in sorted(used):
+        if l.startswith("_") or l.endswith("_"):
+            bad.append(f"{l} (placeholder/underscore-bounded)")
+        elif " " in l:
+            bad.append(f"{l} (contains a space — id should be snake_case)")
+        elif l != l.lower():
+            bad.append(f"{l} (not lowercase)")
+    return bad
+
+
 def check_label_mapping(man):
     env = load_env()
-    url = env.get("VITE_SUPABASE_URL"); key = env.get("VITE_SUPABASE_ANON_KEY")
+    url = (env.get("VITE_SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+           or os.environ.get("VITE_SUPABASE_URL"))
+    key = (env.get("VITE_SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+           or os.environ.get("VITE_SUPABASE_ANON_KEY"))
+
+    if not man:
+        record("labels map to species", FAIL, "skipped — no manifest")
+        return
+    used = set(man.get("species", {}).values())
+
     if not (url and key):
-        record("labels map to species", WARN, "no creds to verify")
+        # Credential-free fallback. Cannot confirm every label IS an
+        # active species, but can still reject the ones that cannot be
+        # one. Reported as FAIL when structurally bad, WARN otherwise —
+        # never silently PASS.
+        structural = _structurally_bad_labels(used)
+        if structural:
+            record("labels map to species", FAIL,
+                   f"no creds, but {len(structural)} label(s) are structurally "
+                   f"invalid: {'; '.join(structural[:4])}")
+        else:
+            record("labels map to species", WARN,
+                   f"no creds to reach the species table — {len(used)} labels "
+                   f"pass a structural check only. Set SUPABASE_URL + "
+                   f"SUPABASE_ANON_KEY for the full check.")
+        record("scientific names resolved", WARN, "no creds to verify")
         return
     req = urllib.request.Request(
         url.rstrip("/") + "/rest/v1/species?select=id,scientific,is_active",
@@ -215,10 +256,6 @@ def check_label_mapping(man):
               if r.get("is_active") is not False
               and not (r.get("scientific") or "").strip()}
 
-    if not man:
-        record("labels map to species", FAIL, "skipped — no manifest")
-        return
-    used = set(man.get("species", {}).values())
     unmapped = sorted(used - active)
     if unmapped:
         record("labels map to species", FAIL,
@@ -236,11 +273,27 @@ def check_label_mapping(man):
         record("scientific names resolved", OK, "every training species has one")
 
 
+EXIF_TEST_URL = (
+    "https://raw.githubusercontent.com/robertboot/know-your-catch/"
+    "claude/upload-app-assets-NUxRr/training/tests/test_exif_parity.py"
+)
+
+
 def check_exif():
     test = HERE / "tests" / "test_exif_parity.py"
     if not test.exists():
-        record("EXIF normalization", FAIL, "test file missing")
-        return
+        # Colab fetches preflight.py standalone, so the tests/ directory
+        # is not present. Pull the test rather than failing on its
+        # absence — "test file missing" told us nothing about the data
+        # and blocked a run whose dataset was fine.
+        try:
+            test.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(EXIF_TEST_URL, str(test))
+            print(f"       (fetched {test.name} — not present locally)")
+        except Exception as e:
+            record("EXIF normalization", FAIL,
+                   f"test file missing and could not be fetched: {e}")
+            return
     out = subprocess.run([sys.executable, str(test)], capture_output=True, text=True)
     tail = (out.stdout.strip().splitlines() or ["no output"])[-1]
     if out.returncode == 0 and "PASS" in out.stdout:

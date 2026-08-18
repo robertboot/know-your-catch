@@ -55,10 +55,20 @@ def make_rotated_jpeg(tmp: Path) -> Path:
 def main():
     import tempfile
 
-    try:
-        from PIL import Image  # noqa: F401
-    except ImportError:
-        print("SKIP: Pillow not installed — cannot author a fixture.")
+    # Guard on EVERY dependency the assertion path touches, not just the
+    # fixture's. _decode_upright() needs numpy as well as Pillow, and
+    # guarding on Pillow alone turned a missing-numpy environment into a
+    # traceback that preflight reported as "no output" — a failure that
+    # said nothing about EXIF or about the data.
+    missing = []
+    for mod in ("PIL", "numpy"):
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(mod)
+    if missing:
+        print(f"SKIP: {', '.join(missing)} not installed — cannot run the "
+              f"EXIF assertion in this environment.")
         return 0
 
     # Imported lazily: _decode_upright lives in train_fish_id, which pulls
