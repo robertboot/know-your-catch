@@ -1611,259 +1611,443 @@ export function ResetPasswordPage() {
 }
 
 /* ============================================================
-   /testers — private recruiting page for the first 25 testers
+   /testers — private early-access recruiting page
    ============================================================
-   A web replica of the ReelIntel tester flyer. Deliberately NOT
-   linked from the marketing nav or footer: the app is live on the
-   App Store but not yet marketed, so this URL is handed out
-   directly and the page says so at the bottom.
+   NOT the public marketing homepage. This URL is texted directly to
+   ~25 anglers the founder knows personally, so it is unlisted (no nav
+   or footer link) and served with X-Robots-Tag: noindex (vercel.json).
 
-   The phone is built in markup rather than shipped as an image so
-   the screen content stays legible at every width and can be edited
-   in code — the flyer's mock dashboard (a PB, a top pattern, a
-   month's stats) is representative of the real home screen.  */
+   It reuses the site's design system wholesale — the `rl-*` classes,
+   the P palette, the button and card language — and adds only what the
+   tester flow needs. iOS only: ReelIntel has no Android build, so there
+   is deliberately no Play badge or "available on both stores" copy.
+
+   The phone is composed in markup rather than shipped as a flat export:
+   it stays sharp on every display, costs no image bytes on a page that
+   is opened over cellular from a text message, and the screen content
+   can be edited in code instead of re-cut in a design tool.  */
+
+/* Every download CTA on the page points here. */
+const TESTER_APP_URL = APP_STORE_URL;
+/* Apple's deep link that opens the write-a-review sheet directly. */
+const TESTER_REVIEW_URL = `${APP_STORE_URL}?action=write-review`;
+
+/* Tester spots. SPOTS_TOTAL is the promise in the copy; the claimed
+   count is read from the backend when the tester_feedback table exists
+   (one completed submission = one claimed spot) and falls back to this
+   constant otherwise — so the page is correct before any backend work
+   and self-maintaining after it. */
+const TESTER_SPOTS_TOTAL = 25;
+const TESTER_SPOTS_CLAIMED_FALLBACK = 0;
 
 function UserIcon({ size = 22, color = P.accent }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
-         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
     </svg>
   );
 }
-
 function StarIcon({ size = 22, color = P.accent }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
-         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />
+    </svg>
+  );
+}
+function WrenchIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a4 4 0 105.1 5.1L21 21H3l9.6-1.2a4 4 0 102.1-13.5z" />
+    </svg>
+  );
+}
+function AppleIcon({ size = 19, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
+      <path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.9zM14.2 5.3c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3z" />
     </svg>
   );
 }
 
 const TESTERS_CSS = `
-.rl-test-wrap { padding: 8px 0 0; }
+/* ---- shell ---- */
+.rl-tt-nav {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 44px; max-width: 1200px; margin: 0 auto;
+  position: sticky; top: 0; z-index: 40;
+  background: rgba(6,17,31,0.82); backdrop-filter: blur(14px);
+  border-bottom: 1px solid ${P.border};
+}
+@media (max-width: 560px) { .rl-tt-nav { padding: 12px 18px; gap: 10px; } }
+.rl-tt-nav-sp { flex: 1; }
+.rl-tt-back {
+  color: ${P.inkSoft}; text-decoration: none; font-size: 13.5px; font-weight: 600;
+  white-space: nowrap; transition: color 160ms ease;
+}
+.rl-tt-back:hover { color: ${P.accent}; }
+@media (max-width: 460px) { .rl-tt-back { display: none; } }
+.rl-tt-navcta { padding: 10px 18px; font-size: 13px; white-space: nowrap; }
 
-/* Masthead: logo left, headline right (stacks under 900px) */
-.rl-test-top {
-  display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  gap: 32px; align-items: center; padding: 10px 0 34px;
+/* ---- hero ---- */
+.rl-tt-hero { position: relative; overflow: hidden; padding: 34px 0 20px; }
+.rl-tt-hero-art {
+  position: absolute; right: -6%; top: -4%; width: min(720px, 58%);
+  opacity: 0.13; pointer-events: none; z-index: 0; filter: saturate(1.1);
 }
-.rl-test-logo { width: 100%; max-width: 420px; height: auto; display: block; }
-.rl-test-headline {
-  font-size: clamp(34px, 5.4vw, 62px); line-height: 0.96; margin: 0;
-  font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase;
-  color: ${P.ink}; text-align: right;
+.rl-tt-rings {
+  position: absolute; left: 50%; top: 46%; width: 1100px; height: 1100px;
+  transform: translate(-50%,-50%); pointer-events: none; z-index: 0; opacity: 0.5;
 }
-.rl-test-headline .accent { color: ${P.accent}; }
-.rl-test-badge {
-  display: inline-block; margin-top: 18px; float: right; clear: both;
-  background: ${P.accent}; color: #031B33;
-  font-size: clamp(15px, 2.1vw, 24px); font-weight: 900; font-style: italic;
-  letter-spacing: 0.5px; padding: 9px 26px; border-radius: 4px;
-  text-transform: uppercase; transform: rotate(-1deg);
-  box-shadow: 0 10px 28px rgba(25,212,242,0.25);
+.rl-tt-hero-grid {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,0.95fr);
+  gap: 48px; align-items: center;
 }
-@media (max-width: 900px) {
-  .rl-test-top { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 18px; }
-  .rl-test-headline { text-align: center; }
-  .rl-test-badge { float: none; }
+@media (max-width: 940px) { .rl-tt-hero-grid { grid-template-columns: 1fr; gap: 30px; } }
+.rl-tt-hero-copy { display: flex; flex-direction: column; }
+.rl-tt-hero-copy > .rl-tt-logo  { order: 1; }
+.rl-tt-hero-copy > .rl-tt-h1    { order: 2; }
+.rl-tt-hero-copy > .rl-tt-sub   { order: 3; }
+.rl-tt-hero-copy > .rl-tt-caps  { order: 4; }
+.rl-tt-hero-copy > .rl-tt-hero-cta { order: 5; }
+@media (max-width: 700px) {
+  /* CTA before the capability list — it must land in the first screen. */
+  .rl-tt-hero-copy > .rl-tt-hero-cta { order: 4; margin-bottom: 26px; }
+  .rl-tt-hero-copy > .rl-tt-caps     { order: 5; margin-bottom: 0; }
+  .rl-tt-logo { width: 210px; margin-bottom: 16px; }
+  .rl-tt-h1   { margin-bottom: 14px; }
+  .rl-tt-sub  { font-size: 15.5px; margin-bottom: 22px; }
+  .rl-tt-hero { padding-top: 22px; }
 }
+.rl-tt-logo { width: min(330px, 74%); height: auto; display: block; margin-bottom: 22px; }
+.rl-tt-h1 {
+  font-size: clamp(36px, 5.6vw, 64px); line-height: 0.98; margin: 0 0 18px;
+  font-weight: 900; letter-spacing: -1px; text-transform: uppercase;
+}
+.rl-tt-h1 .accent { color: ${P.accent}; }
+.rl-tt-sub { color: ${P.inkSoft}; font-size: 16.5px; line-height: 1.62; margin: 0 0 26px; max-width: 560px; }
+.rl-tt-caps {
+  display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px 20px;
+  margin: 0 0 30px; padding: 0; list-style: none; max-width: 580px;
+}
+@media (max-width: 420px) { .rl-tt-caps { grid-template-columns: 1fr; gap: 14px; } }
+.rl-tt-cap-t {
+  font-size: 12.5px; font-weight: 800; color: ${P.ink}; text-transform: uppercase;
+  letter-spacing: 0.8px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.rl-tt-cap-d { font-size: 13.5px; color: ${P.inkMute}; line-height: 1.5; margin: 0; }
+.rl-tt-note { font-size: 13px; color: ${P.inkMute}; margin: 12px 0 0; }
+.rl-tt-note .accent { color: ${P.accent}; }
 
-/* Body: copy + steps on the left, phone on the right */
-.rl-test-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
-  gap: 46px; align-items: start; padding: 8px 0 54px;
+/* Big Apple-style CTA — used in several sections */
+.rl-tt-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 11px;
+  background: ${P.accent}; color: #031B33; border: none; cursor: pointer;
+  padding: 17px 30px; border-radius: 14px; font-size: 15.5px; font-weight: 800;
+  letter-spacing: 0.3px; text-decoration: none;
+  box-shadow: 0 14px 38px rgba(25,212,242,0.32);
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
-@media (max-width: 900px) { .rl-test-body { grid-template-columns: 1fr; gap: 34px; } }
+.rl-tt-cta:hover { transform: translateY(-2px); box-shadow: 0 18px 46px rgba(25,212,242,0.44); }
+.rl-tt-cta-ghost {
+  background: transparent; color: ${P.accent}; border: 1.5px solid ${P.accent};
+  box-shadow: none;
+}
+.rl-tt-cta-ghost:hover { background: rgba(25,212,242,0.08); box-shadow: none; }
+@media (max-width: 560px) { .rl-tt-cta { width: 100%; box-sizing: border-box; padding: 17px 18px; font-size: 15px; } }
+/* Keep the label on ONE line on a phone — a wrapped label orphans the
+   Apple glyph on the far left and reads as a layout bug. */
+@media (max-width: 440px) { .rl-tt-cta-long { display: none; } }
 
-.rl-test-kicker {
-  font-size: clamp(20px, 2.6vw, 30px); font-weight: 900; line-height: 1.12;
-  text-transform: uppercase; margin: 0 0 14px; letter-spacing: -0.2px;
+/* ---- phone ---- */
+.rl-tt-phone-col { display: flex; justify-content: center; position: relative; }
+.rl-tt-phone {
+  width: 100%; max-width: 310px; border-radius: 44px; padding: 10px;
+  background: linear-gradient(155deg, #33414f, #0e151c 52%, #2b3846);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.62), 0 0 0 1px rgba(255,255,255,0.07);
+  transform: rotate(-2.2deg);
 }
-.rl-test-kicker .accent { color: ${P.accent}; display: block; }
-.rl-test-lead { color: ${P.inkSoft}; font-size: 16px; line-height: 1.62; margin: 0 0 30px; max-width: 520px; }
-
-.rl-test-ask {
-  font-size: clamp(17px, 2.1vw, 22px); font-weight: 900; color: ${P.accent};
-  text-transform: uppercase; margin: 0 0 18px; letter-spacing: 0.2px;
-}
-.rl-test-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
-.rl-test-step { display: grid; grid-template-columns: 46px 1fr; gap: 16px; align-items: start; }
-.rl-test-step-ic {
-  width: 46px; height: 46px; border-radius: 999px; flex-shrink: 0;
-  border: 2px solid ${P.accent}; display: flex; align-items: center; justify-content: center;
-  background: rgba(25,212,242,0.06);
-}
-.rl-test-step-t {
-  font-size: 15px; font-weight: 800; color: ${P.ink}; text-transform: uppercase;
-  letter-spacing: 0.4px; margin: 4px 0 3px;
-}
-.rl-test-step-d { font-size: 14.5px; color: ${P.inkSoft}; line-height: 1.5; margin: 0; }
-
-/* Phone — built in markup so the screen stays crisp and editable */
-.rl-test-phone-col { display: flex; justify-content: center; }
-.rl-test-phone {
-  width: 100%; max-width: 320px; border-radius: 42px; padding: 11px;
-  background: linear-gradient(160deg, #2b3947, #10171f 55%, #273442);
-  box-shadow: 0 34px 70px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07);
-}
-.rl-test-screen {
-  background: #071c30; border-radius: 32px; overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.06);
-}
-.rl-test-status {
+@media (max-width: 940px) { .rl-tt-phone { transform: none; max-width: 290px; } }
+.rl-tt-screen { background: #06162a; border-radius: 35px; overflow: hidden; }
+.rl-tt-scr-top {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 20px 6px; font-size: 12px; font-weight: 700; color: ${P.ink};
+  padding: 11px 20px 4px; font-size: 11.5px; font-weight: 700; color: ${P.ink};
 }
-.rl-test-appbar {
-  display: flex; justify-content: center; align-items: center; position: relative;
-  padding: 6px 18px 12px;
+.rl-tt-scr-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 16px 10px; }
+.rl-tt-scr-bar img { height: 15px; width: auto; display: block; }
+.rl-tt-scr-body { padding: 0 11px 10px; display: grid; gap: 8px; }
+.rl-tt-c {
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 13px; padding: 10px 12px;
 }
-.rl-test-appbar img { height: 17px; width: auto; display: block; }
-.rl-test-scr-body { padding: 0 12px 12px; display: grid; gap: 9px; }
-.rl-test-card {
-  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 13px; padding: 11px 13px;
+.rl-tt-c-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.rl-tt-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 8.5px; font-weight: 800;
+  letter-spacing: 0.6px; text-transform: uppercase; color: ${P.accent};
+  border: 1px solid rgba(25,212,242,0.4); background: rgba(25,212,242,0.10);
+  padding: 2.5px 7px; border-radius: 999px; margin-bottom: 5px;
 }
-.rl-test-card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.rl-test-sp { font-size: 15px; font-weight: 800; color: ${P.ink}; }
-.rl-test-len { font-size: 15px; font-weight: 800; color: ${P.accent}; margin-top: 1px; }
-.rl-test-meta { font-size: 10.5px; color: ${P.inkMute}; margin-top: 3px; line-height: 1.45; }
-.rl-test-lbl { font-size: 10px; letter-spacing: 1px; color: ${P.inkMute}; font-weight: 800; text-transform: uppercase; }
-.rl-test-heat {
-  height: 74px; border-radius: 9px; margin-top: 9px; position: relative; overflow: hidden;
+.rl-tt-sp { font-size: 14.5px; font-weight: 800; color: ${P.ink}; line-height: 1.2; }
+.rl-tt-len { font-size: 14.5px; font-weight: 800; color: ${P.accent}; margin-top: 1px; }
+.rl-tt-meta { font-size: 10px; color: ${P.inkMute}; margin-top: 3px; line-height: 1.45; }
+.rl-tt-lbl { font-size: 9.5px; letter-spacing: 1px; color: ${P.inkMute}; font-weight: 800; text-transform: uppercase; }
+.rl-tt-heat {
+  height: 70px; border-radius: 9px; margin-top: 8px; position: relative; overflow: hidden;
   background:
-    radial-gradient(circle at 50% 58%, rgba(255,200,87,0.95) 0%, rgba(255,120,60,0.55) 14%, rgba(25,212,242,0.30) 34%, rgba(11,39,64,0) 62%),
-    linear-gradient(180deg, #0a2136, #07182a);
+    radial-gradient(circle at 52% 56%, rgba(255,200,87,0.92) 0%, rgba(255,130,60,0.5) 15%, rgba(25,212,242,0.28) 36%, rgba(6,22,42,0) 64%),
+    repeating-linear-gradient(115deg, rgba(25,212,242,0.07) 0 1px, transparent 1px 13px),
+    linear-gradient(180deg, #0a2136, #06172a);
 }
-.rl-test-pin {
-  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
-  width: 15px; height: 15px; border-radius: 999px 999px 999px 0;
-  background: ${P.accent}; rotate: -45deg; box-shadow: 0 0 14px rgba(25,212,242,0.9);
+.rl-tt-pin {
+  position: absolute; left: 52%; top: 40%; transform: translate(-50%,-50%) rotate(-45deg);
+  width: 13px; height: 13px; border-radius: 999px 999px 999px 0;
+  background: ${P.accent}; box-shadow: 0 0 12px rgba(25,212,242,0.9);
 }
-.rl-test-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
-.rl-test-stat-n { font-size: 21px; font-weight: 900; color: ${P.ink}; line-height: 1; }
-.rl-test-stat-l { font-size: 9px; letter-spacing: 0.8px; color: ${P.inkMute}; font-weight: 700; margin-top: 4px; text-transform: uppercase; }
-.rl-test-tabs {
+.rl-tt-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 9px; }
+.rl-tt-stat-n { font-size: 20px; font-weight: 900; color: ${P.ink}; line-height: 1; }
+.rl-tt-stat-l { font-size: 8.5px; letter-spacing: 0.8px; color: ${P.inkMute}; font-weight: 700; margin-top: 4px; text-transform: uppercase; }
+.rl-tt-tabs {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 9px 16px 13px; border-top: 1px solid ${P.border}; margin-top: 2px;
+  padding: 8px 15px 12px; border-top: 1px solid ${P.border};
 }
-.rl-test-tab { font-size: 8.5px; color: ${P.inkMute}; text-align: center; font-weight: 600; }
-.rl-test-tab-plus {
-  width: 34px; height: 34px; border-radius: 999px; background: ${P.accent}; color: #031B33;
-  display: flex; align-items: center; justify-content: center; font-size: 21px; font-weight: 700;
-  line-height: 1; box-shadow: 0 6px 18px rgba(25,212,242,0.45);
+.rl-tt-tab { font-size: 8px; color: ${P.inkMute}; font-weight: 600; }
+.rl-tt-tab.on { color: ${P.accent}; }
+.rl-tt-plus {
+  width: 32px; height: 32px; border-radius: 999px; background: ${P.accent}; color: #031B33;
+  display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700;
+  line-height: 1; box-shadow: 0 6px 16px rgba(25,212,242,0.45);
 }
 
-/* T-shirt reward band */
-.rl-test-tee {
-  display: grid; grid-template-columns: 250px 1fr; gap: 34px; align-items: center;
-  border-top: 1px solid ${P.border}; border-bottom: 1px solid ${P.border};
-  padding: 34px 0; margin-bottom: 34px;
+/* ---- generic section furniture ---- */
+.rl-tt-sec { padding: 62px 0; }
+.rl-tt-sec-alt { background: ${P.bgAlt}; }
+@media (max-width: 640px) { .rl-tt-sec { padding: 46px 0; } }
+.rl-tt-h2 {
+  font-size: clamp(26px, 3.9vw, 42px); font-weight: 900; text-transform: uppercase;
+  letter-spacing: -0.5px; line-height: 1.04; margin: 0 0 12px;
 }
-@media (max-width: 760px) { .rl-test-tee { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 22px; } }
-.rl-test-tee-img {
-  width: 100%; max-width: 250px; border-radius: 14px; display: block;
-  background: ${P.card}; border: 1px solid ${P.border};
-}
-.rl-test-tee-fallback {
-  width: 100%; max-width: 250px; aspect-ratio: 1 / 1; border-radius: 14px;
-  background: ${P.card}; border: 1px solid ${P.border};
-  display: flex; align-items: center; justify-content: center; padding: 22px; box-sizing: border-box;
-}
-.rl-test-tee-fallback { padding: 10px; }
-.rl-test-tee-svg { width: 100%; height: auto; display: block; }
-.rl-test-tee-h {
-  font-size: clamp(26px, 4vw, 46px); font-weight: 900; text-transform: uppercase;
-  line-height: 1.02; margin: 0 0 6px; letter-spacing: -0.5px;
-}
-.rl-test-tee-h .accent { color: ${P.accent}; }
-.rl-test-tee-p { color: ${P.inkSoft}; font-size: 15.5px; line-height: 1.6; margin: 0 0 8px; max-width: 560px; }
-.rl-test-tee-note { color: ${P.accent}; font-size: 13px; margin: 0; }
+.rl-tt-h2 .accent { color: ${P.accent}; }
+.rl-tt-lead { color: ${P.inkSoft}; font-size: 16px; line-height: 1.62; margin: 0 0 32px; max-width: 660px; }
 
-/* Download row */
-.rl-test-dl {
-  display: flex; align-items: center; justify-content: center; gap: 26px; flex-wrap: wrap;
-  border: 1px solid ${P.border}; border-radius: 16px; padding: 20px 26px; background: ${P.card};
+/* ---- the ask ---- */
+.rl-tt-steps { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
+@media (max-width: 1000px) { .rl-tt-steps { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 700px)  { .rl-tt-steps { grid-template-columns: 1fr; } }
+.rl-tt-step {
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 18px;
+  padding: 26px 24px; position: relative; overflow: hidden;
 }
-.rl-test-dl img { height: 54px; width: auto; display: block; }
-.rl-test-dl-or { font-size: 14px; font-weight: 800; color: ${P.ink}; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.45; }
-.rl-test-dl-or span { color: ${P.accent}; }
-.rl-test-quiet {
-  text-align: center; color: ${P.accent}; font-style: italic; font-weight: 700;
-  letter-spacing: 0.5px; font-size: 14px; padding: 26px 0 40px; text-transform: uppercase;
+.rl-tt-step-n {
+  font-size: 13px; font-weight: 900; letter-spacing: 2px; color: ${P.accent}; margin-bottom: 12px;
 }
+.rl-tt-step-h {
+  font-size: 18px; font-weight: 900; color: ${P.ink}; text-transform: uppercase;
+  letter-spacing: 0.3px; margin: 0 0 8px; display: flex; align-items: center; gap: 10px;
+}
+.rl-tt-step-p { font-size: 14.5px; color: ${P.inkSoft}; line-height: 1.6; margin: 0; }
+/* Step 04 carries the whole point of the page — give it the accent. */
+.rl-tt-step-hi {
+  grid-column: 1 / -1;
+  border-color: ${P.borderHi};
+  background: linear-gradient(150deg, rgba(25,212,242,0.10), ${P.card} 58%);
+  box-shadow: 0 0 0 1px rgba(25,212,242,0.10) inset, 0 18px 44px rgba(0,0,0,0.35);
+}
+.rl-tt-step-hi .rl-tt-step-p { color: ${P.ink}; font-size: 16px; }
+
+/* ---- shirt ---- */
+.rl-tt-shirt {
+  display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 40px; align-items: center;
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 22px; padding: 34px;
+}
+@media (max-width: 760px) { .rl-tt-shirt { grid-template-columns: 1fr; gap: 24px; padding: 26px 22px; text-align: center; justify-items: center; } }
+.rl-tt-shirt-img { width: 100%; max-width: 260px; border-radius: 16px; display: block; }
+.rl-tt-shirt-svg { width: 100%; max-width: 260px; height: auto; display: block; }
+.rl-tt-prog-wrap { max-width: 420px; margin-top: 22px; }
+@media (max-width: 760px) { .rl-tt-prog-wrap { margin-left: auto; margin-right: auto; } }
+.rl-tt-prog-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.rl-tt-prog-n { font-size: 15px; font-weight: 900; color: ${P.ink}; }
+.rl-tt-prog-n .accent { color: ${P.accent}; }
+.rl-tt-prog-l { font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase; color: ${P.inkMute}; font-weight: 700; }
+.rl-tt-prog-track { height: 9px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.rl-tt-prog-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, ${P.accent}, ${T.warn});
+  box-shadow: 0 0 16px rgba(25,212,242,0.5);
+  transition: width 600ms ease;
+}
+.rl-tt-fine { font-size: 12.5px; color: ${P.inkMute}; margin: 12px 0 0; }
+
+/* ---- review strip ---- */
+.rl-tt-review {
+  display: flex; align-items: center; justify-content: space-between; gap: 26px; flex-wrap: wrap;
+  border: 1px solid ${P.border}; border-radius: 18px; padding: 28px 30px; background: ${P.bgAlt};
+}
+.rl-tt-review p { margin: 0; max-width: 620px; }
+
+/* ---- intelligence ---- */
+.rl-tt-intel { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,0.85fr); gap: 44px; align-items: center; }
+@media (max-width: 900px) { .rl-tt-intel { grid-template-columns: 1fr; gap: 30px; } }
+.rl-tt-three { display: grid; gap: 14px; margin-top: 26px; }
+.rl-tt-three-i { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start; }
+.rl-tt-three-ic {
+  width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
+  background: rgba(25,212,242,0.08); border: 1px solid ${P.border};
+}
+.rl-tt-three-t { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: ${P.ink}; margin-bottom: 3px; }
+.rl-tt-three-d { font-size: 14px; color: ${P.inkMute}; line-height: 1.5; margin: 0; }
+.rl-tt-viz { background: ${P.card}; border: 1px solid ${P.border}; border-radius: 20px; padding: 22px; }
+.rl-tt-viz-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.rl-tt-viz-t { font-size: 11.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: ${P.inkMute}; }
+.rl-tt-bars { display: flex; align-items: flex-end; gap: 5px; height: 92px; margin-bottom: 6px; }
+.rl-tt-bar { flex: 1; border-radius: 4px 4px 2px 2px; background: rgba(25,212,242,0.22); }
+.rl-tt-bar.hot { background: linear-gradient(180deg, ${T.warn}, ${P.accent}); box-shadow: 0 0 14px rgba(255,200,87,0.35); }
+.rl-tt-bar-x { display: flex; justify-content: space-between; font-size: 9.5px; color: ${P.inkMute}; letter-spacing: 0.5px; }
+.rl-tt-viz-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.rl-tt-mini { background: ${P.bgAlt}; border: 1px solid ${P.border}; border-radius: 13px; padding: 13px; }
+.rl-tt-mini-l { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: ${P.inkMute}; font-weight: 800; }
+.rl-tt-mini-v { font-size: 17px; font-weight: 900; color: ${P.ink}; margin-top: 4px; }
+.rl-tt-mini-v small { font-size: 11px; color: ${P.accent}; font-weight: 700; margin-left: 5px; }
+
+/* ---- privacy ---- */
+.rl-tt-priv {
+  display: grid; grid-template-columns: 76px 1fr; gap: 22px; align-items: center;
+  border: 1px solid ${P.border}; border-radius: 18px; padding: 26px 28px;
+  background: linear-gradient(140deg, rgba(25,212,242,0.07), ${P.card} 62%);
+}
+@media (max-width: 560px) { .rl-tt-priv { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 14px; } }
+.rl-tt-priv-ic {
+  width: 76px; height: 76px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
+  background: rgba(25,212,242,0.10); border: 1px solid ${P.borderHi};
+}
+
+/* ---- feedback form ---- */
+.rl-tt-form { display: grid; gap: 16px; max-width: 760px; }
+.rl-tt-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 620px) { .rl-tt-row2 { grid-template-columns: 1fr; } }
+.rl-tt-field { display: grid; gap: 7px; }
+.rl-tt-field label { font-size: 12px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; color: ${P.inkSoft}; }
+.rl-tt-field input, .rl-tt-field textarea {
+  background: ${P.bgAlt}; border: 1px solid ${P.border}; border-radius: 12px;
+  padding: 13px 15px; color: ${P.ink}; font-size: 15px; font-family: inherit;
+  width: 100%; box-sizing: border-box; transition: border-color 140ms ease;
+}
+.rl-tt-field input:focus, .rl-tt-field textarea:focus { outline: none; border-color: ${P.accent}; }
+.rl-tt-field textarea { min-height: 88px; resize: vertical; line-height: 1.55; }
+.rl-tt-field input[type=file] { padding: 11px 13px; font-size: 13px; color: ${P.inkMute}; }
+.rl-tt-err { color: ${T.warn}; font-size: 13.5px; margin: 0; }
+.rl-tt-done {
+  border: 1px solid ${P.borderHi}; border-radius: 18px; padding: 34px 30px; text-align: center;
+  background: linear-gradient(140deg, rgba(25,212,242,0.10), ${P.card} 60%);
+}
+.rl-tt-done h3 { font-size: 22px; font-weight: 900; margin: 0 0 8px; color: ${P.ink}; }
+.rl-tt-done p { color: ${P.inkSoft}; margin: 0; font-size: 15px; }
+
+/* ---- final cta ---- */
+.rl-tt-final { position: relative; overflow: hidden; padding: 92px 0; text-align: center; }
+@media (max-width: 640px) { .rl-tt-final { padding: 64px 0; } }
+.rl-tt-final-bg { position: absolute; inset: 0; background-size: cover; background-position: center; z-index: 0; }
+.rl-tt-final-scrim {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, ${P.bg} 0%, rgba(6,17,31,0.72) 34%, rgba(6,17,31,0.86) 100%);
+}
+.rl-tt-final-in { position: relative; z-index: 2; }
+.rl-tt-quiet {
+  margin: 30px auto 0; max-width: 620px; font-size: 13.5px; line-height: 1.6;
+  color: ${P.inkSoft}; border-top: 1px solid ${P.border}; padding-top: 22px;
+}
+.rl-tt-quiet strong { color: ${P.accent}; font-weight: 800; }
+.rl-tt-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  padding: 26px 0 40px; border-top: 1px solid ${P.border}; margin-top: 10px;
+}
+.rl-tt-foot a { color: ${P.inkMute}; text-decoration: none; font-size: 13px; }
+.rl-tt-foot a:hover { color: ${P.accent}; }
 `;
 
-/* The four asks, straight off the flyer. */
-const TESTER_STEPS = [
-  { Icon: UserIcon,   title: 'Create an account',    body: 'Get set up and explore the app.' },
-  { Icon: CameraIcon, title: 'Upload some photos',   body: 'Snap a few fish photos (real or made up).' },
-  { Icon: FishIcon,   title: 'Log a few catches',    body: 'Add a few catches (real or made up) and explore the features.' },
-  { Icon: StarIcon,   title: 'Leave a positive review', body: 'Your review on the App Store helps us grow and helps other anglers find ReelIntel.' },
+/* Four capabilities under the hero headline. */
+const TESTER_CAPS = [
+  { Icon: CameraIcon, t: 'Identify fish',      d: 'Snap a photo and get an instant species ID.' },
+  { Icon: ShieldIcon, t: 'Check the rules',    d: 'See size, season and bag limits for your waters.' },
+  { Icon: FishIcon,   t: 'Log your catches',   d: 'Save your catches, photos, conditions and memories.' },
+  { Icon: ChartIcon,  t: 'Build your patterns',d: 'Let ReelIntel learn from your fishing history and help uncover what works.' },
 ];
 
-/* Mock home screen inside the phone frame. Mirrors the flyer. */
-/* Tee graphic — drawn rather than photographed so the reward section
-   works before a real product shot exists. Drop a photo in at
-   public/marketing/tester-tshirt.png and it takes over automatically. */
+const TESTER_STEPS = [
+  { n: '01', Icon: UserIcon,   t: 'Create your account',
+    d: 'Download ReelIntel and create your free account.' },
+  { n: '02', Icon: CameraIcon, t: 'Upload some photos',
+    d: 'Run several fish photos through Fish ID. They can be new photos or photos already on your phone.' },
+  { n: '03', Icon: FishIcon,   t: 'Log a few catches',
+    d: 'Add several catches so ReelIntel begins building your log. Real catches are ideal, but test entries are completely fine for this early testing.' },
+  { n: '04', Icon: WrenchIcon, t: 'Tell me what sucks', hi: true,
+    d: 'If something is confusing, slow, broken or just doesn’t make sense, I want to know. Don’t be polite — help me fix it.' },
+];
+
+/* Drawn tee, so the reward section works before a product shot exists.
+   Drop a photo at public/marketing/tester-tshirt.png and it takes over. */
 function TeeGraphic() {
   return (
-    <svg className="rl-test-tee-svg" viewBox="0 0 256 256" role="img"
-         aria-label="Navy ReelIntel t-shirt">
-      <path
-        d="M96 18 L40 44 L18 96 L62 112 L62 240 L194 240 L194 112 L238 96 L216 44 L160 18 Q128 48 96 18 Z"
-        fill="#0d2036" stroke="rgba(25,212,242,0.45)" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M96 18 Q128 48 160 18" fill="none" stroke="rgba(25,212,242,0.45)" strokeWidth="2" />
-      <image href={LOGO_BRAND} x="74" y="86" width="108" height="108"
-             preserveAspectRatio="xMidYMid meet" />
+    <svg className="rl-tt-shirt-svg" viewBox="0 0 256 256" role="img" aria-label="ReelIntel t-shirt">
+      <defs>
+        <linearGradient id="tee" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#12293f" /><stop offset="1" stopColor="#0a1c2e" />
+        </linearGradient>
+      </defs>
+      <path d="M96 18 L40 44 L18 96 L62 112 L62 240 L194 240 L194 112 L238 96 L216 44 L160 18 Q128 48 96 18 Z"
+            fill="url(#tee)" stroke="rgba(25,212,242,0.42)" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M96 18 Q128 48 160 18" fill="none" stroke="rgba(25,212,242,0.42)" strokeWidth="2" />
+      <image href={LOGO_BRAND} x="76" y="92" width="104" height="104" preserveAspectRatio="xMidYMid meet" />
     </svg>
   );
 }
 
+/* Hero phone — a representative ReelIntel home screen. */
 function TesterPhone() {
   return (
-    <div className="rl-test-phone-col">
-      <div className="rl-test-phone">
-        <div className="rl-test-screen">
-          <div className="rl-test-status"><span>8:43</span><span>▪ ◗ ▮</span></div>
-          <div className="rl-test-appbar">
+    <div className="rl-tt-phone-col">
+      <div className="rl-tt-phone">
+        <div className="rl-tt-screen">
+          <div className="rl-tt-scr-top"><span>9:41</span><span>▪▪ ◗ ▮</span></div>
+          <div className="rl-tt-scr-bar">
             <img src={LOGO_HEADER} alt="ReelIntel" />
+            <span style={{ fontSize: 11, color: P.inkMute }}>⚙</span>
           </div>
-          <div className="rl-test-scr-body">
-            <div className="rl-test-card">
-              <div className="rl-test-card-row">
+          <div className="rl-tt-scr-body">
+            <div className="rl-tt-c">
+              <div className="rl-tt-c-row">
                 <div>
-                  <div className="rl-test-sp">Red Snapper</div>
-                  <div className="rl-test-len">28.5 in</div>
-                  <div className="rl-test-meta">Gulf of America<br />May 18, 2025 · 8:32 AM</div>
+                  <span className="rl-tt-chip">Fish ID · 96%</span>
+                  <div className="rl-tt-sp">Red Snapper</div>
+                  <div className="rl-tt-len">28.5 in</div>
+                  <div className="rl-tt-meta">Gulf of America<br />May 18, 2025 · 8:32 AM</div>
                 </div>
-                <FishIcon size={40} />
+                <FishIcon size={38} />
               </div>
             </div>
-            <div className="rl-test-card">
-              <div className="rl-test-lbl">Top Pattern</div>
-              <div className="rl-test-sp" style={{ marginTop: 3 }}>North Drop-Off</div>
-              <div className="rl-test-meta">8–11 AM Outgoing Tide</div>
-              <div className="rl-test-heat"><span className="rl-test-pin" /></div>
+            <div className="rl-tt-c">
+              <div className="rl-tt-lbl">Top Pattern</div>
+              <div className="rl-tt-sp" style={{ marginTop: 3 }}>North Drop-Off</div>
+              <div className="rl-tt-meta">8–11 AM · Outgoing tide</div>
+              <div className="rl-tt-heat"><span className="rl-tt-pin" /></div>
             </div>
-            <div className="rl-test-card">
-              <div className="rl-test-lbl">Your Stats</div>
-              <div className="rl-test-meta" style={{ marginTop: 1 }}>This Month</div>
-              <div className="rl-test-stats">
-                <div><div className="rl-test-stat-n">12</div><div className="rl-test-stat-l">Catches</div></div>
-                <div><div className="rl-test-stat-n">8</div><div className="rl-test-stat-l">Species</div></div>
-                <div><div className="rl-test-stat-n">2</div><div className="rl-test-stat-l">PB's</div></div>
+            <div className="rl-tt-c">
+              <div className="rl-tt-lbl">Your Stats</div>
+              <div className="rl-tt-meta" style={{ marginTop: 1 }}>This month</div>
+              <div className="rl-tt-stats">
+                <div><div className="rl-tt-stat-n">12</div><div className="rl-tt-stat-l">Catches</div></div>
+                <div><div className="rl-tt-stat-n">8</div><div className="rl-tt-stat-l">Species</div></div>
+                <div><div className="rl-tt-stat-n">2</div><div className="rl-tt-stat-l">PB’s</div></div>
               </div>
             </div>
           </div>
-          <div className="rl-test-tabs">
-            <div className="rl-test-tab">Log</div>
-            <div className="rl-test-tab">Map</div>
-            <div className="rl-test-tab-plus">+</div>
-            <div className="rl-test-tab">Insights</div>
-            <div className="rl-test-tab">More</div>
+          <div className="rl-tt-tabs">
+            <div className="rl-tt-tab on">Log</div>
+            <div className="rl-tt-tab">Map</div>
+            <div className="rl-tt-plus">+</div>
+            <div className="rl-tt-tab">Insights</div>
+            <div className="rl-tt-tab">More</div>
           </div>
         </div>
       </div>
@@ -1871,94 +2055,378 @@ function TesterPhone() {
   );
 }
 
+/* Tester feedback. Writes to the `tester_feedback` table when it exists
+   (see supabase/tester-feedback-schema.sql) and otherwise falls back to
+   opening a pre-filled email — the founder never loses a response
+   because a migration hasn't been run yet. */
+const FEEDBACK_FIELDS = [
+  { k: 'tested',    label: 'What did you test?',                  ph: 'Fish ID, regulations, logging, maps…' },
+  { k: 'worked',    label: 'What worked?',                        ph: 'What felt good or useful?' },
+  { k: 'confusing', label: 'What was confusing?',                 ph: 'Where did you have to stop and think?' },
+  { k: 'broke',     label: 'Did anything break?',                 ph: 'Crashes, errors, things that never loaded…' },
+  { k: 'wish',      label: 'What feature do you wish existed?',   ph: 'The thing that would make you use it every trip.' },
+];
+
+function TesterFeedback() {
+  const [form, setForm] = useState({ name: '', email: '', tested: '', worked: '', confusing: '', broke: '', wish: '' });
+  const [shot, setShot] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const mailtoFallback = () => {
+    const body = [
+      `Name: ${form.name}`, `Email: ${form.email}`, '',
+      ...FEEDBACK_FIELDS.map(f => `${f.label}\n${form[f.k] || '—'}\n`),
+      shot ? '(Screenshot: please attach it to this email.)' : '',
+    ].join('\n');
+    window.location.href =
+      `mailto:robert@reelintel.ai?subject=${encodeURIComponent('ReelIntel tester feedback — ' + (form.name || 'anonymous'))}` +
+      `&body=${encodeURIComponent(body)}`;
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!form.name.trim() || !form.email.trim()) { setError('Name and email, please — so I know who found it.'); return; }
+    setBusy(true); setError('');
+    try {
+      const c = supabaseClient();
+      if (!c) throw new Error('no client');
+      let screenshot_path = null;
+      if (shot) {
+        // Best-effort: a missing bucket must not cost us the written feedback.
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${shot.name}`;
+        const up = await c.storage.from('tester-feedback').upload(path, shot, { upsert: false });
+        if (!up.error) screenshot_path = path;
+      }
+      const { error: insErr } = await c.from('tester_feedback').insert({
+        name: form.name, email: form.email, tested: form.tested, worked: form.worked,
+        confusing: form.confusing, broke: form.broke, wish: form.wish, screenshot_path,
+      });
+      if (insErr) throw insErr;
+      setDone(true);
+    } catch {
+      // Table/bucket not provisioned (or offline) — hand it to email instead.
+      mailtoFallback();
+      setDone(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className="rl-tt-done">
+        <h3>Thanks. This is exactly what I need to make ReelIntel better.</h3>
+        <p>I read every one of these. If I have a follow-up question, I’ll reach out.</p>
+      </div>
+    );
+  }
+
+  return (
+    <form className="rl-tt-form" onSubmit={submit}>
+      <div className="rl-tt-row2">
+        <div className="rl-tt-field">
+          <label htmlFor="tf-name">Name</label>
+          <input id="tf-name" value={form.name} onChange={set('name')} autoComplete="name" required />
+        </div>
+        <div className="rl-tt-field">
+          <label htmlFor="tf-email">Email</label>
+          <input id="tf-email" type="email" value={form.email} onChange={set('email')} autoComplete="email" required />
+        </div>
+      </div>
+      {FEEDBACK_FIELDS.map(f => (
+        <div className="rl-tt-field" key={f.k}>
+          <label htmlFor={`tf-${f.k}`}>{f.label}</label>
+          <textarea id={`tf-${f.k}`} value={form[f.k]} onChange={set(f.k)} placeholder={f.ph} />
+        </div>
+      ))}
+      <div className="rl-tt-field">
+        <label htmlFor="tf-shot">Screenshot (optional)</label>
+        <input id="tf-shot" type="file" accept="image/*" onChange={(e) => setShot(e.target.files?.[0] || null)} />
+      </div>
+      {error && <p className="rl-tt-err">{error}</p>}
+      <div>
+        <button type="submit" className="rl-tt-cta" disabled={busy}>
+          {busy ? 'Sending…' : 'Submit feedback'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function TestersPage() {
   const cssRef = useMemo(() => CSS, []);
-  const [teeBroken, setTeeBroken] = useState(false);
+  const [claimed, setClaimed] = useState(TESTER_SPOTS_CLAIMED_FALLBACK);
+
+  // Claimed spots = completed feedback submissions. Silently keeps the
+  // fallback if the table isn't provisioned yet.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const c = supabaseClient();
+        if (!c) return;
+        // RPC, not a select: RLS keeps responses admin-only, so anon
+        // cannot count rows directly. tester_feedback_count() exposes
+        // just the number.
+        const { data, error } = await c.rpc('tester_feedback_count');
+        if (!alive || error || typeof data !== 'number') return;
+        setClaimed(Math.min(data, TESTER_SPOTS_TOTAL));
+      } catch { /* keep the fallback */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const pct = Math.round((claimed / TESTER_SPOTS_TOTAL) * 100);
+  const [shirtBroken, setShirtBroken] = useState(false);
+
   return (
     <div className="rl-root">
       <style>{cssRef}</style>
       <style>{TESTERS_CSS}</style>
-      <Nav />
-      <div className="rl-container rl-test-wrap">
 
-        <header className="rl-test-top">
-          <img className="rl-test-logo" src={LOGO_BRAND}
-               alt="ReelIntel — identify, check rules, log catch, find better spots" />
-          <div>
-            <h1 className="rl-test-headline">
-              Help build<br />the best<br />
+      {/* Minimal nav — this is a private page, not the marketing site. */}
+      <nav className="rl-tt-nav" aria-label="Tester">
+        <a href="/" className="rl-brand" aria-label="ReelIntel">
+          <img src={LOGO_HEADER} alt="ReelIntel" style={{ height: 38, width: 'auto', display: 'block' }} />
+        </a>
+        <span className="rl-tt-nav-sp" />
+        <a className="rl-tt-back" href="/">Back to ReelIntel</a>
+        <a className="rl-btn rl-btn-primary rl-tt-navcta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
+          Download App
+        </a>
+      </nav>
+
+      {/* ---------- HERO ---------- */}
+      <header className="rl-tt-hero">
+        <img className="rl-tt-hero-art" src={`${M}testers-marlin.png`} alt="" aria-hidden="true" />
+        <svg className="rl-tt-rings" viewBox="0 0 900 900" aria-hidden="true" focusable="false">
+          {[190, 280, 370, 440].map((r, i) => (
+            <circle key={r} cx="450" cy="450" r={r} fill="none"
+                    stroke="rgba(25,212,242,0.16)" strokeWidth="1"
+                    strokeDasharray={i % 2 ? '3 9' : undefined} />
+          ))}
+        </svg>
+        <div className="rl-container rl-tt-hero-grid">
+          <div className="rl-tt-hero-copy">
+            <img className="rl-tt-logo" src={LOGO_BRAND}
+                 alt="ReelIntel — identify, check rules, log catch, find better spots" />
+            <h1 className="rl-tt-h1">
+              Help build the best<br />
               <span className="accent">fishing app</span><br />on the water.
             </h1>
-            <span className="rl-test-badge">We need 25 testers!</span>
-          </div>
-        </header>
-
-        <div className="rl-test-body">
-          <div>
-            <h2 className="rl-test-kicker">
-              <span className="accent">You get early access.</span>
-              We get your feedback.
-            </h2>
-            <p className="rl-test-lead">
-              ReelIntel is now live on the App Store and we’re looking for 25 anglers
-              to put it to the test before we launch to the world.
+            <p className="rl-tt-sub">
+              ReelIntel is live on the App Store, but we’re not marketing it heavily yet.
+              I’m looking for 25 anglers to put it through real-world testing, log some
+              catches, and help me make it better before the public launch.
             </p>
 
-            <h3 className="rl-test-ask">What we’re asking you to do:</h3>
-            <ul className="rl-test-steps">
-              {TESTER_STEPS.map(({ Icon, title, body }) => (
-                <li className="rl-test-step" key={title}>
-                  <span className="rl-test-step-ic"><Icon size={22} /></span>
-                  <div>
-                    <div className="rl-test-step-t">{title}</div>
-                    <p className="rl-test-step-d">{body}</p>
-                  </div>
+            <ul className="rl-tt-caps">
+              {TESTER_CAPS.map(({ Icon, t, d }) => (
+                <li key={t}>
+                  <div className="rl-tt-cap-t"><Icon size={17} /> {t}</div>
+                  <p className="rl-tt-cap-d">{d}</p>
                 </li>
               ))}
             </ul>
-          </div>
 
+            <div className="rl-tt-hero-cta">
+              <a className="rl-tt-cta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
+                <AppleIcon /> Download <span className="rl-tt-cta-long">ReelIntel </span>on the App Store →
+              </a>
+              <p className="rl-tt-note"><span className="accent">Free to use.</span> No in-app purchase required.</p>
+            </div>
+          </div>
           <TesterPhone />
         </div>
+      </header>
 
-        <section className="rl-test-tee">
-          {teeBroken ? (
-            <div className="rl-test-tee-fallback"><TeeGraphic /></div>
-          ) : (
-            <img
-              className="rl-test-tee-img"
-              src={`${M}tester-tshirt.png`}
-              alt="ReelIntel t-shirt"
-              onError={() => setTeeBroken(true)}
-            />
-          )}
-          <div>
-            <h2 className="rl-test-tee-h">
-              First 25 users<br />
-              <span className="accent">get a free ReelIntel t‑shirt!</span>
-            </h2>
-            <p className="rl-test-tee-p">
-              Complete the steps above and leave a positive review on the App Store
-              and we’ll send you a FREE ReelIntel t-shirt.
-            </p>
-            <p className="rl-test-tee-note">* Limited to the first 25 eligible reviewers.</p>
-          </div>
-        </section>
-
-        <div className="rl-test-dl">
-          <a href={APP_STORE_URL} target="_blank" rel="noreferrer" aria-label="Download ReelIntel on the App Store">
-            <img src={A.appStoreBadge} alt="Download on the App Store" />
-          </a>
-          <div className="rl-test-dl-or">
-            Search <span>“ReelIntel”</span><br />in the App Store
+      {/* ---------- THE ASK ---------- */}
+      <section className="rl-tt-sec rl-tt-sec-alt">
+        <div className="rl-container">
+          <h2 className="rl-tt-h2">I need 25 anglers to put it<br /><span className="accent">through its paces.</span></h2>
+          <p className="rl-tt-lead">
+            You don’t need to go fishing tomorrow. I need usage, data and feedback.
+          </p>
+          <div className="rl-tt-steps">
+            {TESTER_STEPS.map(({ n, Icon, t, d, hi }) => (
+              <div className={`rl-tt-step${hi ? ' rl-tt-step-hi' : ''}`} key={n}>
+                <div className="rl-tt-step-n">{n}</div>
+                <h3 className="rl-tt-step-h"><Icon size={20} /> {t}</h3>
+                <p className="rl-tt-step-p">{d}</p>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        <p className="rl-test-quiet">
-          Not widely marketed yet. Please don’t share on social media.
-        </p>
+      {/* ---------- SHIRT ---------- */}
+      <section className="rl-tt-sec">
+        <div className="rl-container">
+          <div className="rl-tt-shirt">
+            {shirtBroken ? <TeeGraphic /> : (
+              <img className="rl-tt-shirt-img" src={`${M}tester-tshirt.png`} alt="ReelIntel t-shirt"
+                   onError={() => setShirtBroken(true)} loading="lazy" />
+            )}
+            <div>
+              <h2 className="rl-tt-h2">First 25 testers get a<br /><span className="accent">free ReelIntel t‑shirt.</span></h2>
+              <p className="rl-tt-lead" style={{ marginBottom: 0 }}>
+                Complete the tester checklist and send us your feedback. If you’re one of
+                the first 25 to finish, we’ll send you a ReelIntel shirt as a thank-you.
+              </p>
+              <div className="rl-tt-prog-wrap">
+                <div className="rl-tt-prog-top">
+                  <span className="rl-tt-prog-n"><span className="accent">{claimed}</span> / {TESTER_SPOTS_TOTAL}</span>
+                  <span className="rl-tt-prog-l">Spots claimed</span>
+                </div>
+                <div className="rl-tt-prog-track" role="progressbar" aria-valuenow={claimed}
+                     aria-valuemin={0} aria-valuemax={TESTER_SPOTS_TOTAL}
+                     aria-label="Tester spots claimed">
+                  <div className="rl-tt-prog-fill" style={{ width: `${Math.max(pct, 2)}%` }} />
+                </div>
+                <p className="rl-tt-fine">Limited to the first 25 completed tester submissions.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- REVIEW (separate from the reward) ---------- */}
+      <section className="rl-tt-sec rl-tt-sec-alt" style={{ paddingTop: 0, background: 'transparent' }}>
+        <div className="rl-container">
+          <div className="rl-tt-review">
+            <div>
+              <h3 className="rl-tt-h2" style={{ fontSize: 'clamp(21px, 2.6vw, 28px)', marginBottom: 8 }}>
+                Used it enough to have an opinion?
+              </h3>
+              <p style={{ color: P.inkSoft, fontSize: 15, lineHeight: 1.6 }}>
+                An honest App Store review helps other anglers find ReelIntel and helps us
+                understand what’s working. Once you’ve spent some time in the app, I’d
+                appreciate your feedback there too.
+              </p>
+            </div>
+            <a className="rl-tt-cta rl-tt-cta-ghost" href={TESTER_REVIEW_URL} target="_blank" rel="noreferrer">
+              <StarIcon size={17} /> Review ReelIntel on the App Store →
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- INTELLIGENCE ---------- */}
+      <section className="rl-tt-sec rl-tt-sec-alt">
+        <div className="rl-container rl-tt-intel">
+          <div>
+            <h2 className="rl-tt-h2">You’re not just testing an app.<br /><span className="accent">You’re helping train the intelligence.</span></h2>
+            <p className="rl-tt-lead" style={{ marginBottom: 0 }}>
+              Every catch makes ReelIntel more useful. The goal isn’t simply to store
+              fishing logs — it’s to turn those catches into patterns: when you catch fish,
+              where, under what conditions, what species show up together, and what keeps
+              producing over time.
+            </p>
+            <div className="rl-tt-three">
+              {[
+                { Icon: FishIcon,   t: 'More catches',    d: 'More real-world information.' },
+                { Icon: ChartIcon,  t: 'Better patterns', d: 'ReelIntel learns what works for you.' },
+                { Icon: TargetIcon, t: 'Smarter trips',   d: 'Your history becomes useful fishing intelligence.' },
+              ].map(({ Icon, t, d }) => (
+                <div className="rl-tt-three-i" key={t}>
+                  <span className="rl-tt-three-ic"><Icon size={20} /></span>
+                  <div>
+                    <div className="rl-tt-three-t">{t}</div>
+                    <p className="rl-tt-three-d">{d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Illustrative pattern read-out — shape of the insight, not real data. */}
+          <div className="rl-tt-viz" aria-hidden="true">
+            <div className="rl-tt-viz-h">
+              <span className="rl-tt-viz-t">Bite window</span>
+              <span className="rl-tt-viz-t" style={{ color: P.accent }}>Outgoing</span>
+            </div>
+            <div className="rl-tt-bars">
+              {[18, 26, 34, 30, 52, 74, 96, 88, 62, 40, 30, 22].map((h, i) => (
+                <span key={i} className={`rl-tt-bar${h > 70 ? ' hot' : ''}`} style={{ height: `${h}%` }} />
+              ))}
+            </div>
+            <div className="rl-tt-bar-x"><span>5a</span><span>9a</span><span>1p</span><span>5p</span><span>9p</span></div>
+            <div className="rl-tt-viz-split">
+              <div className="rl-tt-mini">
+                <div className="rl-tt-mini-l">Depth pattern</div>
+                <div className="rl-tt-mini-v">62–78 ft <small>▲</small></div>
+              </div>
+              <div className="rl-tt-mini">
+                <div className="rl-tt-mini-l">Top species</div>
+                <div className="rl-tt-mini-v">Snapper <small>+ AJ</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- PRIVACY ---------- */}
+      <section className="rl-tt-sec" style={{ paddingTop: 0 }}>
+        <div className="rl-container">
+          <div className="rl-tt-priv">
+            <span className="rl-tt-priv-ic"><LockIcon size={34} /></span>
+            <div>
+              <h3 className="rl-tt-h2" style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', marginBottom: 8 }}>
+                Your data is yours.
+              </h3>
+              <p style={{ color: P.inkSoft, fontSize: 15, lineHeight: 1.6, margin: 0, maxWidth: 680 }}>
+                Your catches and exact fishing spots stay private. ReelIntel uses your
+                history to build your own fishing intelligence. You can export your data
+                whenever you want.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- FEEDBACK ---------- */}
+      <section className="rl-tt-sec rl-tt-sec-alt" id="feedback">
+        <div className="rl-container">
+          <h2 className="rl-tt-h2">Send me your feedback.</h2>
+          <p className="rl-tt-lead">
+            The more specific, the better. Half-finished thoughts are still useful — send them.
+          </p>
+          <TesterFeedback />
+        </div>
+      </section>
+
+      {/* ---------- FINAL CTA ---------- */}
+      <section className="rl-tt-final">
+        <div className="rl-tt-final-bg" style={{ backgroundImage: `url(${M}testers-cta-bg.jpg)` }} />
+        <div className="rl-tt-final-scrim" />
+        <div className="rl-container rl-tt-final-in">
+          <h2 className="rl-tt-h2" style={{ marginBottom: 14 }}>Ready to help me break it?</h2>
+          <p className="rl-tt-lead" style={{ margin: '0 auto 30px' }}>
+            Download ReelIntel, create your account and start putting it through its paces.
+          </p>
+          <a className="rl-tt-cta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
+            <AppleIcon /> Download on the App Store →
+          </a>
+          <p className="rl-tt-note" style={{ marginTop: 16 }}>
+            Then come back here and <a href="#feedback" style={{ color: P.accent }}>tell me what you found</a>.
+          </p>
+          <p className="rl-tt-quiet">
+            You’re getting this before anyone else — <strong>please keep it off social media
+            for now.</strong> Share it with someone who’d genuinely help test it, and
+            that’s it.
+          </p>
+        </div>
+      </section>
+
+      <div className="rl-container rl-tt-foot">
+        <img src={LOGO_HEADER} alt="ReelIntel" style={{ height: 34, width: 'auto', display: 'block' }} />
+        <span style={{ color: P.inkMute, fontSize: 13 }}>Thank you for helping build the future of fishing.</span>
+        <a href={PRIVACY_URL}>Privacy Policy</a>
       </div>
-      <Footer />
     </div>
   );
 }
