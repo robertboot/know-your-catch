@@ -16,6 +16,7 @@ if (__KYC_WEB__) installChunkReloadGuard();
        marketing module from the iOS bundle entirely.
      - reelintel.ai web deploy: __KYC_WEB__ is true → path split.
          /                → marketing landing
+         /testers         → TestersPage (tester recruiting flyer)
          /admin           → App (which routes to the admin console for
                             allow-listed emails once signed in)
          /reset-password  → ResetPasswordPage (Supabase parses the
@@ -29,6 +30,11 @@ const MarketingLanding    = __KYC_WEB__
 const ResetPasswordPage   = __KYC_WEB__
   ? lazy(() => import('./screens_marketing.jsx').then(m => ({ default: m.ResetPasswordPage })))
   : null;
+// /testers — private recruiting page handed out directly (not linked
+// from the site nav) while the app is live but unmarketed.
+const TestersPage         = __KYC_WEB__
+  ? lazy(() => import('./screens_marketing.jsx').then(m => ({ default: m.TestersPage })))
+  : null;
 // Vercel Web Analytics — web deploy only. Lazy + __KYC_WEB__ gated so
 // Rollup drops it from the iOS bundle (it only reports on Vercel anyway).
 const Analytics           = __KYC_WEB__
@@ -41,6 +47,13 @@ function pickRoot() {
   if (path === '/admin') {
     if (window.location.hash !== '#/admin') window.location.hash = '#/admin';
     return <App />;
+  }
+  if (path === '/testers') {
+    return (
+      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#0A1B2E' }} />}>
+        <TestersPage />
+      </Suspense>
+    );
   }
   if (path === '/reset-password') {
     return (

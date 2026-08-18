@@ -30,6 +30,10 @@ import AnnouncementBanner from './AnnouncementBanner.jsx';
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
 const LOGO_HEADER     = `${import.meta.env.BASE_URL}brand/icon-horz.png`;
+// Stacked marlin badge + wordmark + tagline — the /testers masthead.
+// Transparent + tightly cropped (brand/reelintel-brand.png ships with a
+// flat navy background baked in, which reads as a grey box on the page).
+const LOGO_BRAND      = `${import.meta.env.BASE_URL}marketing/testers-logo.png`;
 
 const A = {
   heroBg:              `${M}888866A1-EE9A-4408-B410-E19A5141D228.png`,
@@ -54,7 +58,7 @@ const A = {
   shield:              `${M}shield.png`,
 };
 
-const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/';
+const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/id6785558103';
 // Set this to the Google Play listing once Android is live. While empty,
 // Android users fall back to the App Store (nothing dead-ends).
 const PLAY_STORE_URL = '';
@@ -1602,6 +1606,359 @@ export function ResetPasswordPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   /testers — private recruiting page for the first 25 testers
+   ============================================================
+   A web replica of the ReelIntel tester flyer. Deliberately NOT
+   linked from the marketing nav or footer: the app is live on the
+   App Store but not yet marketed, so this URL is handed out
+   directly and the page says so at the bottom.
+
+   The phone is built in markup rather than shipped as an image so
+   the screen content stays legible at every width and can be edited
+   in code — the flyer's mock dashboard (a PB, a top pattern, a
+   month's stats) is representative of the real home screen.  */
+
+function UserIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+    </svg>
+  );
+}
+
+function StarIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />
+    </svg>
+  );
+}
+
+const TESTERS_CSS = `
+.rl-test-wrap { padding: 8px 0 0; }
+
+/* Masthead: logo left, headline right (stacks under 900px) */
+.rl-test-top {
+  display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 32px; align-items: center; padding: 10px 0 34px;
+}
+.rl-test-logo { width: 100%; max-width: 420px; height: auto; display: block; }
+.rl-test-headline {
+  font-size: clamp(34px, 5.4vw, 62px); line-height: 0.96; margin: 0;
+  font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase;
+  color: ${P.ink}; text-align: right;
+}
+.rl-test-headline .accent { color: ${P.accent}; }
+.rl-test-badge {
+  display: inline-block; margin-top: 18px; float: right; clear: both;
+  background: ${P.accent}; color: #031B33;
+  font-size: clamp(15px, 2.1vw, 24px); font-weight: 900; font-style: italic;
+  letter-spacing: 0.5px; padding: 9px 26px; border-radius: 4px;
+  text-transform: uppercase; transform: rotate(-1deg);
+  box-shadow: 0 10px 28px rgba(25,212,242,0.25);
+}
+@media (max-width: 900px) {
+  .rl-test-top { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 18px; }
+  .rl-test-headline { text-align: center; }
+  .rl-test-badge { float: none; }
+}
+
+/* Body: copy + steps on the left, phone on the right */
+.rl-test-body {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  gap: 46px; align-items: start; padding: 8px 0 54px;
+}
+@media (max-width: 900px) { .rl-test-body { grid-template-columns: 1fr; gap: 34px; } }
+
+.rl-test-kicker {
+  font-size: clamp(20px, 2.6vw, 30px); font-weight: 900; line-height: 1.12;
+  text-transform: uppercase; margin: 0 0 14px; letter-spacing: -0.2px;
+}
+.rl-test-kicker .accent { color: ${P.accent}; display: block; }
+.rl-test-lead { color: ${P.inkSoft}; font-size: 16px; line-height: 1.62; margin: 0 0 30px; max-width: 520px; }
+
+.rl-test-ask {
+  font-size: clamp(17px, 2.1vw, 22px); font-weight: 900; color: ${P.accent};
+  text-transform: uppercase; margin: 0 0 18px; letter-spacing: 0.2px;
+}
+.rl-test-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
+.rl-test-step { display: grid; grid-template-columns: 46px 1fr; gap: 16px; align-items: start; }
+.rl-test-step-ic {
+  width: 46px; height: 46px; border-radius: 999px; flex-shrink: 0;
+  border: 2px solid ${P.accent}; display: flex; align-items: center; justify-content: center;
+  background: rgba(25,212,242,0.06);
+}
+.rl-test-step-t {
+  font-size: 15px; font-weight: 800; color: ${P.ink}; text-transform: uppercase;
+  letter-spacing: 0.4px; margin: 4px 0 3px;
+}
+.rl-test-step-d { font-size: 14.5px; color: ${P.inkSoft}; line-height: 1.5; margin: 0; }
+
+/* Phone — built in markup so the screen stays crisp and editable */
+.rl-test-phone-col { display: flex; justify-content: center; }
+.rl-test-phone {
+  width: 100%; max-width: 320px; border-radius: 42px; padding: 11px;
+  background: linear-gradient(160deg, #2b3947, #10171f 55%, #273442);
+  box-shadow: 0 34px 70px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07);
+}
+.rl-test-screen {
+  background: #071c30; border-radius: 32px; overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.rl-test-status {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px 6px; font-size: 12px; font-weight: 700; color: ${P.ink};
+}
+.rl-test-appbar {
+  display: flex; justify-content: center; align-items: center; position: relative;
+  padding: 6px 18px 12px;
+}
+.rl-test-appbar img { height: 17px; width: auto; display: block; }
+.rl-test-scr-body { padding: 0 12px 12px; display: grid; gap: 9px; }
+.rl-test-card {
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 13px; padding: 11px 13px;
+}
+.rl-test-card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rl-test-sp { font-size: 15px; font-weight: 800; color: ${P.ink}; }
+.rl-test-len { font-size: 15px; font-weight: 800; color: ${P.accent}; margin-top: 1px; }
+.rl-test-meta { font-size: 10.5px; color: ${P.inkMute}; margin-top: 3px; line-height: 1.45; }
+.rl-test-lbl { font-size: 10px; letter-spacing: 1px; color: ${P.inkMute}; font-weight: 800; text-transform: uppercase; }
+.rl-test-heat {
+  height: 74px; border-radius: 9px; margin-top: 9px; position: relative; overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 58%, rgba(255,200,87,0.95) 0%, rgba(255,120,60,0.55) 14%, rgba(25,212,242,0.30) 34%, rgba(11,39,64,0) 62%),
+    linear-gradient(180deg, #0a2136, #07182a);
+}
+.rl-test-pin {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  width: 15px; height: 15px; border-radius: 999px 999px 999px 0;
+  background: ${P.accent}; rotate: -45deg; box-shadow: 0 0 14px rgba(25,212,242,0.9);
+}
+.rl-test-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
+.rl-test-stat-n { font-size: 21px; font-weight: 900; color: ${P.ink}; line-height: 1; }
+.rl-test-stat-l { font-size: 9px; letter-spacing: 0.8px; color: ${P.inkMute}; font-weight: 700; margin-top: 4px; text-transform: uppercase; }
+.rl-test-tabs {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 16px 13px; border-top: 1px solid ${P.border}; margin-top: 2px;
+}
+.rl-test-tab { font-size: 8.5px; color: ${P.inkMute}; text-align: center; font-weight: 600; }
+.rl-test-tab-plus {
+  width: 34px; height: 34px; border-radius: 999px; background: ${P.accent}; color: #031B33;
+  display: flex; align-items: center; justify-content: center; font-size: 21px; font-weight: 700;
+  line-height: 1; box-shadow: 0 6px 18px rgba(25,212,242,0.45);
+}
+
+/* T-shirt reward band */
+.rl-test-tee {
+  display: grid; grid-template-columns: 250px 1fr; gap: 34px; align-items: center;
+  border-top: 1px solid ${P.border}; border-bottom: 1px solid ${P.border};
+  padding: 34px 0; margin-bottom: 34px;
+}
+@media (max-width: 760px) { .rl-test-tee { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 22px; } }
+.rl-test-tee-img {
+  width: 100%; max-width: 250px; border-radius: 14px; display: block;
+  background: ${P.card}; border: 1px solid ${P.border};
+}
+.rl-test-tee-fallback {
+  width: 100%; max-width: 250px; aspect-ratio: 1 / 1; border-radius: 14px;
+  background: ${P.card}; border: 1px solid ${P.border};
+  display: flex; align-items: center; justify-content: center; padding: 22px; box-sizing: border-box;
+}
+.rl-test-tee-fallback { padding: 10px; }
+.rl-test-tee-svg { width: 100%; height: auto; display: block; }
+.rl-test-tee-h {
+  font-size: clamp(26px, 4vw, 46px); font-weight: 900; text-transform: uppercase;
+  line-height: 1.02; margin: 0 0 6px; letter-spacing: -0.5px;
+}
+.rl-test-tee-h .accent { color: ${P.accent}; }
+.rl-test-tee-p { color: ${P.inkSoft}; font-size: 15.5px; line-height: 1.6; margin: 0 0 8px; max-width: 560px; }
+.rl-test-tee-note { color: ${P.accent}; font-size: 13px; margin: 0; }
+
+/* Download row */
+.rl-test-dl {
+  display: flex; align-items: center; justify-content: center; gap: 26px; flex-wrap: wrap;
+  border: 1px solid ${P.border}; border-radius: 16px; padding: 20px 26px; background: ${P.card};
+}
+.rl-test-dl img { height: 54px; width: auto; display: block; }
+.rl-test-dl-or { font-size: 14px; font-weight: 800; color: ${P.ink}; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.45; }
+.rl-test-dl-or span { color: ${P.accent}; }
+.rl-test-quiet {
+  text-align: center; color: ${P.accent}; font-style: italic; font-weight: 700;
+  letter-spacing: 0.5px; font-size: 14px; padding: 26px 0 40px; text-transform: uppercase;
+}
+`;
+
+/* The four asks, straight off the flyer. */
+const TESTER_STEPS = [
+  { Icon: UserIcon,   title: 'Create an account',    body: 'Get set up and explore the app.' },
+  { Icon: CameraIcon, title: 'Upload some photos',   body: 'Snap a few fish photos (real or made up).' },
+  { Icon: FishIcon,   title: 'Log a few catches',    body: 'Add a few catches (real or made up) and explore the features.' },
+  { Icon: StarIcon,   title: 'Leave a positive review', body: 'Your review on the App Store helps us grow and helps other anglers find ReelIntel.' },
+];
+
+/* Mock home screen inside the phone frame. Mirrors the flyer. */
+/* Tee graphic — drawn rather than photographed so the reward section
+   works before a real product shot exists. Drop a photo in at
+   public/marketing/tester-tshirt.png and it takes over automatically. */
+function TeeGraphic() {
+  return (
+    <svg className="rl-test-tee-svg" viewBox="0 0 256 256" role="img"
+         aria-label="Navy ReelIntel t-shirt">
+      <path
+        d="M96 18 L40 44 L18 96 L62 112 L62 240 L194 240 L194 112 L238 96 L216 44 L160 18 Q128 48 96 18 Z"
+        fill="#0d2036" stroke="rgba(25,212,242,0.45)" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M96 18 Q128 48 160 18" fill="none" stroke="rgba(25,212,242,0.45)" strokeWidth="2" />
+      <image href={LOGO_BRAND} x="74" y="86" width="108" height="108"
+             preserveAspectRatio="xMidYMid meet" />
+    </svg>
+  );
+}
+
+function TesterPhone() {
+  return (
+    <div className="rl-test-phone-col">
+      <div className="rl-test-phone">
+        <div className="rl-test-screen">
+          <div className="rl-test-status"><span>8:43</span><span>▪ ◗ ▮</span></div>
+          <div className="rl-test-appbar">
+            <img src={LOGO_HEADER} alt="ReelIntel" />
+          </div>
+          <div className="rl-test-scr-body">
+            <div className="rl-test-card">
+              <div className="rl-test-card-row">
+                <div>
+                  <div className="rl-test-sp">Red Snapper</div>
+                  <div className="rl-test-len">28.5 in</div>
+                  <div className="rl-test-meta">Gulf of America<br />May 18, 2025 · 8:32 AM</div>
+                </div>
+                <FishIcon size={40} />
+              </div>
+            </div>
+            <div className="rl-test-card">
+              <div className="rl-test-lbl">Top Pattern</div>
+              <div className="rl-test-sp" style={{ marginTop: 3 }}>North Drop-Off</div>
+              <div className="rl-test-meta">8–11 AM Outgoing Tide</div>
+              <div className="rl-test-heat"><span className="rl-test-pin" /></div>
+            </div>
+            <div className="rl-test-card">
+              <div className="rl-test-lbl">Your Stats</div>
+              <div className="rl-test-meta" style={{ marginTop: 1 }}>This Month</div>
+              <div className="rl-test-stats">
+                <div><div className="rl-test-stat-n">12</div><div className="rl-test-stat-l">Catches</div></div>
+                <div><div className="rl-test-stat-n">8</div><div className="rl-test-stat-l">Species</div></div>
+                <div><div className="rl-test-stat-n">2</div><div className="rl-test-stat-l">PB's</div></div>
+              </div>
+            </div>
+          </div>
+          <div className="rl-test-tabs">
+            <div className="rl-test-tab">Log</div>
+            <div className="rl-test-tab">Map</div>
+            <div className="rl-test-tab-plus">+</div>
+            <div className="rl-test-tab">Insights</div>
+            <div className="rl-test-tab">More</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TestersPage() {
+  const cssRef = useMemo(() => CSS, []);
+  const [teeBroken, setTeeBroken] = useState(false);
+  return (
+    <div className="rl-root">
+      <style>{cssRef}</style>
+      <style>{TESTERS_CSS}</style>
+      <Nav />
+      <div className="rl-container rl-test-wrap">
+
+        <header className="rl-test-top">
+          <img className="rl-test-logo" src={LOGO_BRAND}
+               alt="ReelIntel — identify, check rules, log catch, find better spots" />
+          <div>
+            <h1 className="rl-test-headline">
+              Help build<br />the best<br />
+              <span className="accent">fishing app</span><br />on the water.
+            </h1>
+            <span className="rl-test-badge">We need 25 testers!</span>
+          </div>
+        </header>
+
+        <div className="rl-test-body">
+          <div>
+            <h2 className="rl-test-kicker">
+              <span className="accent">You get early access.</span>
+              We get your feedback.
+            </h2>
+            <p className="rl-test-lead">
+              ReelIntel is now live on the App Store and we’re looking for 25 anglers
+              to put it to the test before we launch to the world.
+            </p>
+
+            <h3 className="rl-test-ask">What we’re asking you to do:</h3>
+            <ul className="rl-test-steps">
+              {TESTER_STEPS.map(({ Icon, title, body }) => (
+                <li className="rl-test-step" key={title}>
+                  <span className="rl-test-step-ic"><Icon size={22} /></span>
+                  <div>
+                    <div className="rl-test-step-t">{title}</div>
+                    <p className="rl-test-step-d">{body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <TesterPhone />
+        </div>
+
+        <section className="rl-test-tee">
+          {teeBroken ? (
+            <div className="rl-test-tee-fallback"><TeeGraphic /></div>
+          ) : (
+            <img
+              className="rl-test-tee-img"
+              src={`${M}tester-tshirt.png`}
+              alt="ReelIntel t-shirt"
+              onError={() => setTeeBroken(true)}
+            />
+          )}
+          <div>
+            <h2 className="rl-test-tee-h">
+              First 25 users<br />
+              <span className="accent">get a free ReelIntel t‑shirt!</span>
+            </h2>
+            <p className="rl-test-tee-p">
+              Complete the steps above and leave a positive review on the App Store
+              and we’ll send you a FREE ReelIntel t-shirt.
+            </p>
+            <p className="rl-test-tee-note">* Limited to the first 25 eligible reviewers.</p>
+          </div>
+        </section>
+
+        <div className="rl-test-dl">
+          <a href={APP_STORE_URL} target="_blank" rel="noreferrer" aria-label="Download ReelIntel on the App Store">
+            <img src={A.appStoreBadge} alt="Download on the App Store" />
+          </a>
+          <div className="rl-test-dl-or">
+            Search <span>“ReelIntel”</span><br />in the App Store
+          </div>
+        </div>
+
+        <p className="rl-test-quiet">
+          Not widely marketed yet. Please don’t share on social media.
+        </p>
+      </div>
+      <Footer />
     </div>
   );
 }
