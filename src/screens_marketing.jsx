@@ -1759,12 +1759,18 @@ const TESTERS_CSS = `
 
 /* ---- shirt ---- */
 .rl-tt-shirt {
-  display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 40px; align-items: center;
+  display: grid; grid-template-columns: minmax(0,1.12fr) minmax(0,0.88fr);
+  gap: 40px; align-items: center;
   background: ${P.card}; border: 1px solid ${P.border}; border-radius: 22px; padding: 34px;
 }
-@media (max-width: 760px) { .rl-tt-shirt { grid-template-columns: 1fr; gap: 24px; padding: 26px 22px; text-align: center; justify-items: center; } }
-.rl-tt-shirt-img { width: 100%; max-width: 260px; border-radius: 16px; display: block; }
-.rl-tt-shirt-svg { width: 100%; max-width: 260px; height: auto; display: block; }
+@media (max-width: 860px) { .rl-tt-shirt { grid-template-columns: 1fr; gap: 24px; padding: 26px 22px; text-align: center; justify-items: center; } }
+/* Photo: fill the column. Drawing: stays small — scaling line art up
+   just makes it look like a placeholder, which it is. */
+.rl-tt-shirt-img {
+  width: 100%; border-radius: 16px; display: block;
+  border: 1px solid ${P.border};
+}
+.rl-tt-shirt-svg { width: 100%; max-width: 240px; height: auto; display: block; margin: 0 auto; }
 .rl-tt-prog-wrap { max-width: 420px; margin-top: 22px; }
 @media (max-width: 760px) { .rl-tt-prog-wrap { margin-left: auto; margin-right: auto; } }
 .rl-tt-prog-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
@@ -1985,7 +1991,10 @@ export function TestersPage() {
   }, []);
 
   const pct = Math.round((claimed / TESTER_SPOTS_TOTAL) * 100);
-  const [shirtBroken, setShirtBroken] = useState(false);
+  // Photo source chain: jpg (correct for a photograph) -> png -> the
+  // drawn tee. Saves a naming mistake from silently showing line art.
+  const SHIRT_SRCS = [`${M}tester-tshirt.jpg`, `${M}tester-tshirt.png`];
+  const [shirtIdx, setShirtIdx] = useState(0);
 
   return (
     <div className="rl-root">
@@ -2053,9 +2062,10 @@ export function TestersPage() {
       <section className="rl-tt-sec">
         <div className="rl-container">
           <div className="rl-tt-shirt">
-            {shirtBroken ? <TeeGraphic /> : (
-              <img className="rl-tt-shirt-img" src={`${M}tester-tshirt.png`} alt="ReelIntel t-shirt"
-                   onError={() => setShirtBroken(true)} loading="lazy" />
+            {shirtIdx >= SHIRT_SRCS.length ? <TeeGraphic /> : (
+              <img className="rl-tt-shirt-img" src={SHIRT_SRCS[shirtIdx]}
+                   alt="ReelIntel t-shirt — front and back"
+                   onError={() => setShirtIdx(i => i + 1)} loading="lazy" />
             )}
             <div>
               <h2 className="rl-tt-h2">First 25 testers get a<br /><span className="accent">free ReelIntel t‑shirt.</span></h2>
