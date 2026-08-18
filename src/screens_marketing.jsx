@@ -1656,11 +1656,12 @@ function StarIcon({ size = 22, color = P.accent }) {
     </svg>
   );
 }
-function WrenchIcon({ size = 22, color = P.accent }) {
+function SpeechIcon({ size = 22, color = P.accent }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14.7 6.3a4 4 0 105.1 5.1L21 21H3l9.6-1.2a4 4 0 102.1-13.5z" />
+      <path d="M21 12a8 8 0 01-8 8H8l-4 3v-4.4A8 8 0 1121 12z" />
+      <path d="M9 11h6M9 14.5h3.5" />
     </svg>
   );
 }
@@ -1821,7 +1822,7 @@ const TESTERS_CSS = `
 }
 
 /* ---- generic section furniture ---- */
-.rl-tt-sec { padding: 62px 0; }
+.rl-tt-sec { padding: 62px 0; scroll-margin-top: 84px; }
 .rl-tt-sec-alt { background: ${P.bgAlt}; }
 @media (max-width: 640px) { .rl-tt-sec { padding: 46px 0; } }
 .rl-tt-h2 {
@@ -1830,6 +1831,18 @@ const TESTERS_CSS = `
 }
 .rl-tt-h2 .accent { color: ${P.accent}; }
 .rl-tt-lead { color: ${P.inkSoft}; font-size: 16px; line-height: 1.62; margin: 0 0 32px; max-width: 660px; }
+
+/* The line the whole page turns on — set like a pull quote so it reads
+   before the numbered steps do. */
+.rl-tt-motto {
+  font-size: clamp(21px, 3.3vw, 36px); font-weight: 900; text-transform: uppercase;
+  letter-spacing: -0.4px; line-height: 1.1; color: ${P.ink};
+  margin: 0 0 30px; padding: 20px 24px;
+  border-left: 3px solid ${P.accent}; border-radius: 0 16px 16px 0;
+  background: linear-gradient(90deg, rgba(25,212,242,0.12), rgba(25,212,242,0) 72%);
+}
+.rl-tt-motto .accent { color: ${P.accent}; }
+@media (max-width: 560px) { .rl-tt-motto { padding: 16px 18px; margin-bottom: 24px; } }
 
 /* ---- the ask ---- */
 .rl-tt-steps { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
@@ -1981,8 +1994,8 @@ const TESTER_STEPS = [
     d: 'Run several fish photos through Fish ID. They can be new photos or photos already on your phone.' },
   { n: '03', Icon: FishIcon,   t: 'Log a few catches',
     d: 'Add several catches so ReelIntel begins building your log. Real catches are ideal, but test entries are completely fine for this early testing.' },
-  { n: '04', Icon: WrenchIcon, t: 'Tell me what sucks', hi: true,
-    d: 'If something is confusing, slow, broken or just doesn’t make sense, I want to know. Don’t be polite — help me fix it.' },
+  { n: '04', Icon: SpeechIcon, t: 'Tell me what you’d change', hi: true,
+    d: 'Use ReelIntel like you normally would, then tell me what you’d make better. What’s confusing? What’s missing? What takes too many steps? What would make you use it more?' },
 ];
 
 /* Drawn tee, so the reward section works before a product shot exists.
@@ -2247,9 +2260,13 @@ export function TestersPage() {
       {/* ---------- THE ASK ---------- */}
       <section className="rl-tt-sec rl-tt-sec-alt">
         <div className="rl-container">
-          <h2 className="rl-tt-h2">I need 25 anglers to put it<br /><span className="accent">through its paces.</span></h2>
+          <h2 className="rl-tt-h2">I’m handing this to 25 anglers<br /><span className="accent">before anyone else sees it.</span></h2>
           <p className="rl-tt-lead">
-            You don’t need to go fishing tomorrow. I need usage, data and feedback.
+            You don’t need to go fishing tomorrow. Open it, poke around, and tell me
+            how it holds up — that’s genuinely the whole ask.
+          </p>
+          <p className="rl-tt-motto">
+            Use it. Push it.<br /><span className="accent">Tell me what you’d change.</span>
           </p>
           <div className="rl-tt-steps">
             {TESTER_STEPS.map(({ n, Icon, t, d, hi }) => (
@@ -2391,9 +2408,10 @@ export function TestersPage() {
       {/* ---------- FEEDBACK ---------- */}
       <section className="rl-tt-sec rl-tt-sec-alt" id="feedback">
         <div className="rl-container">
-          <h2 className="rl-tt-h2">Send me your feedback.</h2>
+          <h2 className="rl-tt-h2">Tell me what you’d change.</h2>
           <p className="rl-tt-lead">
-            The more specific, the better. Half-finished thoughts are still useful — send them.
+            The more specific, the better — but half-finished thoughts are still worth
+            sending. Every one of these shapes what ReelIntel becomes.
           </p>
           <TesterFeedback />
         </div>
@@ -2404,9 +2422,9 @@ export function TestersPage() {
         <div className="rl-tt-final-bg" style={{ backgroundImage: `url(${M}testers-cta-bg.jpg)` }} />
         <div className="rl-tt-final-scrim" />
         <div className="rl-container rl-tt-final-in">
-          <h2 className="rl-tt-h2" style={{ marginBottom: 14 }}>Ready to help me break it?</h2>
+          <h2 className="rl-tt-h2" style={{ marginBottom: 14 }}>Ready to take it out?</h2>
           <p className="rl-tt-lead" style={{ margin: '0 auto 30px' }}>
-            Download ReelIntel, create your account and start putting it through its paces.
+            Download ReelIntel, create your account, and start fishing with it.
           </p>
           <a className="rl-tt-cta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
             <AppleIcon /> Download on the App Store →
