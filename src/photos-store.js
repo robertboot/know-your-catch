@@ -335,6 +335,59 @@ export async function rehydrateFromCloud(p) {
   }
 }
 
+/* Eagerly restore EVERY photo whose local file is missing.
+
+   Lazy per-render rehydration is not enough, and shipping it as if it
+   were was a real mistake: it only repairs a photo if the angler happens
+   to open the screen showing it WHILE ONLINE. Go offline first — which
+   is the normal way this app is used — and every screen you never
+   visited is still empty. Personal Bests came up blank in airplane mode
+   for exactly that reason.
+
+   So sweep the whole saved state once at launch when there is a network,
+   with a small concurrency cap so it never competes with the UI. Each
+   photo is repaired once, ever; afterwards the device is self-sufficient.
+
+   Returns { checked, restored, failed }. */
+export async function rehydrateAllMissing(state, { concurrency = 3, onProgress } = {}) {
+  const out = { checked: 0, restored: 0, failed: 0 };
+  if (!NATIVE || !state) return out;
+
+  // Collect every photo entry the app knows about, from both shapes.
+  const photos = [];
+  const push = (v) => {
+    if (!v) return;
+    if (Array.isArray(v)) { v.forEach(push); return; }
+    if (typeof v === 'object' && (v.path || v.thumbPath)) photos.push(v);
+  };
+  for (const c of (state.catchLog || [])) { push(c.photos); push(c.photo); }
+  for (const pb of Object.values(state.pbs || {})) { push(pb.photos); push(pb.photo); }
+
+  // Only those with a cloud copy to restore FROM and no local bytes.
+  const work = [];
+  for (const p of photos) {
+    if (!(p.cloudPath || p.cloudUrl)) continue;
+    out.checked += 1;
+    const [full, th] = await Promise.all([
+      photoLocalExists(p, 'path'), photoLocalExists(p, 'thumbPath'),
+    ]);
+    if (!full || !th) work.push(p);
+  }
+  if (!work.length) return out;
+
+  let i = 0;
+  const worker = async () => {
+    while (i < work.length) {
+      const p = work[i++];
+      const ok = await rehydrateFromCloud(p);
+      if (ok) out.restored += 1; else out.failed += 1;
+      if (onProgress) onProgress({ ...out, total: work.length });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, work.length) }, worker));
+  return out;
+}
+
 /* Async signed URL for a photo's private cloud copy. Returns null when
    there's no cloud copy, no session, or the sign fails. Cached per path
    so repeated renders don't re-sign. */

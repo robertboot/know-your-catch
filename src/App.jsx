@@ -11,6 +11,7 @@ import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
 import {
   migratePhotosToStore, regenerateThumbs, thumbRegenNeeded, markThumbRegenDone,
   initPhotoPaths,
+  rehydrateAllMissing,
 } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
@@ -163,6 +164,25 @@ export default function App() {
     // migration below writes thumb files.
     initPhotoPaths()
       .then(() => setPhotoPathsReady(true))
+      // Restore any photo whose local file is gone, from its cloud copy,
+      // ONCE at launch rather than lazily when a screen happens to be
+      // opened online. A reinstall replaces the app container and every
+      // saved photo's bytes go with it; repairing only what the angler
+      // happens to view while connected leaves the rest blank the moment
+      // they lose signal — which is when this app is actually used.
+      // Fire-and-forget: never block boot on it.
+      .then(() => {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+        rehydrateAllMissing(s)
+          .then((r) => {
+            if (r.restored) {
+              // eslint-disable-next-line no-console
+              console.log('[photos] rehydrated', r.restored, 'of', r.checked,
+                          'cloud-backed photos;', r.failed, 'failed');
+            }
+          })
+          .catch(() => { /* photos stay on the per-render fallback */ });
+      })
       .then(() => migratePhotosToStore(s)).then((migrated) => {
       if (migrated !== s) {
         setState(prev => {
