@@ -165,3 +165,17 @@ comparable to an earlier one.
 
 Same shape as the offline-first rule: the expensive thing belongs
 somewhere it happens once, not on the hot path.
+
+## Runtime: LiteRT.js, not tfjs-tflite (app path)
+
+Since build 201 the app runs DeepBlue on @litertjs/core (wasm bundled at
+models/litert/). tfjs-tflite never worked on the capacitor:// origin —
+every prior success was secretly the CDN. If a model fails to load:
+
+- LiteRT 2.5.3 rejects dynamic batch ([-1,…]); staticizeModelBytes()
+  patches 3 metadata ints and FAILS CLOSED on unexpected layouts. Prefer
+  exporting static batch 1 from the trainer.
+- WebKit Error.stack omits name AND message — log `e.name: e.message`
+  first or you will debug anonymous frames for five builds.
+- Admin Test Image panels still use tfjs-tflite; app and admin runtimes
+  are different until someone migrates admin.
