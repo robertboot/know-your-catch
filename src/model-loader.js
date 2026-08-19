@@ -39,6 +39,28 @@ let _model = null;                // loaded tflite runtime model
 let _manifest = null;             // cached manifest object
 let _readyPromise = null;         // resolves to _model (or null)
 let _modelSource = 'NONE';        // 'BUNDLED' | 'CACHED_UPDATE' | 'NONE'
+let _cacheQuarantinedThisSession = false;
+
+/* A cached model that failed RUNTIME load is removed so it cannot win
+   selection again — this session (flag) or the next (files gone). The
+   bundled model is app content and untouchable; a WORKING cache never
+   reaches here. A future background update that downloads AND
+   load-validates writes a fresh cache as before. */
+async function _quarantineCache(reason) {
+  _cacheQuarantinedThisSession = true;
+  try {
+    if (NATIVE) {
+      try { await Filesystem.deleteFile({ path: CACHED_MODEL,    directory: Directory.Data }); } catch {}
+      try { await Filesystem.deleteFile({ path: CACHED_MANIFEST, directory: Directory.Data }); } catch {}
+    } else {
+      localStorage.removeItem(LS_MODEL_KEY);
+      localStorage.removeItem(LS_MANIFEST_KEY);
+    }
+    _log('LOG', `cache quarantined (${(reason || '').slice(0, 80)})`);
+  } catch (e) {
+    _log('ERR', `cache quarantine failed: ${e?.message || e}`);
+  }
+}
 let _status = 'idle';             // 'idle' | 'loading' | 'ready' | 'error' | 'no-network'
 let _lastError = null;            // human-readable string surfaced in Settings
 
@@ -474,42 +496,71 @@ async function _doInit() {
   //         denied by, a network response.
   let bytes = null, manifest = null;
 
-  const cachedManifest = await readCachedManifest();
-  const cachedBytes = cachedManifest ? await readCachedModelBytes() : null;
-  const cacheProblem = validModelPair(cachedBytes, cachedManifest);
-  if (!cacheProblem) {
-    bytes = cachedBytes; manifest = cachedManifest;
-    _modelSource = 'CACHED_UPDATE';
-    _log('LOG', `using cached model ${manifest.version_name}`);
-  } else {
-    _log('LOG', `cache unusable (${cacheProblem}) — falling back to bundled`);
-    const bundled = await loadBundledModel();
-    if (bundled) {
-      bytes = bundled.bytes; manifest = bundled.manifest;
-      _modelSource = 'BUNDLED';
+  // ---- 1a. Try a structurally valid CACHE first — but a cache that
+  //          passes the byte checks and then THROWS at runtime load is
+  //          rejected the same as a corrupt one. The previous code set
+  //          status=error there and returned null, so a bad cached
+  //          update made Fish ID unavailable while a known-good bundled
+  //          model sat unread in the app package. A failed cached
+  //          update must never cost the feature.
+  let cachedLoadError = null;
+  if (!_cacheQuarantinedThisSession) {
+    const cachedManifest = await readCachedManifest();
+    const cachedBytes = cachedManifest ? await readCachedModelBytes() : null;
+    const cacheProblem = validModelPair(cachedBytes, cachedManifest);
+    if (!cacheProblem) {
+      try {
+        _model = await loadRuntimeAndModel(cachedBytes);
+        _manifest = cachedManifest;
+        _modelSource = 'CACHED_UPDATE';
+        _status = 'ready'; _lastError = null;
+        _log('LOG', `ready: ${cachedManifest.version_name} (source=CACHED_UPDATE)`);
+        _emit();
+        _backgroundUpdateCheck(cachedManifest.version_name).catch(() => {});
+        return _model;
+      } catch (e) {
+        cachedLoadError = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
+        _log('ERR', `cached: LOAD FAIL — ${cachedLoadError}`);
+        await _quarantineCache(cachedLoadError);
+      }
+    } else {
+      _log('LOG', `cache unusable (${cacheProblem}) — using bundled`);
     }
+  } else {
+    _log('LOG', 'cache quarantined earlier this session — using bundled');
   }
 
+  // ---- 1b. BUNDLED DeepBlue — the guaranteed baseline.
+  const bundled = await loadBundledModel();
+  if (bundled) { bytes = bundled.bytes; manifest = bundled.manifest; }
+
   if (!bytes || !manifest) {
-    // With a valid bundled model this is exceptional (corrupt install).
+    // Only reachable when the cache failed AND the bundle failed —
+    // a genuinely broken install, the sole case allowed to say
+    // "model unavailable".
     _modelSource = 'NONE';
-    _log('ERR', 'no usable model: cache invalid AND bundled load failed');
-    _status = 'error'; _lastError = 'no usable model on device'; _emit();
+    _lastError = cachedLoadError
+      ? `cached update failed (${cachedLoadError.slice(0, 120)}) and bundled model failed to load`
+      : 'bundled model failed to load';
+    _log('ERR', `no usable model: ${_lastError}`);
+    _status = 'error'; _emit();
     return null;
   }
 
-  // ---- 2. Load the runtime with the LOCAL model. Ready before any
-  //         network activity happens.
   try {
     _model = await loadRuntimeAndModel(bytes);
     _manifest = manifest;
+    _modelSource = 'BUNDLED';
     _status = 'ready';
-    _lastError = null;
-    _log('LOG', `ready: ${manifest.version_name} (source=${_modelSource})`);
+    // Keep the cached failure visible in diagnostics without making the
+    // feature look broken — the model IS ready.
+    _lastError = cachedLoadError ? `cached update rejected: ${cachedLoadError.slice(0, 160)}` : null;
+    _log('LOG', `bundled: LOAD PASS — ready: ${manifest.version_name} (source=BUNDLED)`);
     _emit();
   } catch (e) {
     const msg = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
-    _log('ERR', `runtime load failed: ${msg}`);
+    _log('ERR', `bundled runtime load failed: ${msg}`);
+    _modelSource = 'NONE';
     _lastError = msg; _status = 'error'; _emit();
     return null;
   }
