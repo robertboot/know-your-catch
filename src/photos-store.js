@@ -476,16 +476,16 @@ export async function rehydrateFromCloud(p) {
    itself produces the full URI for the exact file.
 
    Cached per relative path — one bridge call per file per session. */
-const _uriCache = new Map();
+const _uriCache = new Map();   // relPath -> { uri, converted }
 
 export async function localPhotoDisplayUrl(relPath) {
   if (!NATIVE || !relPath) return null;
   if (_uriCache.has(relPath)) return _uriCache.get(relPath);
   try {
     const { uri } = await Filesystem.getUri({ path: relPath, directory: Directory.Data });
-    const converted = Capacitor.convertFileSrc(uri);
-    _uriCache.set(relPath, converted);
-    return converted;
+    const out = { uri, converted: Capacitor.convertFileSrc(uri) };
+    _uriCache.set(relPath, out);
+    return out;
   } catch (e) {
     photoEvent({ kind: 'log', msg: `getUri FAIL ${relPath}: ${e?.message || e}` });
     return null;
@@ -553,19 +553,22 @@ export async function resolvePhotoDisplay(p, { preferThumb = true, diag = null }
     if (preferThumb && p.thumbPath) {
       trace.statThumb = await photoLocalExists(p, 'thumbPath') ? 'PASS' : 'FAIL';
       if (trace.statThumb === 'PASS') {
-        const converted = await localPhotoDisplayUrl(p.thumbPath);
-        trace.nativeUri = _uriCache.has(p.thumbPath) ? 'per-file getUri' : null;
-        trace.convertedUri = converted ? converted.slice(-60) : null;
-        if (converted) return finish('available', converted, { source: 'LOCAL_THUMB' });
+        const r = await localPhotoDisplayUrl(p.thumbPath);
+        trace.nativeUri = r ? r.uri.slice(-70) : null;
+        trace.convertedUri = r ? r.converted.slice(-70) : null;
+        trace.finalImgSrc = trace.convertedUri;
+        if (r) return finish('available', r.converted, { source: 'LOCAL_THUMB' });
         trace.statThumb = 'PASS-but-getUri-FAIL';
       }
     }
     if (p.path) {
       trace.statOriginal = await photoLocalExists(p, 'path') ? 'PASS' : 'FAIL';
       if (trace.statOriginal === 'PASS') {
-        const converted = await localPhotoDisplayUrl(p.path);
-        trace.convertedUri = converted ? converted.slice(-60) : null;
-        if (converted) return finish('available', converted, { source: 'LOCAL_ORIGINAL' });
+        const r = await localPhotoDisplayUrl(p.path);
+        trace.nativeUri = r ? r.uri.slice(-70) : null;
+        trace.convertedUri = r ? r.converted.slice(-70) : null;
+        trace.finalImgSrc = trace.convertedUri;
+        if (r) return finish('available', r.converted, { source: 'LOCAL_ORIGINAL' });
         trace.statOriginal = 'PASS-but-getUri-FAIL';
       }
     }
