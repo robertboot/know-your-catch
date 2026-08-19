@@ -1265,7 +1265,13 @@ export default function App() {
             </button>
           )}
           <button
-            onClick={() => { onLogoTap(); reset([{ name: 'home' }]); }}
+            // Tap counting moved to pointerdown: onClick fires AFTER the
+            // navigation reset re-renders the tree, and on device the
+            // synthesized clicks proved unreliable mid-transition — the
+            // 5-tap panel never opened in build 195. pointerdown is
+            // delivered before any of that.
+            onPointerDown={onLogoTap}
+            onClick={() => reset([{ name: 'home' }])}
             aria-label="ReelIntel — home"
             style={{
               background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',

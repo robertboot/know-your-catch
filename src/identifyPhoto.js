@@ -375,8 +375,15 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   });
   if (cloud) return { ...cloud, _diag: `cloud used (no local model) · ${diagTail()}`, _subjectBox: lastSubjectBox() };
 
-  // Nothing available — return an empty, banded result.
-  return rankAndBand([]);
+  // Nothing available — return an empty, banded result, CARRYING the
+  // reason. The couldn't-identify screen already renders _diag, so the
+  // first failing step is visible on the normal UI even if the hidden
+  // panel can't be opened — which is exactly what happened on build 195.
+  return {
+    ...rankAndBand([]),
+    _diag: `engine:NONE · model:${getModelStatus()} · `
+         + `err:${(localErr || getModelError() || 'none').slice(0, 140)}`,
+  };
 }
 
 /* Kept unchanged — surfaced by PhotoAnalyzingScreen while the model
