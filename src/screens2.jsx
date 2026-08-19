@@ -2072,12 +2072,14 @@ function FishIdModelCard() {
   const [status, setStatus] = React.useState('loading');
   const [info, setInfo] = React.useState(null);
   const [errMsg, setErrMsg] = React.useState(null);
+  const [source, setSource] = React.useState('NONE');
   React.useEffect(() => {
     (async () => {
-      const { getModelStatus, getModelInfo, getModelError } = await import('./model-loader.js');
+      const { getModelStatus, getModelInfo, getModelError, getModelSource } = await import('./model-loader.js');
       setStatus(getModelStatus());
       setInfo(getModelInfo());
       setErrMsg(getModelError());
+      setSource(getModelSource());
     })();
   }, [tick]);
 
@@ -2091,12 +2093,16 @@ function FishIdModelCard() {
     }
   };
 
+  // This field must NEVER read as blank. Build 195 shipped a blank
+  // model card, and the flagship offline feature silently didn't exist
+  // until the user guessed that "Check for updates" would install it.
   const label =
-    status === 'ready'      ? info?.version_name || '—'
+    status === 'ready'      ? (info?.version_name
+                                ? `DeepBlue ${String(info.version_name).replace(/^deepblue\s*/i, '')}`
+                                : 'DeepBlue Built-In')
   : status === 'loading'    ? 'Loading…'
-  : status === 'no-network' ? 'Not yet synced'
-  : status === 'error'      ? 'Failed to load'
-  : '—';
+  : status === 'error'      ? 'Model unavailable'
+  : 'Loading…';
 
   return (
     <Card style={{ marginBottom: 10 }}>
@@ -2104,14 +2110,10 @@ function FishIdModelCard() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: 16, color: T.ink, fontWeight: 700 }}>{label}</div>
-          {status === 'ready' && info?.labels && (
-            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>
-              {info.labels.length} species · updates over the air
-            </div>
-          )}
-          {status === 'no-network' && (
-            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>
-              Open the app once online to download the current model.
+          {status === 'ready' && (
+            <div style={{ fontSize: 12, color: T.open, marginTop: 3, fontWeight: 700 }}>
+              Offline Ready ✓{source === 'BUNDLED' ? ' · built-in' : ''}
+              {info?.labels ? ` · ${info.labels.length} species` : ''}
             </div>
           )}
           {status === 'error' && errMsg && (

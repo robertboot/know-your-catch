@@ -1978,7 +1978,9 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <AlertTriangle size={22} color="#c66" />
               <div>
-                <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>Not confident</div>
+                <div style={{ fontWeight: 700, color: T.ink, fontSize: 16 }}>
+                  {result?._modelUnavailable ? 'Fish ID model unavailable' : 'Not confident'}
+                </div>
                 <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
                   The image was too uncertain to commit to a species. Try a clearer photo, or identify manually.
                 </div>

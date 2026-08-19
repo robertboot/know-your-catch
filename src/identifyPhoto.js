@@ -43,7 +43,7 @@
 
 import { SPECIES, REGULATIONS } from './data.js';
 import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote, lastSubjectFound, lastSubjectBox } from './identify/adapter.js';
-import { getModelInfo, getModelStatus, getModelError } from './model-loader.js';
+import { getModelInfo, getModelStatus, getModelError, getModelSource } from './model-loader.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
@@ -350,6 +350,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
     photoEvent({
       kind: 'fishid',
       modelStatus: getModelStatus(),
+      modelSource: getModelSource(),
       modelVersion: getModelInfo()?.version_name || null,
       localTop1: localTopId, localScore: localTop,
       cloudCalled: false,
@@ -366,6 +367,7 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   photoEvent({
     kind: 'fishid',
     modelStatus: getModelStatus(),
+    modelSource: getModelSource(),
     modelVersion: getModelInfo()?.version_name || null,
     modelError: (getModelError() || '').slice(0, 120) || null,
     localErr: localErr ? String(localErr).slice(0, 120) : null,
@@ -381,7 +383,11 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   // panel can't be opened — which is exactly what happened on build 195.
   return {
     ...rankAndBand([]),
-    _diag: `engine:NONE · model:${getModelStatus()} · `
+    // With a bundled model, a not-ready status here is a genuine
+    // malfunction, not a sync state — the UI says so instead of using
+    // low-confidence language.
+    _modelUnavailable: getModelStatus() !== 'ready',
+    _diag: `engine:NONE · model:${getModelStatus()}/${getModelSource()} · `
          + `err:${(localErr || getModelError() || 'none').slice(0, 140)}`,
   };
 }

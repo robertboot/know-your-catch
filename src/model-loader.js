@@ -38,6 +38,7 @@ export const PUBLIC_MANIFEST_URL = () =>
 let _model = null;                // loaded tflite runtime model
 let _manifest = null;             // cached manifest object
 let _readyPromise = null;         // resolves to _model (or null)
+let _modelSource = 'NONE';        // 'BUNDLED' | 'CACHED_UPDATE' | 'NONE'
 let _status = 'idle';             // 'idle' | 'loading' | 'ready' | 'error' | 'no-network'
 let _lastError = null;            // human-readable string surfaced in Settings
 
@@ -65,6 +66,7 @@ export function getModelInfo()   { return _manifest; }
 export function getReadyModel()  { return _readyPromise; }
 export function getModelError()  { return _lastError; }
 export function getModelLog()    { return _logBuf.slice(); }
+export function getModelSource() { return _modelSource; }
 
 /* Read the cached manifest from disk (or localStorage on web). Returns
    null if nothing cached. */
@@ -138,6 +140,49 @@ function _bufferToBase64(buf) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   }
   return btoa(bin);
+}
+
+/* Validate a candidate model before it is allowed to serve. A model
+   that fails here is treated as ABSENT — never "sort of loaded". */
+function validModelPair(bytes, manifest) {
+  if (!bytes || bytes.byteLength < 1024) return 'bytes missing/truncated';
+  const v = new Uint8Array(bytes);
+  const magic = String.fromCharCode(v[4], v[5], v[6], v[7]);
+  if (magic !== 'TFL3') return `bad flatbuffer magic ${JSON.stringify(magic)}`;
+  if (!manifest || !Array.isArray(manifest.labels) || manifest.labels.length < 2) {
+    return 'manifest/labels invalid';
+  }
+  if (!Number.isFinite(manifest.input_size)) return 'manifest missing input_size';
+  return null;
+}
+
+/* The GUARANTEED baseline: DeepBlue shipped inside the app bundle at
+   public/models/deepblue/. Fish ID must never depend on any network —
+   that is the product's core promise, and build 195 proved the old
+   design broke it: a reinstall wiped the cache, the first offline
+   launch cached a FAILED init for the whole session, Settings showed a
+   blank model, and the user had to know to press "Check for updates"
+   to make the flagship feature exist. */
+async function loadBundledModel() {
+  const base = `${(import.meta.env.BASE_URL || '/')}models/deepblue/`;
+  try {
+    const [mResp, jResp] = await Promise.all([
+      fetch(`${base}current.tflite`), fetch(`${base}current.json`),
+    ]);
+    if (!mResp.ok || !jResp.ok) {
+      _log('ERR', `bundled model fetch: tflite=${mResp.status} json=${jResp.status}`);
+      return null;
+    }
+    const bytes = await mResp.arrayBuffer();
+    const manifest = await jResp.json();
+    const bad = validModelPair(bytes, manifest);
+    if (bad) { _log('ERR', `bundled model invalid: ${bad}`); return null; }
+    _log('LOG', `bundled model ok: ${manifest.version_name}, ${bytes.byteLength} bytes`);
+    return { bytes, manifest };
+  } catch (e) {
+    _log('ERR', `bundled model load threw: ${e?.message || e}`);
+    return null;
+  }
 }
 
 /* Fetch the remote manifest. Returns null if offline / bucket unset. */
@@ -406,7 +451,14 @@ async function loadRuntimeAndModel(modelBytes) {
 /* Main entry point — called from App.jsx on boot. Idempotent: repeat
    calls return the same in-flight promise. */
 export function initModel() {
-  if (_readyPromise) return _readyPromise;
+  // A finished init that did NOT produce a model must not be cached for
+  // the session — that is the exact defect that left build 195 blank:
+  // one offline first-launch resolved null, and every later call
+  // (including after network returned) got that same null back until
+  // the user manually pressed "Check for updates".
+  if (_readyPromise && (_status === 'loading' || _status === 'ready')) {
+    return _readyPromise;
+  }
   _readyPromise = _doInit();
   return _readyPromise;
 }
@@ -415,76 +467,88 @@ async function _doInit() {
   _status = 'loading';
   _lastError = null;
   _logBuf.length = 0;
-  _log('LOG', `_doInit start; native=${NATIVE} baseURI=${typeof document !== 'undefined' ? document.baseURI : 'n/a'}`);
+  _log('LOG', `_doInit start; native=${NATIVE}`);
   _emit();
 
-  // 1. Read whatever we have cached.
+  // ---- 1. LOCAL FIRST. Fish ID readiness must never wait on, or be
+  //         denied by, a network response.
+  let bytes = null, manifest = null;
+
   const cachedManifest = await readCachedManifest();
-
-  // 2. Try the network for the latest manifest.
-  const remoteManifest = await fetchRemoteManifest();
-
-  // Log which manifest we're basing the decision on.
-  if (!cachedManifest && !remoteManifest) {
-    _log('ERR', 'manifest: BOTH failed — no cache and no network');
-  } else if (remoteManifest && cachedManifest) {
-    _log('LOG', `manifest: cache=${cachedManifest.version_name} remote=${remoteManifest.version_name}`);
-  } else if (remoteManifest) {
-    _log('LOG', `manifest: remote only, ${remoteManifest.version_name}`);
+  const cachedBytes = cachedManifest ? await readCachedModelBytes() : null;
+  const cacheProblem = validModelPair(cachedBytes, cachedManifest);
+  if (!cacheProblem) {
+    bytes = cachedBytes; manifest = cachedManifest;
+    _modelSource = 'CACHED_UPDATE';
+    _log('LOG', `using cached model ${manifest.version_name}`);
   } else {
-    _log('LOG', `manifest: cache only, ${cachedManifest.version_name}`);
-  }
-
-  // 3. Decide which manifest wins.
-  const needsDownload =
-    !cachedManifest ||
-    (remoteManifest && remoteManifest.version_name !== cachedManifest.version_name);
-
-  let effectiveManifest = cachedManifest;
-  let modelBytes = null;
-
-  if (needsDownload && remoteManifest) {
-    // New version available (or first launch). Try to fetch bytes.
-    modelBytes = await fetchRemoteModel();
-    if (modelBytes) {
-      effectiveManifest = remoteManifest;
-      await writeCache(modelBytes, remoteManifest);
-    }
-    // If bytes fetch failed but we have a cache, fall through to it.
-  }
-
-  // 4. If no bytes yet (either no download attempted or it failed),
-  //    fall back to cached bytes.
-  if (!modelBytes) {
-    modelBytes = await readCachedModelBytes();
-    if (modelBytes) {
-      _log('LOG', `using cached model bytes, ${modelBytes.byteLength} bytes`);
+    _log('LOG', `cache unusable (${cacheProblem}) — falling back to bundled`);
+    const bundled = await loadBundledModel();
+    if (bundled) {
+      bytes = bundled.bytes; manifest = bundled.manifest;
+      _modelSource = 'BUNDLED';
     }
   }
 
-  // 5. If we STILL have nothing, this is a first launch offline.
-  if (!modelBytes || !effectiveManifest) {
-    _log('ERR', 'no model available — offline first launch or bucket unreachable');
-    _status = 'no-network'; _emit();
+  if (!bytes || !manifest) {
+    // With a valid bundled model this is exceptional (corrupt install).
+    _modelSource = 'NONE';
+    _log('ERR', 'no usable model: cache invalid AND bundled load failed');
+    _status = 'error'; _lastError = 'no usable model on device'; _emit();
     return null;
   }
 
-  // 6. Load into runtime.
+  // ---- 2. Load the runtime with the LOCAL model. Ready before any
+  //         network activity happens.
   try {
-    _model = await loadRuntimeAndModel(modelBytes);
-    _manifest = effectiveManifest;
+    _model = await loadRuntimeAndModel(bytes);
+    _manifest = manifest;
     _status = 'ready';
     _lastError = null;
-    _log('LOG', `ready: ${effectiveManifest.version_name}`);
+    _log('LOG', `ready: ${manifest.version_name} (source=${_modelSource})`);
     _emit();
-    return _model;
   } catch (e) {
     const msg = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
     _log('ERR', `runtime load failed: ${msg}`);
-    _lastError = msg;
-    _status = 'error';
-    _emit();
+    _lastError = msg; _status = 'error'; _emit();
     return null;
+  }
+
+  // ---- 3. Background update check — strictly after readiness, fire
+  //         and forget, and NEVER able to un-ready the model.
+  _backgroundUpdateCheck(manifest.version_name).catch(() => { /* logged inside */ });
+
+  return _model;
+}
+
+/* Opportunistic update: if a newer promoted model exists, download it,
+   VALIDATE it, persist it, and only then hot-swap. Any failure leaves
+   the running model exactly as it was. */
+async function _backgroundUpdateCheck(currentVersion) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    _log('LOG', 'update check skipped (offline)');
+    return;
+  }
+  const remote = await fetchRemoteManifest();
+  if (!remote) { _log('LOG', 'update check: no remote manifest'); return; }
+  if (remote.version_name === currentVersion) {
+    _log('LOG', `update check: ${currentVersion} is current`);
+    return;
+  }
+  _log('LOG', `update available: ${currentVersion} -> ${remote.version_name}`);
+  const freshBytes = await fetchRemoteModel();
+  const bad = validModelPair(freshBytes, remote);
+  if (bad) { _log('ERR', `update rejected: ${bad} — keeping ${currentVersion}`); return; }
+  try {
+    const m = await loadRuntimeAndModel(freshBytes);
+    await writeCache(freshBytes, remote);
+    _model = m;
+    _manifest = remote;
+    _modelSource = 'CACHED_UPDATE';
+    _log('LOG', `updated to ${remote.version_name}`);
+    _emit();
+  } catch (e) {
+    _log('ERR', `update load failed: ${e?.message || e} — keeping ${currentVersion}`);
   }
 }
 
