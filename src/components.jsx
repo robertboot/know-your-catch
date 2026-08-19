@@ -5,7 +5,7 @@ import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { speciesPhoto, shareReport, speciesById, isAnglerVisible } from './helpers.js';
-import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, photoLocalExists } from './photos-store.js';
+import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, photoLocalExists, rehydrateFromCloud } from './photos-store.js';
 
 /* ============================================================
    PHOTO IMG — shared img resolver with thumb-first render
@@ -53,10 +53,17 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
   const [idx, setIdx] = React.useState(0);
   const [signed, setSigned] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
+  // null = existence not yet determined. While null we render NOTHING
+  // rather than a candidate we may already know is dead — that guess is
+  // what produced the visible broken-image icon before the photo
+  // "popped in" a moment later.
+  const [localOk, setLocalOk] = React.useState(undefined);
 
   // Reset when the photo changes — otherwise a previously-exhausted
   // chain would leave the next photo showing the placeholder.
-  React.useEffect(() => { setIdx(0); setSigned(null); setFailed(false); }, [thumb, primary]);
+  React.useEffect(() => {
+    setIdx(0); setSigned(null); setFailed(false); setLocalOk(undefined);
+  }, [thumb, primary]);
 
   // PROACTIVE: if the local file is gone, go straight to the cloud copy
   // instead of waiting for the <img> to report a failure.
@@ -79,14 +86,28 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
         photoLocalExists(p, 'path'),
         photoLocalExists(p, 'thumbPath'),
       ]);
-      if (cancelled || full || th) return;     // something local survives
+      if (cancelled) return;
+      if (full || th) { setLocalOk(true); return; }   // something local survives
+      setLocalOk(false);
       const url = await photoSignedUrl(p);
       if (!cancelled && url) setSigned(url);
+      // REHYDRATE: write the cloud copy back to disk at the same
+      // relative path. Without this the photo renders today and is
+      // still missing in airplane mode tomorrow — the app is
+      // offline-first, so a network-only photo is a half-fix.
+      rehydrateFromCloud(p);
     })();
     return () => { cancelled = true; };
   }, [photo, thumb, primary]);
 
-  const src = signed || candidates[idx] || null;
+  // Hold fire until we know whether the local file is there. Rendering
+  // a candidate we are about to discover is dead is what made the
+  // broken-image icon flash before the real photo appeared.
+  const awaitingCheck = localOk === undefined
+    && photo && typeof photo === 'object'
+    && (photo.path || photo.thumbPath)
+    && (photo.cloudPath || photo.cloudUrl);
+  const src = signed || (awaitingCheck ? null : (candidates[idx] || null));
 
   const onError = React.useCallback(() => {
     if (debugTag && typeof console !== 'undefined') {
@@ -105,6 +126,16 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
 
   // Nothing renderable — show the same placeholder SpeciesImage uses
   // rather than a broken-image glyph.
+  // No src AND still checking => transparent hold, not the "unavailable"
+  // placeholder. Showing the failure state during a check we have not
+  // finished is the same lie as showing a broken image.
+  if (!src && awaitingCheck && !failed) {
+    return (
+      <div className={className} aria-label={alt || 'Loading photo'}
+           style={{ background: 'rgba(255,255,255,0.03)', ...style }} />
+    );
+  }
+
   if (!src || failed) {
     return (
       <div

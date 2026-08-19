@@ -265,6 +265,55 @@ export async function photoLocalExists(p, which = 'path') {
   return ok;
 }
 
+/* Pull the cloud copy back down to disk, at the SAME relative path the
+   record already stores.
+
+   This is what makes the app offline-first again after a reinstall.
+   Rendering from a signed URL fixes the empty thumbnail but leaves the
+   photo permanently network-dependent — the bytes still are not on the
+   device, so the next airplane-mode launch shows nothing. That is not
+   "works offline", it is "works while online and hides the failure".
+
+   Writing to p.path (relative) rather than a fresh id means the record
+   needs no mutation: photoThumbUrl/photoDisplayUrl already rebuild
+   capacitor://<base-resolved-this-launch>/<path>, so the very next
+   render finds a real file and never touches the network again.
+
+   Best-effort and fire-and-forget by design — a failure here costs a
+   re-fetch next launch, nothing worse. */
+const _rehydrating = new Set();
+
+export async function rehydrateFromCloud(p) {
+  if (!NATIVE || !p || typeof p !== 'object' || !p.path) return false;
+  if (_rehydrating.has(p.path)) return false;
+  _rehydrating.add(p.path);
+  try {
+    const url = await photoSignedUrl(p);
+    if (!url) return false;
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const buf = await res.arrayBuffer();
+    // btoa over a big photo in one call blows the argument limit on
+    // some WebKit builds; chunk it.
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    const CH = 0x8000;
+    for (let i = 0; i < bytes.length; i += CH) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    }
+    await Filesystem.writeFile({
+      path: p.path, data: btoa(bin),
+      directory: Directory.Data, recursive: true,
+    });
+    _existsCache.set(p.path, true);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    _rehydrating.delete(p.path);
+  }
+}
+
 /* Async signed URL for a photo's private cloud copy. Returns null when
    there's no cloud copy, no session, or the sign fails. Cached per path
    so repeated renders don't re-sign. */
