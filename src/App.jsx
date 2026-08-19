@@ -16,7 +16,7 @@ import {
 } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
-import { initModel } from './model-loader.js';
+import { initModel, getModelLog, getModelStatus } from './model-loader.js';
 import { brandAsset, refreshBrandAssets, subscribe as subscribeBrand } from './brand-store.js';
 import { refreshCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { fetchRegulations, subscribe as subscribeRegulations } from './regulations-store.js';
@@ -1354,6 +1354,10 @@ export default function App() {
         }} onClick={() => setPhotoDiagOpen(false)}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
             PHOTO DIAGNOSTICS — {photoLog.length} events (tap panel to close)
+          </div>
+          <div style={{ marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
+            <div style={{ fontWeight: 700 }}>FISH ID MODEL — status: {getModelStatus()}</div>
+            {getModelLog().slice(-10).map((l, i) => <div key={i}>{l}</div>)}
           </div>
           {photoLog.length === 0
             ? <div>no photo events yet — if tiles are broken below, the resolver did not run: report this exact state</div>

@@ -43,10 +43,11 @@
 
 import { SPECIES, REGULATIONS } from './data.js';
 import { classify, LABEL_TO_SPECIES_ID, lastCropTrace, lastSubjectNote, lastSubjectFound, lastSubjectBox } from './identify/adapter.js';
-import { getModelInfo } from './model-loader.js';
+import { getModelInfo, getModelStatus, getModelError } from './model-loader.js';
 import { client } from './supabase-client.js';
 import { getLastSession } from './auth.js';
 import { downscaleImageDataUrl } from './storage.js';
+import { photoEvent } from './photos-store.js';
 
 /* Confidence-band thresholds — ONE authoritative source.
    See getBands(): the published model manifest wins when it carries
@@ -314,16 +315,24 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   let local = null;
   let localTop = 0;
   let cropped = false;
+  let localErr = null;
+  let localTopId = null;
   try {
     const topK = await classify(imageDataUrl);
     if (topK && topK.length) {
       localTop = topK[0]?.score || 0;
+      localTopId = topK[0]?.label || null;
       cropped = lastSubjectFound();
       local = rankAndBand(annotateJurisdiction(mapLabelsToSpecies(topK), jurisdictionId));
       local._subjectBox = lastSubjectBox();
+    } else {
+      localErr = 'classify returned empty top-K';
     }
-  } catch {
-    // Model not ready (e.g. first launch before it downloads).
+  } catch (e) {
+    // Model not ready (e.g. first launch before it downloads) — but the
+    // REASON must not be swallowed: build 194 showed cloud silently
+    // papering over a dead local model whenever there was signal.
+    localErr = e?.message || String(e);
   }
 
   const diagTail = () =>
@@ -338,6 +347,14 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
      launch — and never as a second opinion, because "second opinion"
      turned into "overrides a correct answer with a wrong one". */
   if (local) {
+    photoEvent({
+      kind: 'fishid',
+      modelStatus: getModelStatus(),
+      modelVersion: getModelInfo()?.version_name || null,
+      localTop1: localTopId, localScore: localTop,
+      cloudCalled: false,
+      engine: 'DEEPBLUE_LOCAL',
+    });
     return {
       ...local,
       _diag: `${diagTail()}${cropped ? ' · cropped' : ''}`,
@@ -346,6 +363,16 @@ export async function identifyPhoto(imageDataUrl, options = {}) {
   }
 
   const cloud = await tryCloudIdentify(imageDataUrl, jurisdictionId);
+  photoEvent({
+    kind: 'fishid',
+    modelStatus: getModelStatus(),
+    modelVersion: getModelInfo()?.version_name || null,
+    modelError: (getModelError() || '').slice(0, 120) || null,
+    localErr: localErr ? String(localErr).slice(0, 120) : null,
+    localTop1: localTopId, localScore: localTop || null,
+    cloudCalled: true, cloudResult: cloud ? (cloud.candidates?.[0]?.speciesId || 'none') : 'bail',
+    engine: cloud ? 'CLAUDE_CLOUD' : 'NONE',
+  });
   if (cloud) return { ...cloud, _diag: `cloud used (no local model) · ${diagTail()}`, _subjectBox: lastSubjectBox() };
 
   // Nothing available — return an empty, banded result.
