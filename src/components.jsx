@@ -5,7 +5,7 @@ import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { speciesPhoto, shareReport, speciesById, isAnglerVisible } from './helpers.js';
-import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl } from './photos-store.js';
+import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, photoLocalExists } from './photos-store.js';
 
 /* ============================================================
    PHOTO IMG — shared img resolver with thumb-first render
@@ -57,6 +57,34 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
   // Reset when the photo changes — otherwise a previously-exhausted
   // chain would leave the next photo showing the placeholder.
   React.useEffect(() => { setIdx(0); setSigned(null); setFailed(false); }, [thumb, primary]);
+
+  // PROACTIVE: if the local file is gone, go straight to the cloud copy
+  // instead of waiting for the <img> to report a failure.
+  //
+  // A catch saved under a previous install points into a container iOS
+  // has since replaced. The rebuilt capacitor:// URL is still perfectly
+  // well-formed, so nothing about it looks wrong — but the bytes are
+  // gone. The escalation below only advances when WebKit fires onerror,
+  // and for a missing file behind a custom scheme handler it does not
+  // reliably do so. That is why two Aug-7 catches sat on the broken
+  // -image glyph while their cloud copies were intact and one call away.
+  React.useEffect(() => {
+    let cancelled = false;
+    const p = photo;
+    if (!p || typeof p !== 'object') return;
+    if (!(p.path || p.thumbPath)) return;      // nothing local to verify
+    if (!(p.cloudPath || p.cloudUrl)) return;  // no cloud copy to fall back to
+    (async () => {
+      const [full, th] = await Promise.all([
+        photoLocalExists(p, 'path'),
+        photoLocalExists(p, 'thumbPath'),
+      ]);
+      if (cancelled || full || th) return;     // something local survives
+      const url = await photoSignedUrl(p);
+      if (!cancelled && url) setSigned(url);
+    })();
+    return () => { cancelled = true; };
+  }, [photo, thumb, primary]);
 
   const src = signed || candidates[idx] || null;
 

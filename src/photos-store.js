@@ -229,6 +229,42 @@ function cloudPathOf(p) {
   return null;
 }
 
+/* Does this photo's LOCAL file still exist on this device?
+
+   Cached per path — the answer cannot change within a session, and
+   Filesystem.stat on every thumbnail render would be absurd.
+
+   Why this is needed at all: a photo record stores a relative `path`,
+   and photoThumbUrl/photoDisplayUrl rebuild a capacitor:// URL from it.
+   That URL is always well-FORMED, but says nothing about whether the
+   bytes are there. Catches created under a previous install point into
+   a container that iOS has since replaced, so the file is gone while
+   the record still looks complete.
+
+   Relying on the <img>'s onerror to discover that is not good enough:
+   the escalation only advances if WebKit reports the failure, and a
+   missing file behind a custom scheme handler does not reliably do so.
+   The angler is then left on the browser's broken-image glyph with a
+   perfectly good cloud copy sitting one call away. Ask the filesystem
+   directly instead. */
+const _existsCache = new Map();
+
+export async function photoLocalExists(p, which = 'path') {
+  if (!NATIVE || !p || typeof p !== 'object') return false;
+  const rel = which === 'thumbPath' ? p.thumbPath : p.path;
+  if (!rel) return false;
+  if (_existsCache.has(rel)) return _existsCache.get(rel);
+  let ok = false;
+  try {
+    await Filesystem.stat({ path: rel, directory: Directory.Data });
+    ok = true;
+  } catch {
+    ok = false;
+  }
+  _existsCache.set(rel, ok);
+  return ok;
+}
+
 /* Async signed URL for a photo's private cloud copy. Returns null when
    there's no cloud copy, no session, or the sign fails. Cached per path
    so repeated renders don't re-sign. */
