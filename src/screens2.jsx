@@ -13,7 +13,7 @@ import {
 } from './data.js';
 import { saveState } from './storage.js';
 import {
-  savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl,
+  savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl, resolvePhotoDisplay,
 } from './photos-store.js';
 import {
   speciesById, jurisdictionById, federalJurisdictionFor, getComparison,
@@ -2750,13 +2750,21 @@ function CatchMapView({ items, onView }) {
       Math.abs(c.lat) <= 90 && Math.abs(c.lon) <= 180 &&
       !(c.lat === 0 && c.lon === 0)
     );
+    (async () => {
     for (const c of located) {
       const s = speciesById(c.speciesId);
       // Pin uses the SPECIES photo so anglers see what's caught where
-      // at a glance. Falls back to the catch's own thumbnail (legacy
-      // + user-photo case), then a plain dot if neither exists.
+      // at a glance. Falls back to the catch's own thumbnail resolved
+      // through the CANONICAL per-file path — the legacy photoThumbUrl
+      // string arithmetic was proven broken on-device in build 193 —
+      // then a plain dot if neither exists. Leaflet needs a plain
+      // string, so resolve BEFORE building the divIcon.
       const spPhoto = s ? speciesPhoto(s.id) : null;
-      const pinUrl = spPhoto?.url || photoThumbUrl(c.photo);
+      let pinUrl = spPhoto?.url || null;
+      if (!pinUrl && c.photo) {
+        const r = await resolvePhotoDisplay(c.photo, { preferThumb: true, diag: { screen: 'map-pin' } });
+        if (r.state === 'available') pinUrl = r.src;
+      }
       const icon = pinUrl
         ? L.divIcon({ html: `<img class="kyc-pin-img" src="${pinUrl}">`, className: '', iconSize: [34, 34], iconAnchor: [17, 17] })
         : L.divIcon({ html: `<div class="kyc-pin"></div>`, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
@@ -2773,6 +2781,7 @@ function CatchMapView({ items, onView }) {
     else if (located.length > 1) {
       mapRef.current.fitBounds(L.latLngBounds(located.map(c => [c.lat, c.lon])), { padding: [40, 40], maxZoom: 11 });
     }
+    })();
   }, [items]);
 
   const located = items.filter(c =>

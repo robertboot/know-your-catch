@@ -1366,7 +1366,7 @@ export default function App() {
                         {e.t} {e.species || e.screen || 'photo'}{e.index != null ? ` #${e.index}` : ''} · {e.online === false ? 'OFFLINE' : 'ONLINE'}
                       </div>
                       <div>
-                        thumb:{e.statThumb || '-'} orig:{e.statOriginal || '-'} base:{e.baseResolved ? 'ok' : 'MISSING'} cloud:{e.signedTried ? (e.signedOk ? 'signed' : 'SIGN-FAIL') : (e.cloudPath ? 'skipped' : 'none')} → <b>{e.source}</b>{e.img ? ` · img:${e.img}` : ''}
+                        thumb:{e.statThumb || '-'} orig:{e.statOriginal || '-'} cloud:{e.signedTried ? (e.signedOk ? 'signed' : 'SIGN-FAIL') : (e.cloudPath ? 'skipped' : 'none')} → <b>{e.source}</b>{e.img ? ` · img:${e.img}` : ''}
                       </div>
                     </div>
                   );

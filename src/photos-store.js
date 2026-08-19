@@ -39,16 +39,13 @@ const PHOTO_DIR = 'photos';
 
    So thumbnails now persist the RELATIVE path and this base is joined
    at render time. */
-let _dataUriBase = null;
-
-export async function initPhotoPaths() {
-  if (!NATIVE || _dataUriBase) return;
-  try {
-    const { uri } = await Filesystem.getUri({ path: PHOTO_DIR, directory: Directory.Data });
-    // uri ends with /<PHOTO_DIR>; keep the parent so paths join cleanly.
-    _dataUriBase = uri.replace(new RegExp(`/${PHOTO_DIR}$`), '');
-  } catch { /* thumbs fall back to other sources below */ }
-}
+/* The base-URI + regex-strip + concat strategy that used to live here
+   is GONE — build 193 proved it on-device: files whose stat PASSED
+   failed to render because the concatenated URL pointed at a path that
+   did not exist. All local display now goes through per-file
+   localPhotoDisplayUrl(). Kept as a no-op so boot sequencing in App.jsx
+   is undisturbed. */
+export async function initPhotoPaths() { /* no-op — per-file getUri now */ }
 
 /* Photo quality strategy.
 
@@ -527,7 +524,6 @@ export async function resolvePhotoDisplay(p, { preferThumb = true, diag = null }
     cloudPath: (p && typeof p === 'object') ? (p.cloudPath || p.cloudUrl || null) : null,
     inlineThumb: !!(p && typeof p === 'object' && typeof p.thumb === 'string'),
     persistedSrc: (p && typeof p === 'object' && typeof p.src === 'string') ? p.src.slice(0, 30) : null,
-    baseResolved: !!_dataUriBase,
     statThumb: null, statOriginal: null,
     signedTried: false, signedOk: null, restoreStarted: false,
     source: null,
@@ -727,9 +723,9 @@ export function photoThumbUrl(p) {
   // Rebuild from the relative path + the base resolved this launch.
   // Never trust a persisted thumbSrc first: it may carry a dead
   // container UUID from a previous install.
-  if (p.thumbPath && _dataUriBase) {
-    return Capacitor.convertFileSrc(`${_dataUriBase}/${p.thumbPath}`);
-  }
+  // Local-file rebuild removed — see localPhotoDisplayUrl. This sync
+  // helper now serves only inline/data/cloud values; anything needing a
+  // device file must resolve asynchronously through the canonical path.
   // thumb = legacy inline base64 (pre-migration entries).
   // cloudUrl before src: a stale capacitor:// src fails the same way.
   return p.thumb || p.thumbSrc || p.cloudUrl || p.src || null;
@@ -765,9 +761,7 @@ export function photoDisplayUrl(p) {
   //
   // Never trust a persisted p.src: it carries the container UUID from
   // the install that wrote it, and iOS changes that on every reinstall.
-  if (p.path && _dataUriBase) {
-    return Capacitor.convertFileSrc(`${_dataUriBase}/${p.path}`);
-  }
+  // Local-file rebuild removed — see localPhotoDisplayUrl.
   // No local file — this entry came from another device. cloudUrl is
   // the only thing that can resolve here; PhotoImg escalates to a
   // signed URL when the raw one 403s.

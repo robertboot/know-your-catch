@@ -1053,33 +1053,33 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
   const prev = () => setIdx(i => (i - 1 + total) % total);
   const next = () => setIdx(i => (i + 1) % total);
 
-  // Primary + fallback URL for the current slide. Same pattern as
-  // PhotoImg in screens2.jsx: capacitor:// file URLs baked at save
-  // time can go stale between installs; the inline thumb never does.
+  // CANONICAL resolution, same as PhotoImg — build 193 proved on-device
+  // that the per-file getUri path works offline and this component's
+  // legacy photoDisplayUrl/_dataUriBase arithmetic does not: the grid
+  // thumbnails behind the lightbox rendered while the lightbox itself
+  // said "not available on this device". Full-screen prefers the LOCAL
+  // ORIGINAL (preferThumb: false); on img error it retries once via the
+  // signed cloud URL, then declares unavailable honestly.
   const current = list[idx];
-  const primary = photoDisplayUrl(current) || current;
-  const thumb   = photoThumbUrl(current);
-  const [imgSrc, setImgSrc] = useState(primary);
+  const [imgSrc, setImgSrc] = useState(null);
   const [failed, setFailed] = useState(false);
-  // Escalation chain, mirroring PhotoImg: display URL → inline thumb →
-  // signed cloud URL → graceful placeholder. A stale capacitor:// path
-  // OR a truncated local file now recovers to the cloud copy instead of
-  // rendering the browser's broken-image glyph; only when every source
-  // fails do we show a placeholder.
-  const stepRef = useRef(0); // 0=primary, 1=thumb, 2=signed
+  const triedCloudRef = useRef(false);
   useEffect(() => {
-    setImgSrc(primary);
-    setFailed(false);
-    stepRef.current = 0;
-  }, [primary]);
+    let cancelled = false;
+    setImgSrc(null); setFailed(false); triedCloudRef.current = false;
+    resolvePhotoDisplay(current, { preferThumb: false, diag: { screen: 'lightbox', index: idx } })
+      .then((r) => {
+        if (cancelled) return;
+        triedCloudRef.current = !!r.fromCloud;
+        if (r.state === 'available') setImgSrc(r.src); else setFailed(true);
+      })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [current, idx]);
   const onImgError = () => {
-    if (stepRef.current === 0 && thumb && thumb !== imgSrc) {
-      stepRef.current = 1;
-      setImgSrc(thumb);
-      return;
-    }
-    if (stepRef.current <= 1) {
-      stepRef.current = 2;
+    if (!triedCloudRef.current && current && typeof current === 'object'
+        && (current.cloudPath || current.cloudUrl)) {
+      triedCloudRef.current = true;
       photoSignedUrl(current)
         .then((url) => { if (url) setImgSrc(url); else setFailed(true); })
         .catch(() => setFailed(true));
@@ -1216,6 +1216,10 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
             This photo isn’t available on this device. Open the catch and re-add the photo to restore it.
           </div>
         </div>
+      ) : !imgSrc ? (
+        // Resolution in flight — brief; never render <img src=null>,
+        // which fires onError and would burn the cloud retry for nothing.
+        <div onClick={(e) => e.stopPropagation()} style={{ width: 200, height: 200 }} />
       ) : (
         <img
           src={imgSrc}
