@@ -264,6 +264,19 @@ export default function App() {
     initModel().catch(() => {});
   }, [stack]);
 
+  // Initialize the model UNCONDITIONALLY at boot. The lazy screen-gated
+  // warm-up above dates from when init meant a 6 MB download; with the
+  // model bundled, init is a local read and there is no reason to wait.
+  // Build 198 proved the cost of waiting: launch -> Settings never
+  // passed through a wantsModel screen, initModel never ran, status sat
+  // at 'idle', and the model card read "Loading…" until the user pressed
+  // Check for updates — which was acting as the app's real initializer.
+  // A short defer keeps first paint ahead of the WASM bootstrap.
+  useEffect(() => {
+    const t = setTimeout(() => { initModel().catch(() => {}); }, 800);
+    return () => clearTimeout(t);
+  }, []);
+
   // Re-fetch the verified regulations overlay every time the app
   // returns to the foreground (not just cold boot). iOS keeps the
   // webview alive for days — without this, an angler who verified

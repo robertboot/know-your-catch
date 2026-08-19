@@ -164,6 +164,16 @@ function _bufferToBase64(buf) {
   return btoa(bin);
 }
 
+/* Bounded await — 'loading' must never be a terminal state. A hang in
+   the WASM bootstrap or an asset fetch converts to a thrown error,
+   which the existing cache -> bundled -> error ladder already handles. */
+function withTimeout(promise, ms, what) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
 /* Validate a candidate model before it is allowed to serve. A model
    that fails here is treated as ABSENT — never "sort of loaded". */
 function validModelPair(bytes, manifest) {
@@ -188,9 +198,9 @@ function validModelPair(bytes, manifest) {
 async function loadBundledModel() {
   const base = `${(import.meta.env.BASE_URL || '/')}models/deepblue/`;
   try {
-    const [mResp, jResp] = await Promise.all([
+    const [mResp, jResp] = await withTimeout(Promise.all([
       fetch(`${base}current.tflite`), fetch(`${base}current.json`),
-    ]);
+    ]), 15000, 'bundled asset fetch');
     if (!mResp.ok || !jResp.ok) {
       _log('ERR', `bundled model fetch: tflite=${mResp.status} json=${jResp.status}`);
       return null;
@@ -510,7 +520,7 @@ async function _doInit() {
     const cacheProblem = validModelPair(cachedBytes, cachedManifest);
     if (!cacheProblem) {
       try {
-        _model = await loadRuntimeAndModel(cachedBytes);
+        _model = await withTimeout(loadRuntimeAndModel(cachedBytes), 25000, 'cached model load');
         _manifest = cachedManifest;
         _modelSource = 'CACHED_UPDATE';
         _status = 'ready'; _lastError = null;
@@ -548,7 +558,7 @@ async function _doInit() {
   }
 
   try {
-    _model = await loadRuntimeAndModel(bytes);
+    _model = await withTimeout(loadRuntimeAndModel(bytes), 25000, 'bundled model load');
     _manifest = manifest;
     _modelSource = 'BUNDLED';
     _status = 'ready';
