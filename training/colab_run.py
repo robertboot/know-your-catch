@@ -83,6 +83,28 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 FETCH_ATTEMPTS = 3
 
+def _normalize_exif(path):
+    """Rewrite the file upright if it carries an EXIF Orientation.
+
+    Done HERE, in the 16-way download pool, so it costs one parallel
+    pass instead of a GIL-bound PIL call on every image on every epoch —
+    which measurably starved the GPU when the trainer did it inline.
+    Returns True if the file was rewritten."""
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(path) as im:
+            orient = (im.getexif() or {}).get(0x0112, 1)
+            if orient in (1, None):
+                return False
+            im2 = ImageOps.exif_transpose(im)
+            if im2.mode != "RGB":
+                im2 = im2.convert("RGB")
+            im2.save(path, format="JPEG", quality=95)
+        return True
+    except Exception:
+        return False
+
+
 def _image_problem(path):
     # Supabase Storage sometimes serves an empty 200 body, and
     # urlretrieve happily writes it as a 0-byte file. Anything that
@@ -148,6 +170,7 @@ def _fetch(p):
                 urlretrieve(p["url"], str(dest))
             problem = _image_problem(dest)
             if problem is None:
+                _normalize_exif(dest)
                 return "cropped" if crop else "ok"
             last_err = problem
         except Exception as e:
@@ -250,6 +273,12 @@ if bad:
         print("[colab_run] every run will skip them the same way.")
 print(f"[colab_run] Validation done. {len(photos) - removed} usable images.")
 
+# Marker: tells train_fish_id.py the images on disk are already upright,
+# so it can use the fast graph-native decode instead of the GIL-bound
+# PIL one. Absent marker => trainer falls back to the slow correct path.
+(DATA_DIR / ".exif_normalized").write_text("1")
+print("[colab_run] EXIF normalized at download; marker written.")
+
 
 # 3. Fetch the training script from the working branch.
 print(f"[colab_run] Fetching train_fish_id.py from {BRANCH}...")
@@ -301,6 +330,11 @@ manifest_for_zip = {
 zip_start = time.time()
 with zipfile.ZipFile(STUB_ZIP, "w", zipfile.ZIP_STORED) as z:  # no compression - photos are already JPEG
     z.writestr("manifest.json", json.dumps(manifest_for_zip))
+    # Carry the EXIF marker INTO the zip — the trainer reads it from the
+    # unzipped root, not from /content/dataset, so writing it only to
+    # DATA_DIR would leave the trainer on the slow fallback path.
+    if (DATA_DIR / ".exif_normalized").exists():
+        z.writestr(".exif_normalized", "1")
     for p in photos:
         src = DATA_DIR / p["path"]
         if src.exists():

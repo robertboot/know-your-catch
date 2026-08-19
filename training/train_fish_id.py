@@ -138,6 +138,37 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
         if split == "train":
             ds = ds.shuffle(len(paths), seed=seed, reshuffle_each_iteration=True)
 
+        # FAST PATH vs CORRECT-BUT-SLOW PATH.
+        #
+        # _decode_upright runs PIL inside tf.numpy_function, which holds
+        # the GIL — num_parallel_calls cannot actually parallelise it, so
+        # it serialises the whole input pipeline and starves the GPU.
+        # Measured as the bottleneck on a T4 run.
+        #
+        # So EXIF is normalised ONCE at download time instead (see
+        # colab_run.py), which is parallel and paid once rather than
+        # every epoch. When that has happened the marker file exists and
+        # we decode with the fast graph-native op.
+        #
+        # If the marker is absent we fall back to the slow path rather
+        # than silently reintroducing the train/serve skew — a slow run
+        # is recoverable, a quietly-skewed model is not.
+        exif_done = (data_root / ".exif_normalized").exists()
+        if exif_done:
+            print("  EXIF: pre-normalised at download — using fast decode",
+                  flush=True)
+        else:
+            print("  EXIF: NOT pre-normalised — falling back to the slow "
+                  "PIL decode (correct, but GIL-bound)", flush=True)
+
+        def load_fast(path, y):
+            img = tf.io.decode_image(tf.io.read_file(path), channels=3,
+                                     expand_animations=False)
+            img.set_shape([None, None, 3])
+            img = letterbox(img)
+            img.set_shape([IMG_SIZE, IMG_SIZE, 3])
+            return img, y
+
         def load(path, y):
             # EXIF orientation is applied HERE, not by decode_image.
             #
@@ -162,7 +193,8 @@ def build_datasets(data_root: Path, labels: list[str], seed: int):
             img.set_shape([IMG_SIZE, IMG_SIZE, 3])
             return img, y
 
-        return (ds.map(load, num_parallel_calls=tf.data.AUTOTUNE)
+        return (ds.map(load_fast if exif_done else load,
+                       num_parallel_calls=tf.data.AUTOTUNE)
                   .batch(BATCH_SIZE))
 
     train_ds = make("train")

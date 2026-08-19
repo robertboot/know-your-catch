@@ -143,3 +143,25 @@ classes from the admin export manifest, not by walking the photo root,
 so stale folders from older species names never reach training. Check
 which classes the manifest actually contains before assuming a
 disk-level collision matters.
+
+## Never do per-image Python work inside the tf.data pipeline
+
+The EXIF fix was first written as `tf.numpy_function(_decode_upright)`
+— PIL, in Python, per image, every epoch. `num_parallel_calls` cannot
+parallelise that: numpy_function holds the GIL, so the whole input
+pipeline serialises and the GPU starves. Correct output, unusable
+throughput.
+
+**Rule: pay per-image Python costs ONCE, at download, in a thread
+pool — not per-epoch in the graph.** `colab_run.py` now normalises EXIF
+as it fetches (16 workers, already opening each file for validation) and
+writes a `.exif_normalized` marker into the dataset zip. The trainer
+sees the marker and uses the graph-native `tf.io.decode_image`.
+
+**Absent marker = slow correct path, never silent fast-and-wrong.** A
+slow run is recoverable; a quietly-skewed model is not. The trainer
+prints which path it took — check that line before assuming a run is
+comparable to an earlier one.
+
+Same shape as the offline-first rule: the expensive thing belongs
+somewhere it happens once, not on the hot path.
