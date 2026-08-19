@@ -462,6 +462,36 @@ export async function rehydrateFromCloud(p) {
   }
 }
 
+/* ONE canonical native-file -> WebView URL conversion.
+
+   Filesystem.getUri per file, then Capacitor.convertFileSrc. NEVER
+   base-URI + string concatenation: build 192's device trace showed
+   thumb:PASS -> LOCAL_THUMB -> img:onError, and the concat is why. The
+   old path derived a base by regex-stripping "/photos" off
+   getUri('photos') — if the platform returns a directory URI with a
+   trailing slash the regex silently doesn't match, and every local URL
+   gains a duplicated ".../photos//photos/..." segment. stat() kept
+   passing because it uses the RELATIVE path; only the display URL was
+   corrupt. Per-file getUri cannot have that class of bug: the platform
+   itself produces the full URI for the exact file.
+
+   Cached per relative path — one bridge call per file per session. */
+const _uriCache = new Map();
+
+export async function localPhotoDisplayUrl(relPath) {
+  if (!NATIVE || !relPath) return null;
+  if (_uriCache.has(relPath)) return _uriCache.get(relPath);
+  try {
+    const { uri } = await Filesystem.getUri({ path: relPath, directory: Directory.Data });
+    const converted = Capacitor.convertFileSrc(uri);
+    _uriCache.set(relPath, converted);
+    return converted;
+  } catch (e) {
+    photoEvent({ kind: 'log', msg: `getUri FAIL ${relPath}: ${e?.message || e}` });
+    return null;
+  }
+}
+
 /* THE canonical resolver. Every UI that shows a saved photo goes
    through this — PhotoImg is its only consumer, and every screen uses
    PhotoImg. One deterministic strategy, in priority order:
@@ -519,21 +549,24 @@ export async function resolvePhotoDisplay(p, { preferThumb = true, diag = null }
     return finish('available', p.thumb, { source: 'INLINE_THUMB' });
   }
 
-  if (NATIVE && _dataUriBase) {
+  if (NATIVE) {
     if (preferThumb && p.thumbPath) {
       trace.statThumb = await photoLocalExists(p, 'thumbPath') ? 'PASS' : 'FAIL';
       if (trace.statThumb === 'PASS') {
-        return finish('available',
-          Capacitor.convertFileSrc(`${_dataUriBase}/${p.thumbPath}`),
-          { source: 'LOCAL_THUMB' });
+        const converted = await localPhotoDisplayUrl(p.thumbPath);
+        trace.nativeUri = _uriCache.has(p.thumbPath) ? 'per-file getUri' : null;
+        trace.convertedUri = converted ? converted.slice(-60) : null;
+        if (converted) return finish('available', converted, { source: 'LOCAL_THUMB' });
+        trace.statThumb = 'PASS-but-getUri-FAIL';
       }
     }
     if (p.path) {
       trace.statOriginal = await photoLocalExists(p, 'path') ? 'PASS' : 'FAIL';
       if (trace.statOriginal === 'PASS') {
-        return finish('available',
-          Capacitor.convertFileSrc(`${_dataUriBase}/${p.path}`),
-          { source: 'LOCAL_ORIGINAL' });
+        const converted = await localPhotoDisplayUrl(p.path);
+        trace.convertedUri = converted ? converted.slice(-60) : null;
+        if (converted) return finish('available', converted, { source: 'LOCAL_ORIGINAL' });
+        trace.statOriginal = 'PASS-but-getUri-FAIL';
       }
     }
   } else if (!NATIVE && typeof p.src === 'string' && p.src.startsWith('data:')) {
