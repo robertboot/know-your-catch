@@ -293,9 +293,22 @@ function staticizeModelBytes(buf, numLabels) {
     }
     return n;
   };
+  // Fail closed on anything unexpected. This is surgery on flatbuffer
+  // metadata: the ONLY acceptable outcomes are "already static, nothing
+  // to do" or "exactly the known DeepBlue shape entries patched". A
+  // future model with a different structure must be REJECTED (throw ->
+  // the lifecycle treats it as an invalid model and falls back), never
+  // silently half-patched into something that loads and lies.
+  if (!Number.isFinite(numLabels) || numLabels < 2) {
+    throw new Error(`staticize: invalid label count ${numLabels}`);
+  }
   const a = patchSeq([-1, size, size, 3]);
   const b = patchSeq([-1, numLabels]);
-  if (a || b) _log('LOG', `staticize: patched ${a} input + ${b} output batch dims`);
+  if (a === 0 && b === 0) return bytes;          // already static — no-op
+  if (a !== 1 || b < 1 || b > 2) {
+    throw new Error(`staticize: unexpected shape layout (input=${a}, output=${b}) — refusing to patch`);
+  }
+  _log('LOG', `staticize: patched ${a} input + ${b} output batch dims`);
   return bytes;
 }
 
