@@ -264,7 +264,10 @@ export default function App() {
     initModel().catch(() => {});
   }, [stack]);
 
-  // Initialize the model UNCONDITIONALLY at boot. The lazy screen-gated
+  // Initialize the model UNCONDITIONALLY at boot.
+  // CONTRACT (.claude/skills/offline-fishid-contract): DO NOT remove or
+  // re-gate this behind a screen — that regression made "Check for
+  // Updates" the app's real initializer for six builds. The lazy screen-gated
   // warm-up above dates from when init meant a 6 MB download; with the
   // model bundled, init is a local read and there is no reason to wait.
   // Build 198 proved the cost of waiting: launch -> Settings never

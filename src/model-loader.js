@@ -316,7 +316,12 @@ function getModelInputSize(manifest) {
   return Number.isFinite(manifest?.input_size) ? manifest.input_size : 224;
 }
 
-/* LiteRT.js runtime. Replaces @tensorflow/tfjs-tflite 0.0.1-alpha.10,
+/* CONTRACT (.claude/skills/offline-fishid-contract): the app runtime is
+   LiteRT.js and must stay fully bundled — no CDN, no remote probe, no
+   tfjs-tflite. Known-good baseline: build 201 / 16b106c, verified
+   fresh-install airplane-mode on device 2026-08-19.
+
+   LiteRT.js runtime. Replaces @tensorflow/tfjs-tflite 0.0.1-alpha.10,
    whose Emscripten module loader returned undefined on the local
    capacitor:// origin ("undefined is not an object (evaluating
    'l._malloc')" — build 200 device trace) and only ever worked via the
@@ -414,6 +419,8 @@ async function _doInit() {
   }
 
   // ---- 1b. BUNDLED DeepBlue — the guaranteed baseline.
+  // CONTRACT: this fallback is what makes Fish ID exist offline. Do not
+  // remove it, and do not let any remote step run before READY.
   const bundled = await loadBundledModel();
   if (bundled) { bytes = bundled.bytes; manifest = bundled.manifest; }
 
