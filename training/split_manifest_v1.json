@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated_at": "2026-08-18T05:17:53.824715+00:00",
+ "generated_at": "2026-08-19T02:06:31.654498+00:00",
  "salt": "reelintel-split-v1",
  "fractions": {
   "train": 0.8,
@@ -9,9 +9,9 @@
  },
  "grouping": "inat observation id where recoverable, else per-image singleton",
  "counts": {
-  "images": 60158,
-  "groups": 45422,
-  "singleton_fallback_images": 9118,
+  "images": 60159,
+  "groups": 45423,
+  "singleton_fallback_images": 9119,
   "group_conflicts_repaired": 0
  },
  "assignments": {
@@ -28450,6 +28450,7 @@
   "795146d7-1733-1ed0-1239-fee721863f8c": "train",
   "7951a373-e03a-91be-df77-d2117c8e8a3b": "train",
   "7951c4bc-e845-d450-d7c1-24f20ed1dada": "train",
+  "79523902-dc31-4e94-97c2-8019d23d77b9": "train",
   "7952a595-1f4d-32f1-2b2c-609056954572": "train",
   "7954d195-eca1-8216-52f2-dc648f8f62fa": "train",
   "79552c44-dfb3-7f73-a303-78e289b1ff2f": "train",
@@ -88601,6 +88602,7 @@
   "795146d7-1733-1ed0-1239-fee721863f8c": "inat:148178145",
   "7951a373-e03a-91be-df77-d2117c8e8a3b": "inat:254149277",
   "7951c4bc-e845-d450-d7c1-24f20ed1dada": "inat:295177147",
+  "79523902-dc31-4e94-97c2-8019d23d77b9": "self:79523902-dc31-4e94-97c2-8019d23d77b9",
   "7952a595-1f4d-32f1-2b2c-609056954572": "inat:258504125",
   "7954d195-eca1-8216-52f2-dc648f8f62fa": "inat:261434262",
   "79552c44-dfb3-7f73-a303-78e289b1ff2f": "inat:23532777",
@@ -148752,6 +148754,7 @@
   "795146d7-1733-1ed0-1239-fee721863f8c": "atlantic_menhaden",
   "7951a373-e03a-91be-df77-d2117c8e8a3b": "nassau_grouper",
   "7951c4bc-e845-d450-d7c1-24f20ed1dada": "blue_shark",
+  "79523902-dc31-4e94-97c2-8019d23d77b9": "scamp",
   "7952a595-1f4d-32f1-2b2c-609056954572": "jack_crevalle",
   "7954d195-eca1-8216-52f2-dc648f8f62fa": "great_hammerhead_shark",
   "79552c44-dfb3-7f73-a303-78e289b1ff2f": "dusky_shark",
