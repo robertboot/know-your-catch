@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0-beta.1",
   "type": "module",
-  "description": "ReelIntel \u2014 identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
+  "description": "ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -33,6 +33,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/geolocation": "^8.2.0",
     "@capacitor/share": "^8.0.1",
+    "@litertjs/core": "^2.5.3",
     "@supabase/supabase-js": "^2.108.2",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-tflite": "^0.0.1-alpha.10",
