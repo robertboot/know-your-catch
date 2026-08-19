@@ -391,6 +391,69 @@ export async function rehydrateFromCloud(p) {
   }
 }
 
+/* THE canonical resolver. Every UI that shows a saved photo goes
+   through this — PhotoImg is its only consumer, and every screen uses
+   PhotoImg. One deterministic strategy, in priority order:
+
+     1. inline thumb (legacy data URL)        — no filesystem, no network
+     2. local thumbnail file (stat-verified)  — offline path
+     3. local original file (stat-verified)   — offline path
+     4. cloud copy via signed URL (online)    — also triggers ONE
+        bounded background restore so step 2 works next launch
+     5. unavailable
+
+   Returns { state: 'available'|'unavailable', src, fromCloud }.
+   The stat checks are cached per path, so after first resolution a
+   list of 100 thumbnails costs zero filesystem calls.
+
+   Replaces three overlapping mechanisms that grew across builds
+   184-186 (render-time escalation chain, proactive per-render
+   existence effect, transparent hold state) — each was added to patch
+   the previous one's gap, and together they made failures invisible
+   instead of impossible. */
+export async function resolvePhotoDisplay(p, { preferThumb = true } = {}) {
+  if (!p) return { state: 'unavailable', src: null };
+  if (typeof p === 'string') return { state: 'available', src: p };
+
+  // 1. Inline thumb — the shape every "working" record had.
+  if (preferThumb && typeof p.thumb === 'string' && p.thumb.startsWith('data:')) {
+    return { state: 'available', src: p.thumb };
+  }
+
+  if (NATIVE && _dataUriBase) {
+    // 2/3. Local files, EXISTENCE-VERIFIED. A rebuilt capacitor:// URL
+    // is always well-formed; only stat says whether the bytes exist.
+    if (preferThumb && p.thumbPath && await photoLocalExists(p, 'thumbPath')) {
+      return { state: 'available', src: Capacitor.convertFileSrc(`${_dataUriBase}/${p.thumbPath}`) };
+    }
+    if (p.path && await photoLocalExists(p, 'path')) {
+      return { state: 'available', src: Capacitor.convertFileSrc(`${_dataUriBase}/${p.path}`) };
+    }
+  } else if (!NATIVE && typeof p.src === 'string' && p.src.startsWith('data:')) {
+    // Web: photos ride inline.
+    return { state: 'available', src: p.src };
+  }
+
+  // 4. Cloud. Signed because the bucket is private. Restore-once rides
+  // along (deduped + backoff inside rehydrateFromCloud) so this photo
+  // is local next launch.
+  if (p.cloudPath || p.cloudUrl) {
+    const url = await photoSignedUrl(p);
+    if (url) {
+      rehydrateFromCloud(p);
+      return { state: 'available', src: url, fromCloud: true };
+    }
+  }
+
+  // Last-ditch: any inline bytes at all.
+  if (typeof p.thumb === 'string' && p.thumb.startsWith('data:')) {
+    return { state: 'available', src: p.thumb };
+  }
+  _plog(`resolve UNAVAILABLE path=${p.path || '-'} cloud=${!!(p.cloudPath || p.cloudUrl)}`);
+  return { state: 'unavailable', src: null };
+}
+
+
 /* Eagerly restore EVERY photo whose local file is missing.
 
    Lazy per-render rehydration is not enough, and shipping it as if it

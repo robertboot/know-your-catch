@@ -5,7 +5,7 @@ import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { speciesPhoto, shareReport, speciesById, isAnglerVisible } from './helpers.js';
-import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, photoLocalExists, rehydrateFromCloud } from './photos-store.js';
+import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, resolvePhotoDisplay } from './photos-store.js';
 
 /* ============================================================
    PHOTO IMG — shared img resolver with thumb-first render
@@ -27,121 +27,58 @@ import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, photoLo
    photoThumbUrl both return data URLs, so no double download; the
    two-layer swap is a no-op there. */
 export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
-  /* Escalation chain, driven by the <img>'s own onError.
+  /* One resolver, three EXPLICIT states. See resolvePhotoDisplay in
+     photos-store.js for the strategy.
 
-     The previous version probed the primary URL only when a thumb
-     existed AND differed from it:
+       loading      — resolution in flight (brief; stat results cache)
+       available    — src set; if the img element still errors (e.g.
+                      truncated file) we retry once skipping local, then
+                      declare unavailable
+       unavailable  — ImageOff placeholder. Always visibly distinct
+                      from loading: an invisible failure cost three
+                      builds of guessing.
 
-         const startSrc = thumb || primary || '';
-         if (!primary || primary === startSrc) return;   // bailed
+     Replaces the candidate-escalation chain + proactive existence
+     effect + transparent hold state from builds 184-186. */
+  const [res, setRes] = React.useState({ state: 'loading', src: null });
+  const triedCloudRef = React.useRef(false);
 
-     With no thumb, startSrc IS primary, so it returned immediately and
-     the signed-URL recovery never ran — precisely the case that needs
-     it. Cloud-synced catches (no local file, private bucket, so the raw
-     cloudUrl 403s) rendered a broken image with nothing to rescue them.
-
-     Now every candidate is tried in order and the signed URL is fetched
-     on demand when the cheap ones fail. */
-  const thumb   = photoThumbUrl(photo);
-  const primary = photoDisplayUrl(photo);
-
-  const candidates = React.useMemo(
-    () => [thumb, primary].filter((v, i, a) => v && a.indexOf(v) === i),
-    [thumb, primary],
-  );
-
-  const [idx, setIdx] = React.useState(0);
-  const [signed, setSigned] = React.useState(null);
-  const [failed, setFailed] = React.useState(false);
-  // null = existence not yet determined. While null we render NOTHING
-  // rather than a candidate we may already know is dead — that guess is
-  // what produced the visible broken-image icon before the photo
-  // "popped in" a moment later.
-  const [localOk, setLocalOk] = React.useState(undefined);
-
-  // Reset when the photo changes — otherwise a previously-exhausted
-  // chain would leave the next photo showing the placeholder.
-  React.useEffect(() => {
-    setIdx(0); setSigned(null); setFailed(false); setLocalOk(undefined);
-  }, [thumb, primary]);
-
-  // PROACTIVE: if the local file is gone, go straight to the cloud copy
-  // instead of waiting for the <img> to report a failure.
-  //
-  // A catch saved under a previous install points into a container iOS
-  // has since replaced. The rebuilt capacitor:// URL is still perfectly
-  // well-formed, so nothing about it looks wrong — but the bytes are
-  // gone. The escalation below only advances when WebKit fires onerror,
-  // and for a missing file behind a custom scheme handler it does not
-  // reliably do so. That is why two Aug-7 catches sat on the broken
-  // -image glyph while their cloud copies were intact and one call away.
   React.useEffect(() => {
     let cancelled = false;
-    const p = photo;
-    if (!p || typeof p !== 'object') return;
-    if (!(p.path || p.thumbPath)) return;      // nothing local to verify
-    if (!(p.cloudPath || p.cloudUrl)) return;  // no cloud copy to fall back to
-    (async () => {
-      const [full, th] = await Promise.all([
-        photoLocalExists(p, 'path'),
-        photoLocalExists(p, 'thumbPath'),
-      ]);
-      if (cancelled) return;
-      if (full || th) { setLocalOk(true); return; }   // something local survives
-      setLocalOk(false);
-      const url = await photoSignedUrl(p);
-      if (!cancelled && url) setSigned(url);
-      // REHYDRATE: write the cloud copy back to disk at the same
-      // relative path. Without this the photo renders today and is
-      // still missing in airplane mode tomorrow — the app is
-      // offline-first, so a network-only photo is a half-fix.
-      rehydrateFromCloud(p);
-    })();
+    triedCloudRef.current = false;
+    setRes({ state: 'loading', src: null });
+    resolvePhotoDisplay(photo, { preferThumb: true })
+      .then((r) => { if (!cancelled) { triedCloudRef.current = !!r.fromCloud; setRes(r); } })
+      .catch(() => { if (!cancelled) setRes({ state: 'unavailable', src: null }); });
     return () => { cancelled = true; };
-  }, [photo, thumb, primary]);
-
-  // Hold fire until we know whether the local file is there. Rendering
-  // a candidate we are about to discover is dead is what made the
-  // broken-image icon flash before the real photo appeared.
-  const awaitingCheck = localOk === undefined
-    && photo && typeof photo === 'object'
-    && (photo.path || photo.thumbPath)
-    && (photo.cloudPath || photo.cloudUrl);
-  const src = signed || (awaitingCheck ? null : (candidates[idx] || null));
+  }, [photo]);
 
   const onError = React.useCallback(() => {
     if (debugTag && typeof console !== 'undefined') {
       // eslint-disable-next-line no-console
-      console.warn(`[PhotoImg:${debugTag}] failed`, { idx, src: (src || '').slice(0, 80) });
+      console.warn(`[PhotoImg:${debugTag}] img error`, { src: (res.src || '').slice(0, 80) });
     }
-    if (idx + 1 < candidates.length) { setIdx(idx + 1); return; }
-    if (signed) { setFailed(true); return; }   // signed url failed too
-    // Last resort: a short-lived signed URL for the private cloud copy.
-    // This is the cross-device case — the entry carries the ORIGINATING
-    // device's capacitor:// src, which can never resolve here.
-    photoSignedUrl(photo).then((url) => {
-      if (url) setSigned(url); else setFailed(true);
-    }).catch(() => setFailed(true));
-  }, [idx, candidates.length, signed, photo, src, debugTag]);
+    // The resolved src failed to LOAD (truncated local file, expired
+    // signed URL). One retry via the cloud, then give up honestly.
+    if (!triedCloudRef.current && photo && typeof photo === 'object'
+        && (photo.cloudPath || photo.cloudUrl)) {
+      triedCloudRef.current = true;
+      photoSignedUrl(photo).then((url) => {
+        if (url) setRes({ state: 'available', src: url, fromCloud: true });
+        else setRes({ state: 'unavailable', src: null });
+      }).catch(() => setRes({ state: 'unavailable', src: null }));
+      return;
+    }
+    setRes({ state: 'unavailable', src: null });
+  }, [photo, res.src, debugTag]);
 
-  // Nothing renderable — show the same placeholder SpeciesImage uses
-  // rather than a broken-image glyph.
-  // No src AND still checking => transparent hold, not the "unavailable"
-  // placeholder. Showing the failure state during a check we have not
-  // finished is the same lie as showing a broken image.
-  if (!src && awaitingCheck && !failed) {
-    return (
-      <div className={className} aria-label={alt || 'Loading photo'}
-           style={{ background: 'rgba(255,255,255,0.03)', ...style }} />
-    );
-  }
-
-  if (!src || failed) {
+  if (res.state !== 'available') {
+    const unavailable = res.state === 'unavailable';
     return (
       <div
         onClick={onClick}
         className={className}
-        aria-label={alt || 'Photo unavailable'}
+        aria-label={alt || (unavailable ? 'Photo unavailable' : 'Loading photo')}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'linear-gradient(160deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
@@ -149,14 +86,14 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
           ...style,
         }}
       >
-        <ImageOff size={18} strokeWidth={1.6} />
+        {unavailable ? <ImageOff size={18} strokeWidth={1.6} /> : null}
       </div>
     );
   }
 
   return (
     <img
-      src={src}
+      src={res.src}
       alt={alt || ''}
       style={style}
       onClick={onClick}

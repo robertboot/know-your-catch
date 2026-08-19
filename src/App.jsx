@@ -174,7 +174,9 @@ export default function App() {
       // Fire-and-forget: never block boot on it.
       .then(() => {
         if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-        rehydrateAllMissing(s)
+        // Delayed so first paint and initial data reads win the CPU and
+        // radio; the sweep is background repair, never the UI path.
+        setTimeout(() => rehydrateAllMissing(s)
           .then((r) => {
             if (r.restored) {
               // eslint-disable-next-line no-console
@@ -182,7 +184,7 @@ export default function App() {
                           'cloud-backed photos;', r.failed, 'failed');
             }
           })
-          .catch(() => { /* photos stay on the per-render fallback */ });
+          .catch(() => { /* photos stay on the per-render fallback */ }), 5000);
       })
       .then(() => migratePhotosToStore(s)).then((migrated) => {
       if (migrated !== s) {
