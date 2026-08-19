@@ -301,11 +301,32 @@ export async function rehydrateFromCloud(p) {
     for (let i = 0; i < bytes.length; i += CH) {
       bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
     }
+    const b64 = btoa(bin);
     await Filesystem.writeFile({
-      path: p.path, data: btoa(bin),
+      path: p.path, data: b64,
       directory: Directory.Data, recursive: true,
     });
     _existsCache.set(p.path, true);
+
+    // The THUMB has to be rebuilt too, not just the full-size.
+    //
+    // photoThumbUrl returns capacitor://<base>/<thumbPath> whenever
+    // thumbPath is set — it does not check the file. So restoring only
+    // the full-size leaves the thumb URL pointing at a file that is
+    // still missing, and the list view flashes and re-fetches on every
+    // single launch. Regenerate it from the bytes we just downloaded.
+    if (p.thumbPath) {
+      try {
+        const thumbDataUrl = await downscaleImageDataUrl(
+          `data:image/jpeg;base64,${b64}`, THUMB_DIM, THUMB_QUALITY);
+        await Filesystem.writeFile({
+          path: p.thumbPath,
+          data: thumbDataUrl.replace(/^data:image\/[^;]+;base64,/, ''),
+          directory: Directory.Data, recursive: true,
+        });
+        _existsCache.set(p.thumbPath, true);
+      } catch { /* full-size alone still renders */ }
+    }
     return true;
   } catch {
     return false;
