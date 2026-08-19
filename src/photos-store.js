@@ -480,7 +480,21 @@ export async function rehydrateAllMissing(state, { concurrency = 2, maxPerLaunch
     if (Array.isArray(v)) { v.forEach(push); return; }
     if (typeof v === 'object' && (v.path || v.thumbPath)) photos.push(v);
   };
-  for (const c of (state.catchLog || [])) { push(c.photos); push(c.photo); }
+  // NEWEST CATCH FIRST, and all of a catch's photos CONTIGUOUS.
+  //
+  // The order used to be raw state order, which interacts badly with
+  // the 12-per-launch cap: photo 0 of a catch gets restored anyway the
+  // moment its list tile renders online, but photos 1-2 are only ever
+  // restored by this sweep — and unordered, they could sit behind
+  // dozens of ancient photos for several sessions. Proven on-device in
+  // build 189: same catch, photo 0 fine offline, photos 1-2 missing.
+  // Newest-first + grouped means the catches the angler actually looks
+  // at become fully offline in the first session, and a catch is never
+  // left half-restored ahead of one nobody opens.
+  const byDate = [...(state.catchLog || [])].sort((a, b) =>
+    String(b.dateIso || b.date_iso || b.date || '').localeCompare(
+      String(a.dateIso || a.date_iso || a.date || '')));
+  for (const c of byDate) { push(c.photos); push(c.photo); }
   for (const pb of Object.values(state.pbs || {})) { push(pb.photos); push(pb.photo); }
 
   // Only those with a cloud copy to restore FROM and no local bytes.
