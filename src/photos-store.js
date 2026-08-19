@@ -309,7 +309,17 @@ const _rehydrating = new Set();
    photo per launch, which is battery and heat, not resilience. One
    failure parks the photo for 6h; three failures parks it for good
    until the app version changes. */
-const _REHYDRATE_LS = 'kyc.rehydrateFails';
+/* v2: the v1 key is ABANDONED deliberately. Under builds 188-189 an
+   OFFLINE restore attempt recorded a strike — photoSignedUrl returns
+   null with no network, and that null was treated as a failure. Robert
+   tested in airplane mode repeatedly (as designed!), so the photos his
+   screens rendered while offline — exactly index 0 of each visible
+   card — hit 3 strikes and were parked forever. Build 190 then
+   restored the never-attempted photos 1-2 and skipped the parked
+   photo 0: the precise blank/ok/ok pattern seen on-device. Changing
+   the key unparks every wrongly-parked photo without needing a
+   migration. */
+const _REHYDRATE_LS = 'kyc.rehydrateFails.v2';
 function _failMap() {
   try { return JSON.parse(localStorage.getItem(_REHYDRATE_LS) || '{}'); }
   catch { return {}; }
@@ -337,11 +347,24 @@ function _clearFail(path) {
 export async function rehydrateFromCloud(p) {
   if (!NATIVE || !p || typeof p !== 'object' || !p.path) return false;
   if (_rehydrating.has(p.path)) return false;
+  // Offline is NOT a failure — it is the absence of an attempt. Strikes
+  // are reserved for the network answering and the restore still not
+  // working (HTTP error, bad bytes, write error).
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    _plog(`rehydrate DEFER ${p.path} (offline)`);
+    return false;
+  }
   if (_shouldSkip(p.path)) { _plog(`rehydrate SKIP ${p.path} (backoff)`); return false; }
   _rehydrating.add(p.path);
   try {
     const url = await photoSignedUrl(p);
-    if (!url) { _plog(`rehydrate ${p.path}: NO SIGNED URL (session? cloudPath=${!!(p.cloudPath||p.cloudUrl)})`); _recordFail(p.path); return false; }
+    if (!url) {
+      // No signed URL usually means no session or no network mid-flight
+      // — an environment problem, not evidence this photo cannot be
+      // restored. No strike; next launch simply tries again.
+      _plog(`rehydrate ${p.path}: NO SIGNED URL (no strike)`);
+      return false;
+    }
     const res = await fetch(url);
     if (!res.ok) { _plog(`rehydrate ${p.path}: fetch HTTP ${res.status}`); _recordFail(p.path); return false; }
     const buf = await res.arrayBuffer();
