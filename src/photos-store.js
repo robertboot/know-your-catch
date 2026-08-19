@@ -359,10 +359,19 @@ export async function rehydrateFromCloud(p) {
   try {
     const url = await photoSignedUrl(p);
     if (!url) {
-      // No signed URL usually means no session or no network mid-flight
-      // — an environment problem, not evidence this photo cannot be
-      // restored. No strike; next launch simply tries again.
-      _plog(`rehydrate ${p.path}: NO SIGNED URL (no strike)`);
+      // Two different situations share this null, and they must not
+      // share a policy. Network dropped mid-flight: an attempt never
+      // really happened — defer, no strike (the entry gate already
+      // deferred the clearly-offline case). Genuinely ONLINE and the
+      // sign still failed (revoked object, auth problem): that is a
+      // real recoverable failure and earns a strike, or a photo that
+      // can never sign would be retried every launch forever.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        _plog(`rehydrate DEFER ${p.path} (went offline mid-attempt, no strike)`);
+        return false;
+      }
+      _plog(`rehydrate ${p.path}: NO SIGNED URL while online (strike)`);
+      _recordFail(p.path);
       return false;
     }
     const res = await fetch(url);
@@ -407,7 +416,12 @@ export async function rehydrateFromCloud(p) {
     return true;
   } catch (e) {
     _plog(`rehydrate FAIL ${p.path}: ${e?.message || e}`);
-    _recordFail(p.path);
+    // Same offline exemption as the entry gate: a fetch that died
+    // because the network vanished mid-flight is a non-attempt, not
+    // evidence about this photo.
+    if (!(typeof navigator !== 'undefined' && navigator.onLine === false)) {
+      _recordFail(p.path);
+    }
     return false;
   } finally {
     _rehydrating.delete(p.path);
