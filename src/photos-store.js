@@ -303,15 +303,47 @@ export async function photoLocalExists(p, which = 'path') {
    re-fetch next launch, nothing worse. */
 const _rehydrating = new Set();
 
+/* Failure backoff, PERSISTED. Without it a photo whose restore fails
+   (bad path, revoked object, disk error) is re-downloaded at full
+   resolution on EVERY launch forever — multi-MB fetch + decode per
+   photo per launch, which is battery and heat, not resilience. One
+   failure parks the photo for 6h; three failures parks it for good
+   until the app version changes. */
+const _REHYDRATE_LS = 'kyc.rehydrateFails';
+function _failMap() {
+  try { return JSON.parse(localStorage.getItem(_REHYDRATE_LS) || '{}'); }
+  catch { return {}; }
+}
+function _recordFail(path) {
+  try {
+    const m = _failMap();
+    m[path] = { n: (m[path]?.n || 0) + 1, t: Date.now() };
+    localStorage.setItem(_REHYDRATE_LS, JSON.stringify(m));
+  } catch { /* diagnostics only */ }
+}
+function _shouldSkip(path) {
+  const f = _failMap()[path];
+  if (!f) return false;
+  if (f.n >= 3) return true;                       // parked
+  return (Date.now() - f.t) < 6 * 3600 * 1000;     // 6h backoff
+}
+function _clearFail(path) {
+  try {
+    const m = _failMap();
+    if (m[path]) { delete m[path]; localStorage.setItem(_REHYDRATE_LS, JSON.stringify(m)); }
+  } catch { /* diagnostics only */ }
+}
+
 export async function rehydrateFromCloud(p) {
   if (!NATIVE || !p || typeof p !== 'object' || !p.path) return false;
   if (_rehydrating.has(p.path)) return false;
+  if (_shouldSkip(p.path)) { _plog(`rehydrate SKIP ${p.path} (backoff)`); return false; }
   _rehydrating.add(p.path);
   try {
     const url = await photoSignedUrl(p);
-    if (!url) { _plog(`rehydrate ${p.path}: NO SIGNED URL (session? cloudPath=${!!(p.cloudPath||p.cloudUrl)})`); return false; }
+    if (!url) { _plog(`rehydrate ${p.path}: NO SIGNED URL (session? cloudPath=${!!(p.cloudPath||p.cloudUrl)})`); _recordFail(p.path); return false; }
     const res = await fetch(url);
-    if (!res.ok) { _plog(`rehydrate ${p.path}: fetch HTTP ${res.status}`); return false; }
+    if (!res.ok) { _plog(`rehydrate ${p.path}: fetch HTTP ${res.status}`); _recordFail(p.path); return false; }
     const buf = await res.arrayBuffer();
     // btoa over a big photo in one call blows the argument limit on
     // some WebKit builds; chunk it.
@@ -348,9 +380,11 @@ export async function rehydrateFromCloud(p) {
       } catch { /* full-size alone still renders */ }
     }
     _plog(`rehydrate OK ${p.path} (${bytes.length} bytes)`);
+    _clearFail(p.path);
     return true;
   } catch (e) {
     _plog(`rehydrate FAIL ${p.path}: ${e?.message || e}`);
+    _recordFail(p.path);
     return false;
   } finally {
     _rehydrating.delete(p.path);
@@ -371,7 +405,7 @@ export async function rehydrateFromCloud(p) {
    photo is repaired once, ever; afterwards the device is self-sufficient.
 
    Returns { checked, restored, failed }. */
-export async function rehydrateAllMissing(state, { concurrency = 3, onProgress } = {}) {
+export async function rehydrateAllMissing(state, { concurrency = 2, maxPerLaunch = 12, onProgress } = {}) {
   const out = { checked: 0, restored: 0, failed: 0 };
   if (!NATIVE || !state) { _plog(`sweep skipped (native=${NATIVE}, state=${!!state})`); return out; }
   _plog('sweep starting');
@@ -398,6 +432,14 @@ export async function rehydrateAllMissing(state, { concurrency = 3, onProgress }
   }
   _plog(`sweep: ${out.checked} cloud-backed photos, ${work.length} missing locally`);
   if (!work.length) return out;
+  // Cap per launch. Restoring a 100-photo backlog in one go is a
+  // hundred full-res downloads + decodes back to back — measurable
+  // heat on a phone. 12 per launch clears a real backlog in a few
+  // sessions without turning any single launch into a space heater.
+  if (work.length > maxPerLaunch) {
+    _plog(`sweep: capping to ${maxPerLaunch} this launch (${work.length - maxPerLaunch} deferred)`);
+    work.length = maxPerLaunch;
+  }
 
   let i = 0;
   const worker = async () => {
