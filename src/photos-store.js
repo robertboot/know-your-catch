@@ -249,6 +249,25 @@ function cloudPathOf(p) {
    directly instead. */
 const _existsCache = new Map();
 
+/* Diagnostic ring buffer, same pattern as model-loader's _log. The
+   photo pipeline has now shipped three builds whose behaviour on the
+   DEVICE could not be observed — each looked correct from the desk and
+   failed in the field. This makes the phone report what actually
+   happened (sweep counts, per-photo failures) in the UI, without
+   Xcode or Web Inspector. */
+const _plogBuf = [];
+export function getPhotoLog() { return _plogBuf.slice(); }
+const _psubs = new Set();
+export function subscribePhotoLog(cb) { _psubs.add(cb); return () => _psubs.delete(cb); }
+function _plog(msg) {
+  const line = `[${new Date().toISOString().slice(11, 19)}] ${msg}`;
+  _plogBuf.push(line);
+  if (_plogBuf.length > 60) _plogBuf.shift();
+  // eslint-disable-next-line no-console
+  console.log('[photos]', msg);
+  for (const cb of _psubs) { try { cb(); } catch { /* subscriber */ } }
+}
+
 export async function photoLocalExists(p, which = 'path') {
   if (!NATIVE || !p || typeof p !== 'object') return false;
   const rel = which === 'thumbPath' ? p.thumbPath : p.path;
@@ -258,8 +277,9 @@ export async function photoLocalExists(p, which = 'path') {
   try {
     await Filesystem.stat({ path: rel, directory: Directory.Data });
     ok = true;
-  } catch {
+  } catch (e) {
     ok = false;
+    _plog(`stat MISS ${rel} (${e?.message || e})`);
   }
   _existsCache.set(rel, ok);
   return ok;
@@ -289,9 +309,9 @@ export async function rehydrateFromCloud(p) {
   _rehydrating.add(p.path);
   try {
     const url = await photoSignedUrl(p);
-    if (!url) return false;
+    if (!url) { _plog(`rehydrate ${p.path}: NO SIGNED URL (session? cloudPath=${!!(p.cloudPath||p.cloudUrl)})`); return false; }
     const res = await fetch(url);
-    if (!res.ok) return false;
+    if (!res.ok) { _plog(`rehydrate ${p.path}: fetch HTTP ${res.status}`); return false; }
     const buf = await res.arrayBuffer();
     // btoa over a big photo in one call blows the argument limit on
     // some WebKit builds; chunk it.
@@ -327,8 +347,10 @@ export async function rehydrateFromCloud(p) {
         _existsCache.set(p.thumbPath, true);
       } catch { /* full-size alone still renders */ }
     }
+    _plog(`rehydrate OK ${p.path} (${bytes.length} bytes)`);
     return true;
-  } catch {
+  } catch (e) {
+    _plog(`rehydrate FAIL ${p.path}: ${e?.message || e}`);
     return false;
   } finally {
     _rehydrating.delete(p.path);
@@ -351,7 +373,8 @@ export async function rehydrateFromCloud(p) {
    Returns { checked, restored, failed }. */
 export async function rehydrateAllMissing(state, { concurrency = 3, onProgress } = {}) {
   const out = { checked: 0, restored: 0, failed: 0 };
-  if (!NATIVE || !state) return out;
+  if (!NATIVE || !state) { _plog(`sweep skipped (native=${NATIVE}, state=${!!state})`); return out; }
+  _plog('sweep starting');
 
   // Collect every photo entry the app knows about, from both shapes.
   const photos = [];
@@ -373,6 +396,7 @@ export async function rehydrateAllMissing(state, { concurrency = 3, onProgress }
     ]);
     if (!full || !th) work.push(p);
   }
+  _plog(`sweep: ${out.checked} cloud-backed photos, ${work.length} missing locally`);
   if (!work.length) return out;
 
   let i = 0;
@@ -385,6 +409,7 @@ export async function rehydrateAllMissing(state, { concurrency = 3, onProgress }
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, work.length) }, worker));
+  _plog(`sweep done: restored ${out.restored}, failed ${out.failed}`);
   return out;
 }
 

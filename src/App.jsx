@@ -12,6 +12,7 @@ import {
   migratePhotosToStore, regenerateThumbs, thumbRegenNeeded, markThumbRegenDone,
   initPhotoPaths,
   rehydrateAllMissing,
+  getPhotoLog, subscribePhotoLog,
 } from './photos-store.js';
 import { refreshFeeds } from './regsync.js';
 import { refreshSpecies, subscribe as subscribeSpecies } from './species-store.js';
@@ -469,6 +470,23 @@ export default function App() {
   const [splashInitialMode, setSplashInitialMode] = useState('signin');
 
   const [saveError, setSaveError] = useState(null); // 'quota' | 'other' | null
+  // Photo pipeline diagnostics — visible on-device via 5 taps on the
+  // header logo, because three photo builds in a row could not be
+  // observed in the field and each "fix" was flying blind.
+  const [photoDiagOpen, setPhotoDiagOpen] = useState(false);
+  const [photoLog, setPhotoLog] = useState([]);
+  const _logoTaps = React.useRef({ n: 0, t: 0 });
+  useEffect(() => subscribePhotoLog(() => setPhotoDiagOpen(open => {
+    if (open) setPhotoLog(getPhotoLog());
+    return open;
+  })), []);
+  const onLogoTap = () => {
+    const now = Date.now();
+    const r = _logoTaps.current;
+    r.n = (now - r.t < 1500) ? r.n + 1 : 1;
+    r.t = now;
+    if (r.n >= 5) { r.n = 0; setPhotoLog(getPhotoLog()); setPhotoDiagOpen(v => !v); }
+  };
   const [captureError, setCaptureError] = useState(null); // camera/library failure message
 
   // update() merges patch into state and persists. If localStorage
@@ -1245,7 +1263,7 @@ export default function App() {
             </button>
           )}
           <button
-            onClick={() => reset([{ name: 'home' }])}
+            onClick={() => { onLogoTap(); reset([{ name: 'home' }]); }}
             aria-label="ReelIntel — home"
             style={{
               background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
@@ -1322,6 +1340,22 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      {photoDiagOpen && (
+        <div style={{
+          position: 'fixed', top: 'calc(env(safe-area-inset-top) + 54px)', left: 0, right: 0,
+          zIndex: 70, maxHeight: '40vh', overflowY: 'auto',
+          background: 'rgba(3,20,38,0.97)', borderBottom: '1px solid #2b5c7a',
+          color: '#cfe8f5', padding: '8px 12px',
+          fontSize: 11, lineHeight: 1.5,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        }} onClick={() => setPhotoDiagOpen(false)}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>PHOTO DIAGNOSTICS (tap to close)</div>
+          {photoLog.length === 0
+            ? <div>no photo events yet</div>
+            : photoLog.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
 
       {saveError && (
         <div role="alert" style={{
