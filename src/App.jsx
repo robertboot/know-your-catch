@@ -1352,10 +1352,31 @@ export default function App() {
           fontSize: 11, lineHeight: 1.5,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }} onClick={() => setPhotoDiagOpen(false)}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>PHOTO DIAGNOSTICS (tap to close)</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>
+            PHOTO DIAGNOSTICS — {photoLog.length} events (tap panel to close)
+          </div>
           {photoLog.length === 0
-            ? <div>no photo events yet</div>
-            : photoLog.map((l, i) => <div key={i}>{l}</div>)}
+            ? <div>no photo events yet — if tiles are broken below, the resolver did not run: report this exact state</div>
+            : [...photoLog].reverse().map((e, i) => {
+                if (typeof e === 'string') return <div key={i}>{e}</div>;
+                if (e.kind === 'resolve') {
+                  return (
+                    <div key={e.id || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '3px 0' }}>
+                      <div>
+                        {e.t} {e.species || e.screen || 'photo'}{e.index != null ? ` #${e.index}` : ''} · {e.online === false ? 'OFFLINE' : 'ONLINE'}
+                      </div>
+                      <div>
+                        thumb:{e.statThumb || '-'} orig:{e.statOriginal || '-'} base:{e.baseResolved ? 'ok' : 'MISSING'} cloud:{e.signedTried ? (e.signedOk ? 'signed' : 'SIGN-FAIL') : (e.cloudPath ? 'skipped' : 'none')} → <b>{e.source}</b>{e.img ? ` · img:${e.img}` : ''}
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={e.id || i} style={{ padding: '2px 0', opacity: 0.9 }}>
+                    {e.t} [{e.kind}] {Object.entries(e).filter(([k]) => !['id','t','kind','session','online','native'].includes(k)).map(([k, v]) => `${k}=${v}`).join(' ')}
+                  </div>
+                );
+              })}
         </div>
       )}
 

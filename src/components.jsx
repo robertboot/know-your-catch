@@ -26,7 +26,7 @@ import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, resolve
    Web mode uses the same code path — photoDisplayUrl and
    photoThumbUrl both return data URLs, so no double download; the
    two-layer swap is a no-op there. */
-export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
+export function PhotoImg({ photo, alt, style, onClick, className, debugTag, diag }) {
   /* One resolver, three EXPLICIT states. See resolvePhotoDisplay in
      photos-store.js for the strategy.
 
@@ -47,13 +47,14 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
     let cancelled = false;
     triedCloudRef.current = false;
     setRes({ state: 'loading', src: null });
-    resolvePhotoDisplay(photo, { preferThumb: true })
+    resolvePhotoDisplay(photo, { preferThumb: true, diag: diag || (debugTag ? { screen: debugTag } : null) })
       .then((r) => { if (!cancelled) { triedCloudRef.current = !!r.fromCloud; setRes(r); } })
       .catch(() => { if (!cancelled) setRes({ state: 'unavailable', src: null }); });
     return () => { cancelled = true; };
   }, [photo]);
 
   const onError = React.useCallback(() => {
+    if (res._evt) res._evt.img = 'onError';
     if (debugTag && typeof console !== 'undefined') {
       // eslint-disable-next-line no-console
       console.warn(`[PhotoImg:${debugTag}] img error`, { src: (res.src || '').slice(0, 80) });
@@ -98,6 +99,7 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag }) {
       style={style}
       onClick={onClick}
       className={className}
+      onLoad={() => { if (res._evt) res._evt.img = 'onLoad'; }}
       onError={onError}
     />
   );

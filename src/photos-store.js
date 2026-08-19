@@ -255,18 +255,40 @@ const _existsCache = new Map();
    failed in the field. This makes the phone report what actually
    happened (sweep counts, per-photo failures) in the UI, without
    Xcode or Web Inspector. */
-const _plogBuf = [];
-export function getPhotoLog() { return _plogBuf.slice(); }
-const _psubs = new Set();
-export function subscribePhotoLog(cb) { _psubs.add(cb); return () => _psubs.delete(cb); }
-function _plog(msg) {
-  const line = `[${new Date().toISOString().slice(11, 19)}] ${msg}`;
-  _plogBuf.push(line);
-  if (_plogBuf.length > 60) _plogBuf.shift();
-  // eslint-disable-next-line no-console
-  console.log('[photos]', msg);
-  for (const cb of _psubs) { try { cb(); } catch { /* subscriber */ } }
+/* GLOBAL, not module-local. Build 191's panel said "no photo events
+   yet" while broken tiles sat directly under it — which is only
+   possible if the writer and the reader were different module
+   instances (the bundle carries two chunk graphs). globalThis makes
+   that structurally impossible: one buffer per webview, period. */
+const _G = (typeof globalThis !== 'undefined' ? globalThis : window);
+if (!_G.__kycPhotoDiag) {
+  _G.__kycPhotoDiag = { buf: [], subs: new Set(), seq: 0,
+                        session: `s_${Date.now().toString(36)}` };
 }
+const _DIAG = _G.__kycPhotoDiag;
+export function getPhotoLog() { return _DIAG.buf.slice(); }
+export function subscribePhotoLog(cb) { _DIAG.subs.add(cb); return () => _DIAG.subs.delete(cb); }
+
+/* Structured event. Returns the event object so later stages (img
+   onLoad/onError, restore results) can annotate the SAME event. */
+export function photoEvent(fields) {
+  const evt = {
+    id: ++_DIAG.seq,
+    t: new Date().toISOString().slice(11, 23),
+    session: _DIAG.session,
+    online: (typeof navigator !== 'undefined') ? navigator.onLine : null,
+    native: NATIVE,
+    ...fields,
+  };
+  _DIAG.buf.push(evt);
+  if (_DIAG.buf.length > 50) _DIAG.buf.shift();
+  // eslint-disable-next-line no-console
+  console.log('[photos]', evt.kind || 'log', JSON.stringify(fields).slice(0, 200));
+  for (const cb of _DIAG.subs) { try { cb(); } catch { /* subscriber */ } }
+  return evt;
+}
+
+function _plog(msg) { photoEvent({ kind: 'log', msg }); }
 
 export async function photoLocalExists(p, which = 'path') {
   if (!NATIVE || !p || typeof p !== 'object') return false;
@@ -375,7 +397,10 @@ export async function rehydrateFromCloud(p) {
       return false;
     }
     const res = await fetch(url);
-    if (!res.ok) { _plog(`rehydrate ${p.path}: fetch HTTP ${res.status}`); _recordFail(p.path); return false; }
+    if (!res.ok) {
+      photoEvent({ kind: 'restore', path: p.path, http: res.status, strike: true });
+      _recordFail(p.path); return false;
+    }
     const buf = await res.arrayBuffer();
     // btoa over a big photo in one call blows the argument limit on
     // some WebKit builds; chunk it.
@@ -411,7 +436,16 @@ export async function rehydrateFromCloud(p) {
         _existsCache.set(p.thumbPath, true);
       } catch { /* full-size alone still renders */ }
     }
-    _plog(`rehydrate OK ${p.path} (${bytes.length} bytes)`);
+    // Post-write stat — trusting writeFile's silence cost us three
+    // builds; ask the filesystem whether the bytes are really there.
+    _existsCache.delete(p.path);
+    if (p.thumbPath) _existsCache.delete(p.thumbPath);
+    const postOrig = await photoLocalExists(p, 'path');
+    const postThumb = p.thumbPath ? await photoLocalExists(p, 'thumbPath') : null;
+    photoEvent({ kind: 'restore', path: p.path, bytes: bytes.length,
+                 writeOriginal: 'PASS',
+                 postStatOriginal: postOrig ? 'PASS' : 'FAIL',
+                 postStatThumb: postThumb === null ? 'n/a' : (postThumb ? 'PASS' : 'FAIL') });
     _clearFail(p.path);
     return true;
   } catch (e) {
@@ -448,46 +482,79 @@ export async function rehydrateFromCloud(p) {
    existence effect, transparent hold state) — each was added to patch
    the previous one's gap, and together they made failures invisible
    instead of impossible. */
-export async function resolvePhotoDisplay(p, { preferThumb = true } = {}) {
-  if (!p) return { state: 'unavailable', src: null };
-  if (typeof p === 'string') return { state: 'available', src: p };
+export async function resolvePhotoDisplay(p, { preferThumb = true, diag = null } = {}) {
+  // SINGLE-EXIT INSTRUMENTATION, by construction. Every return goes
+  // through finish(), which emits the event — there is no code path
+  // that produces a tile without producing a diagnostic. That property
+  // is the assertion build 191 lacked: its panel said "no photo events
+  // yet" above visibly broken tiles.
+  const trace = {
+    kind: 'resolve',
+    screen: diag?.screen, catchId: diag?.catchId,
+    species: diag?.species, index: diag?.index,
+    path: (p && typeof p === 'object') ? (p.path || null) : null,
+    thumbPath: (p && typeof p === 'object') ? (p.thumbPath || null) : null,
+    cloudPath: (p && typeof p === 'object') ? (p.cloudPath || p.cloudUrl || null) : null,
+    inlineThumb: !!(p && typeof p === 'object' && typeof p.thumb === 'string'),
+    persistedSrc: (p && typeof p === 'object' && typeof p.src === 'string') ? p.src.slice(0, 30) : null,
+    baseResolved: !!_dataUriBase,
+    statThumb: null, statOriginal: null,
+    signedTried: false, signedOk: null, restoreStarted: false,
+    source: null,
+  };
+  const finish = (state, src, extra = {}) => {
+    trace.source = extra.source || (state === 'unavailable' ? 'UNAVAILABLE' : trace.source);
+    trace.srcType = !src ? null
+      : src.startsWith('data:') ? 'data' : src.startsWith('capacitor:') ? 'capacitor'
+      : src.startsWith('https:') ? 'https' : src.startsWith('http:') ? 'http'
+      : src.startsWith('blob:') ? 'blob' : 'other';
+    const evt = photoEvent(trace);
+    return { state, src, fromCloud: extra.fromCloud, _evt: evt };
+  };
 
-  // 1. Inline thumb — the shape every "working" record had.
+  if (!p) return finish('unavailable', null, { source: 'UNAVAILABLE' });
+  if (typeof p === 'string') return finish('available', p, { source: 'LEGACY_STRING' });
+
   if (preferThumb && typeof p.thumb === 'string' && p.thumb.startsWith('data:')) {
-    return { state: 'available', src: p.thumb };
+    return finish('available', p.thumb, { source: 'INLINE_THUMB' });
   }
 
   if (NATIVE && _dataUriBase) {
-    // 2/3. Local files, EXISTENCE-VERIFIED. A rebuilt capacitor:// URL
-    // is always well-formed; only stat says whether the bytes exist.
-    if (preferThumb && p.thumbPath && await photoLocalExists(p, 'thumbPath')) {
-      return { state: 'available', src: Capacitor.convertFileSrc(`${_dataUriBase}/${p.thumbPath}`) };
+    if (preferThumb && p.thumbPath) {
+      trace.statThumb = await photoLocalExists(p, 'thumbPath') ? 'PASS' : 'FAIL';
+      if (trace.statThumb === 'PASS') {
+        return finish('available',
+          Capacitor.convertFileSrc(`${_dataUriBase}/${p.thumbPath}`),
+          { source: 'LOCAL_THUMB' });
+      }
     }
-    if (p.path && await photoLocalExists(p, 'path')) {
-      return { state: 'available', src: Capacitor.convertFileSrc(`${_dataUriBase}/${p.path}`) };
+    if (p.path) {
+      trace.statOriginal = await photoLocalExists(p, 'path') ? 'PASS' : 'FAIL';
+      if (trace.statOriginal === 'PASS') {
+        return finish('available',
+          Capacitor.convertFileSrc(`${_dataUriBase}/${p.path}`),
+          { source: 'LOCAL_ORIGINAL' });
+      }
     }
   } else if (!NATIVE && typeof p.src === 'string' && p.src.startsWith('data:')) {
-    // Web: photos ride inline.
-    return { state: 'available', src: p.src };
+    return finish('available', p.src, { source: 'WEB_INLINE' });
   }
 
-  // 4. Cloud. Signed because the bucket is private. Restore-once rides
-  // along (deduped + backoff inside rehydrateFromCloud) so this photo
-  // is local next launch.
   if (p.cloudPath || p.cloudUrl) {
+    trace.signedTried = true;
     const url = await photoSignedUrl(p);
+    trace.signedOk = !!url;
     if (url) {
+      trace.restoreStarted = true;
       rehydrateFromCloud(p);
-      return { state: 'available', src: url, fromCloud: true };
+      return finish('available', url, { source: 'CLOUD', fromCloud: true });
     }
   }
 
-  // Last-ditch: any inline bytes at all.
   if (typeof p.thumb === 'string' && p.thumb.startsWith('data:')) {
-    return { state: 'available', src: p.thumb };
+    return finish('available', p.thumb, { source: 'INLINE_THUMB_FALLBACK' });
   }
-  _plog(`resolve UNAVAILABLE path=${p.path || '-'} cloud=${!!(p.cloudPath || p.cloudUrl)}`);
-  return { state: 'unavailable', src: null };
+  return finish('unavailable', null, { source: 'UNAVAILABLE' });
 }
 
 
@@ -544,7 +611,8 @@ export async function rehydrateAllMissing(state, { concurrency = 2, maxPerLaunch
     ]);
     if (!full || !th) work.push(p);
   }
-  _plog(`sweep: ${out.checked} cloud-backed photos, ${work.length} missing locally`);
+  photoEvent({ kind: 'sweep', phase: 'scan', considered: photos.length,
+               cloudBacked: out.checked, missingLocal: work.length });
   if (!work.length) return out;
   // Cap per launch. Restoring a 100-photo backlog in one go is a
   // hundred full-res downloads + decodes back to back — measurable
@@ -565,7 +633,7 @@ export async function rehydrateAllMissing(state, { concurrency = 2, maxPerLaunch
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, work.length) }, worker));
-  _plog(`sweep done: restored ${out.restored}, failed ${out.failed}`);
+  photoEvent({ kind: 'sweep', phase: 'end', restored: out.restored, failed: out.failed });
   return out;
 }
 
