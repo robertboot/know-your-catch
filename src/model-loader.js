@@ -167,6 +167,17 @@ function _bufferToBase64(buf) {
 /* Bounded await — 'loading' must never be a terminal state. A hang in
    the WASM bootstrap or an asset fetch converts to a thrown error,
    which the existing cache -> bundled -> error ladder already handles. */
+/* WebKit's Error.stack is FRAMES ONLY — no name, no message. Every
+   formatter here used `e.stack || e.message`, so on iOS the one thing
+   we needed (the message) was systematically discarded, and the build
+   199 trace ended in anonymous stack frames. Name and message first,
+   always; frames after. */
+function _errText(e) {
+  if (!e) return String(e);
+  const head = `${e.name || 'Error'}: ${e.message || String(e)}`;
+  return e.stack ? `${head}\n${e.stack}` : head;
+}
+
 function withTimeout(promise, ms, what) {
   return Promise.race([
     promise,
@@ -474,7 +485,7 @@ async function loadRuntimeAndModel(modelBytes) {
     _log('LOG', 'loadTFLiteModel ok');
     return m;
   } catch (e) {
-    const msg = e && (e.stack || e.message) ? String(e.stack || e.message) : String(e);
+    const msg = _errText(e);
     _log('ERR', `loadTFLiteModel threw: ${msg}`);
     throw e;
   }
@@ -529,7 +540,7 @@ async function _doInit() {
         _backgroundUpdateCheck(cachedManifest.version_name).catch(() => {});
         return _model;
       } catch (e) {
-        cachedLoadError = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
+        cachedLoadError = _errText(e);
         _log('ERR', `cached: LOAD FAIL — ${cachedLoadError}`);
         await _quarantineCache(cachedLoadError);
       }
@@ -568,7 +579,7 @@ async function _doInit() {
     _log('LOG', `bundled: LOAD PASS — ready: ${manifest.version_name} (source=BUNDLED)`);
     _emit();
   } catch (e) {
-    const msg = (e && (e.stack || e.message)) ? String(e.stack || e.message) : String(e);
+    const msg = _errText(e);
     _log('ERR', `bundled runtime load failed: ${msg}`);
     _modelSource = 'NONE';
     _lastError = msg; _status = 'error'; _emit();
