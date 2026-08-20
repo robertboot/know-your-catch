@@ -16,7 +16,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const FROM_ADDRESS = 'ReelIntel <hello@reelintel.ai>';
-const TO_ADDRESS = 'robertb1023@me.com';
+const TO_ADDRESSES = ['robertb1023@me.com', 'annelies@reelintel.ai'];
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         from: FROM_ADDRESS,
-        to: [TO_ADDRESS],
+        to: TO_ADDRESSES,
         // So hitting reply in the mail client reaches the tester.
         reply_to: row.email || undefined,
         subject: `ReelIntel tester feedback — ${name}`,

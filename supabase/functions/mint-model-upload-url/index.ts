@@ -36,7 +36,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const ADMIN_EMAIL     = 'robertb1023@me.com';
+const ADMIN_EMAILS    = ['robertb1023@me.com', 'annelies@reelintel.ai'];
 const MODEL_BUCKET    = 'model-artifacts';
 const TICKET_TTL_MS   = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -130,7 +130,7 @@ Deno.serve(async (req: Request) => {
     if (!token) return jsonResponse({ error: 'missing bearer token' }, 401);
     const { data, error } = await admin.auth.getUser(token);
     const email = (data?.user?.email || '').trim().toLowerCase();
-    if (error || email !== ADMIN_EMAIL) return jsonResponse({ error: 'forbidden' }, 403);
+    if (error || !ADMIN_EMAILS.includes(String(email || '').toLowerCase())) return jsonResponse({ error: 'forbidden' }, 403);
     const ticket = await issueTicket(SECRET);
     return jsonResponse({ ok: true, ticket, expiresInDays: 7 });
   }

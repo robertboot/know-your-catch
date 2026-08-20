@@ -42,7 +42,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const ADMIN_EMAILS = ['robertb1023@me.com'];
+const ADMIN_EMAILS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL    = 'claude-sonnet-5';
 const ANTHROPIC_VERSION  = '2023-06-01';

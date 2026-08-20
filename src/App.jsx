@@ -71,7 +71,11 @@ const AdminApp = __KYC_ADMIN__
   ? lazy(() => import('./admin/AdminApp.jsx'))
   : null;
 
-const ADMIN_EMAIL = 'robertb1023@me.com';
+// Admin allowlist. Keep in step with public.is_admin() in the database
+// (supabase/add-admin-annelies.sql) — the JS gate only decides whether
+// the console renders; RLS is what actually protects the data.
+const ADMIN_EMAILS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+const isAdminEmail = (e) => ADMIN_EMAILS.includes(String(e || '').trim().toLowerCase());
 
 const currentHashRoute = () =>
   (typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '')) || '';
@@ -706,7 +710,7 @@ export default function App() {
       );
     }
 
-    if (authedEmail && authedEmail === ADMIN_EMAIL) {
+    if (authedEmail && isAdminEmail(authedEmail)) {
       return (
         <Suspense fallback={<SplashScreen />}>
           <AdminApp

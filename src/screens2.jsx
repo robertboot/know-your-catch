@@ -1982,7 +1982,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
       {/* Admin console entry — web-only, admin allowlist only. When
           __KYC_ADMIN__ is false (ios:build) the whole Card constant-
           folds out and never reaches the iOS bundle. */}
-      {__KYC_ADMIN__ && (state.anglerEmail || '').trim().toLowerCase() === 'robertb1023@me.com' && (
+      {__KYC_ADMIN__ && ['robertb1023@me.com', 'annelies@reelintel.ai'].includes((state.anglerEmail || '').trim().toLowerCase()) && (
         <Card style={{ marginBottom: 10 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Admin</SectionLabel>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -16,7 +16,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const ADMIN_EMAILS = ['robertb1023@me.com'];
+const ADMIN_EMAILS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
 const FROM_ADDRESS = 'ReelIntel <hello@reelintel.ai>';
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const SEND_INTERVAL_MS = 100; // 10 sends/sec

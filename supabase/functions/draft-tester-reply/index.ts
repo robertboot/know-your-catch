@@ -17,7 +17,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL    = 'claude-sonnet-4-6';
-const ADMIN_EMAIL        = 'robertb1023@me.com';
+const ADMIN_EMAILS       = ['robertb1023@me.com', 'annelies@reelintel.ai'];
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: userRes, error: userErr } = await admin.auth.getUser(authHeader.slice(7));
   if (userErr || !userRes?.user?.email) return json({ error: 'invalid_auth' }, 401);
-  if (userRes.user.email.trim().toLowerCase() !== ADMIN_EMAIL) return json({ error: 'forbidden' }, 403);
+  if (!ADMIN_EMAILS.includes(userRes.user.email.trim().toLowerCase())) return json({ error: 'forbidden' }, 403);
 
   let b: Record<string, unknown>;
   try { b = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }

@@ -42,7 +42,7 @@ import {
   finalTextBlock, salvageJson,
 } from '../_shared/regs-shared.ts';
 
-const ADMIN_EMAILS = ['robertb1023@me.com'];
+const ADMIN_EMAILS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
 // Web search interleaves reasoning + search-result digestion into the
 // output stream before the final JSON, so this needs headroom well
 // beyond the ~200-token answer itself.
