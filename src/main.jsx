@@ -3,12 +3,17 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { installChunkReloadGuard } from './chunk-reload.js';
+import ErrorBoundary from './ErrorBoundary.jsx';
+import { installErrorReporting } from './error-log.js';
 
 // Web only: iOS ships a self-contained bundle (no hashed chunks to go
 // stale), so the stale-deploy recovery is pointless there. On the web
 // deploy it saves anyone with an open tab from a chunk 404 after a
 // redeploy.
 if (__KYC_WEB__) installChunkReloadGuard();
+// Global handlers before the first render, so a crash during boot is
+// reported too.
+installErrorReporting();
 
 /* Root picker.
      - iOS + gh-pages preview:  __KYC_WEB__ is false → always App.
@@ -71,7 +76,7 @@ function pickRoot() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {pickRoot()}
+    <ErrorBoundary>{pickRoot()}</ErrorBoundary>
     {Analytics && <Suspense fallback={null}><Analytics /></Suspense>}
   </React.StrictMode>
 );

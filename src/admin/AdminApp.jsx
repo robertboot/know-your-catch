@@ -28,6 +28,7 @@ import NotificationsTab from './NotificationsTab.jsx';
 import HomeDashboard from './HomeDashboard.jsx';
 import LegalTab from './LegalTab.jsx';
 import TestersTab from './TestersTab.jsx';
+import ErrorsTab from './ErrorsTab.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
   iosAppIconPublicUrl, uploadIosAppIcon, deleteIosAppIcon, getIosAppIconMeta,
@@ -323,6 +324,7 @@ function SignedInShell({ email, onExit }) {
       {tab === 'ocean'         && !detailView && <OceanHeatmapPanel />}
       {tab === 'notifications' && !detailView && <NotificationsTab />}
       {tab === 'testers'       && !detailView && <TestersTab />}
+      {tab === 'errors'        && !detailView && <ErrorsTab />}
       {tab === 'legal'         && !detailView && <LegalTab />}
     </Chrome>
   );
@@ -349,6 +351,7 @@ function TabBar({ tab, onTab }) {
     { id: 'categories',    label: 'Categories' },
     { id: 'branding',      label: 'Branding' },
     { id: 'testers',       label: 'Testers' },
+    { id: 'errors',        label: 'Errors' },
     { id: 'legal',         label: 'Legal' },
   ];
   const narrow = useIsNarrow();

@@ -7,6 +7,7 @@ import { T, screenSize, containerMaxWidth, chromeHeights, typeScale, cols } from
 import { ScreenSizeContext } from './screen-size.js';
 import { DISCLAIMER_VERSION } from './data.js';
 import { loadState, saveState, defaultState, clearState } from './storage.js';
+import { setErrorContext } from './error-log.js';
 import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
 import {
   migratePhotosToStore, regenerateThumbs, thumbRegenNeeded, markThumbRegenDone,
@@ -1220,6 +1221,16 @@ export default function App() {
     default:
       body = <HomeScreen {...homeProps} />;
   }
+
+  // Crash reports are useless without this: which screen, whether the
+  // angler had picked waters, and which build.
+  useEffect(() => {
+    setErrorContext({
+      screen: screen?.name || null,
+      hasJurisdiction: !!state.jurisdiction,
+      appVersion: DATA_VERSION,
+    });
+  }, [screen?.name, state.jurisdiction]);
 
   const isHome = screen.name === 'home';
   const activeTab =
