@@ -16,6 +16,7 @@ import { T } from '../theme.js';
 import { Card, GhostButton, SectionLabel } from '../components.jsx';
 import { client } from '../supabase-client.js';
 import { getLastSession } from '../auth.js';
+import { draftToHtml, draftToText } from '../email-signature.js';
 
 const SPOTS_TOTAL = 25;
 
@@ -92,16 +93,26 @@ function Row({ r }) {
   };
 
   const copyDraft = async () => {
+    const text = draftToText(draft);
     try {
-      await navigator.clipboard.writeText(draft);
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked — the textarea is selectable */ }
+      // Write text/html AND text/plain: a mail client takes the HTML
+      // (signature intact), anything else falls back to the text.
+      if (window.ClipboardItem && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new window.ClipboardItem({
+          'text/html':  new Blob([draftToHtml(draft)], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        })]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      setCopied(true); setTimeout(() => setCopied(false), 2200);
+    } catch { /* clipboard blocked — the textarea is still selectable */ }
   };
 
   // Opens the mail client with the draft already in the body.
   const mailtoDraft = `mailto:${encodeURIComponent(r.email)}` +
     `?subject=${encodeURIComponent('Thanks for testing ReelIntel')}` +
-    `&body=${encodeURIComponent(draft)}`;
+    `&body=${encodeURIComponent(draftToText(draft))}`;
 
   return (
     <Card style={{ marginBottom: 10, padding: 0, overflow: 'hidden' }}>
@@ -185,7 +196,7 @@ function Row({ r }) {
                   />
                   <div style={{ display: 'flex', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
                     <GhostButton onClick={copyDraft} style={{ padding: '8px 14px', fontSize: 13 }}>
-                      {copied ? '✓ Copied' : 'Copy'}
+                      {copied ? '✓ Copied with signature' : 'Copy + signature'}
                     </GhostButton>
                     <a href={mailtoDraft} style={{
                       color: T.oceanDeep, background: T.brass, borderRadius: 8,
@@ -193,7 +204,8 @@ function Row({ r }) {
                       textDecoration: 'none', whiteSpace: 'nowrap',
                     }}>Open in Mail</a>
                     <span style={{ fontSize: 11.5, color: T.inkMute, alignSelf: 'center' }}>
-                      Editable — read it before sending.
+                      Editable — read it before sending. Copy keeps the signature
+                      formatted; Mail sends the plain-text version.
                     </span>
                   </div>
                 </>
