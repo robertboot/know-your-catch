@@ -16,7 +16,7 @@ export const SITE_URL      = 'https://www.reelintel.ai';
 
 /* One template, per-person details. Two people share a signature; two
    copies of the markup would drift the moment either changed. */
-export function signatureHtml({ name, title }) {
+export function signatureHtml({ name, title, email, phone }) {
   return `
 <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif">
   <tr>
@@ -29,7 +29,8 @@ export function signatureHtml({ name, title }) {
       <div style="font-size:23px;font-weight:800;color:#0B1F33;letter-spacing:-0.2px;line-height:1.2">${name}</div>
       <div style="margin-top:5px;font-size:12px;font-weight:700;color:#19A8C4;letter-spacing:1.1px;text-transform:uppercase">${title} &nbsp;|&nbsp; ReelIntel</div>
       <div style="margin-top:14px;font-size:15px;color:#334155;line-height:1.5">Fishing intelligence built for anglers.</div>
-      <div style="margin-top:4px;font-size:13px;color:#64748B;line-height:1.5">Fish ID &nbsp;•&nbsp; Regulations &nbsp;•&nbsp; Catch insights</div>
+      <div style="margin-top:4px;font-size:13px;color:#64748B;line-height:1.5">Fish ID &nbsp;•&nbsp; Regulations &nbsp;•&nbsp; Catch insights</div>${(email || phone) ? `
+      <div style="margin-top:12px;font-size:13px;color:#334155;line-height:1.7">${email ? `<a href="mailto:${email}" style="color:#19A8C4;text-decoration:none;font-weight:600">${email}</a>` : ''}${(email && phone) ? '&nbsp;&nbsp;·&nbsp;&nbsp;' : ''}${phone ? `<a href="tel:${String(phone).replace(/[^0-9+]/g, '')}" style="color:#334155;text-decoration:none">${phone}</a>` : ''}</div>` : ''}
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:16px">
         <tr>
           <td bgcolor="#19D4F2" style="background-color:#19D4F2;border-radius:8px">
@@ -46,8 +47,9 @@ export function signatureHtml({ name, title }) {
 }
 
 export const PEOPLE = [
-  { name: 'Rob Boot',  title: 'Founder' },
-  { name: 'Annelies',  title: 'Project Manager' },
+  { name: 'Rob Boot',      title: 'Founder',         email: 'robert@reelintel.ai' },
+  { name: 'Annelies Boot', title: 'Project Manager', email: 'annelies@reelintel.ai',
+    phone: '678.834.4488' },
 ];
 
 /* Rob's, used by the admin tester-reply drafts. */
