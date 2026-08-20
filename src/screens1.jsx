@@ -35,7 +35,7 @@ import { savePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl } from './pho
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, BigButton, SpeciesRow,
-  PhotoImg, CoachBubble,
+  PhotoImg, CoachBubble, IdentificationResultCard,
   inputStyle,
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
@@ -1888,7 +1888,7 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
   );
 }
 
-export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew, onCropRetry }) {
+export function PhotoResultScreen({ result, imageDataUrl, jurisdiction, onViewRegs, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew, onCropRetry }) {
   const { confidence, candidates } = result || {};
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
@@ -1930,7 +1930,7 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   // fall through to the main results view and be presented as an ID.
   // Low-confidence picks are shown below as possibilities, never as an
   // answer.
-  if (((!candidates || candidates.length === 0) || result?.notConfident) && !overrideId) {
+  if ((!candidates || candidates.length === 0) && !overrideId) {
     return (
       <div style={{ padding: '18px 16px' }}>
         {/* Show the WHOLE photo. maxHeight + object-fit:cover cropped a
@@ -2109,46 +2109,20 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
   const sciSize    = isTablet ? 22 : 18;
   const ringSize   = isTablet ? 72 : 60;
 
-  const lowConfidence = !isCorrected && top && (top.score || 0) < 0.60;
+  // Band comes from the PIPELINE's confidence, never re-derived
+  // thresholds — the shared card renders identical language on both
+  // routes. notConfident results with candidates land here too (low
+  // band, compact recrop strip) instead of the old dead-end screen.
+  const band = isCorrected ? null
+    : result?.notConfident ? 'low'
+    : (confidence || null);
 
   return (
     <div style={{ padding: '14px 14px 140px', position: 'relative' }}>
-      {/* Low-confidence → prompt a crop-and-retry for a sharper ID. */}
-      {onCropRetry && lowConfidence && (
-        <Card style={{ background: 'rgba(255,200,87,0.12)', borderColor: '#FFC857', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <AlertTriangle size={22} color="#FFC857" style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, color: T.ink, fontSize: 15 }}>Low confidence — crop for a better ID</div>
-              <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3, lineHeight: 1.5 }}>
-                Tighten the photo to just the fish and re-run — it usually sharpens the match.
-              </div>
-              <button ref={cropBtnRef} onClick={() => { dismissCropTip(); onCropRetry?.(); }} style={{
-                marginTop: 8, background: '#FFC857', color: '#062330', border: 'none', borderRadius: 8,
-                padding: '8px 14px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}>
-                <Crop size={15} /> Crop &amp; try again
-              </button>
-            </div>
-          </div>
-        </Card>
-      )}
-      {/* Anchored crop tip. CoachBubble renders nothing until its target
-          has a real rect, so this self-suppresses on confident results
-          where the low-confidence card (and its button) isn't mounted —
-          no extra condition needed here. */}
-      {showCropTip && (
-        <CoachBubble targetRef={cropBtnRef} onDismiss={dismissCropTip} placement="bottom">
-          <b style={{ color: '#f2f8fc' }}>Crop for a sharper ID.</b>{' '}
-          Zoom in so the fish fills the frame — less background gives the
-          model far more to work with.
-        </CoachBubble>
-      )}
       {/* Crop is always available, even on a confident match. */}
-      {onCropRetry && !lowConfidence && (
+      {onCropRetry && band !== 'low' && (
         <div style={{ textAlign: 'right', marginBottom: 10 }}>
-          <button onClick={onCropRetry} style={{
+          <button onClick={() => { dismissCropTip(); onCropRetry(); }} style={{
             background: 'transparent', border: 'none', color: T.brass, cursor: 'pointer',
             fontSize: 13, fontWeight: 700, padding: 4, display: 'inline-flex', alignItems: 'center', gap: 5,
           }}>
@@ -2156,117 +2130,24 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
           </button>
         </div>
       )}
-      {/* HERO PHOTO — user's photo with overlaid identity.
-          No forced aspect ratio: the frame takes the photo's own shape
-          so nothing gets cropped. A fixed 4:3 / 3:4 box with object-fit
-          cover was chopping the head and tail off wide shots, which is
-          exactly the detail the angler is checking the ID against.
-          maxHeight keeps a very tall portrait from pushing the species
-          name and actions off-screen. */}
-      <div style={{
-        position: 'relative', overflow: 'hidden',
-        borderRadius: 14, border: '1.5px solid #5ecdf2',
-        marginBottom: 14, background: '#0a1420',
-        boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
-        display: 'flex',
-      }}>
-        {/* Photo + the region the model actually scanned. Drawn inside
-            an inline-block wrapper so it shrink-wraps the image exactly
-            — percentage offsets then line up with the pixels, which
-            they would not against a wider flex parent. */}
-        <span style={{ position: 'relative', display: 'inline-block', margin: '0 auto' }}>
-          <img src={imageDataUrl} alt="Your catch" style={{
-            width: 'auto', maxWidth: '100%', height: 'auto',
-            maxHeight: isTablet ? '62vh' : '58vh',
-            objectFit: 'contain', display: 'block',
-          }} />
-          {result?._subjectBox && (
-            <span aria-hidden style={{
-              position: 'absolute',
-              left:   `${result._subjectBox.x * 100}%`,
-              top:    `${result._subjectBox.y * 100}%`,
-              width:  `${result._subjectBox.w * 100}%`,
-              height: `${result._subjectBox.h * 100}%`,
-              border: '2px solid #5ecdf2',
-              borderRadius: 6,
-              boxShadow: '0 0 0 9999px rgba(4,12,22,0.35)',
-              pointerEvents: 'none',
-            }} />
-          )}
-        </span>
-        <div aria-hidden style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, height: '48%',
-          background: 'linear-gradient(to top, rgba(6,20,36,0.94) 15%, rgba(6,20,36,0.55) 60%, transparent 100%)',
-          pointerEvents: 'none',
-        }} />
-        {/* Content stacked one column: pill → name (auto-fit one line)
-            → scientific → dial + horizontal CONFIDENCE label. */}
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          padding: isTablet ? '22px 22px' : '18px 16px',
-        }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: pillTier.bg, color: pillTier.ink,
-            padding: '5px 10px', borderRadius: 999,
-            fontSize: 12, fontWeight: 800, letterSpacing: '0.15em',
-            marginBottom: 10,
-          }}>
-            <Check size={12} strokeWidth={3} />
-            {pillTier.label}
-          </div>
-          <AutoFitText
-            text={topSpecies?.commonName || top.speciesId}
-            maxSize={nameSize}
-            minSize={36}
-            style={{
-              fontFamily: 'Georgia, serif', fontStyle: 'italic',
-              lineHeight: 0.95,
-              color: '#ffffff', fontWeight: 400,
-              letterSpacing: '-0.01em',
-            }}
-          />
-          {topSpecies?.scientific && (
-            <div style={{
-              fontStyle: 'italic', fontSize: sciSize,
-              color: '#8ea3ba', marginTop: 4,
-            }}>
-              {topSpecies.scientific}
-            </div>
-          )}
-          {!isCorrected && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              marginTop: 12,
-            }}>
-              <ConfidenceRing pct={scorePct} size={ringSize} />
-              <div style={{
-                fontSize: 12, fontWeight: 800, letterSpacing: '0.15em',
-                color: '#ffffff',
-              }}>
-                CONFIDENCE
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Save-catch action — floppy icon superimposed bottom-right of
-            the photo. Logs the catch with the displayed species. */}
-        <button
-          onClick={doSave}
-          aria-label="Save catch"
-          style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 3,
-            display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-            background: 'rgba(6,20,36,0.72)', border: '1.5px solid #5ecdf2',
-            color: '#5ecdf2', borderRadius: 12, padding: '8px 12px',
-            cursor: 'pointer', backdropFilter: 'blur(4px)',
-          }}
-        >
-          <SaveIcon size={26} strokeWidth={2} />
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>SAVE CATCH</span>
-        </button>
-      </div>
+      {/* THE shared identification result — identical to the Log Catch
+          route: photo, species, confidence language, compact low-band
+          recrop, legal-to-keep + regulation summary, correction. */}
+      <IdentificationResultCard
+        photoUrl={imageDataUrl}
+        subjectBox={result?._subjectBox}
+        species={topSpecies}
+        pct={isCorrected ? null : scorePct}
+        band={band}
+        pickedByUser={isCorrected}
+        onCropRetry={onCropRetry ? () => { dismissCropTip(); onCropRetry(); } : null}
+        onCorrectSpecies={() => setShowPicker(true)}
+        jurisdiction={jurisdiction || null}
+        onViewRegs={onViewRegs ? () => onViewRegs(displayedId) : null}
+        photoHeight={isTablet ? 380 : 300}
+      />
+      <div style={{ marginBottom: 14 }} />
 
       <style>{`@keyframes kycFeedbackIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }`}</style>
 
@@ -2379,50 +2260,24 @@ export function PhotoResultScreen({ result, imageDataUrl, onPickSpecies, onConfi
         borderTop: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', gap: 10,
       }}>
-        {feedbackState === 'confirmed' ? (
-          <div style={{
-            flex: 2, minHeight: 52, animation: 'kycFeedbackIn 220ms ease-out',
+        <PrimaryButton
+          onClick={doSave}
+          style={{
+            flex: 2, minHeight: 52, fontSize: 18, fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            background: 'rgba(50,209,123,0.14)', border: `1.5px solid ${T.open}`,
-            color: T.open, borderRadius: 10, fontSize: 16, fontWeight: 800,
-          }}>
-            <Check size={18} strokeWidth={3} /> ID confirmed
-          </div>
-        ) : (
-          <PrimaryButton
-            onClick={doConfirm}
-            style={{
-              flex: 2, minHeight: 52, fontSize: 18, fontWeight: 800,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            <Check size={20} strokeWidth={3} /> CONFIRM
-          </PrimaryButton>
-        )}
-        {feedbackState === 'confirmed' ? (
-          // Once confirmed, "wrong ID" no longer applies — offer the next
-          // scan instead. Behaves like Click-to-Scan (photo/library/file).
-          <GhostButton
-            onClick={onScanAnother || onRetake}
-            style={{
-              flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}
-          >
-            <RotateCcw size={15} /> Scan Another
-          </GhostButton>
-        ) : (
-          <GhostButton
-            onClick={() => setShowPicker(true)}
-            style={{
-              flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              color: T.warn, borderColor: T.warn,
-            }}
-          >
-            <Flag size={15} /> Report Wrong ID
-          </GhostButton>
-        )}
+          }}
+        >
+          <Check size={20} strokeWidth={3} /> LOG THIS CATCH
+        </PrimaryButton>
+        <GhostButton
+          onClick={onScanAnother || onRetake}
+          style={{
+            flex: 1, minHeight: 52, fontSize: 14, fontWeight: 800,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
+        >
+          <RotateCcw size={15} /> Scan Another
+        </GhostButton>
       </div>
 
       {/* Report wrong ID picker — updates the displayed species IN

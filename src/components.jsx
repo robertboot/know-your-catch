@@ -4,7 +4,8 @@ import { T } from './theme.js';
 import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
-import { speciesPhoto, shareReport, speciesById, isAnglerVisible } from './helpers.js';
+import { speciesPhoto, shareReport, speciesById, isAnglerVisible, seasonState, cleanSeason } from './helpers.js';
+import { regulationFor } from './regulations-store.js';
 import { photoDisplayUrl, photoThumbUrl, photoAsDataUrl, photoSignedUrl, resolvePhotoDisplay } from './photos-store.js';
 
 /* ============================================================
@@ -102,6 +103,190 @@ export function PhotoImg({ photo, alt, style, onClick, className, debugTag, diag
       onLoad={() => { if (res._evt) res._evt.img = 'onLoad'; }}
       onError={onError}
     />
+  );
+}
+
+/* ============================================================
+   IDENTIFICATION RESULT — the ONE shared result experience.
+
+   Both identification routes (Fish ID tab and Home → Log Your Catch →
+   Select Photo) render this card, so species, confidence language,
+   low-confidence recrop, species correction, legal-to-keep status and
+   the regulation summary are decided in exactly one place. Route
+   difference is confined to the CTAs the CALLER renders beneath it.
+
+   Identification and regulations stay separate concerns: the species
+   block is purely the DeepBlue result; the legal block is purely
+   jurisdiction + the existing regulation engine (regulationFor +
+   seasonState). Nothing here rescored anything, and nothing here may
+   ever feed regulation availability back into confidence.
+   ============================================================ */
+
+const _BAND_LANG = {
+  high:   { text: 'Strong match',                    color: T.open },
+  medium: { text: 'Likely match',                    color: T.brass },
+  low:    { text: 'Low confidence — verify species', color: T.warn },
+};
+
+export function IdentificationResultCard({
+  photoUrl, subjectBox,
+  identifying = false,          // Fish ID still running
+  species = null,               // resolved species object (or null)
+  pct = null,                   // 0..100 or null
+  band = null,                  // 'high' | 'medium' | 'low' | null
+  pickedByUser = false,         // user override — never claim a model match
+  onCropRetry = null,           // low-confidence recrop; hidden if absent
+  onCorrectSpecies = null,      // opens the caller's species picker
+  jurisdiction = null,          // { id, name, short } or null
+  onViewRegs = null,            // optional "View Full Regulations >"
+  photoHeight = 300,
+}) {
+  const name = species?.commonName || null;
+  const lang = band ? _BAND_LANG[band] : null;
+
+  // ---- Legal-to-keep, from the EXISTING regulation engine only.
+  const reg = (species && jurisdiction)
+    ? regulationFor(species.id, jurisdiction.id).regulation
+    : null;
+  const ss = reg ? seasonState(reg.open) : null;
+  const legal =
+    !species ? null
+    : !jurisdiction ? { title: 'Select location to check regulations', tone: 'muted', pill: null }
+    : !reg ? { title: 'REGULATION STATUS UNAVAILABLE', tone: 'muted', pill: 'unknown',
+               sub: 'No regulations on file for this species in this jurisdiction.' }
+    : ss.status === 'open'   ? { title: 'LEGAL TO KEEP',     tone: 'open',   pill: 'open' }
+    : ss.status === 'closed' ? { title: 'NOT LEGAL TO KEEP', tone: 'closed', pill: 'closed',
+                                 sub: 'Season closed in these waters.' }
+    : { title: 'REGULATION STATUS — VERIFY', tone: 'muted', pill: ss.status || 'unknown',
+        sub: cleanSeason(reg.open) || 'Season could not be determined — verify before keeping.' };
+
+  const legalColor = legal?.tone === 'open' ? T.open
+    : legal?.tone === 'closed' ? T.closed : T.inkMute;
+
+  const ruleBits = reg ? [
+    reg.minSize != null ? `Min ${reg.minSize}\u2033` : null,
+    reg.maxSize != null ? `Max ${reg.maxSize}\u2033` : null,
+    reg.bagLimit != null ? `Bag ${reg.bagLimit}` : null,
+  ].filter(Boolean) : [];
+
+  return (
+    <Card style={{ padding: 0, overflow: 'hidden' }}>
+      {/* 1. PHOTO — whole frame, Log-Catch proportions. */}
+      <div style={{ position: 'relative', background: '#000' }}>
+        <img src={photoUrl} alt="Your catch" style={{
+          width: '100%', height: photoHeight, objectFit: 'contain', display: 'block',
+        }} />
+        {subjectBox && (
+          <span aria-hidden style={{
+            position: 'absolute',
+            left: `${subjectBox.x * 100}%`, top: `${subjectBox.y * 100}%`,
+            width: `${subjectBox.w * 100}%`, height: `${subjectBox.h * 100}%`,
+            border: '2px solid #5ecdf2', borderRadius: 6, pointerEvents: 'none',
+          }} />
+        )}
+      </div>
+
+      <div style={{ padding: 14 }}>
+        {/* 2. IDENTIFICATION */}
+        <SectionLabel style={{ marginBottom: 2 }}>Identification</SectionLabel>
+        {identifying ? (
+          <div style={{ fontSize: 18, color: T.inkMute }}>Identifying…</div>
+        ) : name ? (
+          <>
+            <div style={{ fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>{name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              {pickedByUser ? (
+                <span style={{
+                  background: T.parchmentDeep, borderRadius: 999, padding: '4px 12px',
+                  fontSize: 13, fontWeight: 700, color: T.warn,
+                }}>Picked by you</span>
+              ) : (
+                <span style={{
+                  background: T.parchmentDeep, borderRadius: 999, padding: '4px 12px',
+                  fontSize: 13, fontWeight: 700, color: lang?.color || T.inkMute,
+                }}>
+                  {pct != null ? `Best match · ${pct}% confidence` : 'Best match'}
+                </span>
+              )}
+              {!pickedByUser && lang && (
+                <span style={{ fontSize: 13, fontWeight: 700, color: lang.color }}>{lang.text}</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 18, color: T.inkMute }}>Not identified — pick below</div>
+        )}
+
+        {/* 3. LOW-CONFIDENCE ACTION — compact, both routes identical. */}
+        {!identifying && !pickedByUser && band === 'low' && onCropRetry && (
+          <div style={{
+            marginTop: 10, padding: '10px 12px', borderRadius: 10,
+            background: 'rgba(255,200,87,0.10)', border: '1px solid rgba(255,200,87,0.45)',
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: 1, minWidth: 160, fontSize: 13, color: T.inkSoft, lineHeight: 1.4 }}>
+              <b style={{ color: T.ink }}>Low confidence.</b> Tighten the crop to just the fish for a better ID.
+            </div>
+            <button onClick={onCropRetry} style={{
+              background: '#FFC857', color: '#062330', border: 'none', borderRadius: 8,
+              padding: '8px 12px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            }}>
+              <Crop size={14} /> Crop &amp; try again
+            </button>
+          </div>
+        )}
+
+        {/* 5 + 6. LEGAL-TO-KEEP + compact regulation summary — BEFORE
+            any log/continue action, because "identify the fish and
+            immediately understand the regulations" is the product. */}
+        {!identifying && species && legal && (
+          <div style={{
+            marginTop: 12, padding: '10px 12px', borderRadius: 10,
+            background: T.parchmentDeep, border: `1px solid ${legal.tone === 'muted' ? T.cardEdge : legalColor}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 15, fontWeight: 900, letterSpacing: 0.4, color: legalColor }}>
+                {legal.title}
+              </span>
+              {legal.pill && <StatusPill status={legal.pill} size="small" />}
+            </div>
+            {legal.sub && (
+              <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>{legal.sub}</div>
+            )}
+            {reg && ruleBits.length > 0 && (
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginTop: 6 }}>
+                {ruleBits.join('  ·  ')}
+              </div>
+            )}
+            {jurisdiction && reg && (
+              <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>{jurisdiction.name}</div>
+            )}
+            {onViewRegs && reg && (
+              <button onClick={onViewRegs} style={{
+                marginTop: 8, background: 'transparent', border: 'none', padding: 0,
+                color: T.brass, fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 2,
+              }}>
+                View Full Regulations <ChevronRight size={14} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 4. SPECIES CORRECTION */}
+        {!identifying && onCorrectSpecies && (
+          <button onClick={onCorrectSpecies} style={{
+            width: '100%', marginTop: 12,
+            background: 'transparent', border: `1.5px solid ${T.brass}`,
+            color: T.brass, borderRadius: 10, padding: '12px',
+            fontSize: 15, fontWeight: 800, cursor: 'pointer',
+          }}>
+            {name ? `Not a ${name}?` : 'Pick the species'}
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 

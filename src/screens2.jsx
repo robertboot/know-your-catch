@@ -46,7 +46,7 @@ function CoordsLink({ lat, lon }) {
 import {
   StatusPill, SpeciesImage, Card, PrimaryButton, GhostButton, SectionLabel, H1,
   DetailRow, Field, PickButton, SpeciesRow, StarButton, LightboxModal,
-  PhotoImg, CropStep, CoachBubble,
+  PhotoImg, CropStep, CoachBubble, IdentificationResultCard,
   inputStyle,
 } from './components.jsx';
 import { AccountSection } from './auth-ui.jsx';
@@ -3221,6 +3221,7 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         idStatus: 'done',
         idSpeciesId: top?.speciesId || null,
         idConfidence: typeof res?.confidenceScore === 'number' ? res.confidenceScore : (top?.score ?? null),
+        idBand: res?.confidence || null,
         idCandidates: cands,
       } : pc);
     }).catch(() => {
@@ -4061,6 +4062,14 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             resolveSpecies={resolveSpecies}
             speciesOptions={speciesSorted}
             units={state.units}
+            jurisdiction={jurisdiction}
+            onCropRetry={(pc) => {
+              // Low-confidence recrop: back to the crop step with the
+              // SAME full frame + metadata; the crop feeds only the
+              // classifier, the full photo is still what gets saved.
+              setPendingConfirm(null);
+              setPendingCrop({ dataUrl: pc.dataUrl, meta: pc.meta });
+            }}
             onResolve={resolvePhotoConfirm}
             onCancel={cancelPhotoConfirm}
             onHome={onHome}
@@ -4487,7 +4496,7 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
    picks one of the explicit Confirm actions — so wrong metadata
    can never slip in silently and poison Patterns/analysis.
    ============================================================ */
-function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, units, onResolve, onCancel, onHome }) {
+function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, units, jurisdiction, onCropRetry, onResolve, onCancel, onHome }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
   const [suggestNew, setSuggestNew] = useState(false);
@@ -4552,53 +4561,34 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
         </button>
       </div>
 
-      {/* ---------- TOP HALF: photo + identification + details ---------- */}
-      <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
-        {/* Photo + circular crop-icon affordance */}
-        <div style={{ position: 'relative' }}>
-          {/* Fit the WHOLE photo (contain) — the model IDs the entire image,
-              so the preview must show all of it, not a cropped-to-fill view. */}
-          {/* The FULL frame — that is what gets saved. Cropping happens
-              on the step before this one and only feeds the classifier,
-              so showing the crop here would misrepresent the photo the
-              angler is about to keep. */}
-          <img src={pc.dataUrl} alt="Your catch" style={{ width: '100%', height: 300, objectFit: 'contain', display: 'block', background: '#000' }} />
+      {/* ---------- TOP: the ONE shared identification result ---------- */}
+      {suggestNew ? (
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          <SectionLabel style={{ marginBottom: 2 }}>Identification</SectionLabel>
+          <div style={{ fontSize: 22, fontWeight: 800, color: T.brass }}>New species</div>
+          <button onClick={() => setPickerOpen(true)} style={{
+            width: '100%', marginTop: 12, background: 'transparent',
+            border: `1.5px solid ${T.brass}`, color: T.brass, borderRadius: 10,
+            padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer',
+          }}>Pick a listed species instead</button>
+        </Card>
+      ) : (
+        <div style={{ marginBottom: 16 }}>
+          <IdentificationResultCard
+            photoUrl={pc.dataUrl}
+            identifying={pc.idStatus === 'running'}
+            species={chosen}
+            pct={speciesPick ? null : pct}
+            band={speciesPick ? null : (pc.idBand || null)}
+            pickedByUser={!!speciesPick}
+            onCropRetry={onCropRetry ? () => onCropRetry(pc) : null}
+            onCorrectSpecies={() => setPickerOpen(true)}
+            jurisdiction={jurisdiction || null}
+          />
         </div>
+      )}
 
-        <div style={{ padding: 14 }}>
-          {/* Identification */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 999, flexShrink: 0,
-              border: `1.5px solid ${T.brass}`, color: T.brass,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <FishIcon size={24} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <SectionLabel style={{ marginBottom: 2 }}>Identification</SectionLabel>
-              {suggestNew ? (
-                <div style={{ fontSize: 22, fontWeight: 800, color: T.brass, lineHeight: 1.15 }}>New species</div>
-              ) : chosen ? (
-                <div style={{ fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>{chosen.commonName}</div>
-              ) : pc.idStatus === 'running' ? (
-                <div style={{ fontSize: 18, color: T.inkMute }}>Identifying…</div>
-              ) : (
-                <div style={{ fontSize: 18, color: T.inkMute }}>Not identified — pick below</div>
-              )}
-              {!suggestNew && chosen && pct != null && (
-                <div style={{
-                  display: 'inline-block', marginTop: 6,
-                  background: T.parchmentDeep, borderRadius: 999,
-                  padding: '4px 12px', fontSize: 13, fontWeight: 700,
-                  color: pct >= 80 ? T.open : pct >= 60 ? T.brass : T.warn,
-                }}>
-                  {speciesPick ? 'Picked by you' : `Best match · ${pct}% confidence`}
-                </div>
-              )}
-            </div>
-          </div>
-
+      <Card style={{ padding: 14, marginBottom: 16 }}>
           {/* Location row — tap to adjust on the details step */}
           <button onClick={() => logCatch('loc')} style={{ ...rowStyle, marginTop: 12 }}>
             <MapPinIcon size={20} color={T.brass} style={{ flexShrink: 0 }} />
@@ -4619,19 +4609,6 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
             <ChevronRight size={20} color={T.inkMute} />
           </button>
 
-          {/* Not-a-[species] → picker (search or add) → back here */}
-          <button
-            onClick={() => setPickerOpen(true)}
-            style={{
-              width: '100%', marginTop: 14,
-              background: 'transparent', border: `1.5px solid ${T.brass}`,
-              color: T.brass, borderRadius: 10, padding: '12px',
-              fontSize: 15, fontWeight: 800, cursor: 'pointer',
-            }}
-          >
-            {chosen ? `Not a ${speciesName}?` : 'Pick the species'}
-          </button>
-        </div>
       </Card>
 
       {/* ---------- BOTTOM: primary LOG CATCH + quiet quick-confirm link ---------- */}
@@ -4654,9 +4631,9 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
           borderRadius: 14, padding: '16px', cursor: 'pointer',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
         }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 20, fontWeight: 900, letterSpacing: 0.3 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 19, fontWeight: 900, letterSpacing: 0.3 }}>
             <CheckCircle2 size={24} color={T.oceanDeep} strokeWidth={2.6} />
-            LOG CATCH
+            CONTINUE TO LOG CATCH
           </span>
           <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.85 }}>Details look good</span>
         </button>

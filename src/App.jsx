@@ -1018,6 +1018,8 @@ export default function App() {
       body = <PhotoResultScreen
         result={screen.result}
         imageDataUrl={screen.imageDataUrl}
+        jurisdiction={jurisdiction}
+        onViewRegs={(sid) => push({ name: 'species', id: sid })}
         onPickSpecies={(id) => push({ name: 'species', id })}
         onConfirmSave={(topPickSpeciesId) => {
           // Save & Continue tapped when the feedback strip is unset
