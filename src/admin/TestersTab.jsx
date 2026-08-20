@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { T } from '../theme.js';
 import { Card, GhostButton, SectionLabel } from '../components.jsx';
 import { client } from '../supabase-client.js';
+import { getLastSession } from '../auth.js';
 
 const SPOTS_TOTAL = 25;
 
@@ -47,6 +48,10 @@ function Pill({ tone, children }) {
 
 function Row({ r }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [draftErr, setDraftErr] = useState('');
+  const [copied, setCopied] = useState(false);
   const hasAccount = !!r.user_id;
   const answered = FIELDS.filter(([k]) => (r[k] || '').trim());
 
@@ -55,6 +60,48 @@ function Row({ r }) {
     `&body=${encodeURIComponent(
       `Hi ${(r.name || '').split(' ')[0] || 'there'},\n\n` +
       `Thanks for putting ReelIntel through its paces — genuinely useful feedback.\n\n`)}`;
+
+  const answeredCount = answered.length;
+
+  const makeDraft = async () => {
+    const c = client();
+    if (!c || drafting) return;
+    setDrafting(true); setDraftErr(''); setOpen(true);
+    try {
+      const token = getLastSession()?.access_token;
+      const { data, error } = await c.functions.invoke('draft-tester-reply', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: {
+          name: r.name, tested: r.tested, worked: r.worked, confusing: r.confusing,
+          broke: r.broke, wish: r.wish,
+          hasAccount: !!r.user_id, catches: r.catches,
+        },
+      });
+      if (error || !data?.draft) {
+        setDraftErr(
+          data?.detail || error?.message ||
+          'Draft failed — is draft-tester-reply deployed?');
+      } else {
+        setDraft(data.draft);
+      }
+    } catch (e) {
+      setDraftErr(e?.message || String(e));
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked — the textarea is selectable */ }
+  };
+
+  // Opens the mail client with the draft already in the body.
+  const mailtoDraft = `mailto:${encodeURIComponent(r.email)}` +
+    `?subject=${encodeURIComponent('Thanks for testing ReelIntel')}` +
+    `&body=${encodeURIComponent(draft)}`;
 
   return (
     <Card style={{ marginBottom: 10, padding: 0, overflow: 'hidden' }}>
@@ -78,8 +125,14 @@ function Row({ r }) {
 
         <div style={{ fontSize: 11.5, color: T.inkMute, whiteSpace: 'nowrap' }}>{fmt(r.submitted_at)}</div>
         <GhostButton onClick={() => setOpen(o => !o)} style={{ padding: '7px 12px', fontSize: 12.5 }}>
-          {open ? 'Hide' : `Feedback (${answered.length})`}
+          {open ? 'Hide' : `Feedback (${answeredCount})`}
         </GhostButton>
+        {answeredCount > 0 && (
+          <GhostButton onClick={makeDraft} disabled={drafting}
+            style={{ padding: '7px 12px', fontSize: 12.5, color: T.brass, borderColor: T.brass }}>
+            {drafting ? 'Drafting…' : draft ? 'Redraft' : 'Draft reply'}
+          </GhostButton>
+        )}
         <a href={mailto} className="rl-tappable" style={{
           color: T.brass, border: `1px solid ${T.brass}`, borderRadius: 8,
           padding: '7px 12px', fontSize: 12.5, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
@@ -108,6 +161,45 @@ function Row({ r }) {
               <div style={{ fontSize: 14, color: T.ink, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r[k]}</div>
             </div>
           ))}
+          {(draft || draftErr) && (
+            <div style={{
+              border: `1px solid ${T.brass}55`, borderRadius: 12, padding: 13,
+              background: 'rgba(25,212,242,0.05)',
+            }}>
+              <SectionLabel style={{ marginBottom: 8 }}>Suggested reply</SectionLabel>
+              {draftErr ? (
+                <div style={{ color: T.closed, fontSize: 13, lineHeight: 1.5 }}>{draftErr}</div>
+              ) : (
+                <>
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    spellCheck
+                    style={{
+                      width: '100%', boxSizing: 'border-box', minHeight: 220,
+                      background: T.parchmentDeep, color: T.ink,
+                      border: `1px solid ${T.cardEdge}`, borderRadius: 10,
+                      padding: '11px 13px', fontSize: 14, lineHeight: 1.6,
+                      fontFamily: 'inherit', resize: 'vertical',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
+                    <GhostButton onClick={copyDraft} style={{ padding: '8px 14px', fontSize: 13 }}>
+                      {copied ? '✓ Copied' : 'Copy'}
+                    </GhostButton>
+                    <a href={mailtoDraft} style={{
+                      color: T.oceanDeep, background: T.brass, borderRadius: 8,
+                      padding: '8px 14px', fontSize: 13, fontWeight: 800,
+                      textDecoration: 'none', whiteSpace: 'nowrap',
+                    }}>Open in Mail</a>
+                    <span style={{ fontSize: 11.5, color: T.inkMute, alignSelf: 'center' }}>
+                      Editable — read it before sending.
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {r.screenshot_path && (
             <div style={{ fontSize: 12.5, color: T.inkSoft }}>
               Screenshot: <code style={{ color: T.brass }}>{r.screenshot_path}</code>
