@@ -1,0 +1,10 @@
+
+# verify_jwt=false is LOAD-BEARING for these two — a bulk
+# `functions deploy` without flags resets it to true (happened
+# 2026-08-20 and broke Colab bundle upload + the ocean-maps cron).
+# Keeping it here makes the CLI apply it on every deploy.
+[functions.mint-model-upload-url]
+verify_jwt = false
+
+[functions.refresh-ocean-maps]
+verify_jwt = false
