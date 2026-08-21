@@ -1747,6 +1747,28 @@ const TESTERS_CSS = `
 .rl-tt-h2 .accent { color: ${P.accent}; }
 .rl-tt-lead { color: ${P.inkSoft}; font-size: 16px; line-height: 1.62; margin: 0 0 32px; max-width: 660px; }
 
+/* ---- checklist ---- */
+.rl-tt-check {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px;
+  counter-reset: step;
+}
+@media (max-width: 900px) { .rl-tt-check { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 560px) { .rl-tt-check { grid-template-columns: 1fr; gap: 12px; } }
+.rl-tt-check-i {
+  background: ${P.card}; border: 1px solid ${P.border}; border-radius: 16px;
+  padding: 20px 18px; position: relative;
+}
+.rl-tt-check-i::before {
+  counter-increment: step; content: '0' counter(step);
+  display: block; font-size: 12px; font-weight: 900; letter-spacing: 1.6px;
+  color: ${P.accent}; margin-bottom: 12px;
+}
+.rl-tt-check-t {
+  font-size: 14.5px; font-weight: 800; color: ${P.ink}; line-height: 1.3;
+  margin: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.rl-tt-check-d { font-size: 13.5px; color: ${P.inkMute}; line-height: 1.55; margin: 0; }
+
 /* ---- shirt ---- */
 .rl-tt-shirt {
   display: grid; grid-template-columns: minmax(0,1.12fr) minmax(0,0.88fr);
@@ -1828,6 +1850,37 @@ const TESTER_CAPS = [
   { Icon: ChartIcon,  t: 'Build your patterns',d: 'Let ReelIntel learn from your fishing history and help uncover what works.' },
 ];
 
+
+function UserIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+    </svg>
+  );
+}
+function SpeechIcon({ size = 22, color = P.accent }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a8 8 0 01-8 8H8l-4 3v-4.4A8 8 0 1121 12z" />
+      <path d="M9 11h6M9 14.5h3.5" />
+    </svg>
+  );
+}
+
+/* The checklist. Compact by design — the long numbered version was cut
+   for being heavy, but the shirt copy promises a "tester checklist" and
+   without one the page asks for feedback while never saying what to do. */
+const TESTER_CHECKLIST = [
+  { Icon: UserIcon,   t: 'Create your account',  d: 'Free, and it only takes a minute.' },
+  { Icon: CameraIcon, t: 'Run a few photos through Fish ID',
+    d: 'New shots or ones already on your phone.' },
+  { Icon: FishIcon,   t: 'Log a few catches',
+    d: 'Real ones are ideal; test entries are fine.' },
+  { Icon: SpeechIcon, t: 'Tell me what you’d change',
+    d: 'What’s confusing, missing, or takes too many steps.' },
+];
 
 /* Drawn tee, so the reward section works before a product shot exists.
    Drop a photo at public/marketing/tester-tshirt.png and it takes over. */
@@ -2040,6 +2093,26 @@ export function TestersPage() {
         </div>
       </header>
 
+
+      {/* ---------- CHECKLIST ---------- */}
+      <section className="rl-tt-sec rl-tt-sec-alt" id="checklist">
+        <div className="rl-container">
+          <h2 className="rl-tt-h2">The tester checklist.</h2>
+          <p className="rl-tt-lead">
+            You don’t need to go fishing tomorrow — open it, poke around, and tell me
+            how it holds up. That’s the whole ask.
+          </p>
+          <div className="rl-tt-check">
+            {TESTER_CHECKLIST.map(({ Icon, t, d }) => (
+              <div className="rl-tt-check-i" key={t}>
+                <Icon size={22} />
+                <div className="rl-tt-check-t">{t}</div>
+                <p className="rl-tt-check-d">{d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ---------- SHIRT ---------- */}
       <section className="rl-tt-sec">
