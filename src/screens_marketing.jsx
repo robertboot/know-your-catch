@@ -520,6 +520,7 @@ body { margin: 0; }
 .rl-marine-maps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 720px) { .rl-marine-maps { grid-template-columns: 1fr; } }
 .rl-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.rl-features-2 { grid-template-columns: repeat(2, 1fr); }
 @media (max-width: 1024px) { .rl-features { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px)  { .rl-features { grid-template-columns: 1fr; } }
 .rl-feature {
@@ -1369,12 +1370,24 @@ function Footer() {
    ROOT
    ============================================================ */
 
+/* Label + one line above each ocean image. Without it a visitor meets
+   three unexplained screenshots and has to infer what a chlorophyll map
+   is from the colours. */
+function MarineCaption({ label, body }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <span className="rl-eyebrow" style={{ fontSize: 11.5 }}>{label}</span>
+      <p style={{
+        margin: '7px 0 0', fontSize: 15, lineHeight: 1.55, color: P.inkSoft, maxWidth: 620,
+      }}>{body}</p>
+    </div>
+  );
+}
+
 function MarineIntel() {
   const cards = [
     { icon: TargetIcon, title: 'Fishability grade', body: 'An A–F grade for right now, every hour, and 10 days out — weighted for wind, seas, and swell period and tuned to safe-boating limits.' },
     { icon: CloudIcon,  title: 'Wind, waves & tide', body: 'Wind and gusts in knots, wave height and period, sea temp, currents, and NOAA tide predictions for your starred spot.' },
-    { icon: MapPinIcon, title: 'Chlorophyll maps', body: 'Find the color: satellite phytoplankton imagery reveals the green-water breaks where bait and gamefish stack up.' },
-    { icon: ChartIcon,  title: 'Sea-temp breaks', body: 'Satellite sea-surface temperature shows the edges and weed lines that concentrate pelagics — free NOAA/NASA data.' },
   ];
   return (
     <section className="rl-section rl-section-alt" id="marine">
@@ -1388,30 +1401,46 @@ function MarineIntel() {
       {/* Showcase gallery — forecast banner + the two satellite maps */}
       <div className="rl-container" style={{ marginTop: 40 }}>
         <div style={{ display: 'grid', gap: 16 }}>
+          <MarineCaption
+            label="The 10-day outlook"
+            body="Every six hours, graded A–F. Scan the row and find the window worth running."
+          />
           <ImageSlot
             variant="banner"
             src={A.marineForecast}
             label="MARINE-FORECAST.png"
             alt="ReelIntel 10-day fishability outlook in 6-hour blocks — letter grade, bite %, wind, waves, tide."
           />
-          <div className="rl-marine-maps">
-            <ImageSlot
-              variant="banner"
-              src={A.marineChlorophyll}
-              label="MARINE-CHLOROPHYLL.png"
-              alt="Satellite chlorophyll map of the Gulf and Florida — the green-water breaks where bait and gamefish stack up."
-            />
-            <ImageSlot
-              variant="banner"
-              src={A.marineSeaTemp}
-              label="MARINE-SEATEMP.png"
-              alt="Satellite sea-surface temperature map of the Gulf and Florida — temperature breaks that concentrate pelagics."
-            />
+          <div className="rl-marine-maps" style={{ marginTop: 14 }}>
+            <div>
+              <MarineCaption
+                label="Chlorophyll — where the bait is"
+                body="Green water means plankton, which means bait. Fish the color breaks, not the middle."
+              />
+              <ImageSlot
+                variant="banner"
+                src={A.marineChlorophyll}
+                label="MARINE-CHLOROPHYLL.png"
+                alt="Satellite chlorophyll map of the Gulf and Florida — the green-water breaks where bait and gamefish stack up."
+              />
+            </div>
+            <div>
+              <MarineCaption
+                label="Sea temperature — where the edges are"
+                body="Sharp temperature changes stack pelagics. Look for tight gradients, not the warmest water."
+              />
+              <ImageSlot
+                variant="banner"
+                src={A.marineSeaTemp}
+                label="MARINE-SEATEMP.png"
+                alt="Satellite sea-surface temperature map of the Gulf and Florida — temperature breaks that concentrate pelagics."
+              />
+            </div>
           </div>
         </div>
       </div>
       <div className="rl-container" style={{ marginTop: 40 }}>
-        <div className="rl-features">
+        <div className="rl-features rl-features-2">
           {cards.map((c) => (
             <div className="rl-feature" key={c.title}>
               <div className="rl-feature-icon"><c.icon size={22} /></div>
