@@ -615,6 +615,18 @@ export default function App() {
   // angler chose "Browse without an account". Guest access is what
   // keeps non-account content (species, regs, forecast) reachable with
   // no forced registration — App Store guideline 5.1.1(v).
+  // Crash reports are useless without this: which screen, whether the
+  // angler had picked waters, and which build.
+  useEffect(() => {
+    setErrorContext({
+      screen: screen?.name || null,
+      hasJurisdiction: !!state.jurisdiction,
+      appVersion: DATA_VERSION,
+    });
+  }, [screen?.name, state.jurisdiction]);
+  // HOOK ORDER: must stay ABOVE the splash early-return below — build 203
+  // shipped it after the return and every launch threw React #310.
+
   const admitted = !!session || hasLocalCredential() || hasGuestAccess();
   if (showSplash || !loaded || !admitted) {
     const showLogin = loaded && !admitted;
@@ -1225,16 +1237,6 @@ export default function App() {
     default:
       body = <HomeScreen {...homeProps} />;
   }
-
-  // Crash reports are useless without this: which screen, whether the
-  // angler had picked waters, and which build.
-  useEffect(() => {
-    setErrorContext({
-      screen: screen?.name || null,
-      hasJurisdiction: !!state.jurisdiction,
-      appVersion: DATA_VERSION,
-    });
-  }, [screen?.name, state.jurisdiction]);
 
   const isHome = screen.name === 'home';
   const activeTab =
