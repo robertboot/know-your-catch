@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { CheckCircle2, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles, Crop, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Check, X, Anchor, AlertTriangle, Star, Search, Share2, Trophy, ImageOff, ChevronLeft, ChevronRight, Sparkles, Crop, RotateCcw } from 'lucide-react';
 import { T } from './theme.js';
 import { useScreenSize } from './screen-size.js';
 import { JURISDICTIONS, DISCLAIMER_TEXT, SPECIES } from './data.js';
@@ -137,12 +137,16 @@ export function IdentificationResultCard({
   pickedByUser = false,         // user override — never claim a model match
   onCropRetry = null,           // low-confidence recrop; hidden if absent
   onCorrectSpecies = null,      // opens the caller's species picker
+  onConfirmSpecies = null,      // banks a model_confirmation; hidden if absent
   jurisdiction = null,          // { id, name, short } or null
   onViewRegs = null,            // optional "View Full Regulations >"
   photoHeight = 300,
 }) {
   const name = species?.commonName || null;
   const lang = band ? _BAND_LANG[band] : null;
+
+  const [confirmed, setConfirmed] = React.useState(false);
+  React.useEffect(() => { setConfirmed(false); }, [species?.id]);
 
   // ---- Legal-to-keep, from the EXISTING regulation engine only.
   const reg = (species && jurisdiction)
@@ -274,16 +278,42 @@ export function IdentificationResultCard({
           </div>
         )}
 
-        {/* 4. SPECIES CORRECTION */}
-        {!identifying && onCorrectSpecies && (
-          <button onClick={onCorrectSpecies} style={{
-            width: '100%', marginTop: 12,
-            background: 'transparent', border: `1.5px solid ${T.brass}`,
-            color: T.brass, borderRadius: 10, padding: '12px',
-            fontSize: 15, fontWeight: 800, cursor: 'pointer',
-          }}>
-            {name ? `Not a ${name}?` : 'Pick the species'}
-          </button>
+        {/* 4. CONFIRM + CORRECT — the two answers to "is this right?",
+            side by side. Confirming banks the label as training data
+            without logging a catch, which is the case the logging CTA
+            alone cannot capture: identify a fish, agree, release it. */}
+        {!identifying && (onConfirmSpecies || onCorrectSpecies) && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            {onConfirmSpecies && name && (
+              <button
+                onClick={() => { if (!confirmed) { setConfirmed(true); onConfirmSpecies(); } }}
+                disabled={confirmed}
+                style={{
+                  flex: 1, minWidth: 0,
+                  background: confirmed ? 'transparent' : T.brass,
+                  border: `1.5px solid ${confirmed ? T.open : T.brass}`,
+                  color: confirmed ? T.open : T.oceanDeep,
+                  borderRadius: 10, padding: '12px 10px',
+                  fontSize: 15, fontWeight: 800, cursor: confirmed ? 'default' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                {confirmed
+                  ? <><Check size={16} strokeWidth={3} /> Confirmed</>
+                  : 'Confirm species'}
+              </button>
+            )}
+            {onCorrectSpecies && (
+              <button onClick={onCorrectSpecies} style={{
+                flex: 1, minWidth: 0,
+                background: 'transparent', border: `1.5px solid ${T.brass}`,
+                color: T.brass, borderRadius: 10, padding: '12px 10px',
+                fontSize: 15, fontWeight: 800, cursor: 'pointer',
+              }}>
+                {name ? `Not a ${name}?` : 'Pick the species'}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </Card>

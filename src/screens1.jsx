@@ -2135,6 +2135,7 @@ export function PhotoResultScreen({ result, imageDataUrl, jurisdiction, onViewRe
           route: photo, species, confidence language, compact low-band
           recrop, legal-to-keep + regulation summary, correction. */}
       <IdentificationResultCard
+        onConfirmSpecies={doConfirm}
         photoUrl={imageDataUrl}
         subjectBox={result?._subjectBox}
         species={topSpecies}

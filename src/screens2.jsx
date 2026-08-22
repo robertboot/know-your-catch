@@ -7,6 +7,7 @@ import {
   CalendarClock, CalendarX2,
 } from 'lucide-react';
 import { T } from './theme.js';
+import { saveModelFeedback } from './training-store.js';
 import {
   JURISDICTIONS, SPECIES, CATEGORIES,
   DATA_VERSION, DATA_BUILD_DATE,
@@ -20,8 +21,7 @@ import {
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
   sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
   shareReport, fetchWeatherForTime, PROHIBITED_RE,
-  isAnglerVisible, seasonTransition,
-} from './helpers.js';
+  isAnglerVisible, seasonTransition, dataUrlToFile,} from './helpers.js';
 
 /* <img> wrapper that falls back to the inline thumb data URL when
    the primary display URL (usually a capacitor:// file URL) fails
@@ -4497,6 +4497,24 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
    can never slip in silently and poison Patterns/analysis.
    ============================================================ */
 function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, units, jurisdiction, onCropRetry, onResolve, onCancel, onHome }) {
+  /* Bank the shown label as training data without logging a catch —
+     the identify-then-release case the logging CTA never sees. Lands
+     status:'pending' for admin review; fire-and-forget so a flaky
+     signal offshore never blocks the screen. */
+  const confirmSpecies = React.useCallback((chosenSpecies, wasCorrected) => {
+    if (!chosenSpecies || !pc?.dataUrl) return;
+    dataUrlToFile(pc.dataUrl, wasCorrected ? 'correction.jpg' : 'confirmation.jpg')
+      .then((file) => {
+        if (!file) return;
+        saveModelFeedback({
+          file,
+          speciesId: chosenSpecies.id,
+          originalSpeciesId: pc.idSpeciesId || chosenSpecies.id,
+          source: wasCorrected ? 'model_correction' : 'model_confirmation',
+        }).catch(() => {});
+      })
+      .catch(() => {});
+  }, [pc?.dataUrl, pc?.idSpeciesId]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
   const [suggestNew, setSuggestNew] = useState(false);
@@ -4583,6 +4601,7 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
             pickedByUser={!!speciesPick}
             onCropRetry={onCropRetry ? () => onCropRetry(pc) : null}
             onCorrectSpecies={() => setPickerOpen(true)}
+            onConfirmSpecies={() => confirmSpecies(chosen, !!speciesPick)}
             jurisdiction={jurisdiction || null}
           />
         </div>
