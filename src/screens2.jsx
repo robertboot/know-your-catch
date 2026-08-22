@@ -4063,6 +4063,8 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
             speciesOptions={speciesSorted}
             units={state.units}
             jurisdiction={jurisdiction}
+            state={state}
+            update={update}
             onCropRetry={(pc) => {
               // Low-confidence recrop: back to the crop step with the
               // SAME full frame + metadata; the crop feeds only the
@@ -4496,7 +4498,7 @@ function pickSpeciesQuestion(prevSpeciesId = null) {
    picks one of the explicit Confirm actions — so wrong metadata
    can never slip in silently and poison Patterns/analysis.
    ============================================================ */
-function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, units, jurisdiction, onCropRetry, onResolve, onCancel, onHome }) {
+function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, units, jurisdiction, state, update, onCropRetry, onResolve, onCancel, onHome }) {
   /* Bank the shown label as training data without logging a catch —
      the identify-then-release case the logging CTA never sees. Lands
      status:'pending' for admin review; fire-and-forget so a flaky
@@ -4516,6 +4518,9 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
       .catch(() => {});
   }, [pc?.dataUrl, pc?.idSpeciesId]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Species detail shown as a SHEET over this overlay — never a route
+  // change, which would discard the in-progress catch.
+  const [speciesSheetId, setSpeciesSheetId] = useState(null);
   const [speciesPick, setSpeciesPick] = useState(null); // null = follow idSpeciesId
   const [suggestNew, setSuggestNew] = useState(false);
 
@@ -4603,6 +4608,7 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
             onCorrectSpecies={() => setPickerOpen(true)}
             onConfirmSpecies={() => confirmSpecies(chosen, !!speciesPick)}
             jurisdiction={jurisdiction || null}
+            onViewSpecies={chosen ? () => setSpeciesSheetId(chosen.id) : null}
           />
         </div>
       )}
@@ -4685,6 +4691,40 @@ function PhotoConfirmOverlay({ pc, saveError, resolveSpecies, speciesOptions, un
           onRequestSuggest={() => { setSuggestNew(true); setSpeciesPick(null); setPickerOpen(false); }}
           title="What species is it?"
         />
+      )}
+
+      {/* Species detail SHEET — layered above the overlay (400) and the
+          picker (500). Closing returns to the overlay with photo, ID and
+          any correction intact; nothing in here may leave the catch flow,
+          so every navigating handler is a no-op. */}
+      {speciesSheetId && state && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 550,
+          background: T.bgDeep, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+        }}>
+          <button
+            onClick={() => setSpeciesSheetId(null)}
+            aria-label="Close"
+            style={{
+              position: 'fixed', top: 'max(12px, env(safe-area-inset-top))', right: 12, zIndex: 551,
+              width: 40, height: 40, borderRadius: 20, border: 'none', cursor: 'pointer',
+              background: 'rgba(6,35,48,0.85)', color: T.ink,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <X size={22} />
+          </button>
+          <SpeciesDetailScreen
+            id={speciesSheetId}
+            state={state}
+            jurisdiction={jurisdiction || null}
+            update={update || (() => {})}
+            onLookalike={() => {}}
+            onAddPB={() => {}}
+            onFullRegs={() => {}}
+            onKeep={() => {}}
+          />
+        </div>
       )}
     </div>
   );

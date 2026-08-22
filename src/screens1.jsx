@@ -1888,7 +1888,7 @@ function CompareLookalikesModal({ topSpecies, lookalikeSpecies, userPhoto, isTab
   );
 }
 
-export function PhotoResultScreen({ result, imageDataUrl, jurisdiction, onViewRegs, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew, onCropRetry }) {
+export function PhotoResultScreen({ result, imageDataUrl, jurisdiction, onViewRegs, onViewSpecies, onPickSpecies, onConfirmSave, onCorrectSave, onConfirmFeedbackOnly, onCorrectFeedbackOnly, onSaveWithoutFeedback, onRetake, onScanAnother, onManual, onSuggestNew, onCropRetry }) {
   const { confidence, candidates } = result || {};
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
@@ -2146,6 +2146,7 @@ export function PhotoResultScreen({ result, imageDataUrl, jurisdiction, onViewRe
         onCorrectSpecies={() => setShowPicker(true)}
         jurisdiction={jurisdiction || null}
         onViewRegs={onViewRegs ? () => onViewRegs(displayedId) : null}
+        onViewSpecies={onViewSpecies ? () => onViewSpecies(displayedId) : null}
         photoHeight={isTablet ? 380 : 300}
       />
       <div style={{ marginBottom: 14 }} />

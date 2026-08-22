@@ -140,6 +140,7 @@ export function IdentificationResultCard({
   onConfirmSpecies = null,      // banks a model_confirmation; hidden if absent
   jurisdiction = null,          // { id, name, short } or null
   onViewRegs = null,            // optional "View Full Regulations >"
+  onViewSpecies = null,         // optional "About <name> >" under the name
   photoHeight = 300,
 }) {
   const name = species?.commonName || null;
@@ -197,23 +198,37 @@ export function IdentificationResultCard({
           <div style={{ fontSize: 18, color: T.inkMute }}>Identifying…</div>
         ) : name ? (
           <>
-            <div style={{ fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>{name}</div>
+            <div style={{ fontSize: 34, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>{name}</div>
+            {Array.isArray(species?.altNames) && species.altNames.length > 0 && (
+              <div style={{ fontSize: 14, color: T.inkMute, marginTop: 4, lineHeight: 1.4 }}>
+                {species.altNames.join(' · ')}
+              </div>
+            )}
+            {onViewSpecies && (
+              <button onClick={onViewSpecies} style={{
+                background: 'transparent', border: 'none', padding: 0,
+                color: T.brass, fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 2,
+              }}>
+                About {name} <ChevronRight size={14} />
+              </button>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
               {pickedByUser ? (
                 <span style={{
-                  background: T.parchmentDeep, borderRadius: 999, padding: '4px 12px',
-                  fontSize: 13, fontWeight: 700, color: T.warn,
+                  background: T.parchmentDeep, borderRadius: 999, padding: '6px 14px',
+                  fontSize: 16, fontWeight: 700, color: T.warn,
                 }}>Picked by you</span>
               ) : (
                 <span style={{
-                  background: T.parchmentDeep, borderRadius: 999, padding: '4px 12px',
-                  fontSize: 13, fontWeight: 700, color: lang?.color || T.inkMute,
+                  background: T.parchmentDeep, borderRadius: 999, padding: '6px 14px',
+                  fontSize: 16, fontWeight: 700, color: lang?.color || T.inkMute,
                 }}>
                   {pct != null ? `Best match · ${pct}% confidence` : 'Best match'}
                 </span>
               )}
               {!pickedByUser && lang && (
-                <span style={{ fontSize: 13, fontWeight: 700, color: lang.color }}>{lang.text}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: lang.color }}>{lang.text}</span>
               )}
             </div>
           </>
