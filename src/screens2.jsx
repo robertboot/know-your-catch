@@ -2394,7 +2394,7 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
           <div style={{ textAlign: 'center', padding: 18, color: T.inkSoft }}>
             <Camera size={36} color={T.brass} style={{ display: 'block', margin: '0 auto 10px' }} />
             <div style={{ fontWeight: 700, color: T.ink, marginBottom: 6 }}>
-              {pbList.length > 0 ? 'No catches logged yet' : 'Nothing logged yet'}
+              {Object.keys(state.pbs || {}).length > 0 ? 'No catches logged yet' : 'Nothing logged yet'}
             </div>
             <div style={{ fontSize: 15, lineHeight: 1.5 }}>Tap <b>NEW</b> after you land one. The app records the photo, GPS, time of day, sun &amp; moon, and (when online) weather — building your personal where-and-what dataset.</div>
           </div>

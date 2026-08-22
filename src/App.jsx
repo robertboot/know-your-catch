@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { T, screenSize, containerMaxWidth, chromeHeights, typeScale, cols } from './theme.js';
 import { ScreenSizeContext } from './screen-size.js';
-import { DISCLAIMER_VERSION } from './data.js';
+import { DISCLAIMER_VERSION, DATA_VERSION } from './data.js';
 import { loadState, saveState, defaultState, clearState } from './storage.js';
 import { setErrorContext } from './error-log.js';
 import { DEMO_EMAIL, buildDemoSeed } from './demo-seed.js';
