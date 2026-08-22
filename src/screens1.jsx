@@ -939,7 +939,7 @@ export function HomeScreen({
       {/* Featured Species */}
       <Card style={{ marginTop: 14, padding: 14, borderRadius: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>FEATURED SPECIES</span>
+          <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TARGET SPECIES</span>
           <button onClick={onSpeciesList} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
         </div>
         <div className="kyc-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, margin: '0 -14px', padding: '0 14px 4px' }}>

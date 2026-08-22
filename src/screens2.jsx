@@ -1203,7 +1203,7 @@ export function SpeciesListScreen({ state, jurisdiction, update, onPick }) {
       {favRows.length > 0 && (
         <>
           <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: '10px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Star size={12} fill={T.brass} color={T.brass} /> Your fish
+            <Star size={12} fill={T.brass} color={T.brass} /> Your target species
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
             {favRows.map(({ s }) => <SpeciesRow key={'fav-' + s.id} species={s} onClick={() => onPick(s.id)} favorited={true} onToggleFavorite={() => toggleFav(s.id)} />)}

@@ -303,10 +303,10 @@ function CatchHeatMap({ catchLog }) {
       // core. Where catches overlap, the translucent glows sum into
       // hotter areas — a heat map without a plugin.
       L.circleMarker([c.lat, c.lon], {
-        radius: 22, stroke: false, fillColor: '#19D4F2', fillOpacity: 0.10,
+        radius: 22, stroke: false, fillColor: '#2BE07F', fillOpacity: 0.16,
       }).addTo(layerRef.current);
       L.circleMarker([c.lat, c.lon], {
-        radius: 6, stroke: false, fillColor: '#19D4F2', fillOpacity: 0.55,
+        radius: 6, stroke: true, color: '#06341F', weight: 1, opacity: 0.55, fillColor: '#2BE07F', fillOpacity: 0.85,
       }).addTo(layerRef.current);
     }
     if (located.length === 1) mapRef.current.setView([located[0].lat, located[0].lon], 9);
