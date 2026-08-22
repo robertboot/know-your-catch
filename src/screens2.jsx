@@ -593,7 +593,7 @@ export function RegulationsListScreen({ state, jurisdiction, update, onPick }) {
         {favRows.length > 0 && (
           <>
             <div style={{ fontSize: sectionHeaderSize, letterSpacing: 1.6, textTransform: 'uppercase', color: T.brass, fontWeight: 800, padding: sectionHeaderPad, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Star size={isTablet ? 16 : 12} fill={T.brass} color={T.brass} /> Your fish
+              <Star size={isTablet ? 16 : 12} fill={T.brass} color={T.brass} /> Your target species
             </div>
             {favRows.map(({ s, reg, status }) => (
               <RegRow key={'fav-' + s.id} s={s} reg={reg} status={status} state={state}
@@ -868,7 +868,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 10px' }}>
               <Star size={14} fill={T.brass} color={T.brass} />
-              <SectionLabel style={{ color: T.closed, flex: 1 }}>Your fish — closed ({buckets.yourClosed.length})</SectionLabel>
+              <SectionLabel style={{ color: T.closed, flex: 1 }}>Your target species — closed ({buckets.yourClosed.length})</SectionLabel>
               {onEditFavorites && (
                 <button onClick={onEditFavorites} aria-label="Edit your starred fish"
                   style={{
@@ -946,7 +946,7 @@ export function RegulationAlertsScreen({ state, jurisdiction, onPick, onEditFavo
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 2px 8px' }}>
                 <Star size={12} fill={T.brass} color={T.brass} />
-                <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800, flex: 1 }}>Your fish</span>
+                <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: T.brass, fontWeight: 800, flex: 1 }}>Your target species</span>
                 {onEditFavorites && (
                   <button onClick={onEditFavorites} aria-label="Edit your starred fish"
                     style={{
@@ -1994,7 +1994,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
         </Card>
       )}
       <Card style={{ marginBottom: 10 }}>
-        <SectionLabel style={{ marginBottom: 6 }}>Your fish</SectionLabel>
+        <SectionLabel style={{ marginBottom: 6 }}>Your target species</SectionLabel>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 16, color: T.ink, fontWeight: 600 }}>
             {(state.favorites || []).length} starred
