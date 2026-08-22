@@ -1323,7 +1323,28 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
   const [scale, setScale] = useState(1);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
+  // Whether a finger is currently down. MUST be state, not a ref: the
+  // transform's transition is chosen during render, and a ref mutation
+  // does not re-render — so the old ref-read flipped the transition on
+  // and off mid-drag, which is what made panning judder.
+  const [gesturing, setGesturing] = useState(false);
+  const imgRef = useRef(null);
   useEffect(() => { setScale(1); setTx(0); setTy(0); }, [idx]);
+
+  /* Keep the image over its own frame. Without this a pan could drag it
+     entirely out of view, and letting go left it stranded there. */
+  const clampPan = (nx, ny, s) => {
+    if (s <= 1) return { x: 0, y: 0 };
+    const el = imgRef.current;
+    if (!el) return { x: nx, y: ny };
+    const r = el.getBoundingClientRect();      // already scaled
+    const maxX = Math.max(0, (r.width  - r.width  / s) / 2);
+    const maxY = Math.max(0, (r.height - r.height / s) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, nx)),
+      y: Math.max(-maxY, Math.min(maxY, ny)),
+    };
+  };
 
   const pointersRef = useRef(new Map()); // id → { x, y }
   const gestureRef  = useRef(null);      // { startDist, startScale, startTx, startTy, midX, midY }
@@ -1332,6 +1353,7 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
 
   const onPointerDown = (e) => {
     e.preventDefault();
+    setGesturing(true);
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointersRef.current.size === 1) {
@@ -1371,12 +1393,17 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
       // Anchor pan so the midpoint stays visually stable during the pinch.
       const nowMidX = (pts[0].x + pts[1].x) / 2;
       const nowMidY = (pts[0].y + pts[1].y) / 2;
-      setTx(g.startTx + (nowMidX - g.midX));
-      setTy(g.startTy + (nowMidY - g.midY));
+      // At 1x there is nothing to pan, so snap back to centre rather
+      // than leaving the photo offset where the pinch happened — that
+      // stranded offset is the "doesn't re-centre" complaint.
+      const c = clampPan(g.startTx + (nowMidX - g.midX),
+                         g.startTy + (nowMidY - g.midY), nextScale);
+      setTx(c.x); setTy(c.y);
     } else if (pointersRef.current.size === 1 && scale > 1 && swipeRef.current) {
-      // Pan while zoomed.
-      setTx(swipeRef.current.startTx + (e.clientX - swipeRef.current.x));
-      setTy(swipeRef.current.startTy + (e.clientY - swipeRef.current.y));
+      // Pan while zoomed, held inside the image's own bounds.
+      const c = clampPan(swipeRef.current.startTx + (e.clientX - swipeRef.current.x),
+                         swipeRef.current.startTy + (e.clientY - swipeRef.current.y), scale);
+      setTx(c.x); setTy(c.y);
     }
   };
   const onPointerUp = (e) => {
@@ -1393,10 +1420,23 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
       }
       swipeRef.current = null;
     }
+    if (pointersRef.current.size === 0) {
+      setGesturing(false);
+      // Settle: back to dead centre at 1x, otherwise inside bounds. The
+      // transition is live again by now, so this animates.
+      const c = clampPan(tx, ty, scale);
+      if (c.x !== tx) setTx(c.x);
+      if (c.y !== ty) setTy(c.y);
+    }
   };
   const onPointerCancel = (e) => {
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) gestureRef.current = null;
+    if (pointersRef.current.size === 0) {
+      setGesturing(false);
+      const c = clampPan(tx, ty, scale);
+      setTx(c.x); setTy(c.y);
+    }
   };
 
   if (list.length === 0) return null;
@@ -1437,6 +1477,7 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
         <div onClick={(e) => e.stopPropagation()} style={{ width: 200, height: 200 }} />
       ) : (
         <img
+          ref={imgRef}
           src={imgSrc}
           alt={alt || ''}
           onClick={(e) => e.stopPropagation()}
@@ -1453,7 +1494,8 @@ export function LightboxModal({ src, photos, initialIndex = 0, alt, caption, onC
             borderRadius: 8,
             transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
             transformOrigin: 'center center',
-            transition: pointersRef.current.size === 0 ? 'transform 160ms ease' : 'none',
+            transition: gesturing ? 'none' : 'transform 160ms ease',
+            willChange: 'transform',
             touchAction: 'none',
             WebkitUserSelect: 'none', userSelect: 'none',
             cursor: scale > 1 ? 'grab' : 'zoom-in',
