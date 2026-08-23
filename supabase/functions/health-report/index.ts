@@ -9,8 +9,14 @@
  * shared secret is the whole gate, which is why the function can only
  * ever read.
  *
- *   GET /functions/v1/health-report            → all three sections
- *   GET /functions/v1/health-report?section=…  → monitored | regulations | queue
+ * Called through the admin dashboard's own host, not the Supabase URL —
+ * vercel.json rewrites these onto this function so the agent has one
+ * origin to know about (reelintel.ai) and the backend can move:
+ *
+ *   GET https://reelintel.ai/admin/api/health              all three sections
+ *   GET https://reelintel.ai/admin/api/health/monitored
+ *   GET https://reelintel.ai/admin/api/health/regulations
+ *   GET https://reelintel.ai/admin/api/health/queue
  *
  * Deploy:
  *   supabase secrets set HEALTH_API_KEY=<key>

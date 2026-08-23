@@ -5,6 +5,22 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/admin/api/health",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report"
+    },
+    {
+      "source": "/admin/api/health/monitored",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=monitored"
+    },
+    {
+      "source": "/admin/api/health/regulations",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=regulations"
+    },
+    {
+      "source": "/admin/api/health/queue",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=queue"
+    },
+    {
       "source": "/privacy",
       "destination": "/privacy.html"
     },
