@@ -8,3 +8,8 @@ verify_jwt = false
 
 [functions.refresh-ocean-maps]
 verify_jwt = false
+
+# Called by the external daily health-check job with x-api-key only —
+# no user JWT. Auth is HEALTH_API_KEY inside the function.
+[functions.health-report]
+verify_jwt = false
