@@ -2990,7 +2990,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation,pressure_msl,weather_code`
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
-          + `&forecast_days=10`
+          + `&forecast_days=10&past_days=1`
           + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
         // Marine data lives on a separate Open-Meteo endpoint with water-only
         // coverage (inland points return nulls), so fetch it alongside — not
@@ -3000,7 +3000,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&current=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&daily=wave_height_max,wave_period_max,wave_direction_dominant`
-          + `&forecast_days=10&timezone=auto`;
+          + `&forecast_days=10&past_days=1&timezone=auto`;
         // Tides: nearest curated NOAA station (US Gulf/FL), hourly heights
         // for the next 48h. Skipped cleanly when no station is close.
         const station = nearestTideStation(lat, lon);
@@ -3097,7 +3097,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           waveFtMax: marineDaily?.get(iso)?.waveFtMax ?? null,
           periodMaxS: marineDaily?.get(iso)?.periodMaxS ?? null,
         }));
-        setDaily(days);
+        // past_days=1 prepends yesterday to the daily array too. The
+        // outlook is forward-looking, so trim it back to today onward —
+        // only the HOURLY series wants history.
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const nowLocal = new Date();
+        const todayIso = `${nowLocal.getFullYear()}-${pad2(nowLocal.getMonth() + 1)}-${pad2(nowLocal.getDate())}`;
+        setDaily(days.filter(x => x.date >= todayIso));
         // Sun-up/down hours (local ISO hour keys) for the Sun row markers.
         const sunriseHours = new Set((d.sunrise || []).map(s => s?.slice(0, 13)));
         const sunsetHours  = new Set((d.sunset  || []).map(s => s?.slice(0, 13)));
@@ -3129,10 +3135,18 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             sunrise: sunriseHours.has(isoHour),
             sunset: sunsetHours.has(isoHour),
           };
-        }).filter(x => x.when >= nowMs - 60 * 60 * 1000);
-        setHourly(allHours.slice(0, 24));
+        });
+        // Trailing history: a 12-kt wind easing off reads nothing like one
+        // building, and the number alone can't tell you which. Keep 3 hours
+        // behind on the hourly grid and 6 on the 10-day so the trend into
+        // now is visible — that's what past_days=1 above is fetched for.
+        const HOURLY_PAST = 3, BLOCK_PAST = 6;
+        let nowIdx = allHours.findIndex(x => x.when > nowMs) - 1;
+        if (nowIdx < 0) nowIdx = Math.max(0, allHours.length - 1);
+        const marked = allHours.map((x, i) => ({ ...x, isPast: i < nowIdx, isNow: i === nowIdx }));
+        setHourly(marked.slice(Math.max(0, nowIdx - HOURLY_PAST), nowIdx + 24));
         // 6-hour blocks across the whole 10-day feed for the outlook matrix.
-        setBlocks(sixHourBlocks(allHours));
+        setBlocks(sixHourBlocks(marked.slice(Math.max(0, nowIdx - BLOCK_PAST))));
       } catch (e) {
         if (!alive) return;
         setError(e?.message || 'Could not load forecast.');
@@ -3601,6 +3615,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
   );
 }
 
+/* Local calendar date as YYYY-MM-DD. toISOString() would answer in UTC,
+   which flips the day for Gulf-coast evenings. */
+function localDateStr(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /* TimelineBar — a full-width 10-day fishability colour strip that fits on
    screen at once, with a draggable window that scrolls the detail grid
    below (and follows it when the grid is scrolled). Two-way synced to the
@@ -3653,14 +3674,14 @@ function TimelineBar({ blocks, scrollRef, isTablet, mode = 'blocks' }) {
   }, []);
 
   const n = blocks.length;
-  const todayStr = blocks[0]?.date;
+  const todayStr = localDateStr(new Date());
   // Marks along the top: day starts for the 10-day view, 6-hourly ticks
   // for the 24-hour view.
   const marks = mode === 'blocks'
     ? blocks.map((b, i) => ({ i, label: b.date === todayStr ? 'Today' : new Date(b.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' }), hot: b.date === todayStr }))
         .filter((_, i) => blocks[i].slot === 0)
     : blocks.map((c, i) => ({ c, i })).filter(({ c }) => new Date(c.when).getHours() % 6 === 0)
-        .map(({ c, i }) => { const hr = new Date(c.when).getHours(); return { i, label: hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`, hot: i === 0 }; });
+        .map(({ c, i }) => { const hr = new Date(c.when).getHours(); return { i, label: hr === 0 ? '12a' : hr < 12 ? `${hr}a` : hr === 12 ? '12p' : `${hr - 12}p`, hot: !!c.isNow }; });
   return (
     <div style={{ marginBottom: 12, userSelect: 'none' }}>
       <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginBottom: 4, fontSize: isTablet ? 11 : 9, fontWeight: 800, color: T.inkMute }}>
@@ -3766,7 +3787,24 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
   ];
 
   const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
-  const todayStr = mode === 'blocks' ? cols[0]?.date : null;
+  // Today from the clock, NOT from cols[0]: the grid now opens with
+  // history, so before 6am the first block belongs to yesterday and
+  // reading the day label off it would print "Today" on the wrong day.
+  const todayStr = mode === 'blocks' ? localDateStr(new Date()) : null;
+
+  // Windy-style read line: one column stays pinned at a fixed spot in the
+  // viewport while the data scrolls under it, so your eye holds a single
+  // vertical while comparing rows. Columns snap to it so the band always
+  // frames a whole column rather than straddling two.
+  const FOCUS_LEFT = COL_W * 2;
+  const nowIdx = Math.max(0, cols.findIndex(c => c.isNow));
+  // Open with NOW under the read line — the history sits to its left,
+  // there to be scrolled back into, not to push the present off-screen.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = Math.max(0, nowIdx * COL_W - FOCUS_LEFT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowIdx, COL_W]);
 
   // Smooth horizontal gradients (Windy-style): precompute each coloured
   // row's per-column colour, then blend each cell into its neighbours so
@@ -3810,7 +3848,12 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
             <div key={r.key} style={{ height: r.h, display: 'flex', alignItems: 'center', fontSize: labelFs, color: T.inkMute, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.label}</div>
           ))}
         </div>
-        <div ref={scrollRef} className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6 }}>
+        <div ref={scrollRef} className="kyc-hscroll" style={{ display: 'flex', overflowX: 'auto', overflowY: 'hidden', flex: 1, minWidth: 0, paddingBottom: 6, scrollSnapType: 'x proximity', scrollPaddingLeft: FOCUS_LEFT }}>
+          {/* Zero-width sticky rail — it holds its place in the viewport
+              while the columns scroll past, and costs no layout width. */}
+          <div style={{ position: 'sticky', left: FOCUS_LEFT, width: 0, zIndex: 3, alignSelf: 'stretch', pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: 0, bottom: 6, left: 0, width: COL_W, background: 'rgba(255,255,255,0.10)', borderLeft: '1.5px solid rgba(255,255,255,0.55)', borderRight: '1.5px solid rgba(255,255,255,0.55)', borderRadius: 4, boxShadow: '0 0 8px rgba(0,0,0,0.35)' }} />
+          </div>
           {cols.map((c, i) => {
             let timeLabel = '', dayStart = false, dayLbl = '';
             if (mode === 'hourly') {
@@ -3822,10 +3865,10 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
               timeLabel = c.label;
             }
             return (
-              <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', borderLeft: mode === 'blocks' && dayStart && i !== 0 ? `1px solid ${T.cardEdge}` : 'none' }}>
+              <div key={i} style={{ flex: `0 0 ${COL_W}px`, textAlign: 'center', scrollSnapAlign: 'start', opacity: c.isPast ? 0.5 : 1, borderLeft: mode === 'blocks' && dayStart && i !== 0 ? `1px solid ${T.cardEdge}` : 'none' }}>
                 <div style={{ height: HEAD_H, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                   {mode === 'blocks' && <span style={{ fontSize: labelFs, fontWeight: 800, color: T.brass, minHeight: labelFs + 2 }}>{dayStart ? dayLbl : ''}</span>}
-                  <span style={{ fontSize: mode === 'blocks' ? (isTablet ? 11 : 9) : labelFs, fontWeight: 800, color: i === 0 ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{timeLabel}</span>
+                  <span style={{ fontSize: mode === 'blocks' ? (isTablet ? 11 : 9) : labelFs, fontWeight: 800, color: c.isNow ? T.brass : T.inkMute, letterSpacing: 0.6 }}>{c.isNow && mode === 'hourly' ? 'NOW' : timeLabel}</span>
                 </div>
                 <div style={{ height: ICON_H, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                   {c.isDaylight === false && (c.weatherCode == null || c.weatherCode <= 2)

@@ -261,10 +261,19 @@ export function sixHourBlocks(hours) {
   }
   const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   const max = (a) => a.length ? Math.max(...a) : null;
+  // A block is "past" only once its whole 6-hour window has closed. Judge
+  // it by the SLOT boundary, not by b.when: b.when is the first hour that
+  // survived the caller's trim, so a half-elapsed block starts mid-window
+  // and would otherwise look like it began in the future.
+  const nowMs = Date.now();
   return [...map.values()].sort((a, b) => a.when - b.when).map((b) => {
     const temp = avg(b.t), wind = avg(b.w), gust = max(b.g), waveFt = avg(b.h), periodS = avg(b.p), bite = avg(b.bi);
+    const slotStart = new Date(`${b.date}T${String(b.slot * 6).padStart(2, '0')}:00:00`).getTime();
+    const slotEnd = slotStart + 6 * 3600 * 1000;
     return {
       when: b.when, date: b.date, slot: b.slot, weatherCode: b.code,
+      isPast: slotEnd <= nowMs,
+      isNow: slotStart <= nowMs && nowMs < slotEnd,
       isDaylight: b.dl >= b.nt,
       label: ['12a', '6a', '12p', '6p'][b.slot],
       isoHour: `${b.date}T${String(b.slot * 6).padStart(2, '0')}`, // for tide lookup
