@@ -157,9 +157,21 @@ export function fishabilityHour(h) {
 // Continuous red→amber→green ramp so neighbouring scores read as
 // neighbouring colours (no hard cliff at a band edge). Solid (alpha 1)
 // for legible badges/gauge.
-// Cautious ramp: green requires a genuinely good score (mid scores read
-// amber), matching Windy's more conservative visual read.
-const FISH_STOPS = [[40, '#c0392b'], [58, '#d1642b'], [70, '#d98330'], [82, '#9bb03a'], [90, '#4fa64a'], [97, '#63e08a']];
+//
+// The stops sit at the CENTRE of each letter grade, so the colour and
+// the letter always agree. They did not before: red topped out at 40
+// while an F runs to 59, so a failing day painted orange and the whole
+// F–B- range (60–82) collapsed into one amber-to-yellow smear you could
+// not rank days by. Change these and fishabilityGrade() together.
+const FISH_STOPS = [
+  [30, '#8f2417'],  // below F  — deep red, stay in
+  [55, '#c0392b'],  // F  centre — red
+  [66, '#e07b2f'],  // D  centre — orange
+  [76, '#d9b038'],  // C  centre — gold
+  [84, '#9bb03a'],  // B  centre — yellow-green
+  [92, '#4fa64a'],  // A  centre — green
+  [98, '#63e08a'],  // A+        — bright green
+];
 export function fishabilityColor(score) {
   if (score == null) return '#7d8ca0';
   return scaleColor(score, FISH_STOPS, 1);
@@ -244,7 +256,12 @@ export function sixHourBlocks(hours) {
     const slot = Math.floor(parseInt(x.isoHour.slice(11, 13), 10) / 6); // 0..3
     const key = `${date}#${slot}`;
     let b = map.get(key);
-    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [] }; map.set(key, b); }
+    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [], sc: [] }; map.set(key, b); }
+    // Score the hour on its own terms, then reduce. Scoring the block's
+    // AVERAGED conditions instead dropped gusts on the floor entirely —
+    // the aggregate never carried a gust field — so a 24-kt afternoon
+    // graded the same as a still one.
+    if (x.wind != null || x.waveFt != null) b.sc.push(fishabilityHour(x));
     if (x.isDaylight) b.dl++; else b.nt++;
     if (x.temp != null) b.t.push(x.temp);
     if (x.wind != null) b.w.push(x.wind);
@@ -261,6 +278,7 @@ export function sixHourBlocks(hours) {
   }
   const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   const max = (a) => a.length ? Math.max(...a) : null;
+  const min = (a) => a.length ? Math.min(...a) : null;
   // A block is "past" only once its whole 6-hour window has closed. Judge
   // it by the SLOT boundary, not by b.when: b.when is the first hour that
   // survived the caller's trim, so a half-elapsed block starts mid-window
@@ -280,7 +298,13 @@ export function sixHourBlocks(hours) {
       temp, wind, windDir: avg(b.wdir), gust, waveFt, periodS, waveDir: avg(b.wd),
       sstF: avg(b.sst), currentKt: avg(b.cv), currentDir: avg(b.cd),
       precipPct: avg(b.rn), bite,
-      score: fishabilityHour({ wind, waveFt, periodS, bite }),
+      // Weighted toward the mean but with real pull from the worst hour:
+      // two blown-out hours in six should not average away to an A. The
+      // grid still reports averaged CONDITIONS — this is the go/no-go
+      // read on the window as a whole.
+      score: b.sc.length
+        ? Math.round(avg(b.sc) * 0.6 + min(b.sc) * 0.4)
+        : fishabilityHour({ wind, gust, waveFt, periodS, bite }),
     };
   });
 }
