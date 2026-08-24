@@ -308,30 +308,38 @@ function SectionHead({ children, action, onAction }) {
   );
 }
 
-function FeaturedCard({ species, status, bag, onClick }) {
+function FeaturedCard({ species, status, bag, onClick, tier = 'phone' }) {
   const st = STATUS_TEXT[status] || STATUS_TEXT.unknown;
   const bagLabel = bag != null ? `Bag Limit: ${bag}` : 'No Bag Limit';
+  const sz = tierPick(tier);
   return (
     <button onClick={onClick} style={{
-      flex: '0 0 168px', background: T.card, border: `1px solid ${T.cardEdge}`,
-      borderRadius: 14, padding: 10, cursor: 'pointer', textAlign: 'left',
+      flex: `0 0 ${sz(168, 216, 276)}px`, background: T.card, border: `1px solid ${T.cardEdge}`,
+      borderRadius: 14, padding: sz(10, 12, 14), cursor: 'pointer', textAlign: 'left',
     }}>
       <div style={{
-        position: 'relative', borderRadius: 10, height: 116, marginBottom: 12,
+        position: 'relative', borderRadius: 10, height: sz(116, 152, 196), marginBottom: 12,
         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
         background: 'linear-gradient(165deg, #0F3A56 0%, #07223A 60%, #04162A 100%)',
         boxShadow: `inset 0 0 0 1px ${T.cardEdge}`,
       }}>
-        <SpeciesImage species={species} size={150} />
+        <SpeciesImage species={species} size={sz(150, 195, 250)} />
       </div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ fontSize: sz(17, 19, 22), fontWeight: 800, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {species.commonName}
       </div>
-      <div style={{ fontSize: 14.5, color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
-      <div style={{ fontSize: 14, color: T.inkMute, marginTop: 2 }}>{bagLabel}</div>
+      <div style={{ fontSize: sz(14.5, 16, 18), color: st.color, fontWeight: 700, marginTop: 4 }}>{st.label}</div>
+      <div style={{ fontSize: sz(14, 15.5, 17.5), color: T.inkMute, marginTop: 2 }}>{bagLabel}</div>
     </button>
   );
 }
+
+/* Pick a value for the current width tier. The phone layout pinned
+   most of these sections at literal phone pixel sizes, which on a Mac
+   window or an iPad in landscape left them reading as postage stamps
+   next to the sections that did scale. */
+export const tierPick = (tier) => (phone, tablet, wide) =>
+  tier === 'tablet-landscape' ? wide : tier === 'tablet' ? tablet : phone;
 
 function ScrollDots({ count, active }) {
   return (
@@ -351,7 +359,8 @@ function ScrollDots({ count, active }) {
    gauge, verdict, star rating and a go/no-go call, plus the key readings.
    Fetches the same Open-Meteo + marine data as the forecast screen for a
    resolved home location (last catch → jurisdiction centre → Gulf). */
-function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet }) {
+function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet, tier = 'phone' }) {
+  const sz = tierPick(tier);
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [gaugeOn, setGaugeOn] = useState(false);
@@ -423,7 +432,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
 
   const score = data?.score ?? null;
   const sColor = fishabilityColor(score);
-  const gSize = isTablet ? 132 : 118, gStroke = isTablet ? 12 : 11;
+  const gSize = sz(118, 138, 176), gStroke = sz(11, 12, 15);
   const gR = (gSize - gStroke) / 2, gC = 2 * Math.PI * gR;
   const gOff = gaugeOn && score != null ? gC * (1 - score / 100) : gC;
   const starVal = score != null ? score / 20 : 0;
@@ -436,23 +445,23 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
 
   const Stat = ({ label, value }) => (
     <div>
-      <div style={{ fontSize: 10, letterSpacing: 1.2, color: T.inkMute, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: isTablet ? 18 : 16, fontWeight: 800, color: T.ink, marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: sz(10, 11, 13), letterSpacing: 1.2, color: T.inkMute, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: sz(16, 18, 21), fontWeight: 800, color: T.ink, marginTop: 2 }}>{value}</div>
     </div>
   );
 
   return (
-    <Card style={{ marginTop: 14, padding: isTablet ? 20 : 16, borderRadius: 22 }}>
+    <Card style={{ marginTop: 14, padding: sz(16, 20, 26), borderRadius: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
+          <span style={{ fontSize: sz(12, 13.5, 16), color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
           {data?.placeName && (
-            <div style={{ fontSize: isTablet ? 13 : 12, color: T.brassDeep || T.brass, fontWeight: 700, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <Star size={12} color="#FFC857" fill="#FFC857" /> {data.placeName}
+            <div style={{ fontSize: sz(12, 14, 16), color: T.brassDeep || T.brass, fontWeight: 700, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Star size={sz(12, 14, 16)} color="#FFC857" fill="#FFC857" /> {data.placeName}
             </div>
           )}
         </div>
-        {onForecast && <button onClick={onForecast} style={{ flexShrink: 0, background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST ›</button>}
+        {onForecast && <button onClick={onForecast} style={{ flexShrink: 0, background: 'transparent', border: 'none', color: T.brass, fontSize: sz(11, 12.5, 14.5), fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW FORECAST ›</button>}
       </div>
 
       {status === 'loading' && <div style={{ padding: 24, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>Loading conditions…</div>}
@@ -463,12 +472,12 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Weather */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: isTablet ? 14 : 10 }}>
-              <div style={{ flexShrink: 0 }}>{weatherIcon(data.code, isTablet ? 52 : 42, T.warn)}</div>
+              <div style={{ flexShrink: 0 }}>{weatherIcon(data.code, sz(42, 56, 72), T.warn)}</div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: isTablet ? 44 : 34, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{data.tempF != null ? `${Math.round(data.tempF)}°` : '—'}</div>
-                <div style={{ fontSize: isTablet ? 15 : 13, color: T.inkSoft, fontWeight: 600, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{weatherLabel(data.code)}</div>
+                <div style={{ fontSize: sz(34, 46, 60), fontWeight: 900, color: T.ink, lineHeight: 1 }}>{data.tempF != null ? `${Math.round(data.tempF)}°` : '—'}</div>
+                <div style={{ fontSize: sz(13, 16, 19), color: T.inkSoft, fontWeight: 600, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{weatherLabel(data.code)}</div>
                 {data.tMax != null && (
-                  <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
+                  <div style={{ fontSize: sz(12, 14.5, 17), color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
                     <span style={{ color: T.warn }}>H {Math.round(data.tMax)}°</span>
                     <span style={{ margin: '0 6px' }}>·</span>
                     <span>L {Math.round(data.tMin)}°</span>
@@ -486,13 +495,13 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
                     style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
                 </svg>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{fishabilityGrade(score)}</span>
-                  <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 2 }}>{fishabilityLabel(score)}</span>
+                  <span style={{ fontSize: sz(32, 42, 54), fontWeight: 900, color: T.ink, lineHeight: 1 }}>{fishabilityGrade(score)}</span>
+                  <span style={{ fontSize: sz(8, 10, 12), fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 2 }}>{fishabilityLabel(score)}</span>
                 </div>
               </div>
               {onForecast && (
-                <button className="kyc-press" onClick={onForecast} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.brass, fontSize: isTablet ? 13 : 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
-                  Why {fishabilityGrade(score)}? <ChevronRight size={14} />
+                <button className="kyc-press" onClick={onForecast} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.brass, fontSize: sz(11, 13.5, 16), fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+                  Why {fishabilityGrade(score)}? <ChevronRight size={sz(14, 16, 19)} />
                 </button>
               )}
             </div>
@@ -500,19 +509,19 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
 
           {/* Condition chips */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
               <Waves size={14} color={T.brass} /> {data.waveFt != null ? `${data.waveFt.toFixed(1)} ft seas` : 'Seas —'}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
               <Wind size={14} color={T.brass} /> {data.windKt != null ? `${compassDir(data.windDir || 0)} ${Math.round(data.windKt)} kt` : 'Wind —'}
             </span>
             {data.periodS != null && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
                 {data.periodS.toFixed(1)} sec period
               </span>
             )}
             {data.sstF != null && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
                 <Thermometer size={14} color={T.brass} /> {Math.round(data.sstF)}° water
               </span>
             )}
@@ -522,9 +531,9 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           <button onClick={onForecast} className="kyc-press" style={{
             marginTop: 14, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             background: 'transparent', border: `2px solid ${sColor}`, borderRadius: 14, cursor: 'pointer',
-            padding: isTablet ? '13px 0' : '11px 0', color: sColor, fontSize: isTablet ? 16 : 14, fontWeight: 900, letterSpacing: 0.8,
+            padding: sz(11, 14, 18) + 'px 0', color: sColor, fontSize: sz(14, 17, 20), fontWeight: 900, letterSpacing: 0.8,
           }}>
-            <cta.Ic size={isTablet ? 20 : 18} /> {cta.t}
+            <cta.Ic size={sz(18, 21, 25)} /> {cta.t}
           </button>
 
           {/* Satellite ocean map shortcuts */}
@@ -533,14 +542,14 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
               <button onClick={() => onOceanMaps('chl')} className="kyc-press" style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
               }}>
                 <Waves size={16} color="#4fd07a" /> Chlorophyll map
               </button>
               <button onClick={() => onOceanMaps('sst')} className="kyc-press" style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
               }}>
                 <Thermometer size={16} color="#ff9a3d" /> Sea temp map
               </button>
@@ -561,6 +570,7 @@ export function HomeScreen({
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
   const isLandscape = screenSize === 'tablet-landscape';
+  const sz = tierPick(screenSize);
   const heroTilt = useTilt(12);
   // Recent catches strip below the quick-actions row. Show the 10
   // newest; hidden if the angler hasn't logged anything yet.
@@ -862,9 +872,9 @@ export function HomeScreen({
                   key={c.id}
                   onClick={() => onViewCatch && onViewCatch(c.id)}
                   style={{
-                    flex: isTablet ? '0 0 190px' : '0 0 132px',
+                    flex: `0 0 ${sz(132, 214, 288)}px`,
                     background: T.card, border: `1px solid ${T.cardEdge}`,
-                    borderRadius: 14, padding: 0, cursor: 'pointer', textAlign: 'left',
+                    borderRadius: sz(14, 16, 18), padding: 0, cursor: 'pointer', textAlign: 'left',
                     display: 'flex', flexDirection: 'column',
                     scrollSnapAlign: 'start',
                     overflow: 'hidden',
@@ -882,19 +892,19 @@ export function HomeScreen({
                       // private bucket. Same fix the logbook grid got.
                       <PhotoImg photo={cp[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     ) : s ? (
-                      <SpeciesImage species={s} size={80} />
+                      <SpeciesImage species={s} size={sz(80, 130, 175)} />
                     ) : (
-                      <Camera size={30} color={T.inkMute} />
+                      <Camera size={sz(30, 44, 56)} color={T.inkMute} />
                     )}
                   </div>
-                  <div style={{ padding: '8px 10px 10px' }}>
+                  <div style={{ padding: sz(8, 10, 13) + 'px ' + sz(10, 13, 16) + 'px ' + sz(10, 12, 15) + 'px' }}>
                     <div style={{
-                      fontSize: 14, fontWeight: 800, color: T.ink,
+                      fontSize: sz(14, 17, 20), fontWeight: 800, color: T.ink,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       {s ? s.commonName : 'Unknown'}
                     </div>
-                    <div style={{ fontSize: 11, color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: sz(11, 13, 15), color: T.inkMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {sizeLabel ? `${sizeLabel} · ` : ''}{dateLabel}
                     </div>
                   </div>
@@ -911,19 +921,19 @@ export function HomeScreen({
           Tablet: split the row 50/50 across the full container width —
           scrolling makes no sense with the room the iPad canvas offers. */}
       {/* Today's Conditions — live, with the Fishability score gauge */}
-      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} />
+      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
 
       {/* Regulation Alerts — full-width, single-line active alert; rely on
           VIEW ALL for the rest. */}
-      <Card style={{ marginTop: 14, padding: isTablet ? '14px 16px' : '12px 14px', borderRadius: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ShieldCheck size={isTablet ? 30 : 26} color={anyClosed ? T.warn : T.open} strokeWidth={1.7} style={{ flexShrink: 0 }} />
+      <Card style={{ marginTop: 14, padding: sz(12, 16, 20) + 'px ' + sz(14, 18, 24) + 'px', borderRadius: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: sz(12, 14, 18) }}>
+          <ShieldCheck size={sz(26, 32, 40)} color={anyClosed ? T.warn : T.open} strokeWidth={1.7} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
-              <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
+              <span style={{ fontSize: sz(12, 13.5, 16), color: T.ink, fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap' }}>REGULATION ALERTS</span>
+              <button onClick={onRegulationAlerts || onRegulations} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: sz(11, 12.5, 14.5), fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>VIEW ALL</button>
             </div>
-            <div style={{ fontSize: isTablet ? 14 : 13, marginTop: 3, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: sz(13, 16, 19), marginTop: 3, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {anyClosed ? (
                 <><strong style={{ color: T.warn }}>{closedNames[0]} closed</strong>
                   <span style={{ color: T.inkSoft }}>{closedNames.length > 1 ? ` · +${closedNames.length - 1} more` : ''} in {jurisdiction ? jurisdiction.name : 'these waters'}</span></>
@@ -937,14 +947,14 @@ export function HomeScreen({
       </Card>
 
       {/* Featured Species */}
-      <Card style={{ marginTop: 14, padding: 14, borderRadius: 18 }}>
+      <Card style={{ marginTop: 14, padding: sz(14, 18, 22), borderRadius: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TARGET SPECIES</span>
-          <button onClick={onSpeciesList} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
+          <span style={{ fontSize: sz(12, 13.5, 16), color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TARGET SPECIES</span>
+          <button onClick={onSpeciesList} style={{ background: 'transparent', border: 'none', color: T.brass, fontSize: sz(11, 12.5, 14.5), fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer', padding: 0 }}>VIEW ALL</button>
         </div>
         <div className="kyc-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, margin: '0 -14px', padding: '0 14px 4px' }}>
           {featured.map(f => (
-            <FeaturedCard key={f.s.id} species={f.s} status={f.status} bag={f.bag} onClick={() => onSpecies(f.s.id)} />
+            <FeaturedCard key={f.s.id} species={f.s} status={f.status} bag={f.bag} tier={screenSize} onClick={() => onSpecies(f.s.id)} />
           ))}
         </div>
         <ScrollDots count={Math.min(featured.length, 4)} active={0} />
@@ -1022,6 +1032,7 @@ export function IdentifyScreen({
   const tilt = useTilt(14);
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
+  const sz = tierPick(size);
   const fileRef = useRef(null);
   const [q, setQ] = useState('');
   // The crop tip used to live here, on the pre-scan screen, where it was
@@ -1182,9 +1193,9 @@ export function IdentifyScreen({
         display: 'flex', alignItems: 'center', gap: 10,
         background: searchBg,
         border: '1px solid rgba(94,205,242,0.28)', borderRadius: 12,
-        padding: '10px 12px',
+        padding: sz(10, 14, 18) + 'px ' + sz(12, 16, 20) + 'px',
       }}>
-        <Search size={isTablet ? 22 : 18} color={accent} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+        <Search size={sz(18, 24, 30)} color={accent} strokeWidth={2.2} style={{ flexShrink: 0 }} />
         <input
           type="search"
           value={q}
@@ -1193,7 +1204,7 @@ export function IdentifyScreen({
           style={{
             flex: 1, minWidth: 0,
             background: 'transparent', border: 'none', outline: 'none',
-            color: '#e5edf5', fontSize: isTablet ? 16 : 14,
+            color: '#e5edf5', fontSize: sz(14, 18, 22),
             padding: 0,
           }}
         />
@@ -1232,12 +1243,12 @@ export function IdentifyScreen({
                 cursor: 'pointer', textAlign: 'left', width: '100%',
               }}
             >
-              <SpeciesImage species={s} size={38} />
+              <SpeciesImage species={s} size={sz(38, 52, 66)} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: '#e5edf5' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: sz(17, 20, 24), fontWeight: 700, color: '#e5edf5' }}>
                   {s.commonName}
                 </div>
-                <div style={{ fontSize: 12, color: secondaryText, fontStyle: 'italic', marginTop: 2 }}>
+                <div style={{ fontSize: sz(12, 14.5, 17), color: secondaryText, fontStyle: 'italic', marginTop: 2 }}>
                   {s.scientific}
                 </div>
                 {matchedAlt && (
@@ -1278,8 +1289,8 @@ export function IdentifyScreen({
                 background: searchBg,
                 border: '1px solid rgba(255,255,255,0.07)',
                 color: chipText,
-                fontSize: 14.5, fontWeight: 600,
-                padding: '8px 12px', borderRadius: 9,
+                fontSize: sz(14.5, 17, 20), fontWeight: 600,
+                padding: sz(8, 11, 14) + 'px ' + sz(12, 16, 20) + 'px', borderRadius: 9,
                 cursor: 'pointer', whiteSpace: 'nowrap',
                 scrollSnapAlign: 'start',
               }}
@@ -1297,8 +1308,8 @@ export function IdentifyScreen({
                 background: 'transparent',
                 border: `1px solid ${accent}`,
                 color: accent,
-                fontSize: 14.5, fontWeight: 700,
-                padding: '8px 12px', borderRadius: 9,
+                fontSize: sz(14.5, 17, 20), fontWeight: 700,
+                padding: sz(8, 11, 14) + 'px ' + sz(12, 16, 20) + 'px', borderRadius: 9,
                 cursor: 'pointer', whiteSpace: 'nowrap',
                 scrollSnapAlign: 'start',
               }}
@@ -1329,7 +1340,7 @@ export function IdentifyScreen({
             background: identifyBg,
             border: '1px solid rgba(94,205,242,0.35)', borderRadius: 18,
             padding: 0,
-            height: isTablet ? (size === 'tablet-landscape' ? 460 : 400) : 320,
+            height: sz(320, 400, 520),
             overflow: 'hidden',
             boxShadow: '0 6px 22px rgba(0, 0, 0, 0.35)',
           }}
@@ -1375,7 +1386,7 @@ export function IdentifyScreen({
             color: 'rgba(94, 205, 242, 0.9)',
             filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))',
           }}>
-            <Crosshair size={isTablet ? 140 : 104} strokeWidth={1.4} />
+            <Crosshair size={sz(104, 140, 190)} strokeWidth={1.4} />
           </div>
 
           {/* Content — anchored left over the darkened side. */}
@@ -1403,10 +1414,10 @@ export function IdentifyScreen({
               // Cap so long copy wraps in the left half. On narrow
               // phones (<360px CSS) drop to ~55% of container width so
               // the fish still peeks through the right edge.
-              maxWidth: isTablet ? (size === 'tablet-landscape' ? 560 : 460) : 220,
+              maxWidth: sz(220, 460, 640),
             }}>
               <div style={{
-                fontSize: isTablet ? (size === 'tablet-landscape' ? 44 : 40) : 30,
+                fontSize: sz(30, 40, 54),
                 fontWeight: 900, letterSpacing: 0.2,
                 color: '#f7fbff', lineHeight: 1.02,
                 textShadow: '0 2px 10px rgba(0, 0, 0, 0.55)',
@@ -1414,7 +1425,7 @@ export function IdentifyScreen({
                 Click to SCAN
               </div>
               <div style={{
-                fontSize: isTablet ? 16 : 13, color: '#d8e4ee',
+                fontSize: sz(13, 17, 21), color: '#d8e4ee',
                 marginTop: 8, lineHeight: 1.35, fontWeight: 500,
                 textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)',
               }}>
@@ -1437,7 +1448,7 @@ export function IdentifyScreen({
       {!q.trim() && (
         <div>
           <div style={{
-            fontSize: 11.5, fontWeight: 600, color: mutedText,
+            fontSize: sz(11.5, 13.5, 16), fontWeight: 600, color: mutedText,
             letterSpacing: '0.13em', textTransform: 'uppercase',
             padding: '0 2px 8px',
           }}>
@@ -1454,19 +1465,19 @@ export function IdentifyScreen({
             }}
           >
             <div style={{
-              width: 44, height: 44, borderRadius: 10,
+              width: sz(44, 54, 66), height: sz(44, 54, 66), borderRadius: 10,
               background: 'rgba(251,191,36,0.16)', color: '#fbbf24',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
-              <Sparkles size={22} strokeWidth={2} />
+              <Sparkles size={sz(22, 27, 33)} strokeWidth={2} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: isTablet ? 17 : 15, fontWeight: 800, color: '#e5edf5' }}>
+              <div style={{ fontSize: sz(15, 19, 23), fontWeight: 800, color: '#e5edf5' }}>
                 Fish ID Quiz
               </div>
               <div style={{
-                fontSize: isTablet ? 13 : 12, color: secondaryText, marginTop: 3, lineHeight: 1.4,
+                fontSize: sz(12, 15, 18), color: secondaryText, marginTop: 3, lineHeight: 1.4,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {quizExamplePair}
@@ -1474,8 +1485,8 @@ export function IdentifyScreen({
             </div>
             <span style={{
               background: accent, color: accentText,
-              fontSize: 15, fontWeight: 800,
-              padding: '8px 14px', borderRadius: 8,
+              fontSize: sz(15, 17, 20), fontWeight: 800,
+              padding: sz(8, 11, 14) + 'px ' + sz(14, 18, 24) + 'px', borderRadius: 8,
               flexShrink: 0,
             }}>
               Start
@@ -1488,7 +1499,7 @@ export function IdentifyScreen({
       {!q.trim() && (
         <div>
           <div style={{
-            fontSize: 11.5, fontWeight: 600, color: mutedText,
+            fontSize: sz(11.5, 13.5, 16), fontWeight: 600, color: mutedText,
             letterSpacing: '0.13em', textTransform: 'uppercase',
             padding: '0 2px 8px',
           }}>
@@ -1520,19 +1531,19 @@ export function IdentifyScreen({
                       cursor: 'pointer', textAlign: 'left', width: '100%',
                     }}
                   >
-                    <SpeciesImage species={s} size={38} />
+                    <SpeciesImage species={s} size={sz(38, 52, 66)} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: '#e5edf5' }}>
+                      <div style={{ fontFamily: 'Georgia, serif', fontSize: sz(17, 20, 24), fontWeight: 700, color: '#e5edf5' }}>
                         {s.commonName}
                       </div>
-                      <div style={{ fontSize: 12, color: '#7f95ad', fontStyle: 'italic', marginTop: 2 }}>
+                      <div style={{ fontSize: sz(12, 14.5, 17), color: '#7f95ad', fontStyle: 'italic', marginTop: 2 }}>
                         {s.scientific}
                       </div>
                     </div>
                     <span style={{
                       background: st.bg, color: st.fg,
-                      fontSize: 12, fontWeight: 800, letterSpacing: 0.6,
-                      padding: '4px 8px', borderRadius: 6,
+                      fontSize: sz(12, 14, 16), fontWeight: 800, letterSpacing: 0.6,
+                      padding: sz(4, 6, 8) + 'px ' + sz(8, 11, 14) + 'px', borderRadius: 6,
                       textTransform: 'uppercase',
                       flexShrink: 0,
                     }}>
@@ -3449,7 +3460,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                         <div style={{ fontSize: isTablet ? 44 : 34, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{Math.round(current.temperature_2m)}°</div>
                         <div style={{ fontSize: isTablet ? 15 : 13, color: T.inkSoft, fontWeight: 600, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{weatherLabel(current.weather_code)}</div>
                         {daily[0] && (
-                          <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
+                          <div style={{ fontSize: sz(12, 14.5, 17), color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
                             <span style={{ color: T.warn }}>H {Math.round(daily[0].tMax)}°</span>
                             <span style={{ margin: '0 6px' }}>·</span>
                             <span>L {Math.round(daily[0].tMin)}°</span>
@@ -3479,10 +3490,10 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                   </div>
                   {/* Condition chips */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
                       <Waves size={14} color={T.brass} /> {seasFt != null ? `${seasFt.toFixed(1)} ft seas` : 'Seas —'}
                     </span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 700, color: T.ink }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
                       <Wind size={14} color={T.brass} /> {windTxt} {windKt} kt
                     </span>
                     {periodS != null && (
@@ -3500,14 +3511,14 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                       <button onClick={() => onOceanMaps('chl')} className="kyc-press" style={{
                         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                         background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                        padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                        padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
                       }}>
                         <Waves size={16} color="#4fd07a" /> Chlorophyll map
                       </button>
                       <button onClick={() => onOceanMaps('sst')} className="kyc-press" style={{
                         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                         background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                        padding: isTablet ? '11px 0' : '10px 0', color: T.ink, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                        padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
                       }}>
                         <Thermometer size={16} color="#ff9a3d" /> Sea temp map
                       </button>
