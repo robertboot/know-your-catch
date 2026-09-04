@@ -48,11 +48,13 @@ create policy regs_auto_runs_admin_read on public.regs_auto_runs
   for select
   using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
 
--- 3) Hourly schedule. pg_cron + pg_net ship with Supabase; the job
---    POSTs to the edge function with the shared secret. Batch of 5
---    pairs per run (concurrency 3 inside the function keeps it well
---    under the edge wall-clock) ≈ 120 pairs/day → the full ~570-pair
---    grid (95 species × 6 jurisdictions) refreshes about every 5 days.
+-- 3) Steady-state schedule (twice daily). pg_cron + pg_net ship with
+--    Supabase; the job POSTs to the edge function with the shared
+--    secret. First pass completed 2026-08 — every pair has been
+--    researched once, so runs are now re-checks. Batch of 8 pairs,
+--    twice daily (~16 pairs/day) cycles the grid roughly quarterly.
+--    See .claude/skills/api-cost-control for the cadence rule; hourly
+--    at this batch size was ~$12/day in Anthropic web-search tokens.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
@@ -65,7 +67,7 @@ end $$;
 
 select cron.schedule(
   'regs-auto-update-hourly',
-  '17 * * * *',   -- hh:17 every hour, off the top-of-hour rush
+  '17 6,18 * * *',   -- 06:17 and 18:17 UTC, off the top-of-hour rush
   $$
   select net.http_post(
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/auto-update-regulations',
@@ -79,7 +81,7 @@ select cron.schedule(
       'Authorization', 'Bearer YOUR_ANON_KEY',
       'x-cron-secret', 'YOUR_CRON_SECRET'
     ),
-    body    := '{"batch": 5}'::jsonb
+    body    := '{"batch": 8}'::jsonb
   );
   $$
 );
