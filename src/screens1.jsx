@@ -3565,7 +3565,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                   <div style={{ position: 'absolute', top: 4, bottom: 4, width: 'calc((100% - 8px) / 2)', borderRadius: 12, background: T.brass,
                     left: `calc(4px + ${['overview', '7day'].indexOf(fxTab)} * ((100% - 8px) / 2))`,
                     transition: 'left 0.28s cubic-bezier(0.22,1,0.36,1)' }} />
-                  {[['overview', 'Overview'], ['7day', '10-Day']].map(([k, lbl]) => (
+                  {[['overview', '24-Hour'], ['7day', '10-Day']].map(([k, lbl]) => (
                     <button key={k} onClick={() => setFxTab(k)} style={{
                       position: 'relative', zIndex: 1, flex: 1, background: 'transparent', border: 'none', cursor: 'pointer',
                       padding: isTablet ? '11px 0' : '9px 0', fontSize: isTablet ? 15 : 13, fontWeight: 800,
@@ -3574,51 +3574,48 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                   ))}
                 </div>
 
-                {fxTab === 'overview' && (
-                  <>{/* --overview-- */}
-                    {/* Conditions at a glance */}
-                    <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
-                      <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windKt}`} unit="kt" small={gust != null ? `Gusts to ${gust}` : ''} />
-                      <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`}
-                        small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${periodS.toFixed(1)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
-                      {tideVal != null
-                        ? <GlanceCard icon={<Anchor size={16} color={T.brass} />} label="TIDE" big={tideVal.toFixed(1)} unit="ft" small={tideTrend || ''} />
-                        : marine?.sstF != null
-                          ? <GlanceCard icon={<Thermometer size={16} color={T.brass} />} label="SEA TEMP" big={`${Math.round(marine.sstF)}°`} unit="F" small="Surface" />
-                          : <GlanceCard icon={<CloudSun size={16} color={T.brass} />} label="SKY" big={`${Math.round(current.cloud_cover || 0)}%`} unit="cloud" small={weatherLabel(current.weather_code)} />}
-                    </div>
+                {/* Conditions at a glance — shown on both tabs */}
+                <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
+                  <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windKt}`} unit="kt" small={gust != null ? `Gusts to ${gust}` : ''} />
+                  <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`}
+                    small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${periodS.toFixed(1)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
+                  {tideVal != null
+                    ? <GlanceCard icon={<Anchor size={16} color={T.brass} />} label="TIDE" big={tideVal.toFixed(1)} unit="ft" small={tideTrend || ''} />
+                    : marine?.sstF != null
+                      ? <GlanceCard icon={<Thermometer size={16} color={T.brass} />} label="SEA TEMP" big={`${Math.round(marine.sstF)}°`} unit="F" small="Surface" />
+                      : <GlanceCard icon={<CloudSun size={16} color={T.brass} />} label="SKY" big={`${Math.round(current.cloud_cover || 0)}%`} unit="cloud" small={weatherLabel(current.weather_code)} />}
+                </div>
 
-                    {/* Next 24 hours — hourly chart + data */}
-                    {hourly.length > 0 && (
-                      <ForecastMatrix cols={hourly} isTablet={isTablet} tide={tide} mode="hourly" title="Next 24 hours" subtitle={tide ? `Tide: ${tide.stationName}` : null} />
-                    )}
-
-                    {/* Why this score — anchored so the hero link can jump here */}
-                    <Card id="why-section" className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24, scrollMarginTop: 12 }}>
-                      <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score != null ? fishabilityGrade(score) : '—'}?</div>
-                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
-                        Your score is weighted around fishability and ride comfort.
-                      </div>
-                      <FactorScale label="Wind" value={repHour?.wind} unit="kt" axisMax={33} bands={WIND_BANDS} isTablet={isTablet} />
-                      <FactorScale label="Wave height" value={seasFt} unit="ft" axisMax={6} bands={WAVE_BANDS} isTablet={isTablet} />
-                      <FactorScale label="Wave period" value={periodS} unit="s" axisMax={12} bands={PERIOD_BANDS} isTablet={isTablet} />
-                    </Card>
-                  </>
+                {/* Next 24 hours — hourly chart + data */}
+                {fxTab === 'overview' && hourly.length > 0 && (
+                  <ForecastMatrix cols={hourly} isTablet={isTablet} tide={tide} mode="hourly" title="Next 24 hours" subtitle={tide ? `Tide: ${tide.stationName}` : null} />
                 )}
+
+                {/* 10-day outlook — same ForecastMatrix, 6-hour blocks. */}
+                {fxTab === '7day' && blocks.length > 0 && (
+                  <ForecastMatrix
+                    cols={blocks}
+                    isTablet={isTablet}
+                    tide={tide}
+                    mode="blocks"
+                    title="10-day outlook · 6-hour blocks"
+                    subtitle={tide ? `Tide: ${tide.stationName}` : null}
+                  />
+                )}
+
+                {/* Why this score — anchored so the hero link can jump here; shown on both tabs */}
+                <Card id="why-section" className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24, scrollMarginTop: 12 }}>
+                  <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score != null ? fishabilityGrade(score) : '—'}?</div>
+                  <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
+                    Your score is weighted around fishability and ride comfort.
+                  </div>
+                  <FactorScale label="Wind" value={repHour?.wind} unit="kt" axisMax={33} bands={WIND_BANDS} isTablet={isTablet} />
+                  <FactorScale label="Wave height" value={seasFt} unit="ft" axisMax={6} bands={WAVE_BANDS} isTablet={isTablet} />
+                  <FactorScale label="Wave period" value={periodS} unit="s" axisMax={12} bands={PERIOD_BANDS} isTablet={isTablet} />
+                </Card>
               </>
             );
           })()}
-
-          {/* 10-day outlook — same ForecastMatrix, 6-hour blocks. */}
-          {fxTab === '7day' && blocks.length > 0 && (
-            <ForecastMatrix
-              cols={blocks}
-              isTablet={isTablet}
-              tide={tide}
-              mode="blocks"
-              title="10-day outlook · 6-hour blocks"
-            />
-          )}
 
           <div style={{ fontSize: isTablet ? 12 : 11, color: T.inkMute, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>
             Data from Open-Meteo. Always confirm marine conditions with your local NOAA/NWS forecast before heading out.
