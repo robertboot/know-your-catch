@@ -2782,6 +2782,9 @@ function PBSpotlightCard({ state, onPBs, onView, isTablet }) {
 export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps }) {
   const { size } = useScreenSize();
   const isTablet = size !== 'phone';
+  // dc3809e converted several hero-card sizes to sz(...) but never defined
+  // sz in this component — every render threw "Can't find variable: sz".
+  const sz = tierPick(size);
   const [coords, setCoords]   = useState(null);
   const [locLabel, setLocLabel] = useState('');
   const [refreshTick, setRefreshTick] = useState(0); // re-fetch on foreground + interval
