@@ -24,7 +24,7 @@ import {
 } from './helpers.js';
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
-  biteIndex, nearestTideStation,
+  biteIndex, nearestTideStation, nearbyTideStations, TIDE_STATIONS,
   subScores, fishabilityHour, fishabilityColor, fishabilityGrade, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks, weatherCapInfo,
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
@@ -3057,27 +3057,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&daily=wave_height_max,wave_period_max,wave_direction_dominant`
           + `&forecast_days=10&past_days=1&timezone=auto`;
-        // Tides: nearest curated NOAA station (US Gulf/FL), hourly heights
-        // spanning the whole grid — yesterday (the trailing history block)
-        // through eleven days out, so every 10-day block gets a value.
-        // Harmonic predictions, not observations: NOAA serves future dates
-        // freely and hourly-for-12-days is under 300 rows. Dates built from
-        // LOCAL time (toISOString answers in UTC and flips the day on
-        // Gulf-coast evenings). Skipped cleanly when no station is close.
-        const station = nearestTideStation(lat, lon);
-        let tideUrl = null;
-        if (station) {
-          const ymdOf = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-          const now = new Date();
-          const begin = ymdOf(new Date(now.getTime() - 86400000));
-          const end = ymdOf(new Date(now.getTime() + 11 * 86400000));
-          tideUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=ReelIntel`
-            + `&begin_date=${begin}&end_date=${end}&datum=MLLW&station=${station.id}&time_zone=lst_ldt&units=english&interval=h&format=json`;
-        }
-        const [r, marineRes, tideRes] = await Promise.all([
+        const [r, marineRes] = await Promise.all([
           fetch(url),
           fetch(marineUrl).catch(() => null),
-          tideUrl ? fetch(tideUrl).catch(() => null) : Promise.resolve(null),
         ]);
         if (!r.ok) throw new Error(`open-meteo ${r.status}`);
         const j = await r.json();
@@ -3127,34 +3109,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             });
           }
         } catch { setMarine(null); }
-
-        // Parse tides into an hourly (local-time) lookup.
-        try {
-          const tj = tideRes && tideRes.ok ? await tideRes.json() : null;
-          const preds = tj?.predictions;
-          if (station && Array.isArray(preds) && preds.length) {
-            const byHour = new Map();
-            preds.forEach((p) => {
-              const key = p.t.replace(' ', 'T').slice(0, 13); // YYYY-MM-DDTHH
-              const v = parseFloat(p.v);
-              if (!Number.isNaN(v)) byHour.set(key, v);
-            });
-            // Mark the turns — each local max/min in the hourly series.
-            // The turn is what a fisherman plans around; the height at a
-            // random hour on its own is close to useless. First and last
-            // entries have no neighbour on one side, so skip them.
-            const turns = new Map();
-            const keys = [...byHour.keys()];
-            for (let i = 1; i < keys.length - 1; i++) {
-              const prev = byHour.get(keys[i - 1]), cur = byHour.get(keys[i]), next = byHour.get(keys[i + 1]);
-              if (cur > prev && cur > next) turns.set(keys[i], { kind: 'high', height: cur });
-              else if (cur < prev && cur < next) turns.set(keys[i], { kind: 'low', height: cur });
-            }
-            setTide({ stationName: station.name, byHour, turns });
-          } else {
-            setTide(null);
-          }
-        } catch { setTide(null); }
 
         // daily arrays are parallel by index
         const d = j.daily || {};
@@ -3245,6 +3199,90 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
     })();
     return () => { alive = false; };
   }, [coords, refreshTick]);
+
+  // ---- Tide station (auto-pick + per-place override) ----------------
+  // Tide is the ONLY station-bound reading — everything else is modelled
+  // at the spot's exact coordinates. Override is keyed per resolved
+  // location (2-decimal rounding ≈ 0.7 mi) and stored in synced state,
+  // so a spot in Alabama and one in Florida each keep their own choice.
+  const placeKey = coords ? `${coords.lat.toFixed(2)},${coords.lon.toFixed(2)}` : null;
+  const tideOverrideId = (placeKey && state?.tideStationByPlace?.[placeKey]) || null;
+  // Stale override (station no longer in the list) falls through to the
+  // nearest rather than blanking the row.
+  const tideStation = coords
+    ? (TIDE_STATIONS.find(s => s.id === tideOverrideId) || nearestTideStation(coords.lat, coords.lon))
+    : null;
+  const [showTidePicker, setShowTidePicker] = useState(false);
+
+  // Tide fetch is deliberately separate from the weather/marine effect:
+  // switching stations refetches the tide ONLY — grid data, scroll
+  // position and the read line stay put.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!coords || !tideStation) { setTide(null); return; }
+      // NOAA hourly harmonic predictions spanning the whole grid —
+      // yesterday (trailing history) through eleven days out. Dates from
+      // LOCAL time (toISOString answers in UTC and flips the day on
+      // Gulf-coast evenings).
+      const ymdOf = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+      const now = new Date();
+      const begin = ymdOf(new Date(now.getTime() - 86400000));
+      const end = ymdOf(new Date(now.getTime() + 11 * 86400000));
+      const tideUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=ReelIntel`
+        + `&begin_date=${begin}&end_date=${end}&datum=MLLW&station=${tideStation.id}&time_zone=lst_ldt&units=english&interval=h&format=json`;
+      try {
+        const res = await fetch(tideUrl).catch(() => null);
+        const tj = res && res.ok ? await res.json() : null;
+        const preds = tj?.predictions;
+        if (!alive) return;
+        if (Array.isArray(preds) && preds.length) {
+          const byHour = new Map();
+          preds.forEach((p) => {
+            const key = p.t.replace(' ', 'T').slice(0, 13); // YYYY-MM-DDTHH
+            const v = parseFloat(p.v);
+            if (!Number.isNaN(v)) byHour.set(key, v);
+          });
+          // Mark the turns — each local max/min in the hourly series.
+          // The turn is what a fisherman plans around; the height at a
+          // random hour on its own is close to useless. First and last
+          // entries have no neighbour on one side, so skip them.
+          const turns = new Map();
+          const keys = [...byHour.keys()];
+          for (let i = 1; i < keys.length - 1; i++) {
+            const prev = byHour.get(keys[i - 1]), cur = byHour.get(keys[i]), next = byHour.get(keys[i + 1]);
+            if (cur > prev && cur > next) turns.set(keys[i], { kind: 'high', height: cur });
+            else if (cur < prev && cur < next) turns.set(keys[i], { kind: 'low', height: cur });
+          }
+          setTide({ stationName: tideStation.name, byHour, turns });
+        } else {
+          setTide(null);
+        }
+      } catch { if (alive) setTide(null); }
+    })();
+    return () => { alive = false; };
+  }, [coords, tideStation?.id, refreshTick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Write (or clear, id == null) the per-place station override. Clearing
+  // keeps the default tracking the spot if the spot is later moved.
+  const chooseTideStation = (id) => {
+    if (!placeKey) return;
+    const map = { ...(state?.tideStationByPlace || {}) };
+    if (id == null) delete map[placeKey]; else map[placeKey] = id;
+    update({ tideStationByPlace: map });
+    setShowTidePicker(false);
+  };
+
+  // Tappable subtitle — opens the station picker.
+  const tideSubtitle = tide ? (
+    <button className="kyc-press" onClick={() => setShowTidePicker(true)} style={{
+      background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+      color: T.brass, fontSize: 'inherit', fontFamily: 'inherit', fontWeight: 700,
+      display: 'inline-flex', alignItems: 'center', gap: 2,
+    }}>
+      Tide: {tide.stationName} <ChevronRight size={10} />
+    </button>
+  ) : null;
 
   // Sweep the fishability gauge up from zero whenever the data (hence the
   // score) changes or the Overview tab is re-shown.
@@ -3666,7 +3704,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
 
                 {/* Next 24 hours — hourly chart + data */}
                 {fxTab === 'overview' && hourly.length > 0 && (
-                  <ForecastMatrix cols={hourly} isTablet={isTablet} tide={tide} mode="hourly" title="Next 24 hours" subtitle={tide ? `Tide: ${tide.stationName}` : null} />
+                  <ForecastMatrix cols={hourly} isTablet={isTablet} tide={tide} mode="hourly" title="Next 24 hours" subtitle={tideSubtitle} />
                 )}
 
                 {/* 10-day outlook — same ForecastMatrix, 6-hour blocks. */}
@@ -3677,7 +3715,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                     tide={tide}
                     mode="blocks"
                     title="10-day outlook · 6-hour blocks"
-                    subtitle={tide ? `Tide: ${tide.stationName}` : null}
+                    subtitle={tideSubtitle}
                   />
                 )}
 
@@ -3707,6 +3745,71 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             Data from Open-Meteo. Always confirm marine conditions with your local NOAA/NWS forecast before heading out.
           </div>
         </>
+      )}
+
+      {/* Tide-station picker — same sheet pattern as the compare modal. */}
+      {showTidePicker && coords && (
+        <div onClick={() => setShowTidePicker(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(3,27,51,0.85)', backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: isTablet ? 'center' : 'flex-end',
+          justifyContent: 'center',
+          padding: isTablet ? 24 : 0,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: '#0f2438', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: isTablet ? 16 : 0,
+            borderTopLeftRadius: 14, borderTopRightRadius: 14,
+            width: '100%', maxWidth: isTablet ? 480 : '100%',
+            maxHeight: isTablet ? '85vh' : '80vh',
+            display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0,
+            }}>
+              <SectionLabel style={{ color: '#5ecdf2', flex: 1 }}>TIDE STATION</SectionLabel>
+              <button onClick={() => setShowTidePicker(false)} aria-label="Close" style={{
+                background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkSoft, padding: 4, display: 'flex',
+              }}>
+                <X size={22} />
+              </button>
+            </div>
+            <div style={{ padding: '8px 8px 14px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ fontSize: isTablet ? 13 : 12, color: T.inkSoft, lineHeight: 1.5, padding: '6px 8px 10px' }}>
+                Tide timing comes from a physical NOAA station. The nearest is picked
+                automatically — choose another if you fish out of a different pass.
+              </div>
+              {(() => {
+                const nearest = nearestTideStation(coords.lat, coords.lon);
+                return (
+                  <button className="kyc-press" onClick={() => chooseTideStation(null)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    padding: '12px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    color: T.ink, fontSize: isTablet ? 15 : 13, fontWeight: 700,
+                  }}>
+                    <span style={{ flex: 1 }}>Use nearest{nearest ? ` (${nearest.name})` : ''}</span>
+                    {!tideOverrideId && <Check size={18} color={T.brass} />}
+                  </button>
+                );
+              })()}
+              {nearbyTideStations(coords.lat, coords.lon).map((s) => (
+                <button key={s.id} className="kyc-press" onClick={() => chooseTideStation(s.id)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '12px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  color: T.ink, fontSize: isTablet ? 15 : 13, fontWeight: 600,
+                }}>
+                  <span style={{ flex: 1 }}>{s.name}</span>
+                  <span style={{ color: T.inkMute, fontSize: isTablet ? 12 : 11, flexShrink: 0 }}>{s.miles} mi</span>
+                  {tideOverrideId === s.id && <Check size={18} color={T.brass} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

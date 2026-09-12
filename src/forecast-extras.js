@@ -356,14 +356,33 @@ export function sixHourBlocks(hours) {
   });
 }
 
+// One distance expression shared by nearestTideStation and
+// nearbyTideStations — if these two ever disagreed, the picker would
+// recommend a station the auto-pick then refuses to use.
+const stationDistSq = (s, lat, lon) => {
+  const dLat = s.lat - lat, dLon = (s.lon - lon) * Math.cos(lat * Math.PI / 180);
+  return dLat * dLat + dLon * dLon;
+};
+
 export function nearestTideStation(lat, lon) {
   if (lat == null || lon == null) return null;
   let best = null, bestD = Infinity;
   for (const s of TIDE_STATIONS) {
-    const dLat = s.lat - lat, dLon = (s.lon - lon) * Math.cos(lat * Math.PI / 180);
-    const d = dLat * dLat + dLon * dLon;
+    const d = stationDistSq(s, lat, lon);
     if (d < bestD) { bestD = d; best = s; }
   }
   // ~1.5° guard (~100 mi): don't attach a wildly distant station.
   return bestD <= 2.25 ? best : null;
+}
+
+/* Stations nearest a point, sorted by distance, for the tide-station
+   picker. Deliberately NO guard radius: a spot with nothing within
+   100 miles still gets choices, even far ones — the angler may know
+   better. `miles` is approximate (1° ≈ 69 mi), for display only. */
+export function nearbyTideStations(lat, lon, limit = 8) {
+  if (lat == null || lon == null) return [];
+  return TIDE_STATIONS
+    .map(s => { const d = stationDistSq(s, lat, lon); return { ...s, d, miles: Math.round(Math.sqrt(d) * 69) }; })
+    .sort((a, b) => a.d - b.d)
+    .slice(0, limit);
 }
