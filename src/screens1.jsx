@@ -485,6 +485,40 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
   // border already carry good/bad — the app doesn't issue instructions.
   const cta = { t: 'See full forecast', Ic: ChevronRight };
 
+  // Big number over the shared band scale. Bands/axisMax MUST be the same
+  // WAVE_BANDS / PERIOD_BANDS + axisMax the Why-card FactorScales use —
+  // never a hand-typed threshold, or the two cards drift apart.
+  const BandStat = ({ label, value, unit, axisMax, axisLabel, bands }) => {
+    const pos = value == null ? null : Math.max(0, Math.min(100, (value / axisMax) * 100));
+    let band = null;
+    if (value != null) { for (const b of bands) { if (value <= b.max) { band = b; break; } } if (!band) band = bands[bands.length - 1]; }
+    return (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: sz(10, 11, 13), fontWeight: 700, letterSpacing: 1.3, color: T.inkMute }}>{label}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '4px 0 8px' }}>
+          <span style={{ fontSize: sz(34, 40, 48), fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: T.ink }}>{value != null ? value.toFixed(1) : '—'}</span>
+          <span style={{ fontSize: sz(13, 15, 17), fontWeight: 700, color: T.inkSoft }}>{unit}</span>
+        </div>
+        <div style={{ position: 'relative', height: 10 }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
+            {bands.map((b, i) => {
+              const prev = i === 0 ? 0 : bands[i - 1].max;
+              return <div key={i} style={{ width: `${((b.max - prev) / axisMax) * 100}%`, background: b.color }} />;
+            })}
+          </div>
+          {pos != null && (
+            <div style={{ position: 'absolute', left: `${pos}%`, top: -3, width: 2, height: 16, background: '#fff', borderRadius: 2, transform: 'translateX(-1px)', boxShadow: '0 0 4px rgba(0,0,0,.75)' }} />
+          )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 4, marginTop: 4, fontSize: sz(10, 11, 12), color: T.inkMute, fontWeight: 700 }}>
+          <span>0</span>
+          <span style={{ flex: 1, textAlign: 'center', color: band ? band.color : T.inkMute, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{band ? band.name : ''}</span>
+          <span>{axisLabel || `${axisMax} ${unit}`}</span>
+        </div>
+      </div>
+    );
+  };
+
   const Stat = ({ label, value }) => (
     <div>
       <div style={{ fontSize: sz(10, 11, 13), letterSpacing: 1.2, color: T.inkMute, fontWeight: 700 }}>{label}</div>
@@ -549,19 +583,19 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
             </div>
           </div>
 
+          {/* Seas + period — the two numbers that decide the ride, on the
+              SAME band scales the "Why <grade>?" card uses (WAVE_BANDS /
+              PERIOD_BANDS): one source, so the two cards can't drift. */}
+          <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+            <BandStat label="SEAS" value={data.waveFt} unit="ft" axisMax={6} bands={WAVE_BANDS} />
+            <BandStat label="PERIOD" value={data.periodS} unit="sec" axisLabel="12 s" axisMax={12} bands={PERIOD_BANDS} />
+          </div>
+
           {/* Condition chips */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
-              <Waves size={14} color={T.brass} /> {data.waveFt != null ? `${data.waveFt.toFixed(1)} ft seas` : 'Seas —'}
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
               <Wind size={14} color={T.brass} /> {data.windKt != null ? `${compassDir(data.windDir || 0)} ${Math.round(data.windKt)} kt` : 'Wind —'}
             </span>
-            {data.periodS != null && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
-                {data.periodS.toFixed(1)} sec period
-              </span>
-            )}
             {data.sstF != null && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
                 <Thermometer size={14} color={T.brass} /> {Math.round(data.sstF)}° water
