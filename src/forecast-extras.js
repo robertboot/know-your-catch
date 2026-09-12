@@ -134,6 +134,22 @@ export function subScores(h) {
   return { wind, seas, period };
 }
 
+/* Severe-weather ceiling, keyed on WMO weather codes (Open-Meteo).
+   This is a CAP, not another weighted term, on purpose: lightning is a
+   go/no-go call. If it were a weighted factor, 8 kt of wind and flat
+   seas would average a thunderstorm morning back up to an A — which is
+   exactly the bug this fixes. Applied AFTER the weights and the bite
+   nudge so nothing can dilute it. */
+export function weatherCapInfo(code) {
+  if (code == null) return null;
+  if (code === 95 || code === 96 || code === 99) return { cap: 35, reason: 'Thunderstorms' };        // hard F
+  if (code === 82) return { cap: 58, reason: 'Violent rain showers' };                               // F/D- edge
+  if (code === 65 || code === 67) return { cap: 58, reason: 'Heavy rain' };                          // F/D- edge
+  if (code === 81 || code === 63) return { cap: 74, reason: 'Moderate rain' };                       // C
+  if (code === 55 || code === 57) return { cap: 74, reason: 'Heavy drizzle' };                       // C
+  return null;
+}
+
 export function fishabilityHour(h) {
   const s = subScores(h);
   // Wind is weighted highest — it's the safety driver — then wave height,
@@ -151,6 +167,9 @@ export function fishabilityHour(h) {
   }
   // Small solunar nudge only — the three factors dominate (±5).
   if (h.bite != null) score = score * 0.9 + h.bite * 0.1;
+  // Severe-weather ceiling last — see weatherCapInfo for why it's a cap.
+  const wc = weatherCapInfo(h.weatherCode);
+  if (wc) score = Math.min(score, wc.cap);
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
@@ -249,6 +268,14 @@ export function bestWindow(hours) {
    carries a fishability score so the outlook reads like Windy's grid. */
 export function sixHourBlocks(hours) {
   if (!hours || !hours.length) return [];
+  // Severity rank for picking the block's icon code: the block must show
+  // its WORST weather, not whatever hour happened to come first — five
+  // clear hours and one thunderstorm hour is a thunderstorm block.
+  const codeRank = (c) => c == null ? -1
+    : (c === 95 || c === 96 || c === 99) ? 3
+    : (c === 82 || c === 65 || c === 67) ? 2
+    : (c === 81 || c === 63 || c === 55 || c === 57) ? 1
+    : 0;
   const map = new Map();
   for (const x of hours) {
     if (!x.isoHour) continue;
@@ -257,6 +284,7 @@ export function sixHourBlocks(hours) {
     const key = `${date}#${slot}`;
     let b = map.get(key);
     if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [], sc: [] }; map.set(key, b); }
+    if (codeRank(x.weatherCode) > codeRank(b.code)) b.code = x.weatherCode;
     // Score the hour on its own terms, then reduce. Scoring the block's
     // AVERAGED conditions instead dropped gusts on the floor entirely —
     // the aggregate never carried a gust field — so a 24-kt afternoon
@@ -302,9 +330,13 @@ export function sixHourBlocks(hours) {
       // two blown-out hours in six should not average away to an A. The
       // grid still reports averaged CONDITIONS — this is the go/no-go
       // read on the window as a whole.
+      // Per-hour scores already carry the weather cap (fishabilityHour
+      // applies it), and the 0.4 pull toward the worst hour lets it flow
+      // through — do NOT cap again here. The fallback path scores fresh,
+      // so it passes the block's worst code for the same cap.
       score: b.sc.length
         ? Math.round(avg(b.sc) * 0.6 + min(b.sc) * 0.4)
-        : fishabilityHour({ wind, gust, waveFt, periodS, bite }),
+        : fishabilityHour({ wind, gust, waveFt, periodS, bite, weatherCode: b.code }),
     };
   });
 }

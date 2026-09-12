@@ -25,7 +25,7 @@ import {
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
   biteIndex, nearestTideStation,
-  subScores, fishabilityHour, fishabilityColor, fishabilityGrade, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks,
+  subScores, fishabilityHour, fishabilityColor, fishabilityGrade, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks, weatherCapInfo,
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
@@ -414,7 +414,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           }
         } catch {}
         const bite = biteIndex(new Date(), lat, lon, moonPhase(new Date()).illumination);
-        const score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite });
+        const score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite, weatherCode: cur.weather_code });
         if (!alive) return;
         setData({
           placeName: place.name,
@@ -3609,6 +3609,14 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                   <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
                     Your score is weighted around fishability and ride comfort.
                   </div>
+                  {(() => {
+                    const wc = weatherCapInfo(repHour?.weatherCode);
+                    return wc ? (
+                      <div style={{ fontSize: isTablet ? 14 : 12, fontWeight: 800, color: '#e8a75a', marginBottom: 12 }}>
+                        {wc.reason} — capped at {fishabilityGrade(wc.cap)}
+                      </div>
+                    ) : null;
+                  })()}
                   <FactorScale label="Wind" value={repHour?.wind} unit="kt" axisMax={33} bands={WIND_BANDS} isTablet={isTablet} />
                   <FactorScale label="Wave height" value={seasFt} unit="ft" axisMax={6} bands={WAVE_BANDS} isTablet={isTablet} />
                   <FactorScale label="Wave period" value={periodS} unit="s" axisMax={12} bands={PERIOD_BANDS} isTablet={isTablet} />
