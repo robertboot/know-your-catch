@@ -143,8 +143,8 @@ export function subScores(h) {
 export function weatherCapInfo(code) {
   if (code == null) return null;
   if (code === 95 || code === 96 || code === 99) return { cap: 35, reason: 'Thunderstorms' };        // hard F
-  if (code === 82) return { cap: 58, reason: 'Violent rain showers' };                               // F/D- edge
-  if (code === 65 || code === 67) return { cap: 58, reason: 'Heavy rain' };                          // F/D- edge
+  if (code === 82) return { cap: 62, reason: 'Violent rain showers' };                               // D-
+  if (code === 65 || code === 67) return { cap: 62, reason: 'Heavy rain' };                          // D-
   if (code === 81 || code === 63) return { cap: 74, reason: 'Moderate rain' };                       // C
   if (code === 55 || code === 57) return { cap: 74, reason: 'Heavy drizzle' };                       // C
   return null;
