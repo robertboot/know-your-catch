@@ -297,7 +297,7 @@ export function sixHourBlocks(hours) {
     const slot = Math.floor(parseInt(x.isoHour.slice(11, 13), 10) / 6); // 0..3
     const key = `${date}#${slot}`;
     let b = map.get(key);
-    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [], sc: [] }; map.set(key, b); }
+    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [], pr: [], sc: [] }; map.set(key, b); }
     if (codeRank(x.weatherCode) > codeRank(b.code)) b.code = x.weatherCode;
     // Score the hour on its own terms, then reduce. Scoring the block's
     // AVERAGED conditions instead dropped gusts on the floor entirely —
@@ -317,6 +317,7 @@ export function sixHourBlocks(hours) {
     if (x.currentDir != null) b.cd.push(x.currentDir);
     if (x.precipPct != null) b.rn.push(x.precipPct);
     if (x.bite != null) b.bi.push(x.bite);
+    if (x.pressureMb != null) b.pr.push(x.pressureMb);
   }
   const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   const max = (a) => a.length ? Math.max(...a) : null;
@@ -339,7 +340,7 @@ export function sixHourBlocks(hours) {
       isoHour: `${b.date}T${String(b.slot * 6).padStart(2, '0')}`, // for tide lookup
       temp, wind, windDir: avg(b.wdir), gust, waveFt, periodS, waveDir: avg(b.wd),
       sstF: avg(b.sst), currentKt: avg(b.cv), currentDir: avg(b.cd),
-      precipPct: avg(b.rn), bite,
+      precipPct: avg(b.rn), bite, pressureMb: avg(b.pr),
       // Weighted toward the mean but with real pull from the worst hour:
       // two blown-out hours in six should not average away to an A. The
       // grid still reports averaged CONDITIONS — this is the go/no-go

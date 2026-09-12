@@ -3000,7 +3000,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation,pressure_msl,weather_code`
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
-          + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
+          + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code,pressure_msl`
           + `&forecast_days=10&past_days=1`
           + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
         // Marine data lives on a separate Open-Meteo endpoint with water-only
@@ -3094,7 +3094,18 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
               const v = parseFloat(p.v);
               if (!Number.isNaN(v)) byHour.set(key, v);
             });
-            setTide({ stationName: station.name, byHour });
+            // Mark the turns — each local max/min in the hourly series.
+            // The turn is what a fisherman plans around; the height at a
+            // random hour on its own is close to useless. First and last
+            // entries have no neighbour on one side, so skip them.
+            const turns = new Map();
+            const keys = [...byHour.keys()];
+            for (let i = 1; i < keys.length - 1; i++) {
+              const prev = byHour.get(keys[i - 1]), cur = byHour.get(keys[i]), next = byHour.get(keys[i + 1]);
+              if (cur > prev && cur > next) turns.set(keys[i], { kind: 'high', height: cur });
+              else if (cur < prev && cur < next) turns.set(keys[i], { kind: 'low', height: cur });
+            }
+            setTide({ stationName: station.name, byHour, turns });
           } else {
             setTide(null);
           }
@@ -3143,6 +3154,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             windDir: h.wind_direction_10m?.[i],
             gust: h.wind_gusts_10m?.[i],
             weatherCode: h.weather_code?.[i],
+            pressureMb: h.pressure_msl?.[i] ?? null, // hPa == mb
             waveFt: wave?.waveFt ?? null,
             periodS: wave?.periodS ?? null,
             waveDir: wave?.waveDir ?? null,
@@ -3154,6 +3166,20 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             sunset: sunsetHours.has(isoHour),
           };
         });
+        // Pressure-trend nudge on the bite index: a falling barometer is
+        // one of the oldest reliable feeding signals. Like the solunar
+        // index itself this is a heuristic nudge on an already-estimated
+        // number, not a measured quantity — hence small, stepped values.
+        // Must run BEFORE sixHourBlocks() and before any per-hour scoring
+        // so blocks average the adjusted bite and the score's bite nudge
+        // sees it. 3-hour delta: this hour minus the hour three back.
+        for (let i = 0; i < allHours.length; i++) {
+          const x = allHours[i], prev = allHours[i - 3];
+          if (x.bite == null || x.pressureMb == null || prev?.pressureMb == null) continue;
+          const d = x.pressureMb - prev.pressureMb;
+          const adj = d < -1.5 ? 8 : d <= -0.5 ? 4 : d < 0.5 ? 0 : d <= 1.5 ? -3 : -6;
+          x.bite = Math.max(0, Math.min(100, x.bite + adj));
+        }
         // Trailing history: a 12-kt wind easing off reads nothing like one
         // building, and the number alone can't tell you which. Keep 3 hours
         // behind on the hourly grid and 6 on the 10-day so the trend into
@@ -3774,6 +3800,9 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
     { key: 'rain', label: 'Rain, %', h: RH, color: T.inkSoft, bg: c => rainColor(c.precipPct), cell: c => `${Math.round(c.precipPct || 0)}` },
     { key: 'wind', label: 'Wind, kt', h: RH, color: T.ink, bg: c => windColor(c.wind), cell: c => c.wind != null ? withArrow((c.windDir || 0) + 180, T.ink, Math.round(c.wind)) : '—' },
     { key: 'gust', label: 'Gust, kt', h: RH, color: T.inkSoft, bg: c => windColor(c.gust), cell: c => c.gust != null ? `${Math.round(c.gust)}` : '—' },
+    // No heat-fill on pressure — a bg colour would imply high is good,
+    // which is not true. The TREND is the signal, and it feeds bite.
+    { key: 'pres', label: 'Pressure, mb', h: RH, color: T.inkSoft, cell: c => c.pressureMb != null ? c.pressureMb.toFixed(1) : '—' },
     ...(anySST ? [
       { key: 'sst', label: 'Sea, °F', h: RH, color: T.ink, bg: c => sstColor(c.sstF), cell: c => c.sstF != null ? `${Math.round(c.sstF)}°` : '—' },
     ] : []),
@@ -3808,7 +3837,38 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
       { key: 'curr', label: 'Current, kt', h: RH, color: T.ink, bg: c => currColor(c.currentKt), cell: c => c.currentKt != null ? withArrow(c.currentDir || 0, T.ink, c.currentKt.toFixed(1)) : '—' },
     ] : []),
     ...(hasTide ? [
-      { key: 'tide', label: 'Tide, ft', h: RH, color: T.brass, cell: c => { const v = tide.byHour.get(c.isoHour); return v != null ? v.toFixed(1) : '—'; } },
+      { key: 'tide', label: 'Tide, ft', h: RH, color: T.brass, render: c => {
+        const v = tide.byHour.get(c.isoHour);
+        if (v == null) return <span style={{ fontSize: valFs, color: T.inkMute }}>—</span>;
+        // Mark the turn — that's what a fisherman plans around. Hourly:
+        // this hour is the turn. Blocks: the cell reads the slot-start
+        // height, but the turn can fall anywhere in the six hours, so
+        // mark the block if ANY hour inside its window turns.
+        let turn = null;
+        if (tide.turns?.size) {
+          if (mode === 'hourly') {
+            turn = tide.turns.get(c.isoHour)?.kind ?? null;
+          } else {
+            const date = c.isoHour.slice(0, 10), start = parseInt(c.isoHour.slice(11, 13), 10);
+            let hi = false, lo = false;
+            for (let k = 0; k < 6; k++) {
+              const t = tide.turns.get(`${date}T${String(start + k).padStart(2, '0')}`);
+              if (t) { if (t.kind === 'high') hi = true; else lo = true; }
+            }
+            turn = hi && lo ? 'high/low' : hi ? 'high' : lo ? 'low' : null;
+          }
+        }
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.1 }}>
+            {turn && (
+              <span style={{ fontSize: isTablet ? 9 : 7, fontWeight: 900, color: T.brass, letterSpacing: 0.5 }}>
+                {turn === 'high' ? '▲ HIGH' : turn === 'low' ? '▼ LOW' : 'HIGH/LOW'}
+              </span>
+            )}
+            <span style={{ fontSize: valFs, fontWeight: 600 }}>{v.toFixed(1)}</span>
+          </div>
+        );
+      } },
     ] : []),
   ];
 
