@@ -237,12 +237,18 @@ export function ratingWord(score) {
   return 'Poor';
 }
 
-/* Best fishing window: scan daylight (+ dawn/dusk) hours over the feed,
-   score each, and pick the highest-scoring contiguous run (≥2 h). Prefer
-   the earliest strong window so the recommendation is actionable today/
-   tomorrow rather than days out. Returns null if nothing qualifies. */
-export function bestWindow(hours) {
+/* Best fishing window: scan daylight (+ dawn/dusk) units over the feed,
+   score each, and pick the highest-scoring contiguous run. Prefer the
+   earliest strong window so the recommendation is actionable today/
+   tomorrow rather than days out. Returns null if nothing qualifies.
+   stepMs is the unit width — 1 h by default (existing callers), pass
+   6*3600000 when reducing six-hour blocks. */
+export function bestWindow(hours, stepMs = 3600000) {
   if (!hours || !hours.length) return null;
+  // Minimum run: 2+ consecutive units on the hourly series, but a
+  // SINGLE unit qualifies on coarser steps — two 6-hour blocks would
+  // demand a 12-hour window, too coarse to ever fire.
+  const minRun = stepMs > 3600000 ? 1 : 2;
   const scored = hours.map(h => ({
     when: h.when,
     isDay: !!h.isDaylight,
@@ -266,8 +272,8 @@ export function bestWindow(hours) {
       if (!good && runStart != null) {
         const run = block.slice(runStart, k);
         const avg = run.reduce((a, b) => a + b.score, 0) / run.length;
-        if (run.length >= 2 && (!best || avg > best.avg)) {
-          best = { startMs: run[0].when, endMs: run[run.length - 1].when + 3600000, avg: Math.round(avg) };
+        if (run.length >= minRun && (!best || avg > best.avg)) {
+          best = { startMs: run[0].when, endMs: run[run.length - 1].when + stepMs, avg: Math.round(avg) };
         }
         runStart = null;
       }

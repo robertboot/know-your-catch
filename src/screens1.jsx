@@ -3572,7 +3572,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
         <>
           {/* ---- Decision-first dashboard: best-window hero + score gauge --- */}
           {(() => {
-            const win = bestWindow(hourly);
             // Grade the CURRENT conditions so the hero matches the Home card:
             // same live `current` + marine-current inputs Home scores.
             const nowHour = {
@@ -3599,22 +3598,33 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             // Short period is only a problem when seas are up (steep chop) —
             // a short period on calm water is normal and fine.
             const shortPeriod = periodS != null && periodS < 5 && (seasFt ?? 0) > 2.5;
-            // Tide value + trend for the glance card.
+            // Tide value + trend for the hero chip.
             let tideVal = null, tideTrend = '';
             if (tide && hourly.length) {
               const cur = tide.byHour.get(hourly[0].isoHour);
               const later = tide.byHour.get(hourly[Math.min(4, hourly.length - 1)].isoHour);
               if (cur != null) { tideVal = cur; if (later != null) tideTrend = later > cur ? 'Rising' : later < cur ? 'Falling' : 'Slack'; }
             }
-            const fmtT = (ms) => { const d = new Date(ms); let hh = d.getHours(); const mm = d.getMinutes(); const ap = hh < 12 ? 'AM' : 'PM'; hh = hh % 12 || 12; return mm ? `${hh}:${String(mm).padStart(2, '0')} ${ap}` : `${hh} ${ap}`; };
-            let dayWord = '', range = '', leaveBy = null;
-            if (win) {
-              const s = new Date(win.startMs), now = new Date();
-              const same = (a, b) => a.toDateString() === b.toDateString();
-              const tmw = new Date(now.getTime() + 86400000);
-              dayWord = same(s, now) ? 'Today' : same(s, tmw) ? 'Tomorrow' : s.toLocaleDateString(undefined, { weekday: 'long' });
-              range = `${fmtT(win.startMs)} – ${fmtT(win.endMs)}`;
-              leaveBy = win.startMs - 45 * 60000;
+            // Best-window line — follows the ACTIVE tab: hourly run on
+            // 24-Hour, 6-hour blocks (a single block may qualify) on
+            // 10-Day. Null = render nothing, no placeholder.
+            let winLine = null;
+            if (fxTab === 'overview') {
+              const w = bestWindow(hourly);
+              if (w) {
+                const fmt = (ms) => { const d = new Date(ms); let hr = d.getHours(); const ap = hr < 12 ? 'am' : 'pm'; hr = hr % 12 || 12; return { hr, ap }; };
+                const a = fmt(w.startMs), b = fmt(w.endMs);
+                const rng = a.ap === b.ap ? `${a.hr}–${b.hr}${b.ap}` : `${a.hr}${a.ap}–${b.hr}${b.ap}`;
+                const sameDay = new Date(w.startMs).toDateString() === new Date().toDateString();
+                winLine = { text: `Best window ${sameDay ? 'today' : 'tomorrow'} · ${rng}`, avg: w.avg };
+              }
+            } else {
+              const w = bestWindow(blocks, 6 * 3600000);
+              if (w) {
+                const fmtH = (ms) => { const h = new Date(ms).getHours(); return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`; };
+                const day = new Date(w.startMs).toLocaleDateString(undefined, { weekday: 'short' });
+                winLine = { text: `Best window · ${day} ${fmtH(w.startMs)}–${fmtH(w.endMs)}`, avg: w.avg };
+              }
             }
             // Gauge geometry.
             const gSize = isTablet ? 150 : 118, gStroke = isTablet ? 13 : 11;
@@ -3622,23 +3632,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
             const gOff = gaugeOn && score != null ? gC * (1 - score / 100) : gC;
 
             const barColor = (v) => v == null ? T.cardEdge : v >= 75 ? '#3fa34d' : v >= 60 ? '#d98330' : '#c0392b';
-            const GlanceCard = ({ icon, label, big, small, unit, smallColor }) => (
-              <div className="kyc-fadeup" style={{
-                flex: 1, minWidth: 0, background: `linear-gradient(160deg, ${T.card}, ${T.oceanDeep})`,
-                border: `1px solid ${T.cardEdge}`, borderRadius: 20, padding: isTablet ? 16 : 12,
-                boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  {icon}
-                  <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute }}>{label}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span style={{ fontSize: isTablet ? 28 : 22, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{big}</span>
-                  {unit && <span style={{ fontSize: isTablet ? 13 : 11, color: T.inkMute, fontWeight: 700 }}>{unit}</span>}
-                </div>
-                <div style={{ fontSize: isTablet ? 13 : 11, color: smallColor || T.inkSoft, marginTop: 8, fontWeight: 600 }}>{small}</div>
-              </div>
-            );
 
             return (
               <>
@@ -3689,13 +3682,25 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                       </button>
                     </div>
                   </div>
+                  {/* Best window for whichever tab is active */}
+                  {winLine && (
+                    <div style={{ marginTop: 10, textAlign: 'center', fontSize: sz(12, 14, 16), fontWeight: 700, color: T.inkSoft }}>
+                      {winLine.text} ·{' '}
+                      <span style={{ color: fishabilityColor(winLine.avg), fontWeight: 900 }}>{fishabilityGrade(winLine.avg)}</span>
+                    </div>
+                  )}
                   {/* Seas + period — shared block, see SeaStateReadout. */}
                   <SeaStateReadout waveFt={seasFt} periodS={periodS} tier={size} />
-                  {/* Condition chips */}
+                  {/* Condition chips — wind (+gusts) and tide, ex-glance-row data */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
-                      <Wind size={14} color={T.brass} /> {windTxt} {windKt} kt
+                      <Wind size={14} color={T.brass} /> {windTxt} {windKt} kt{gust != null ? ` · gusts ${gust}` : ''}
                     </span>
+                    {tideVal != null && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
+                        <Anchor size={14} color={T.brass} /> {tideVal.toFixed(1)} ft{tideTrend ? ` ${tideTrend.toLowerCase()}` : ''}
+                      </span>
+                    )}
                   </div>
                   {/* Satellite ocean map shortcuts */}
                   {onOceanMaps && (
@@ -3764,19 +3769,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                       color: fxTab === k ? T.oceanDeep : T.inkSoft,
                     }}>{lbl}</button>
                   ))}
-                </div>
-
-                {/* Conditions at a glance — shown on both tabs */}
-                <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
-                  <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windKt}`} unit="kt" small={gust != null ? `Gusts to ${gust}` : ''} />
-                  {/* Period sub-line dropped — the hero's SeaStateReadout now
-                      carries it; direction stays, the hero doesn't show it. */}
-                  <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`} />
-                  {tideVal != null
-                    ? <GlanceCard icon={<Anchor size={16} color={T.brass} />} label="TIDE" big={tideVal.toFixed(1)} unit="ft" small={tideTrend || ''} />
-                    : marine?.sstF != null
-                      ? <GlanceCard icon={<Thermometer size={16} color={T.brass} />} label="SEA TEMP" big={`${Math.round(marine.sstF)}°`} unit="F" small="Surface" />
-                      : <GlanceCard icon={<CloudSun size={16} color={T.brass} />} label="SKY" big={`${Math.round(current.cloud_cover || 0)}%`} unit="cloud" small={weatherLabel(current.weather_code)} />}
                 </div>
 
                 {/* Next 24 hours — hourly chart + data */}
