@@ -112,15 +112,29 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x));
 // period only bites hard when the seas are also up (steep chop).
 export function subScores(h) {
   // Wind (kt): factor GUSTS in — gusty air is less safe/comfortable than
-  // the sustained number alone, so blend the two. Deliberately cautious:
-  // ideal ≤5 kt, unfishable by ~22 kt (well inside small-craft advisory).
+  // the sustained number alone, so blend the two. Ideal stays at calm;
+  // unfishable by ~28 kt. A 22-kt small-craft advisory scores 27, not 0 —
+  // an advisory is a warning, not a wall, and the seas term carries the rest.
   let wind = null;
   if (h.wind != null) {
     const eff = h.gust != null ? h.wind * 0.65 + h.gust * 0.35 : h.wind;
-    wind = Math.round(clamp01((22 - eff) / 17) * 100);
+    wind = Math.round(clamp01((28 - eff) / 22) * 100);
   }
-  // Wave height: ≤1 ft ideal; rough by ~5 ft.
-  const seas = h.waveFt == null ? null : Math.round(clamp01((5 - h.waveFt) / 4) * 100);
+  let seas = null;
+  if (h.waveFt != null) {
+    // Steepness, not height, is what makes a sea hard to ride: deep-water
+    // wave length is 5.12*T^2 ft, so the same 3 ft is a gentle roll at 7 s
+    // and a square wall at 3 s. Judge height against that, then run the
+    // existing curve on the adjusted number. Clamped both ends so a long
+    // swell can never shrink a genuinely big sea to nothing.
+    let eff = h.waveFt;
+    if (h.periodS != null && h.periodS > 0) {
+      const steepness = h.waveFt / (5.12 * h.periodS * h.periodS);
+      const factor = Math.max(0.8, Math.min(1.8, Math.pow(steepness / 0.018, 0.4)));
+      eff = h.waveFt * factor;
+    }
+    seas = Math.round(clamp01((6 - eff) / 5) * 100);
+  }
   // Wave period, judged in context of wave height:
   //   • small seas (≤2.5 ft): short period is tolerable but not "great"
   //   • bigger seas: a longer period is needed to ride comfortably
