@@ -4,7 +4,7 @@ import {
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
   MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
-  CheckCircle2, ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
+  ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
   Crosshair, Crop, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
   Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog,
   Star, StarHalf,
@@ -480,12 +480,10 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
   const gR = (gSize - gStroke) / 2, gC = 2 * Math.PI * gR;
   const gOff = gaugeOn && score != null ? gC * (1 - score / 100) : gC;
   const starVal = score != null ? score / 20 : 0;
-  const cta = score == null ? { t: '—', Ic: CloudSun }
-    : score >= 85 ? { t: 'GO OFFSHORE', Ic: CheckCircle2 }
-    : score >= 70 ? { t: 'GOOD — GET OUT', Ic: CheckCircle2 }
-    : score >= 55 ? { t: 'FAIR — STAY NEARSHORE', Ic: AlertTriangle }
-    : score >= 40 ? { t: 'MARGINAL', Ic: AlertTriangle }
-    : { t: 'STAY IN', Ic: AlertTriangle };
+  // Navigation label, not a verdict: the button opens the forecast screen,
+  // so it says what it does. The grade, gauge, and the score-coloured
+  // border already carry good/bad — the app doesn't issue instructions.
+  const cta = { t: 'See full forecast', Ic: ChevronRight };
 
   const Stat = ({ label, value }) => (
     <div>
