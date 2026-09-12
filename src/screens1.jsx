@@ -393,17 +393,27 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         : { lat: 27.5, lon: -84, name: 'Gulf of America' };
       const { lat, lon } = place;
       try {
+        // Hourly series requested alongside `current`: the SCORE comes from
+        // the hourly model at the current hour — the same source the
+        // Forecast screen grades — so Home and Forecast can never disagree
+        // by a letter while Home's "Why?" link lands on the Forecast card.
+        // The `current` nowcast block still drives the instantaneous
+        // display readings (big temp, sky icon, chips). forecast_days=2 so
+        // the current hour exists even late in the day.
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,weather_code`
-          + `&daily=temperature_2m_max,temperature_2m_min&forecast_days=1`
+          + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
+          + `&daily=temperature_2m_max,temperature_2m_min&forecast_days=2`
           + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
-          + `&current=wave_height,wave_period,sea_surface_temperature&timezone=auto`;
+          + `&current=wave_height,wave_period,sea_surface_temperature`
+          + `&hourly=wave_height,wave_period,sea_surface_temperature&forecast_days=2&timezone=auto`;
         const [r, mr] = await Promise.all([fetch(url), fetch(marineUrl).catch(() => null)]);
         if (!r.ok) throw new Error('wx');
         const j = await r.json();
         const cur = j.current || {};
         let waveFt = null, periodS = null, sstF = null;
+        let marineByMs = null;
         try {
           const mj = mr && mr.ok ? await mr.json() : null;
           const mc = mj?.current;
@@ -412,9 +422,43 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
             periodS = mc.wave_period ?? null;
             if (mc.sea_surface_temperature != null) sstF = mc.sea_surface_temperature * 9 / 5 + 32;
           }
+          const mh = mj?.hourly;
+          if (mh?.time) {
+            marineByMs = new Map();
+            mh.time.forEach((iso, i) => {
+              marineByMs.set(new Date(iso).getTime(), {
+                waveFt: mh.wave_height?.[i] != null ? mh.wave_height[i] * 3.28084 : null,
+                periodS: mh.wave_period?.[i] ?? null,
+              });
+            });
+          }
         } catch {}
-        const bite = biteIndex(new Date(), lat, lon, moonPhase(new Date()).illumination);
-        const score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite, weatherCode: cur.weather_code });
+        // Current hour = last hour at or before now, exactly how the
+        // Forecast screen picks nowHour. Falls back to the old
+        // `current`-block scoring if the hourly series is missing.
+        const moonIllum = moonPhase(new Date()).illumination;
+        let score;
+        const ht = j.hourly?.time || [];
+        const nowMs = Date.now();
+        let hIdx = -1;
+        for (let i = 0; i < ht.length; i++) { if (new Date(ht[i]).getTime() <= nowMs) hIdx = i; else break; }
+        if (hIdx >= 0) {
+          const hh = j.hourly;
+          const whenMs = new Date(ht[hIdx]).getTime();
+          const mw = marineByMs?.get(whenMs) || null;
+          score = fishabilityHour({
+            wind: hh.wind_speed_10m?.[hIdx],
+            gust: hh.wind_gusts_10m?.[hIdx],
+            windDir: hh.wind_direction_10m?.[hIdx],
+            waveFt: mw?.waveFt ?? waveFt,
+            periodS: mw?.periodS ?? periodS,
+            weatherCode: hh.weather_code?.[hIdx],
+            bite: biteIndex(new Date(whenMs), lat, lon, moonIllum),
+          });
+        } else {
+          const bite = biteIndex(new Date(), lat, lon, moonIllum);
+          score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite, weatherCode: cur.weather_code });
+        }
         if (!alive) return;
         setData({
           placeName: place.name,
