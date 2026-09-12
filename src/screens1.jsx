@@ -459,11 +459,43 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           const bite = biteIndex(new Date(), lat, lon, moonIllum);
           score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite, weatherCode: cur.weather_code });
         }
+        // Best remaining fishing window over the same hourly series.
+        // bestWindow() skips any hour without isDaylight (set here via
+        // sunPosition, as the Forecast screen does) and returns null when
+        // no 2+ hour daylight run exists — in that case the card shows
+        // nothing. Two fetched days: a window starting tomorrow is
+        // labelled tomorrow, never passed off as today's.
+        let bestWin = null;
+        if (ht.length) {
+          const hh = j.hourly;
+          const winHours = ht.map((iso, i) => {
+            const when = new Date(iso).getTime();
+            const mw = marineByMs?.get(when) || null;
+            return {
+              when,
+              isDaylight: sunPosition(new Date(when), lat, lon).altitudeDeg > 0,
+              wind: hh.wind_speed_10m?.[i],
+              gust: hh.wind_gusts_10m?.[i],
+              waveFt: mw?.waveFt ?? null,
+              periodS: mw?.periodS ?? null,
+              weatherCode: hh.weather_code?.[i],
+              bite: biteIndex(new Date(when), lat, lon, moonIllum),
+            };
+          }).filter(x => x.when + 3600000 > nowMs); // remaining hours only
+          const bw = bestWindow(winHours);
+          if (bw) {
+            const fmt = (ms) => { const d = new Date(ms); let hr = d.getHours(); const ap = hr < 12 ? 'am' : 'pm'; hr = hr % 12 || 12; return { hr, ap }; };
+            const a = fmt(bw.startMs), b = fmt(bw.endMs);
+            const range = a.ap === b.ap ? `${a.hr}–${b.hr}${b.ap}` : `${a.hr}${a.ap}–${b.hr}${b.ap}`;
+            const sameDay = new Date(bw.startMs).toDateString() === new Date().toDateString();
+            bestWin = { range, dayWord: sameDay ? 'today' : 'tomorrow', avg: bw.avg };
+          }
+        }
         if (!alive) return;
         setData({
           placeName: place.name,
           tempF: cur.temperature_2m, windKt: cur.wind_speed_10m, windDir: cur.wind_direction_10m,
-          gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score,
+          gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score, bestWin,
           tMax: j.daily?.temperature_2m_max?.[0], tMin: j.daily?.temperature_2m_min?.[0],
         });
         setStatus('ok');
@@ -582,6 +614,15 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
               )}
             </div>
           </div>
+
+          {/* When to go, not just how it is now. Rendered only when
+              bestWindow found a real 2+ hour daylight run. */}
+          {data.bestWin && (
+            <div style={{ marginTop: 10, textAlign: 'center', fontSize: sz(12, 14, 16), fontWeight: 700, color: T.inkSoft }}>
+              Best window {data.bestWin.dayWord} · {data.bestWin.range} ·{' '}
+              <span style={{ color: fishabilityColor(data.bestWin.avg), fontWeight: 900 }}>{fishabilityGrade(data.bestWin.avg)}</span>
+            </div>
+          )}
 
           {/* Seas + period — the two numbers that decide the ride, on the
               SAME band scales the "Why <grade>?" card uses (WAVE_BANDS /
@@ -3534,6 +3575,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
               periodS: marine?.periodS ?? hourly[0]?.periodS ?? null,
               windDir: current.wind_direction_10m,
               bite: hourly[0]?.bite,
+              // Without this the hero score dodges the severe-weather cap
+              // and reads A- over a grid capping the same hour at F.
+              weatherCode: current.weather_code ?? hourly[0]?.weatherCode ?? null,
             };
             const score = fishabilityHour(nowHour);
             const sColor = fishabilityColor(score);
