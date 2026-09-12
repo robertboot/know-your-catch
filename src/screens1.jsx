@@ -355,6 +355,52 @@ function ScrollDots({ count, active }) {
   );
 }
 
+/* SeaStateReadout — the SEAS / PERIOD big-number band-scale block,
+   shared by the Home conditions card and the Forecast hero. ONE
+   component on purpose: those two cards are hand-written near-copies
+   that have already drifted, and a second copy of this block would too.
+   Bands and axis maxima are the same WAVE_BANDS / PERIOD_BANDS +
+   FactorScale axisMax the Why card uses — never hand-typed. */
+function SeaStateReadout({ waveFt, periodS, tier }) {
+  const sz = tierPick(tier);
+  const BandStat = ({ label, value, unit, axisMax, axisLabel, bands }) => {
+    const pos = value == null ? null : Math.max(0, Math.min(100, (value / axisMax) * 100));
+    let band = null;
+    if (value != null) { for (const b of bands) { if (value <= b.max) { band = b; break; } } if (!band) band = bands[bands.length - 1]; }
+    return (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: sz(10, 11, 13), fontWeight: 700, letterSpacing: 1.3, color: T.inkMute }}>{label}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '4px 0 8px' }}>
+          <span style={{ fontSize: sz(34, 40, 48), fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: T.ink }}>{value != null ? value.toFixed(1) : '—'}</span>
+          <span style={{ fontSize: sz(13, 15, 17), fontWeight: 700, color: T.inkSoft }}>{unit}</span>
+        </div>
+        <div style={{ position: 'relative', height: 10 }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
+            {bands.map((b, i) => {
+              const prev = i === 0 ? 0 : bands[i - 1].max;
+              return <div key={i} style={{ width: `${((b.max - prev) / axisMax) * 100}%`, background: b.color }} />;
+            })}
+          </div>
+          {pos != null && (
+            <div style={{ position: 'absolute', left: `${pos}%`, top: -3, width: 2, height: 16, background: '#fff', borderRadius: 2, transform: 'translateX(-1px)', boxShadow: '0 0 4px rgba(0,0,0,.75)' }} />
+          )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 4, marginTop: 4, fontSize: sz(10, 11, 12), color: T.inkMute, fontWeight: 700 }}>
+          <span>0</span>
+          <span style={{ flex: 1, textAlign: 'center', color: band ? band.color : T.inkMute, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{band ? band.name : ''}</span>
+          <span>{axisLabel || `${axisMax} ${unit}`}</span>
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+      <BandStat label="SEAS" value={waveFt} unit="ft" axisMax={6} bands={WAVE_BANDS} />
+      <BandStat label="PERIOD" value={periodS} unit="sec" axisLabel="12 s" axisMax={12} bands={PERIOD_BANDS} />
+    </div>
+  );
+}
+
 /* HomeConditions — live "Today's Conditions" card with the Fishability
    gauge, verdict, star rating and a go/no-go call, plus the key readings.
    Fetches the same Open-Meteo + marine data as the forecast screen for a
@@ -517,40 +563,6 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
   // border already carry good/bad — the app doesn't issue instructions.
   const cta = { t: 'See full forecast', Ic: ChevronRight };
 
-  // Big number over the shared band scale. Bands/axisMax MUST be the same
-  // WAVE_BANDS / PERIOD_BANDS + axisMax the Why-card FactorScales use —
-  // never a hand-typed threshold, or the two cards drift apart.
-  const BandStat = ({ label, value, unit, axisMax, axisLabel, bands }) => {
-    const pos = value == null ? null : Math.max(0, Math.min(100, (value / axisMax) * 100));
-    let band = null;
-    if (value != null) { for (const b of bands) { if (value <= b.max) { band = b; break; } } if (!band) band = bands[bands.length - 1]; }
-    return (
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: sz(10, 11, 13), fontWeight: 700, letterSpacing: 1.3, color: T.inkMute }}>{label}</div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '4px 0 8px' }}>
-          <span style={{ fontSize: sz(34, 40, 48), fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: T.ink }}>{value != null ? value.toFixed(1) : '—'}</span>
-          <span style={{ fontSize: sz(13, 15, 17), fontWeight: 700, color: T.inkSoft }}>{unit}</span>
-        </div>
-        <div style={{ position: 'relative', height: 10 }}>
-          <div style={{ position: 'absolute', inset: 0, borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
-            {bands.map((b, i) => {
-              const prev = i === 0 ? 0 : bands[i - 1].max;
-              return <div key={i} style={{ width: `${((b.max - prev) / axisMax) * 100}%`, background: b.color }} />;
-            })}
-          </div>
-          {pos != null && (
-            <div style={{ position: 'absolute', left: `${pos}%`, top: -3, width: 2, height: 16, background: '#fff', borderRadius: 2, transform: 'translateX(-1px)', boxShadow: '0 0 4px rgba(0,0,0,.75)' }} />
-          )}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 4, marginTop: 4, fontSize: sz(10, 11, 12), color: T.inkMute, fontWeight: 700 }}>
-          <span>0</span>
-          <span style={{ flex: 1, textAlign: 'center', color: band ? band.color : T.inkMute, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{band ? band.name : ''}</span>
-          <span>{axisLabel || `${axisMax} ${unit}`}</span>
-        </div>
-      </div>
-    );
-  };
-
   const Stat = ({ label, value }) => (
     <div>
       <div style={{ fontSize: sz(10, 11, 13), letterSpacing: 1.2, color: T.inkMute, fontWeight: 700 }}>{label}</div>
@@ -624,13 +636,8 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
             </div>
           )}
 
-          {/* Seas + period — the two numbers that decide the ride, on the
-              SAME band scales the "Why <grade>?" card uses (WAVE_BANDS /
-              PERIOD_BANDS): one source, so the two cards can't drift. */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
-            <BandStat label="SEAS" value={data.waveFt} unit="ft" axisMax={6} bands={WAVE_BANDS} />
-            <BandStat label="PERIOD" value={data.periodS} unit="sec" axisLabel="12 s" axisMax={12} bands={PERIOD_BANDS} />
-          </div>
+          {/* Seas + period — shared block, see SeaStateReadout. */}
+          <SeaStateReadout waveFt={data.waveFt} periodS={data.periodS} tier={tier} />
 
           {/* Condition chips */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
@@ -3682,22 +3689,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                       </button>
                     </div>
                   </div>
+                  {/* Seas + period — shared block, see SeaStateReadout. */}
+                  <SeaStateReadout waveFt={seasFt} periodS={periodS} tier={size} />
                   {/* Condition chips */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
-                      <Waves size={14} color={T.brass} /> {seasFt != null ? `${seasFt.toFixed(1)} ft seas` : 'Seas —'}
-                    </span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
                       <Wind size={14} color={T.brass} /> {windTxt} {windKt} kt
                     </span>
-                    {periodS != null && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '7px 13px', fontSize: isTablet ? 14 : 12, fontWeight: 800,
-                        background: shortPeriod ? 'rgba(217,131,48,0.18)' : T.oceanDeep,
-                        border: `1px solid ${shortPeriod ? '#d98330' : T.cardEdge}`,
-                        color: shortPeriod ? '#e8a75a' : T.ink }}>
-                        {shortPeriod ? '⚠︎ ' : ''}{periodS.toFixed(1)} sec period
-                      </span>
-                    )}
                   </div>
                   {/* Satellite ocean map shortcuts */}
                   {onOceanMaps && (
@@ -3771,8 +3769,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                 {/* Conditions at a glance — shown on both tabs */}
                 <div style={{ display: 'flex', gap: isTablet ? 12 : 8, marginBottom: 14 }}>
                   <GlanceCard icon={<Wind size={16} color={T.brass} />} label="WIND" big={`${windTxt} ${windKt}`} unit="kt" small={gust != null ? `Gusts to ${gust}` : ''} />
-                  <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`}
-                    small={periodS != null ? `${shortPeriod ? 'Short ' : ''}${periodS.toFixed(1)} sec period` : ''} smallColor={shortPeriod ? '#e8a75a' : undefined} />
+                  {/* Period sub-line dropped — the hero's SeaStateReadout now
+                      carries it; direction stays, the hero doesn't show it. */}
+                  <GlanceCard icon={<Waves size={16} color={T.brass} />} label="SEAS" big={seasFt != null ? `${seasFt.toFixed(1)}` : '—'} unit={`ft ${seasDir}`} />
                   {tideVal != null
                     ? <GlanceCard icon={<Anchor size={16} color={T.brass} />} label="TIDE" big={tideVal.toFixed(1)} unit="ft" small={tideTrend || ''} />
                     : marine?.sstF != null
