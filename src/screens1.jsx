@@ -3013,14 +3013,21 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&daily=wave_height_max,wave_period_max,wave_direction_dominant`
           + `&forecast_days=10&past_days=1&timezone=auto`;
         // Tides: nearest curated NOAA station (US Gulf/FL), hourly heights
-        // for the next 48h. Skipped cleanly when no station is close.
+        // spanning the whole grid — yesterday (the trailing history block)
+        // through eleven days out, so every 10-day block gets a value.
+        // Harmonic predictions, not observations: NOAA serves future dates
+        // freely and hourly-for-12-days is under 300 rows. Dates built from
+        // LOCAL time (toISOString answers in UTC and flips the day on
+        // Gulf-coast evenings). Skipped cleanly when no station is close.
         const station = nearestTideStation(lat, lon);
         let tideUrl = null;
         if (station) {
+          const ymdOf = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
           const now = new Date();
-          const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+          const begin = ymdOf(new Date(now.getTime() - 86400000));
+          const end = ymdOf(new Date(now.getTime() + 11 * 86400000));
           tideUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=ReelIntel`
-            + `&begin_date=${ymd}&range=48&datum=MLLW&station=${station.id}&time_zone=lst_ldt&units=english&interval=h&format=json`;
+            + `&begin_date=${begin}&end_date=${end}&datum=MLLW&station=${station.id}&time_zone=lst_ldt&units=english&interval=h&format=json`;
         }
         const [r, marineRes, tideRes] = await Promise.all([
           fetch(url),
