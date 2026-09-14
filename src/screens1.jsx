@@ -359,8 +359,7 @@ function ScrollDots({ count, active }) {
    shared by the Home conditions card and the Forecast hero. ONE
    component on purpose: those two cards are hand-written near-copies
    that have already drifted, and a second copy of this block would too.
-   Bands and axis maxima are the same WAVE_BANDS / PERIOD_BANDS +
-   FactorScale axisMax the Why card uses — never hand-typed. */
+   Bands come from WAVE_BANDS / PERIOD_BANDS — never hand-typed. */
 function SeaStateReadout({ waveFt, periodS, tier }) {
   const sz = tierPick(tier);
   const BandStat = ({ label, value, unit, axisMax, axisLabel, bands }) => {
@@ -483,7 +482,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         // Forecast screen picks nowHour. Falls back to the old
         // `current`-block scoring if the hourly series is missing.
         const moonIllum = moonPhase(new Date()).illumination;
-        let score;
+        let score, scoreCode = null; // scoreCode = the weather code the SCORE saw (hourly model), for the cap line
         const ht = j.hourly?.time || [];
         const nowMs = Date.now();
         let hIdx = -1;
@@ -492,6 +491,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           const hh = j.hourly;
           const whenMs = new Date(ht[hIdx]).getTime();
           const mw = marineByMs?.get(whenMs) || null;
+          scoreCode = hh.weather_code?.[hIdx] ?? null;
           score = fishabilityHour({
             wind: hh.wind_speed_10m?.[hIdx],
             gust: hh.wind_gusts_10m?.[hIdx],
@@ -503,6 +503,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           });
         } else {
           const bite = biteIndex(new Date(), lat, lon, moonIllum);
+          scoreCode = cur.weather_code ?? null;
           score = fishabilityHour({ wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, waveFt, periodS, bite, weatherCode: cur.weather_code });
         }
         // Best remaining fishing window over the same hourly series.
@@ -541,7 +542,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         setData({
           placeName: place.name,
           tempF: cur.temperature_2m, windKt: cur.wind_speed_10m, windDir: cur.wind_direction_10m,
-          gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score, bestWin,
+          gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score, scoreCode, bestWin,
           tMax: j.daily?.temperature_2m_max?.[0], tMin: j.daily?.temperature_2m_min?.[0],
         });
         setStatus('ok');
@@ -619,11 +620,16 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
                   <span style={{ fontSize: sz(8, 10, 12), fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 2 }}>{fishabilityLabel(score)}</span>
                 </div>
               </div>
-              {onForecast && (
-                <button className="kyc-press" onClick={onForecast} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.brass, fontSize: sz(11, 13.5, 16), fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
-                  Why {fishabilityGrade(score)}? <ChevronRight size={sz(14, 16, 19)} />
-                </button>
-              )}
+              {/* Severe-weather limiter — Home grades the same hour as the
+                  Forecast hero and shows the same capped letter. */}
+              {(() => {
+                const wc = weatherCapInfo(data.scoreCode);
+                return wc ? (
+                  <div style={{ fontSize: sz(11, 13, 15), fontWeight: 800, color: '#e8a75a', whiteSpace: 'nowrap' }}>
+                    {wc.reason} — capped at {fishabilityGrade(wc.cap)}
+                  </div>
+                ) : null;
+              })()}
             </div>
           </div>
 
@@ -3676,10 +3682,17 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                           <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginTop: 2 }}>FISHABILITY</span>
                         </div>
                       </div>
-                      <button className="kyc-press" onClick={() => { const el = document.getElementById('why-section'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.brass, fontSize: isTablet ? 13 : 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
-                        Why {score != null ? fishabilityGrade(score) : ''}? <ChevronRight size={14} />
-                      </button>
+                      {/* Severe-weather limiter — the one line the Why card
+                          carried that nothing else shows: without it a
+                          thunderstorm silently caps the score to F. */}
+                      {(() => {
+                        const wc = weatherCapInfo(repHour?.weatherCode);
+                        return wc ? (
+                          <div style={{ fontSize: isTablet ? 13 : 11, fontWeight: 800, color: '#e8a75a', whiteSpace: 'nowrap' }}>
+                            {wc.reason} — capped at {fishabilityGrade(wc.cap)}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                   {/* Best window for whichever tab is active */}
@@ -3788,24 +3801,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                   />
                 )}
 
-                {/* Why this score — anchored so the hero link can jump here; shown on both tabs */}
-                <Card id="why-section" className="kyc-fadeup" style={{ marginBottom: 14, padding: isTablet ? 20 : 16, borderRadius: 24, scrollMarginTop: 12 }}>
-                  <div style={{ fontSize: isTablet ? 18 : 15, fontWeight: 900, color: T.ink }}>Why {score != null ? fishabilityGrade(score) : '—'}?</div>
-                  <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, margin: '4px 0 14px' }}>
-                    Your score is weighted around fishability and ride comfort.
-                  </div>
-                  {(() => {
-                    const wc = weatherCapInfo(repHour?.weatherCode);
-                    return wc ? (
-                      <div style={{ fontSize: isTablet ? 14 : 12, fontWeight: 800, color: '#e8a75a', marginBottom: 12 }}>
-                        {wc.reason} — capped at {fishabilityGrade(wc.cap)}
-                      </div>
-                    ) : null;
-                  })()}
-                  <FactorScale label="Wind" value={repHour?.wind} unit="kt" axisMax={33} bands={WIND_BANDS} isTablet={isTablet} />
-                  <FactorScale label="Wave height" value={seasFt} unit="ft" axisMax={6} bands={WAVE_BANDS} isTablet={isTablet} />
-                  <FactorScale label="Wave period" value={periodS} unit="s" axisMax={12} bands={PERIOD_BANDS} isTablet={isTablet} />
-                </Card>
               </>
             );
           })()}
@@ -4195,17 +4190,9 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
   );
 }
 
-/* Safe-boating scales for the "Why this grade?" breakdown. Bands are
-   research-based (Beaufort wind force + NWS small-craft guidance, and
-   sea-state / swell-period seamanship rules of thumb). Each band: the
-   upper bound of its range, a colour, and a plain-language name. */
-const WIND_BANDS = [ // knots (Beaufort + NWS small-craft advisory ~20–33 kt)
-  { max: 6,  color: '#3fa34d', name: 'Calm–light' },
-  { max: 10, color: '#7fae3e', name: 'Gentle breeze' },
-  { max: 16, color: '#c9b03a', name: 'Moderate breeze' },
-  { max: 21, color: '#d98330', name: 'Fresh — small-craft caution' },
-  { max: 33, color: '#c0392b', name: 'Strong — small-craft advisory' },
-];
+/* Safe-boating scales for the SeaStateReadout band scales. Bands are
+   research-based (sea-state / swell-period seamanship rules of thumb).
+   Each band: the upper bound of its range, a colour, and a name. */
 const WAVE_BANDS = [ // ft
   { max: 1, color: '#3fa34d', name: 'Calm' },
   { max: 2, color: '#7fae3e', name: 'Smooth' },
@@ -4219,40 +4206,6 @@ const PERIOD_BANDS = [ // seconds — longer swell rides smoother
   { max: 8,  color: '#7fae3e', name: 'Moderate swell' },
   { max: 12, color: '#3fa34d', name: 'Long groundswell' },
 ];
-
-function FactorScale({ label, value, unit, axisMax, bands, isTablet }) {
-  const pos = value == null ? null : Math.max(0, Math.min(100, (value / axisMax) * 100));
-  let band = null;
-  if (value != null) { for (const b of bands) { if (value <= b.max) { band = b; break; } } if (!band) band = bands[bands.length - 1]; }
-  const dec = (unit === 'ft' || unit === 's') ? 1 : 0;
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, fontWeight: 700 }}>{label}</span>
-        <span style={{ fontSize: isTablet ? 13 : 11, color: T.ink, fontWeight: 800, textAlign: 'right' }}>
-          {value != null ? `${value.toFixed(dec)} ${unit}` : '—'}{band ? ` · ${band.name}` : ''}
-        </span>
-      </div>
-      <div style={{ position: 'relative', height: 14 }}>
-        <div style={{ position: 'absolute', inset: 0, borderRadius: 999, overflow: 'hidden', display: 'flex' }}>
-          {bands.map((b, i) => {
-            const prev = i === 0 ? 0 : bands[i - 1].max;
-            return <div key={i} style={{ width: `${((b.max - prev) / axisMax) * 100}%`, background: b.color }} />;
-          })}
-        </div>
-        {pos != null && (
-          <>
-            <div style={{ position: 'absolute', left: `${pos}%`, top: -2, bottom: -2, width: 2, background: '#fff', transform: 'translateX(-1px)', boxShadow: '0 0 3px rgba(0,0,0,0.7)' }} />
-            <div style={{ position: 'absolute', left: `${pos}%`, top: -7, transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '6px solid #fff' }} />
-          </>
-        )}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: isTablet ? 10 : 9, color: T.inkMute, fontWeight: 700 }}>
-        <span>0</span><span>{axisMax} {unit}</span>
-      </div>
-    </div>
-  );
-}
 
 /* US state abbreviation -> full name, for "city, ST" weather-spot
    searches (the geocoder's admin1 field carries the full name). */
