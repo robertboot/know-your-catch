@@ -22,6 +22,8 @@ const JURISDICTIONS: Record<string, { name: string; agency: string; federal: str
   fl_state:     { name: 'Florida Gulf State Waters',     agency: 'FWC',          federal: 'fed_gulf',      lat: 27.80, lon: -83.20 },
   fl_atlantic:  { name: 'Florida Atlantic State Waters', agency: 'FWC',          federal: 'fed_satlantic', lat: 27.20, lon: -80.10 },
 };
+const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+
 const FEDERAL_NAME: Record<string, string> = {
   fed_gulf:      'Federal Gulf',
   fed_satlantic: 'Federal South Atlantic',
@@ -35,7 +37,7 @@ const HORIZON_DAYS = 30;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-cron-secret, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, x-cron-secret, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const json = (b: unknown, s = 200) =>
@@ -133,10 +135,22 @@ Deno.serve(async (req: Request) => {
   const URL_   = Deno.env.get('SUPABASE_URL');
   const SR     = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!SECRET || !URL_ || !SR) return json({ error: 'server_misconfigured' }, 500);
+  // Two callers, two credentials. The cron holds the shared secret. The
+  // admin console holds a person's session — and must NOT hold the
+  // secret, which would put it in the web bundle for anyone to read.
+  const db0 = createClient(URL_, SR, { auth: { persistSession: false } });
   const presented = req.headers.get('x-cron-secret') || '';
-  if (presented.length !== SECRET.length || presented !== SECRET) {
-    return json({ error: 'unauthorized' }, 401);
+  let authed = presented.length === SECRET.length && presented === SECRET;
+  if (!authed) {
+    const hdr = req.headers.get('Authorization') || '';
+    const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : '';
+    if (token) {
+      const { data: who } = await db0.auth.getUser(token);
+      const email = (who?.user?.email || '').toLowerCase();
+      authed = ADMINS.includes(email);
+    }
   }
+  if (!authed) return json({ error: 'unauthorized' }, 401);
 
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* generate with defaults */ }
@@ -145,7 +159,7 @@ Deno.serve(async (req: Request) => {
   const jur = JURISDICTIONS[jid];
   if (!jur) return json({ error: 'unknown_jurisdiction', jurisdiction: jid }, 400);
 
-  const db = createClient(URL_, SR, { auth: { persistSession: false } });
+  const db = db0;
   const week = weekStart();
 
   // Already built this week? Regenerating a SENT edition is never right —
