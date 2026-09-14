@@ -208,9 +208,19 @@ Deno.serve(async (req: Request) => {
   }
 
   let batch = DEFAULT_BATCH;
+  // Optional explicit targets: [{species_id, jurisdiction_id}, ...].
+  // The weekly email needs to re-check the specific regulations it is
+  // about to print, which the least-recently-checked rotation cannot be
+  // asked for — those rows may sit anywhere in a ~90-day cycle.
+  let targets: Array<{ species_id: string; jurisdiction_id: string }> | null = null;
   try {
     const body = await req.json();
     if (Number.isFinite(body?.batch)) batch = Math.max(1, Math.min(MAX_BATCH, Math.floor(body.batch)));
+    if (Array.isArray(body?.pairs) && body.pairs.length) {
+      targets = body.pairs
+        .filter((x: any) => x && typeof x.species_id === 'string' && typeof x.jurisdiction_id === 'string')
+        .slice(0, MAX_BATCH);
+    }
   } catch { /* empty body is fine */ }
 
   const db = createClient(SUPABASE_URL, SERVICE_ROLE);
@@ -246,13 +256,23 @@ Deno.serve(async (req: Request) => {
       pairs.push({ sp, jur, row: regByPair.get(`${sp.id}|${jur.id}`) || null });
     }
   }
-  // Least-recently-checked first; never-checked (null) leads.
-  pairs.sort((a, b) => {
-    const ta = a.row?.last_checked_at ? Date.parse(a.row.last_checked_at) : 0;
-    const tb = b.row?.last_checked_at ? Date.parse(b.row.last_checked_at) : 0;
-    return ta - tb;
-  });
-  const work = pairs.slice(0, batch);
+  let work: typeof pairs;
+  if (targets) {
+    // Named pairs, in the order asked for. Anything that does not resolve
+    // to a live species and a known jurisdiction is dropped silently —
+    // the caller gets fewer results, never a research call against a
+    // species that no longer exists.
+    const want = new Set(targets.map(x => `${x.species_id}|${x.jurisdiction_id}`));
+    work = pairs.filter(p => want.has(`${p.sp.id}|${p.jur.id}`)).slice(0, MAX_BATCH);
+  } else {
+    // Least-recently-checked first; never-checked (null) leads.
+    pairs.sort((a, b) => {
+      const ta = a.row?.last_checked_at ? Date.parse(a.row.last_checked_at) : 0;
+      const tb = b.row?.last_checked_at ? Date.parse(b.row.last_checked_at) : 0;
+      return ta - tb;
+    });
+    work = pairs.slice(0, batch);
+  }
 
   const nowIso = new Date().toISOString();
   let published = 0, drafted = 0, unchanged = 0, failed = 0;

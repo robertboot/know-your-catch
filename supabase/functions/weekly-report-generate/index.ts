@@ -34,6 +34,9 @@ const FEDERAL_NAME: Record<string, string> = {
 const STALE_DAYS = 30;
 // How far ahead a season change is worth warning about.
 const HORIZON_DAYS = 30;
+// How many printed regulations a single generate may re-research.
+// This is the whole marginal AI cost of the weekly email.
+const MAX_REFRESH = 8;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -186,10 +189,13 @@ Deno.serve(async (req: Request) => {
   }
 
   // ---- regulations + the freshness gate -------------------------------
-  const { data: regs, error: regErr } = await db.from('regulations')
+  const { data: regsInitial, error: regErr } = await db.from('regulations')
     .select('species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, updated_at, verified_at, last_checked_at')
     .in('jurisdiction_id', [jid, jur.federal]);
   if (regErr) return json({ error: 'regulations_failed', detail: regErr.message }, 500);
+  // Reassignable: the pre-send refresh below re-reads these rows, and the
+  // gate must judge them as they are after that, not before.
+  let regs = regsInitial;
 
   const now = Date.now();
 
@@ -221,6 +227,50 @@ Deno.serve(async (req: Request) => {
       days_away: seasonSoon ? seasonSoon.days : null,
     };
   }).filter(Boolean) as Array<Record<string, unknown>>;
+
+  // ---- refresh what we are about to print, before judging it ---------
+  // The rows this email names may sit anywhere in the updater's ~90-day
+  // rotation, so waiting for the cron to reach them is not a plan. Ask
+  // the updater for exactly these pairs first. Bounded on purpose: at
+  // most MAX_REFRESH pairs, once a week, which is the entire AI cost this
+  // feature adds. Anything still unverified after this blocks the send,
+  // which is the correct outcome — it is better to mail nothing than to
+  // announce a season change from data nobody has confirmed.
+  const printedPairs = changes.map((c: any) => ({
+    species_id: c.species_id as string, jurisdiction_id: c.jurisdiction_id as string,
+  }));
+  const needsRefresh = printedPairs.filter(pp => {
+    const r = (regs || []).find(x => x.species_id === pp.species_id && x.jurisdiction_id === pp.jurisdiction_id);
+    if (!r) return false;
+    if (r.status === 'draft' || r.status === 'disputed') return true;
+    const checked = r.verified_at || r.last_checked_at || r.updated_at;
+    const age = checked ? daysBetween(now, Date.parse(checked)) : null;
+    return age == null || age > STALE_DAYS;
+  }).slice(0, MAX_REFRESH);
+
+  let refreshed = 0;
+  if (needsRefresh.length && !body.skip_refresh) {
+    try {
+      const res = await fetch(`${URL_}/functions/v1/auto-update-regulations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SR}`,
+          'x-cron-secret': SECRET,
+        },
+        body: JSON.stringify({ pairs: needsRefresh }),
+      });
+      if (res.ok) {
+        refreshed = needsRefresh.length;
+        // Re-read: the gate below must judge the rows as they are NOW,
+        // not as they were before the refresh ran.
+        const { data: fresh } = await db.from('regulations')
+          .select('species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, updated_at, verified_at, last_checked_at')
+          .in('jurisdiction_id', [jid, jur.federal]);
+        if (fresh) regs = fresh;
+      }
+    } catch { /* a failed refresh is not fatal — the gate still decides */ }
+  }
 
   // ---- the freshness gate, scoped to what the email actually prints ----
   // Vetting every row for these waters blocks every edition forever: the
@@ -255,6 +305,7 @@ Deno.serve(async (req: Request) => {
     // Not a blocker — the updater's own backlog, surfaced so it is
     // visible in admin rather than invisible until it matters.
     stale_coverage: staleCoverage, total_rows: (regs || []).length,
+    refreshed_before_send: refreshed,
     satellite: {
       chl: `${URL_}/storage/v1/object/public/ocean-maps/chl-latest.png`,
       sst: `${URL_}/storage/v1/object/public/ocean-maps/sst-latest.png`,
@@ -285,6 +336,7 @@ Deno.serve(async (req: Request) => {
   return json({
     ok: true, id: saved.id, status: saved.status, week_start: week,
     recipients: recipients.length, changes: changes.length, blocked: blockers.length,
+    refreshed,
   });
 });
 
