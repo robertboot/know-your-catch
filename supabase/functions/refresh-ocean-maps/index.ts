@@ -159,7 +159,7 @@ Deno.serve(async (req: Request) => {
     if (jwt) {
       const db = createClient(SUPABASE_URL, SERVICE_ROLE);
       const { data } = await db.auth.getUser(jwt);
-      adminOk = ['robertb1023@me.com', 'annelies@reelintel.ai'].includes((data?.user?.email || '').toLowerCase());
+      adminOk = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'].includes((data?.user?.email || '').toLowerCase());
     }
   }
   if (!cronOk && !adminOk) return jsonResponse({ error: 'forbidden' }, 403);

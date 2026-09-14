@@ -17,7 +17,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const FROM_ADDRESS = 'ReelIntel <hello@reelintel.ai>';
-const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

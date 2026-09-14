@@ -22,7 +22,7 @@ const JURISDICTIONS: Record<string, { name: string; agency: string; federal: str
   fl_state:     { name: 'Florida Gulf State Waters',     agency: 'FWC',          federal: 'fed_gulf',      lat: 27.80, lon: -83.20 },
   fl_atlantic:  { name: 'Florida Atlantic State Waters', agency: 'FWC',          federal: 'fed_satlantic', lat: 27.20, lon: -80.10 },
 };
-const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 
 const FEDERAL_NAME: Record<string, string> = {
   fed_gulf:      'Federal Gulf',

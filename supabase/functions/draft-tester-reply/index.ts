@@ -17,7 +17,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL    = 'claude-sonnet-4-6';
-const ADMIN_EMAILS       = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+const ADMIN_EMAILS       = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

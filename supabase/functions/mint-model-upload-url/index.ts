@@ -36,7 +36,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const ADMIN_EMAILS    = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+const ADMIN_EMAILS    = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 const MODEL_BUCKET    = 'model-artifacts';
 const TICKET_TTL_MS   = 7 * 24 * 60 * 60 * 1000; // 7 days
 

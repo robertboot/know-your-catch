@@ -50,9 +50,9 @@ drop policy if exists weekly_emails_admin_all on public.weekly_emails;
 create policy weekly_emails_admin_all on public.weekly_emails
   for all
   using (lower(coalesce((auth.jwt() ->> 'email'), ''))
-         = any (array['robertb1023@me.com','annelies@reelintel.ai']))
+         = any (array['robertb1023@me.com','annelies@reelintel.ai','harper@reelintel.ai']))
   with check (lower(coalesce((auth.jwt() ->> 'email'), ''))
-              = any (array['robertb1023@me.com','annelies@reelintel.ai']));
+              = any (array['robertb1023@me.com','annelies@reelintel.ai','harper@reelintel.ai']));
 
 -- Per-recipient delivery log. Separate from the edition so a partial
 -- send can be resumed without re-mailing the people who already got it.
@@ -75,9 +75,9 @@ drop policy if exists weekly_email_recipients_admin_all on public.weekly_email_r
 create policy weekly_email_recipients_admin_all on public.weekly_email_recipients
   for all
   using (lower(coalesce((auth.jwt() ->> 'email'), ''))
-         = any (array['robertb1023@me.com','annelies@reelintel.ai']))
+         = any (array['robertb1023@me.com','annelies@reelintel.ai','harper@reelintel.ai']))
   with check (lower(coalesce((auth.jwt() ->> 'email'), ''))
-              = any (array['robertb1023@me.com','annelies@reelintel.ai']));
+              = any (array['robertb1023@me.com','annelies@reelintel.ai','harper@reelintel.ai']));
 
 -- Who would receive an edition. A security-definer function because the
 -- admin UI needs the count BEFORE approving, and it cannot read
