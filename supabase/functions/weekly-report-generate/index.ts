@@ -205,14 +205,29 @@ Deno.serve(async (req: Request) => {
   const nameOf = new Map((sp || []).map(s => [s.id, s.common_name as string]));
 
   // ---- what changed ----------------------------------------------------
-  // A weekly cadence exists to report change. A full regulation table is
-  // what the app is for; this section is only what moved or is about to.
-  const sinceMs = now - 7 * 86400000;
+  // Openings and closings only. Nothing else earns a line.
+  //
+  // This used to also report any row the updater had TOUCHED in the last
+  // week, as a stand-in for "a limit moved". It was a bad stand-in: the
+  // updater touches rows on its own rotation, so the section filled with
+  // species that have no season at all — jack crevalle, tarpon — whose
+  // only news was that a robot had looked at them. A reader learns
+  // nothing from that, and every one of those rows still had to clear the
+  // freshness gate, so noise could block a real send.
+  //
+  // Detecting a genuine bag- or size-limit change needs a history of what
+  // the limit WAS, which this schema does not keep. Rather than guess at
+  // it, the section reports the one kind of change the data can actually
+  // prove: a season edge inside the horizon.
   const changes = (regs || []).map(r => {
-    const touched = Date.parse(r.verified_at || r.updated_at || '') || 0;
-    const seasonSoon = seasonEdgeWithin(r.season_text, HORIZON_DAYS);
-    const recent = touched >= sinceMs;
-    if (!recent && !seasonSoon) return null;
+    const edge = seasonEdgeWithin(r.season_text, HORIZON_DAYS);
+    if (!edge) return null;
+    // A species with no season text, no bag limit and no size limit is not
+    // regulated in any way this email can report on. It has no place here
+    // even if a date string happens to parse out of a note.
+    const regulated = !!r.season_text || r.bag_limit != null
+      || r.min_size_in != null || r.max_size_in != null;
+    if (!regulated) return null;
     return {
       species_id: r.species_id,
       species: nameOf.get(r.species_id) || r.species_id,
@@ -223,10 +238,14 @@ Deno.serve(async (req: Request) => {
       bag_limit: r.bag_limit,
       min_size_in: r.min_size_in,
       notes: r.notes,
-      kind: seasonSoon ? seasonSoon.kind : 'updated',
-      days_away: seasonSoon ? seasonSoon.days : null,
+      kind: edge.kind,
+      days_away: edge.days,
     };
   }).filter(Boolean) as Array<Record<string, unknown>>;
+
+  // Soonest first — a season closing in three days outranks one closing
+  // in three weeks, and the reader's attention is finite.
+  changes.sort((a: any, b: any) => (a.days_away ?? 999) - (b.days_away ?? 999));
 
   // ---- refresh what we are about to print, before judging it ---------
   // The rows this email names may sit anywhere in the updater's ~90-day
@@ -442,9 +461,12 @@ function renderHtml(p: any, best: Day | undefined): string {
     </tr>`).join('');
 
   const changeCards = (p.changes as any[]).length ? (p.changes as any[]).map(c => {
-    const tone = c.kind === 'closes' ? '#FF4D4D' : c.kind === 'opens' ? '#32D17B' : '#FFC857';
-    const head = c.kind === 'closes' ? `CLOSES IN ${c.days_away} DAYS`
-               : c.kind === 'opens'  ? `OPENS IN ${c.days_away} DAYS` : 'UPDATED';
+    // Only two kinds reach here now. A closing is the urgent one — it
+    // takes something away — so it gets the alarm colour.
+    const closing = c.kind === 'closes';
+    const tone = closing ? '#FF4D4D' : '#32D17B';
+    const soon = c.days_away === 0 ? 'TODAY' : c.days_away === 1 ? 'TOMORROW' : `IN ${c.days_away} DAYS`;
+    const head = `${closing ? 'CLOSES' : 'OPENS'} ${soon}`;
     return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;margin-bottom:10px;">
       <tr><td style="padding:8px 14px;border-bottom:1px solid ${EDGE};font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1.3px;color:${tone};">
@@ -536,7 +558,7 @@ function renderText(p: any, best: Day | undefined): string {
     lines.push(`  No changes in ${p.jurisdiction_name} or ${p.federal_name} this week.`);
   } else {
     for (const c of p.changes as any[]) {
-      lines.push(`  [${c.jurisdiction_label}] ${c.species} — ${c.kind}${c.days_away != null ? ' in ' + c.days_away + ' days' : ''}`);
+      lines.push(`  [${c.jurisdiction_label}] ${c.species} — ${c.kind} in ${c.days_away} day${c.days_away === 1 ? '' : 's'}`);
       if (c.season_text) lines.push(`      ${c.season_text}`);
     }
   }
