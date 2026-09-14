@@ -20,3 +20,7 @@ verify_jwt = false
 
 [functions.weekly-report-send]
 verify_jwt = false
+
+# Cron-invoked (pg_net, x-cron-secret) — no user JWT.
+[functions.auto-update-regulations]
+verify_jwt = false
