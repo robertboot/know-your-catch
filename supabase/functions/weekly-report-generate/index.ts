@@ -38,6 +38,8 @@ const HORIZON_DAYS = 30;
 // How many printed regulations a single generate may re-research.
 // This is the whole marginal AI cost of the weekly email.
 const MAX_REFRESH = 8;
+// How far back a season change is still worth mentioning.
+const LOOKBACK_DAYS = 14;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -221,7 +223,7 @@ Deno.serve(async (req: Request) => {
   // it, the section reports the one kind of change the data can actually
   // prove: a season edge inside the horizon.
   const changes = (regs || []).map(r => {
-    const edge = seasonEdgeWithin(r.season_text, HORIZON_DAYS);
+    const edge = notableEdge(r.season_text, HORIZON_DAYS, LOOKBACK_DAYS, new Date(now));
     if (!edge) return null;
     // A species with no season text, no bag limit and no size limit is not
     // regulated in any way this email can report on. It has no place here
@@ -246,7 +248,11 @@ Deno.serve(async (req: Request) => {
 
   // Soonest first — a season closing in three days outranks one closing
   // in three weeks, and the reader's attention is finite.
-  changes.sort((a: any, b: any) => (a.days_away ?? 999) - (b.days_away ?? 999));
+  // Soonest first, and anything still ahead before anything already past.
+  changes.sort((a: any, b: any) => {
+    const ax = a.days_away < 0 ? 1 : 0, bx = b.days_away < 0 ? 1 : 0;
+    return ax - bx || Math.abs(a.days_away) - Math.abs(b.days_away);
+  });
 
   // ---- refresh what we are about to print, before judging it ---------
   // The rows this email names may sit anywhere in the updater's ~90-day
@@ -360,30 +366,77 @@ Deno.serve(async (req: Request) => {
   });
 });
 
-/* Does this season text have an edge inside the horizon? Season text is
-   free-form prose written by the updater, so this reads dates out of it
-   rather than pretending there is a structured field. When it cannot
-   parse, it says nothing — a missed heads-up is recoverable, an invented
-   date is not. */
-function seasonEdgeWithin(seasonText: string | null, horizon: number):
-    { kind: 'opens' | 'closes'; days: number } | null {
-  if (!seasonText) return null;
-  const year = new Date().getUTCFullYear();
-  const months = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
-  const re = new RegExp(`(closes?|opens?|through|ends?|until)\\s+(?:on\\s+)?(${months})\\w*\\s+(\\d{1,2})`, 'ig');
+/* Season text is free-form prose written by the auto-updater from an
+   agency page, and it is the only place an opening or closing lives.
+   Real examples from the live table:
+
+     "September 1 - October 1, 2026 (Alabama state waters open concurrently…)"
+     "Open August 1 – December 31, 2026 (or until the federal quota is met); closed annually in January/February"
+     "March 1 - May 31, 2026 and August 1 - December 31, 2026 (subject to early closure…)"
+     "September 1 - October 14, 2026 (currently closed as of Aug 3, 2026; reopens Sept 1, 2026)"
+
+   Two things this has to get right, and an earlier version got both
+   wrong — it looked for a keyword immediately before a date, so it saw
+   the open date and never the close, and it read the parentheses.
+
+   1. A season is a RANGE. The closing date sits after a dash with no
+      keyword in front of it. Parse the range, not the keyword.
+   2. Parentheses are commentary and are full of dates that are not the
+      season — a restatement of the end date, or a narration of what the
+      status was last month. They are dropped before anything is read. */
+const MONTH_RE = '(?:jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*';
+const MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const monthIndex = (w: string) => MONTHS.indexOf(w.toLowerCase().slice(0, 3));
+
+type Edge = { kind: 'opens' | 'closes'; at: number };
+
+function seasonEdges(seasonText: string | null, now: Date): Edge[] {
+  if (!seasonText) return [];
+  const body = String(seasonText).replace(/\([^)]*\)/g, ' ');
+  const range = new RegExp(
+    `(${MONTH_RE})\\s+(\\d{1,2})(?:\\s*,\\s*(\\d{4}))?` +
+    `\\s*(?:-|–|—|to|through|thru)\\s*` +
+    `(?:(${MONTH_RE})\\s+)?(\\d{1,2})(?:\\s*,\\s*(\\d{4}))?`, 'ig');
+  const yearNow = now.getUTCFullYear();
+  const out: Edge[] = [];
   let m: RegExpExecArray | null;
-  let best: { kind: 'opens' | 'closes'; days: number } | null = null;
-  while ((m = re.exec(seasonText)) !== null) {
-    const idx = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
-      .indexOf(m[2].toLowerCase().slice(0, 3));
-    if (idx < 0) continue;
-    const when = Date.UTC(year, idx, parseInt(m[3], 10));
-    const days = Math.round((when - Date.now()) / 86400000);
-    if (days < 0 || days > horizon) continue;
-    const kind = /open/i.test(m[1]) ? 'opens' : 'closes';
-    if (!best || days < best.days) best = { kind, days };
+  while ((m = range.exec(body)) !== null) {
+    const m1 = monthIndex(m[1]);
+    const d1 = parseInt(m[2], 10);
+    const y1 = m[3] ? parseInt(m[3], 10) : yearNow;
+    const m2 = m[4] ? monthIndex(m[4]) : m1;
+    const d2 = parseInt(m[5], 10);
+    const y2 = m[6] ? parseInt(m[6], 10) : (m2 < m1 ? y1 + 1 : y1);
+    if (m1 < 0 || m2 < 0) continue;
+    // Open season or closure? Judge from this clause only — "Open Aug 1 –
+    // Dec 31; closed annually in January" must not read the later word.
+    const clause = body.slice(0, m.index).split(/[;.]/).pop()!.toLowerCase();
+    const isClosure = /clos/.test(clause) && !/open/.test(clause);
+    const start = Date.UTC(y1, m1, d1), end = Date.UTC(y2, m2, d2);
+    if (isClosure) out.push({ kind: 'closes', at: start }, { kind: 'opens', at: end });
+    else           out.push({ kind: 'opens', at: start }, { kind: 'closes', at: end });
   }
-  return best;
+  return out;
+}
+
+/* The edge worth printing. A date still ahead always beats one already
+   past: an angler needs to know the gag season shuts in seventeen days
+   more than that it opened a fortnight ago. Recent edges are kept as a
+   fallback so a season that just opened is still news to someone who has
+   not been out since. */
+function notableEdge(seasonText: string | null, horizonDays: number, lookbackDays: number, now: Date):
+    { kind: 'opens' | 'closes'; days: number } | null {
+  let future: { kind: 'opens' | 'closes'; days: number } | null = null;
+  let past:   { kind: 'opens' | 'closes'; days: number } | null = null;
+  for (const e of seasonEdges(seasonText, now)) {
+    const days = Math.round((e.at - now.getTime()) / 86400000);
+    if (days >= 0 && days <= horizonDays) {
+      if (!future || days < future.days) future = { kind: e.kind, days };
+    } else if (days < 0 && days >= -lookbackDays) {
+      if (!past || days > past.days) past = { kind: e.kind, days };
+    }
+  }
+  return future ?? past;
 }
 
 type Day = { date: string; dayLabel: string; score: number; grade: string; color: string;
@@ -466,8 +519,10 @@ function renderHtml(p: any, best: Day | undefined): string {
     // takes something away — so it gets the alarm colour.
     const closing = c.kind === 'closes';
     const tone = closing ? '#FF4D4D' : '#32D17B';
-    const soon = c.days_away === 0 ? 'TODAY' : c.days_away === 1 ? 'TOMORROW' : `IN ${c.days_away} DAYS`;
-    const head = `${closing ? 'CLOSES' : 'OPENS'} ${soon}`;
+    const d = Number(c.days_away);
+    const head = d < 0
+      ? `${closing ? 'CLOSED' : 'OPENED'} ${Math.abs(d) === 1 ? 'YESTERDAY' : Math.abs(d) + ' DAYS AGO'}`
+      : `${closing ? 'CLOSES' : 'OPENS'} ${d === 0 ? 'TODAY' : d === 1 ? 'TOMORROW' : 'IN ' + d + ' DAYS'}`;
     return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;margin-bottom:10px;">
       <tr><td style="padding:8px 14px;border-bottom:1px solid ${EDGE};font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1.3px;color:${tone};">
@@ -559,7 +614,8 @@ function renderText(p: any, best: Day | undefined): string {
     lines.push(`  Nothing opens or closes in ${p.jurisdiction_name} or ${p.federal_name} in the next 30 days.`);
   } else {
     for (const c of p.changes as any[]) {
-      lines.push(`  [${c.jurisdiction_label}] ${c.species} — ${c.kind} in ${c.days_away} day${c.days_away === 1 ? '' : 's'}`);
+      const dd = Number(c.days_away);
+      lines.push(`  [${c.jurisdiction_label}] ${c.species} — ${c.kind.replace(/s$/, dd < 0 ? 'ed' : 's')} ${dd < 0 ? Math.abs(dd) + ' days ago' : 'in ' + dd + ' days'}`);
       if (c.season_text) lines.push(`      ${c.season_text}`);
     }
   }
