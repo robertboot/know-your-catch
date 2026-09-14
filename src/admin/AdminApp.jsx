@@ -56,13 +56,14 @@ import { JURISDICTIONS } from '../data.js';
 import { SpeciesPickerModal } from './pickers.jsx';
 import { speciesPhoto, relativeTime } from '../helpers.js';
 import { uploadImage } from './upload.js';
+import { isAdminEmail } from '../admin-emails.js';
 import {
   Card, PrimaryButton, GhostButton, SectionLabel, H1, Field, inputStyle,
 } from '../components.jsx';
 
-const ADMIN_EMAILS = ['Robertb1023@me.com'];
-const normEmail = (e) => (e || '').trim().toLowerCase();
-const isAdminEmail = (e) => ADMIN_EMAILS.map(normEmail).includes(normEmail(e));
+// Prefill only — NOT the access check. isAdminEmail comes from the one
+// list both this file and App.jsx read.
+const SIGN_IN_PREFILL = 'robertb1023@me.com';
 
 /* Runtime-swappable brand assets. Each key mirrors an image referenced
    by a component; the fallback is the bundled path under public/brand/.
@@ -180,7 +181,7 @@ function AdminAppInner({ localAnglerEmail, onExit }) {
    Auth screens
    ============================================================ */
 function SignIn({ allowedEmail, onExit }) {
-  const [email, setEmail]       = useState(allowedEmail || ADMIN_EMAILS[0]);
+  const [email, setEmail]       = useState(allowedEmail || SIGN_IN_PREFILL);
   const [password, setPassword] = useState('');
   const [status, setStatus]     = useState('idle');
   const [error, setError]       = useState('');

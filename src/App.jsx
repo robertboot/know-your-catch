@@ -63,6 +63,7 @@ import {
 // out of the cold-start bundle.
 const PatternsScreen = lazy(() => import('./screens_patterns.jsx').then(m => ({ default: m.PatternsScreen })));
 import NotificationsDrawer, { useAnnouncementInbox } from './notifications-inbox.jsx';
+import { isAdminEmail } from './admin-emails.js';
 
 // Web-only admin console. When __KYC_ADMIN__ is false (ios:build) the
 // ternary constant-folds to null and Rollup drops both the dynamic
@@ -71,11 +72,7 @@ const AdminApp = __KYC_ADMIN__
   ? lazy(() => import('./admin/AdminApp.jsx'))
   : null;
 
-// Admin allowlist. Keep in step with public.is_admin() in the database
-// (supabase/add-admin-annelies.sql) — the JS gate only decides whether
-// the console renders; RLS is what actually protects the data.
-const ADMIN_EMAILS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
-const isAdminEmail = (e) => ADMIN_EMAILS.includes(String(e || '').trim().toLowerCase());
+
 
 const currentHashRoute = () =>
   (typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '')) || '';
