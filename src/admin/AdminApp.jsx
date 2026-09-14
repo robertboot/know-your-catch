@@ -29,6 +29,7 @@ import HomeDashboard from './HomeDashboard.jsx';
 import LegalTab from './LegalTab.jsx';
 import TestersTab from './TestersTab.jsx';
 import ErrorsTab from './ErrorsTab.jsx';
+import WeeklyEmailTab from './WeeklyEmailTab.jsx';
 import {
   brandAsset, refreshBrandAssets, upsertBrandAsset, deleteBrandAsset,
   iosAppIconPublicUrl, uploadIosAppIcon, deleteIosAppIcon, getIosAppIconMeta,
@@ -325,6 +326,7 @@ function SignedInShell({ email, onExit }) {
       {tab === 'notifications' && !detailView && <NotificationsTab />}
       {tab === 'testers'       && !detailView && <TestersTab />}
       {tab === 'errors'        && !detailView && <ErrorsTab />}
+      {tab === 'weekly'        && !detailView && <WeeklyEmailTab />}
       {tab === 'legal'         && !detailView && <LegalTab />}
     </Chrome>
   );
@@ -350,6 +352,7 @@ function TabBar({ tab, onTab }) {
     { id: 'notifications', label: 'Notifications' },
     { id: 'categories',    label: 'Categories' },
     { id: 'branding',      label: 'Branding' },
+    { id: 'weekly',        label: 'Weekly email' },
     { id: 'testers',       label: 'Testers' },
     { id: 'errors',        label: 'Errors' },
     { id: 'legal',         label: 'Legal' },
