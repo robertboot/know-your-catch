@@ -41,6 +41,10 @@ export default function WeeklyEmailTab() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');
   const [openId, setOpenId] = useState(null);
+  // The function's own reply. Kept and shown because three rounds of
+  // 'it looks the same' were three rounds of guessing at what a
+  // successful-looking call actually returned.
+  const [lastReply, setLastReply] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -61,6 +65,7 @@ export default function WeeklyEmailTab() {
       const { data, error } = await c.functions.invoke('weekly-report-generate', {
         body: { jurisdiction, force: true },
       });
+      setLastReply({ at: new Date().toISOString(), jurisdiction, data, error: error?.message || null });
       if (error) throw error;
       if (data?.skipped) setErr(`Nothing generated: ${data.skipped}`);
       await load();
@@ -115,6 +120,20 @@ export default function WeeklyEmailTab() {
         <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 10, lineHeight: 1.5 }}>
           Waters with no subscribers build nothing and say so.
         </div>
+        {lastReply && (
+          <div style={{ marginTop: 12, padding: 10, background: T.oceanDeep,
+                        border: `1px solid ${T.cardEdge}`, borderRadius: 8 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2,
+                          color: T.inkMute, marginBottom: 6 }}>
+              LAST GENERATE — {lastReply.jurisdiction}
+            </div>
+            <pre style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: T.inkSoft,
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+{JSON.stringify(lastReply.error ? { error: lastReply.error } : lastReply.data, null, 2)}
+            </pre>
+          </div>
+        )}
       </Card>
 
       {err && (
