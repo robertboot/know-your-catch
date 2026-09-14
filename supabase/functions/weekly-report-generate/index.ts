@@ -192,16 +192,6 @@ Deno.serve(async (req: Request) => {
   if (regErr) return json({ error: 'regulations_failed', detail: regErr.message }, 500);
 
   const now = Date.now();
-  const blockers: Array<Record<string, unknown>> = [];
-  for (const r of regs || []) {
-    const checked = r.verified_at || r.last_checked_at || r.updated_at;
-    const age = checked ? daysBetween(now, Date.parse(checked)) : null;
-    if (r.status === 'draft' || r.status === 'disputed') {
-      blockers.push({ species_id: r.species_id, jurisdiction_id: r.jurisdiction_id, reason: r.status });
-    } else if (age == null || age > STALE_DAYS) {
-      blockers.push({ species_id: r.species_id, jurisdiction_id: r.jurisdiction_id, reason: 'stale', days: age });
-    }
-  }
 
   // ---- species names ---------------------------------------------------
   const ids = [...new Set((regs || []).map(r => r.species_id))];
@@ -232,6 +222,29 @@ Deno.serve(async (req: Request) => {
     };
   }).filter(Boolean) as Array<Record<string, unknown>>;
 
+  // ---- the freshness gate, scoped to what the email actually prints ----
+  // Vetting every row for these waters blocks every edition forever: the
+  // auto-updater cycles the whole grid in about 90 days by design, so a
+  // 30-day rule over ~215 rows can never come back clean. What matters is
+  // the handful of regulations this email puts in front of people — if we
+  // are going to print it, it has to be fresh.
+  const printed = new Set(changes.map(c => `${c.species_id}|${c.jurisdiction_id}`));
+  const blockers: Array<Record<string, unknown>> = [];
+  let staleCoverage = 0;
+  for (const r of regs || []) {
+    const checked = r.verified_at || r.last_checked_at || r.updated_at;
+    const age = checked ? daysBetween(now, Date.parse(checked)) : null;
+    const old = age == null || age > STALE_DAYS;
+    const unsure = r.status === 'draft' || r.status === 'disputed';
+    if (old || unsure) staleCoverage++;
+    if (!printed.has(`${r.species_id}|${r.jurisdiction_id}`)) continue;
+    if (unsure) {
+      blockers.push({ species_id: r.species_id, jurisdiction_id: r.jurisdiction_id, reason: r.status });
+    } else if (old) {
+      blockers.push({ species_id: r.species_id, jurisdiction_id: r.jurisdiction_id, reason: 'stale', days: age });
+    }
+  }
+
   // ---- forecast --------------------------------------------------------
   const days = await weekForecast(jur.lat, jur.lon);
 
@@ -239,6 +252,9 @@ Deno.serve(async (req: Request) => {
     jurisdiction_id: jid, federal_id: jur.federal, week_start: week,
     jurisdiction_name: jur.name, federal_name: FEDERAL_NAME[jur.federal], agency: jur.agency,
     days, changes, blockers, recipient_count: recipients.length,
+    // Not a blocker — the updater's own backlog, surfaced so it is
+    // visible in admin rather than invisible until it matters.
+    stale_coverage: staleCoverage, total_rows: (regs || []).length,
     satellite: {
       chl: `${URL_}/storage/v1/object/public/ocean-maps/chl-latest.png`,
       sst: `${URL_}/storage/v1/object/public/ocean-maps/sst-latest.png`,

@@ -147,6 +147,14 @@ export default function WeeklyEmailTab() {
                   week of {r.week_start} · {r.recipient_count} recipient{r.recipient_count === 1 ? '' : 's'} ·
                   {' '}{changes.length} change{changes.length === 1 ? '' : 's'} · generated {fmt(r.generated_at)}
                   {r.sent_at ? ` · sent ${fmt(r.sent_at)}` : ''}
+                  {/* The updater's backlog. Shown because it is worth knowing, and
+                      greyed because it never stops a send — only the regulations
+                      this edition prints can do that. */}
+                  {r.payload?.stale_coverage > 0 && (
+                    <span style={{ color: T.inkMute }}>
+                      {' '}· {r.payload.stale_coverage} of {r.payload.total_rows} rows past re-check
+                    </span>
+                  )}
                 </div>
               </div>
               <GhostButton onClick={() => setOpenId(open ? null : r.id)}>
@@ -172,7 +180,8 @@ export default function WeeklyEmailTab() {
                       {blockers.length > 12 && <div>…and {blockers.length - 12} more</div>}
                     </div>
                     <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
-                      Fix these in Regulations, then generate the draft again.
+                      These are regulations this edition would have printed. Fix them in Regulations,
+                      then generate the draft again.
                     </div>
                   </div>
                 )}
