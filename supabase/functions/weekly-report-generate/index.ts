@@ -32,7 +32,8 @@ const FEDERAL_NAME: Record<string, string> = {
 // A regulation older than this has not been re-checked recently enough to
 // mail to a few hundred people. Matches the health API's own threshold.
 const STALE_DAYS = 30;
-// How far ahead a season change is worth warning about.
+// How far ahead a season change is worth warning about. The email's own
+// copy says 'this month' and 'in the next 30 days' — change both together.
 const HORIZON_DAYS = 30;
 // How many printed regulations a single generate may re-research.
 // This is the whole marginal AI cost of the weekly email.
@@ -482,8 +483,8 @@ function renderHtml(p: any, best: Day | undefined): string {
   }).join('') : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;">
       <tr><td style="padding:18px;font-family:Arial,Helvetica,sans-serif;">
-        <div style="font-size:15px;font-weight:bold;color:${INK};">No changes this week</div>
-        <div style="font-size:13px;color:${SOFT};line-height:1.5;padding-top:4px;">Nothing opened, closed or changed limits in ${esc(p.jurisdiction_name)} or ${esc(p.federal_name)}.</div>
+        <div style="font-size:15px;font-weight:bold;color:${INK};">No changes this month</div>
+        <div style="font-size:13px;color:${SOFT};line-height:1.5;padding-top:4px;">Nothing opens or closes in ${esc(p.jurisdiction_name)} or ${esc(p.federal_name)} in the next 30 days.</div>
       </td></tr>
     </table>`;
 
@@ -524,7 +525,7 @@ function renderHtml(p: any, best: Day | undefined): string {
       <td width="50%" style="padding-left:6px;"><img src="${esc(p.satellite.sst)}" width="278" alt="Sea temp" style="display:block;width:100%;border-radius:12px;border:1px solid ${EDGE};"><div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${MUTE};padding-top:6px;">Sea temp</div></td>
     </tr></table></div>`)}
 
-  ${wrap(`<div style="padding:30px 0 0;">${label('What changed in your waters')}${changeCards}
+  ${wrap(`<div style="padding:30px 0 0;">${label('Changes this month')}${changeCards}
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${MUTE};line-height:1.55;padding-top:12px;">Verified against ${esc(p.agency)} and NOAA before this went out.</div></div>`)}
 
   ${wrap(`<div style="padding:30px 0 0;">
@@ -553,9 +554,9 @@ function renderText(p: any, best: Day | undefined): string {
   for (const d of p.days as Day[]) {
     lines.push(`  ${d.dayLabel.padEnd(14)} ${d.grade.padEnd(3)} ${d.windKt != null ? d.windDir + ' ' + d.windKt + ' kt' : '—'}  ${d.waveFt != null ? d.waveFt + ' ft' : '—'}`);
   }
-  lines.push('', 'WHAT CHANGED IN YOUR WATERS');
+  lines.push('', 'CHANGES THIS MONTH');
   if ((p.changes as any[]).length === 0) {
-    lines.push(`  No changes in ${p.jurisdiction_name} or ${p.federal_name} this week.`);
+    lines.push(`  Nothing opens or closes in ${p.jurisdiction_name} or ${p.federal_name} in the next 30 days.`);
   } else {
     for (const c of p.changes as any[]) {
       lines.push(`  [${c.jurisdiction_label}] ${c.species} — ${c.kind} in ${c.days_away} day${c.days_away === 1 ? '' : 's'}`);
