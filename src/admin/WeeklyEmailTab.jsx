@@ -233,6 +233,13 @@ export default function WeeklyEmailTab() {
                     <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
                       These are regulations this edition would have printed. Fix them in Regulations,
                       then generate the draft again.
+                      {r.payload?.refresh_timed_out && (
+                        <>
+                          {' '}The automatic re-check ran out of time on this pass — it is still working
+                          through them in the background, so generating again in a few minutes may clear
+                          some without any work from you.
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

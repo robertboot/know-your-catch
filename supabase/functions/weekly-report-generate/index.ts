@@ -45,6 +45,10 @@ const HORIZON_DAYS = 30;
 // How many printed regulations a single generate may re-research.
 // This is the whole marginal AI cost of the weekly email.
 const MAX_REFRESH = 8;
+// How long generate may wait on the regulation researcher before
+// giving up on it. The admin console is a browser holding this
+// request open; it must come back well inside a tab's patience.
+const REFRESH_BUDGET_MS = 25_000;
 // How far back a season change is still worth mentioning.
 const LOOKBACK_DAYS = 14;
 
@@ -282,8 +286,17 @@ Deno.serve(async (req: Request) => {
   }).slice(0, MAX_REFRESH);
 
   let refreshed = 0;
+  let refreshTimedOut = false;
   if (needsRefresh.length && !body.skip_refresh) {
     try {
+      // Bounded. The researcher makes one AI call per pair with
+      // concurrency 3, which can run for minutes — and the admin console
+      // is a browser waiting on this response. Unbounded, the tab gives
+      // up first and the operator sees "Load failed" with no idea that
+      // anything is still running. Whatever has not come back inside the
+      // budget simply is not refreshed, and the gate below then blocks
+      // the edition, which is the correct outcome rather than a silent
+      // one.
       const res = await fetch(`${URL_}/functions/v1/auto-update-regulations`, {
         method: 'POST',
         headers: {
@@ -292,6 +305,7 @@ Deno.serve(async (req: Request) => {
           'x-cron-secret': SECRET,
         },
         body: JSON.stringify({ pairs: needsRefresh }),
+        signal: AbortSignal.timeout(REFRESH_BUDGET_MS),
       });
       if (res.ok) {
         refreshed = needsRefresh.length;
@@ -302,7 +316,11 @@ Deno.serve(async (req: Request) => {
           .in('jurisdiction_id', [jid, jur.federal]);
         if (fresh) regs = fresh;
       }
-    } catch { /* a failed refresh is not fatal — the gate still decides */ }
+    } catch (e) {
+      // Timed out or errored. Not fatal: the gate still decides, and a
+      // row that could not be re-checked will block the send.
+      refreshTimedOut = String(e).includes('Timeout') || String(e).includes('abort');
+    }
   }
 
   // ---- the freshness gate, scoped to what the email actually prints ----
@@ -371,7 +389,7 @@ Deno.serve(async (req: Request) => {
     // Not a blocker — the updater's own backlog, surfaced so it is
     // visible in admin rather than invisible until it matters.
     stale_coverage: staleCoverage, total_rows: (regs || []).length,
-    refreshed_before_send: refreshed,
+    refreshed_before_send: refreshed, refresh_timed_out: refreshTimedOut,
     satellite: {
       chl: `${URL_}/storage/v1/object/public/ocean-maps/chl-latest.png`,
       sst: `${URL_}/storage/v1/object/public/ocean-maps/sst-latest.png`,
@@ -402,7 +420,7 @@ Deno.serve(async (req: Request) => {
   return json({
     ok: true, id: saved.id, status: saved.status, week_start: week,
     recipients: recipients.length, changes: changes.length, blocked: blockers.length,
-    refreshed,
+    refreshed, refresh_timed_out: refreshTimedOut,
   });
 });
 
