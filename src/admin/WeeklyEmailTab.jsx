@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { T } from '../theme.js';
 import { Card, GhostButton, SectionLabel } from '../components.jsx';
-import { client } from '../supabase-client.js';
+import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase-client.js';
 
 const WATERS = [
   { id: 'al_state',    label: 'Alabama' },
@@ -58,19 +58,48 @@ export default function WeeklyEmailTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  /* Raw fetch rather than functions.invoke. invoke collapses every
+     failure into "Failed to send a request to the Edge Function" — a
+     boot crash, a 500, a CORS preflight rejection and a network drop all
+     read identically, which is three rounds of guessing. This reports
+     the status line and the body. */
   const generate = async (jurisdiction) => {
     setBusy('generate'); setErr('');
+    const url = `${SUPABASE_URL}/functions/v1/weekly-report-generate`;
     try {
       const c = client();
-      const { data, error } = await c.functions.invoke('weekly-report-generate', {
-        body: { jurisdiction, force: true },
+      const { data: sess } = await c.auth.getSession();
+      const token = sess?.session?.access_token || SUPABASE_ANON_KEY;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jurisdiction, force: true }),
       });
-      setLastReply({ at: new Date().toISOString(), jurisdiction, data, error: error?.message || null });
-      if (error) throw error;
-      if (data?.skipped) setErr(`Nothing generated: ${data.skipped}`);
+      const raw = await res.text();
+      let parsed = null;
+      try { parsed = JSON.parse(raw); } catch { /* not JSON — show it raw */ }
+      setLastReply({
+        at: new Date().toISOString(), jurisdiction,
+        status: `${res.status} ${res.statusText}`,
+        data: parsed ?? raw.slice(0, 1200),
+        error: res.ok ? null : `HTTP ${res.status}`,
+      });
+      if (!res.ok) setErr(`Generate failed — HTTP ${res.status}. See the box above.`);
+      else if (parsed?.skipped) setErr(`Nothing generated: ${parsed.skipped}`);
       await load();
     } catch (e) {
-      setErr(e?.message || 'Generate failed.');
+      // A throw here is the network layer, not the function: DNS, CORS
+      // preflight, or the function not answering at all.
+      setLastReply({
+        at: new Date().toISOString(), jurisdiction, status: 'no response',
+        data: { url, message: String(e?.message || e) },
+        error: 'the request never reached the function',
+      });
+      setErr('The request never reached the function — see the box above.');
     } finally { setBusy(''); }
   };
 
@@ -126,6 +155,7 @@ export default function WeeklyEmailTab() {
             <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2,
                           color: T.inkMute, marginBottom: 6 }}>
               LAST GENERATE — {lastReply.jurisdiction}
+              {lastReply.status ? ` · ${lastReply.status}` : ''}
             </div>
             <pre style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: T.inkSoft,
                           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
