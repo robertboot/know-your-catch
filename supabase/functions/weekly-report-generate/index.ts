@@ -14,15 +14,22 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const JURISDICTIONS: Record<string, { name: string; agency: string; federal: string; lat: number; lon: number }> = {
-  al_state:     { name: 'Alabama State Waters',          agency: 'Alabama DCNR', federal: 'fed_gulf',      lat: 30.15, lon: -87.90 },
-  ms_state:     { name: 'Mississippi State Waters',      agency: 'MDMR',         federal: 'fed_gulf',      lat: 30.25, lon: -88.90 },
-  la_state:     { name: 'Louisiana State Waters',        agency: 'LDWF',         federal: 'fed_gulf',      lat: 29.20, lon: -90.10 },
-  tx_state:     { name: 'Texas State Waters',            agency: 'TPWD',         federal: 'fed_gulf',      lat: 28.40, lon: -96.30 },
-  fl_state:     { name: 'Florida Gulf State Waters',     agency: 'FWC',          federal: 'fed_gulf',      lat: 27.80, lon: -83.20 },
-  fl_atlantic:  { name: 'Florida Atlantic State Waters', agency: 'FWC',          federal: 'fed_satlantic', lat: 27.20, lon: -80.10 },
+// Each edition's forecast comes from ONE point, and the email has to say
+// which — the app names its source on every screen and a weekly email
+// that quietly averages a whole state is worse, not better. The points
+// are the same places the app's tide stations sit, so a reader who
+// checks both sees the same name.
+const JURISDICTIONS: Record<string, {
+  name: string; agency: string; federal: string;
+  lat: number; lon: number; place: string;
+}> = {
+  al_state:    { name: 'Alabama State Waters',          agency: 'Alabama DCNR', federal: 'fed_gulf',      lat: 30.250, lon: -88.075, place: 'Dauphin Island, AL' },
+  ms_state:    { name: 'Mississippi State Waters',      agency: 'MDMR',         federal: 'fed_gulf',      lat: 30.250, lon: -88.900, place: 'Biloxi, MS' },
+  la_state:    { name: 'Louisiana State Waters',        agency: 'LDWF',         federal: 'fed_gulf',      lat: 29.263, lon: -89.957, place: 'Grand Isle, LA' },
+  tx_state:    { name: 'Texas State Waters',            agency: 'TPWD',         federal: 'fed_gulf',      lat: 29.310, lon: -94.793, place: 'Galveston, TX' },
+  fl_state:    { name: 'Florida Gulf State Waters',     agency: 'FWC',          federal: 'fed_gulf',      lat: 27.760, lon: -82.627, place: 'St. Petersburg, FL' },
+  fl_atlantic: { name: 'Florida Atlantic State Waters', agency: 'FWC',          federal: 'fed_satlantic', lat: 27.200, lon: -80.100, place: 'Fort Pierce, FL' },
 };
-const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 
 const FEDERAL_NAME: Record<string, string> = {
   fed_gulf:      'Federal Gulf',
@@ -357,6 +364,8 @@ Deno.serve(async (req: Request) => {
   const payload = {
     jurisdiction_id: jid, federal_id: jur.federal, week_start: week,
     jurisdiction_name: jur.name, federal_name: FEDERAL_NAME[jur.federal], agency: jur.agency,
+    place: jur.place, lat: jur.lat, lon: jur.lon,
+    fetched_at: new Date().toISOString(),
     days, changes, blockers, recipient_count: recipients.length,
     summary, date_range: dateRange,
     // Not a blocker — the updater's own backlog, surfaced so it is
@@ -539,6 +548,16 @@ async function weekForecast(lat: number, lon: number): Promise<Day[]> {
    load them. */
 const SITE = 'https://www.reelintel.ai';
 
+const fmtCoord = (lat: number, lon: number) =>
+  `${Math.abs(lat).toFixed(2)}\u00B0${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}\u00B0${lon >= 0 ? 'E' : 'W'}`;
+
+const fmtWhen = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString('en-US',
+      { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' }) + ' CT';
+  } catch { return iso; }
+};
+
 function renderHtml(p: any, best: Day | undefined): string {
   // The approved palette, not the app's: #081321 outer, #061F33 content,
   // #0C2D43 cards, #18C5DF accent.
@@ -605,6 +624,7 @@ function renderHtml(p: any, best: Day | undefined): string {
   <tr><td style="padding:16px 32px 22px;background:${OUT};font-family:${F};">
     <div style="font-size:16px;font-weight:bold;color:${INK};">${esc(p.jurisdiction_name)} &amp; ${esc(p.federal_name)}</div>
     <div style="font-size:14px;color:${SOFT};padding-top:3px;">${esc(p.date_range || p.week_start)}</div>
+    <div style="font-size:13px;color:${SOFT};padding-top:6px;">Forecast for <b style="color:${INK};">${esc(p.place)}</b> &middot; ${esc(fmtCoord(p.lat, p.lon))}</div>
   </td></tr>
 
   ${wrap(`<div style="padding:26px 0 0;">${sec("This Week's Outlook")}
@@ -639,6 +659,9 @@ function renderHtml(p: any, best: Day | undefined): string {
       </tr>${dayRows}
     </table>
     <div style="font-family:${F};font-size:13px;color:${SOFT};line-height:1.55;padding-top:14px;">
+      Open-Meteo marine and weather models for ${esc(p.place)}, pulled ${esc(fmtWhen(p.fetched_at))}.
+      Conditions vary across a state &mdash; check your own spot before you run.
+      <br><br>
       Grades rate <b style="color:${INK};">boat comfort only</b> &mdash; wind and gusts, sea height judged against
       wave period, with thunderstorms capping the grade. They say nothing about whether fish are biting, and
       they are not a safety clearance.
@@ -658,7 +681,7 @@ function renderHtml(p: any, best: Day | undefined): string {
       </td>
     </tr></table></div>`)}
 
-  ${wrap(`<div style="padding:32px 0 0;">${sec('Season &amp; Regulation Watch')}${changeCards}
+  ${wrap(`<div style="padding:32px 0 0;">${sec('Season & Regulation Watch')}${changeCards}
     <div style="font-family:${F};font-size:13px;color:${SOFT};line-height:1.55;padding-top:12px;">
       Season dates only &mdash; bag, size and gear rules can change without a season change.
       Verified against ${esc(p.agency)} and NOAA Fisheries before this went out.
@@ -690,6 +713,7 @@ function renderText(p: any, best: Day | undefined): string {
   const lines: string[] = [];
   lines.push(`${p.jurisdiction_name} & ${p.federal_name} — ${p.date_range || p.week_start}`, '');
   if (p.summary) lines.push(p.summary, '');
+  lines.push(`Forecast for ${p.place} — Open-Meteo, pulled ${p.fetched_at}`, '');
   if (best) lines.push(`BEST DAY: ${best.dayLabel} — ${best.grade}`,
     `  ${best.windKt != null ? best.windDir + ' ' + best.windKt + ' kt' : ''}${best.waveFt != null ? ' · ' + best.waveFt + ' ft' : ''}`, '');
   lines.push('THE WEEK AHEAD');
