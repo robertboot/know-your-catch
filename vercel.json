@@ -1,0 +1,61 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run web:build",
+  "outputDirectory": "dist-web",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/admin/api/health",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report"
+    },
+    {
+      "source": "/admin/api/health/monitored",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=monitored"
+    },
+    {
+      "source": "/admin/api/health/regulations",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=regulations"
+    },
+    {
+      "source": "/admin/api/health/queue",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=queue"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/admin/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/testers",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ]
+}
