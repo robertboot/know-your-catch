@@ -16,7 +16,12 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-const FROM_ADDRESS = 'ReelIntel <hello@reelintel.ai>';
+// The weekly report comes FROM a person, not from a shared inbox.
+// hello@ is right for transactional mail nobody replies to; a newsletter
+// that lands from a named marketing manager gets opened and, when
+// someone hits reply, reaches someone who can answer.
+const FROM_ADDRESS = 'Harper Wells, ReelIntel <harper@reelintel.ai>';
+const REPLY_TO = 'harper@reelintel.ai';
 const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 
 const cors = {
@@ -125,7 +130,7 @@ async function mail(key: string, to: string, subject: string, html: string, text
     const res = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM_ADDRESS, to: [to], subject, html, text }),
+      body: JSON.stringify({ from: FROM_ADDRESS, reply_to: REPLY_TO, to: [to], subject, html, text }),
     });
     if (!res.ok) return { ok: false, detail: `${res.status} ${(await res.text()).slice(0, 300)}` };
     return { ok: true, detail: '' };
