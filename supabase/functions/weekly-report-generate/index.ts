@@ -590,6 +590,15 @@ async function weekForecast(lat: number, lon: number): Promise<Day[]> {
    load them. */
 const SITE = 'https://www.reelintel.ai';
 
+/* The PB ask is a pre-written email rather than a form. There is no
+   submission page yet, so a button pointing at one was a dead end —
+   and a mail client is where the photo already lives. The body
+   carries the consent as a line the angler KEEPS or DELETES, which
+   is a choice they make rather than one made for them by having
+   pressed a button, and it says plainly that the shirt does not
+   depend on it. */
+const PB_MAILTO = "mailto:harper@reelintel.ai?subject=My%20personal%20best&body=Hi%20Harper%2C%0A%0AHere%27s%20my%20personal%20best%20%E2%80%94%20photo%20attached.%0A%0ASpecies%3A%0ALength%20/%20weight%3A%0AGeneral%20area%20%28no%20exact%20numbers%20needed%29%3A%0ADate%20caught%3A%0A%0AShirt%20size%3A%0AMailing%20address%3A%0A%0A%0A---%20Permission%20---%0AKeep%20the%20line%20below%20if%20you%27re%20happy%20for%20us%20to%20run%20this%20catch%20in%20the%0Aweekly%20newsletter.%20Delete%20it%20if%20you%27d%20rather%20we%20didn%27t%20%E2%80%94%20either%20way%20the%0Ashirt%20is%20yours.%0A%0AI%20give%20ReelIntel%20permission%20to%20feature%20this%20catch%2C%20my%20first%20name%20and%20this%0Aphoto%20in%20the%20ReelIntel%20weekly%20email.%20My%20exact%20location%20will%20not%20be%20shared.%0A%0AThanks%2C%0A";
+
 const fmtCoord = (lat: number, lon: number) =>
   `${Math.abs(lat).toFixed(2)}\u00B0${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}\u00B0${lon >= 0 ? 'E' : 'W'}`;
 
@@ -780,8 +789,8 @@ function renderHtml(p: any, best: Day | undefined): string {
             </td>
             <td valign="middle" style="font-family:${F};">
               <div style="font-size:22px;font-weight:bold;color:${INK};line-height:1.2;">A New Personal Best? Let&rsquo;s See It.</div>
-              <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:8px;">Send us your personal-best catch and get a ReelIntel shirt. You choose whether we feature your catch.</div>
-              <a href="${SITE}/" style="display:inline-block;background:${GOLD};color:#06212f;font-size:15px;font-weight:bold;text-decoration:none;padding:13px 24px;border-radius:10px;margin-top:14px;">Submit Your PB</a>
+              <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:8px;">Send Harper your personal-best catch and get a ReelIntel shirt. The email opens ready to fill in &mdash; you decide whether we feature it.</div>
+              <a href="${PB_MAILTO}" style="display:inline-block;background:${GOLD};color:#06212f;font-size:15px;font-weight:bold;text-decoration:none;padding:13px 24px;border-radius:10px;margin-top:14px;">Email Harper your PB</a>
             </td>
           </tr>
         </table>
@@ -855,8 +864,9 @@ function renderText(p: any, best: Day | undefined): string {
     }
   }
   lines.push('', 'Tight lines this week. — Harper Wells, harper@reelintel.ai', '');
-  lines.push('', 'Send us your personal best — every angler who submits one gets a ReelIntel shirt.',
-    'https://www.reelintel.ai/', '',
+  lines.push('', 'Send Harper your personal best — every angler who submits one gets a ReelIntel shirt.',
+    'Email harper@reelintel.ai with the species, size, where and when, plus your shirt size and address.',
+    'Say whether we may feature the catch; the shirt is yours either way.', '',
     `Regulations change without notice. Confirm with ${p.agency} or NOAA before you fish.`);
   return lines.join('\n');
 }
