@@ -324,10 +324,41 @@ Deno.serve(async (req: Request) => {
   // ---- forecast --------------------------------------------------------
   const days = await weekForecast(jur.lat, jur.lon);
 
+  // One sentence over the week's real numbers. Written from the data
+  // rather than by a model: it is a statement of fact about wind and
+  // seas, it costs nothing, and it cannot invent a day that is not there.
+  const goodDays = days.filter(d => d.score >= 80);
+  const badDays  = days.filter(d => d.score < 63);
+  const bestDay  = days.reduce((a, b) => (b.score > (a?.score ?? -1) ? b : a), days[0]);
+  let summary = '';
+  if (bestDay) {
+    const names = goodDays.slice(0, 2).map(d => d.dayLabel.split(',')[0]);
+    summary = names.length >= 2
+      ? `${names[0]} and ${names[1]} are the standout weather windows`
+      : `${bestDay.dayLabel.split(',')[0]} is the standout weather window`;
+    if (badDays.length >= 2) {
+      const firstBad = badDays[0].dayLabel.split(',')[0];
+      summary += `; it turns choppier from ${firstBad}.`;
+    } else {
+      summary += `, with ${bestDay.windKt != null ? bestDay.windDir + ' ' + bestDay.windKt + ' kt' : 'light wind'}`
+        + `${bestDay.waveFt != null ? ' and ' + bestDay.waveFt + ' ft seas' : ''}.`;
+    }
+  }
+
+  // Human date range for the masthead — "Week of 2026-09-10" is a
+  // database value, not something anyone says.
+  const ws = new Date(week + 'T12:00:00Z');
+  const we = new Date(ws.getTime() + 6 * 86400000);
+  const md = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const dateRange = ws.getUTCMonth() === we.getUTCMonth()
+    ? `${md(ws)}\u2013${we.getUTCDate()}, ${we.getUTCFullYear()}`
+    : `${md(ws)} \u2013 ${md(we)}, ${we.getUTCFullYear()}`;
+
   const payload = {
     jurisdiction_id: jid, federal_id: jur.federal, week_start: week,
     jurisdiction_name: jur.name, federal_name: FEDERAL_NAME[jur.federal], agency: jur.agency,
     days, changes, blockers, recipient_count: recipients.length,
+    summary, date_range: dateRange,
     // Not a blocker — the updater's own backlog, surfaced so it is
     // visible in admin rather than invisible until it matters.
     stale_coverage: staleCoverage, total_rows: (regs || []).length,
@@ -498,103 +529,158 @@ async function weekForecast(lat: number, lon: number): Promise<Day[]> {
 
 /* Email HTML, not app HTML. Tables and inline styles only — Outlook has
    no flex, Gmail strips <style>, and a design that relies on either
-   arrives as a column of unstyled text. */
-function renderHtml(p: any, best: Day | undefined): string {
-  const NAVY = '#031B33', CARD = '#0B2740', EDGE = '#0f5e85', INK = '#ffffff',
-        SOFT = '#CBD5E1', MUTE = '#94A3B8', BRASS = '#19D4F2';
-  const wrap = (inner: string) => `<tr><td style="padding:0 28px;">${inner}</td></tr>`;
-  const label = (s: string) =>
-    `<div style="font-size:11px;font-weight:bold;letter-spacing:1.6px;color:${MUTE};text-transform:uppercase;padding-bottom:10px;">${esc(s)}</div>`;
+   arrives as a column of unstyled text.
 
-  const dayRows = (p.days as Day[]).map(d => `
+   Images are absolute URLs on reelintel.ai, not attachments and not
+   inline SVG: an email client will not render an <svg>, and a data: URI
+   is stripped by Gmail. Anything that must be seen has to be a PNG or
+   JPEG the client can fetch. That is also why every section still reads
+   correctly with images turned off — a third of recipients will never
+   load them. */
+const SITE = 'https://www.reelintel.ai';
+
+function renderHtml(p: any, best: Day | undefined): string {
+  // The approved palette, not the app's: #081321 outer, #061F33 content,
+  // #0C2D43 cards, #18C5DF accent.
+  const OUT = '#081321', BG = '#061F33', CARD = '#0C2D43',
+        EDGE = 'rgba(24,197,223,0.18)', INK = '#FFFFFF', SOFT = '#B8C8D8',
+        CYAN = '#18C5DF', GOOD = '#54C96B', BAD = '#D65245', GOLD = '#FFC343';
+  const F = 'Arial, Helvetica, sans-serif';
+  const wrap = (inner: string) => `<tr><td style="padding:0 32px;">${inner}</td></tr>`;
+  const sec = (s: string) =>
+    `<div style="font-family:${F};font-size:14px;font-weight:bold;letter-spacing:2px;color:${CYAN};text-transform:uppercase;padding-bottom:12px;">${esc(s)}</div>`;
+
+  const dayRows = (p.days as Day[]).map(d => {
+    const good = d.score >= 80;
+    return `
     <tr>
-      <td style="padding:8px 10px;background:${CARD};border-radius:8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${SOFT};white-space:nowrap;">${esc(d.dayLabel)}</td>
-      <td style="padding:8px 6px;"><div style="background:${d.color};color:#06212f;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;text-align:center;border-radius:6px;padding:5px 0;width:44px;">${esc(d.grade)}</div></td>
-      <td style="padding:8px 10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${SOFT};white-space:nowrap;">${d.windKt != null ? esc(d.windDir + ' ' + d.windKt + ' kt') : '—'}</td>
-      <td style="padding:8px 10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${SOFT};white-space:nowrap;">${d.waveFt != null ? esc(d.waveFt + ' ft') : '—'}${d.periodS != null ? esc(' · ' + d.periodS + ' s') : ''}</td>
-    </tr>`).join('');
+      <td style="padding:8px 10px 8px 0;font-family:${F};font-size:14px;color:${good ? INK : SOFT};font-weight:${good ? 'bold' : 'normal'};white-space:nowrap;">${esc(d.dayLabel)}</td>
+      <td style="padding:8px 10px 8px 0;" width="58">
+        <div style="background:${d.color};color:#06212f;font-family:${F};font-size:14px;font-weight:bold;text-align:center;border-radius:6px;padding:5px 0;">${esc(d.grade)}</div>
+      </td>
+      <td style="padding:8px 10px 8px 0;font-family:${F};font-size:14px;color:${SOFT};white-space:nowrap;">${d.windKt != null ? esc(d.windDir + ' ' + d.windKt + ' kt') : '—'}</td>
+      <td style="padding:8px 0;font-family:${F};font-size:14px;color:${SOFT};white-space:nowrap;">${d.waveFt != null ? esc(d.waveFt + ' ft') : '—'}${d.periodS != null ? esc(' / ' + d.periodS + ' sec') : ''}</td>
+    </tr>`;
+  }).join('');
 
   const changeCards = (p.changes as any[]).length ? (p.changes as any[]).map(c => {
-    // Only two kinds reach here now. A closing is the urgent one — it
-    // takes something away — so it gets the alarm colour.
     const closing = c.kind === 'closes';
-    const tone = closing ? '#FF4D4D' : '#32D17B';
+    const tone = closing ? BAD : GOOD;
     const d = Number(c.days_away);
     const head = d < 0
       ? `${closing ? 'CLOSED' : 'OPENED'} ${Math.abs(d) === 1 ? 'YESTERDAY' : Math.abs(d) + ' DAYS AGO'}`
       : `${closing ? 'CLOSES' : 'OPENS'} ${d === 0 ? 'TODAY' : d === 1 ? 'TOMORROW' : 'IN ' + d + ' DAYS'}`;
     return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;margin-bottom:10px;">
-      <tr><td style="padding:8px 14px;border-bottom:1px solid ${EDGE};font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1.3px;color:${tone};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;margin-bottom:12px;">
+      <tr><td style="padding:9px 15px;border-bottom:1px solid ${EDGE};font-family:${F};font-size:12px;font-weight:bold;letter-spacing:1.2px;color:${tone};">
         ${esc(String(c.jurisdiction_label).toUpperCase())} &middot; ${esc(head)}
       </td></tr>
-      <tr><td style="padding:12px 14px;font-family:Arial,Helvetica,sans-serif;">
-        <div style="font-size:16px;font-weight:bold;color:${INK};">${esc(c.species)}</div>
-        <div style="font-size:13px;color:${SOFT};line-height:1.5;padding-top:4px;">
-          ${esc(c.season_text || '')}${c.bag_limit != null ? esc(' · bag ' + c.bag_limit) : ''}${c.min_size_in != null ? esc(' · min ' + c.min_size_in + ' in') : ''}
-        </div>
+      <tr><td style="padding:14px 15px;font-family:${F};">
+        <div style="font-size:18px;font-weight:bold;color:${INK};">${esc(c.species)}</div>
+        <div style="font-size:14px;color:${SOFT};line-height:1.55;padding-top:5px;">${esc(c.season_text || '')}</div>
       </td></tr>
     </table>`;
   }).join('') : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;">
-      <tr><td style="padding:18px;font-family:Arial,Helvetica,sans-serif;">
-        <div style="font-size:15px;font-weight:bold;color:${INK};">No changes this month</div>
-        <div style="font-size:13px;color:${SOFT};line-height:1.5;padding-top:4px;">Nothing opens or closes in ${esc(p.jurisdiction_name)} or ${esc(p.federal_name)} in the next 30 days.</div>
+      <tr><td style="padding:20px;font-family:${F};">
+        <div style="font-size:17px;font-weight:bold;color:${INK};">No upcoming season changes identified</div>
+        <div style="font-size:14px;color:${SOFT};line-height:1.55;padding-top:6px;">Nothing opens or closes in ${esc(p.jurisdiction_name)} or ${esc(p.federal_name)} in the next 30 days, as of ${esc(p.date_range || p.week_start)}.</div>
       </td></tr>
     </table>`;
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${esc(p.jurisdiction_name)}</title></head>
-<body style="margin:0;padding:0;background:#06111F;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#06111F;">
+<body style="margin:0;padding:0;background:${OUT};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${OUT};">
 <tr><td align="center" style="padding:0;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:${NAVY};">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:640px;max-width:640px;background:${BG};">
 
-  <tr><td style="padding:26px 28px 20px;background:#06111F;border-bottom:1px solid ${EDGE};font-family:Arial,Helvetica,sans-serif;">
-    <div style="font-size:19px;font-weight:bold;color:${INK};letter-spacing:1px;">REEL<span style="color:${BRASS};">INTEL</span></div>
-    <div style="font-size:16px;font-weight:bold;color:${INK};padding-top:12px;">${esc(p.jurisdiction_name)} &amp; ${esc(p.federal_name)}</div>
-    <div style="font-size:12px;color:${MUTE};padding-top:3px;">Week of ${esc(p.week_start)}</div>
+  <!-- masthead: logo, title and tagline are in the artwork; the alt text
+       carries them for anyone with images off -->
+  <tr><td style="padding:0;">
+    <img src="${SITE}/brand/newsletter-masthead.jpg" width="640" alt="ReelIntel — Your Offshore Outlook. Built for Offshore."
+         style="display:block;width:100%;max-width:640px;height:auto;border:0;">
+  </td></tr>
+  <tr><td style="padding:16px 32px 22px;background:${OUT};font-family:${F};">
+    <div style="font-size:16px;font-weight:bold;color:${INK};">${esc(p.jurisdiction_name)} &amp; ${esc(p.federal_name)}</div>
+    <div style="font-size:14px;color:${SOFT};padding-top:3px;">${esc(p.date_range || p.week_start)}</div>
   </td></tr>
 
-  ${best ? wrap(`<div style="padding:24px 0 0;font-family:Arial,Helvetica,sans-serif;">
-    ${label('Best day')}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${best.color};border-radius:14px;">
-      <tr>
-        <td width="74" style="padding:16px 0 16px 16px;">
-          <div style="background:${best.color};color:#06212f;font-size:22px;font-weight:bold;text-align:center;border-radius:14px;padding:16px 0;">${esc(best.grade)}</div>
-        </td>
-        <td style="padding:16px;font-family:Arial,Helvetica,sans-serif;">
-          <div style="font-size:19px;font-weight:bold;color:${INK};">${esc(best.dayLabel)}</div>
-          <div style="font-size:13px;color:${SOFT};padding-top:4px;">${best.windKt != null ? esc(best.windDir + ' ' + best.windKt + ' kt') : ''}${best.waveFt != null ? esc(' · ' + best.waveFt + ' ft') : ''}${best.periodS != null ? esc(' at ' + best.periodS + ' s') : ''}</div>
-        </td>
-      </tr>
+  ${wrap(`<div style="padding:26px 0 0;">${sec("This Week's Outlook")}
+    <div style="font-family:${F};font-size:19px;line-height:1.45;color:${INK};font-weight:bold;">${esc(p.summary || '')}</div></div>`)}
+
+  ${best ? wrap(`<div style="padding:20px 0 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${GOOD};border-radius:12px;">
+      <tr><td style="padding:20px;font-family:${F};">
+        <div style="font-size:13px;font-weight:bold;letter-spacing:1.4px;color:${GOOD};text-transform:uppercase;">Best Weather Window</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;"><tr>
+          <td width="66" valign="middle">
+            <div style="width:66px;height:66px;background:${GOOD};border-radius:12px;text-align:center;">
+              <div style="font-family:${F};font-size:26px;font-weight:bold;color:#06212f;padding-top:16px;line-height:1;">${esc(best.grade)}</div>
+              <div style="font-family:${F};font-size:9px;font-weight:bold;letter-spacing:0.8px;color:#06212f;padding-top:3px;">CALMEST</div>
+            </div>
+          </td>
+          <td style="padding-left:16px;" valign="middle">
+            <div style="font-family:${F};font-size:22px;font-weight:bold;color:${INK};">${esc(best.dayLabel)}</div>
+            <div style="font-family:${F};font-size:14px;color:${SOFT};padding-top:5px;">${best.windKt != null ? esc('Wind ' + best.windDir + ' ' + best.windKt + ' kt') : ''}${best.waveFt != null ? esc(' · Seas ' + best.waveFt + ' ft') : ''}${best.periodS != null ? esc(' · Period ' + best.periodS + ' sec') : ''}</div>
+          </td>
+        </tr></table>
+      </td></tr>
     </table></div>`) : ''}
 
-  ${wrap(`<div style="padding:28px 0 0;">${label('The week ahead')}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 4px;">${dayRows}</table></div>`)}
+  ${wrap(`<div style="padding:30px 0 0;">${sec('The Week Ahead')}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="font-family:${F};font-size:12px;font-weight:bold;letter-spacing:1.3px;color:${SOFT};text-transform:uppercase;padding-bottom:6px;">Day</td>
+        <td style="font-family:${F};font-size:12px;font-weight:bold;letter-spacing:1.3px;color:${SOFT};text-transform:uppercase;padding-bottom:6px;">Grade</td>
+        <td style="font-family:${F};font-size:12px;font-weight:bold;letter-spacing:1.3px;color:${SOFT};text-transform:uppercase;padding-bottom:6px;">Wind</td>
+        <td style="font-family:${F};font-size:12px;font-weight:bold;letter-spacing:1.3px;color:${SOFT};text-transform:uppercase;padding-bottom:6px;">Seas / Period</td>
+      </tr>${dayRows}
+    </table>
+    <div style="font-family:${F};font-size:13px;color:${SOFT};line-height:1.55;padding-top:14px;">
+      Grades rate <b style="color:${INK};">boat comfort only</b> &mdash; wind and gusts, sea height judged against
+      wave period, with thunderstorms capping the grade. They say nothing about whether fish are biting, and
+      they are not a safety clearance.
+    </div></div>`)}
 
-  ${wrap(`<div style="padding:28px 0 0;">${label('Satellite this week')}
+  ${wrap(`<div style="padding:30px 0 0;">${sec('Satellite Watch')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td width="50%" style="padding-right:6px;"><img src="${esc(p.satellite.chl)}" width="278" alt="Chlorophyll" style="display:block;width:100%;border-radius:12px;border:1px solid ${EDGE};"><div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${MUTE};padding-top:6px;">Chlorophyll</div></td>
-      <td width="50%" style="padding-left:6px;"><img src="${esc(p.satellite.sst)}" width="278" alt="Sea temp" style="display:block;width:100%;border-radius:12px;border:1px solid ${EDGE};"><div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${MUTE};padding-top:6px;">Sea temp</div></td>
+      <td width="50%" valign="top" style="padding-right:7px;">
+        <img src="${esc(p.satellite.chl)}" width="278" alt="Chlorophyll, northern Gulf" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid ${EDGE};">
+        <div style="font-family:${F};font-size:15px;font-weight:bold;color:${INK};padding-top:8px;">Chlorophyll</div>
+        <div style="font-family:${F};font-size:12px;color:${SOFT};padding-top:2px;">NOAA CoastWatch, 8-day composite</div>
+      </td>
+      <td width="50%" valign="top" style="padding-left:7px;">
+        <img src="${esc(p.satellite.sst)}" width="278" alt="Sea surface temperature, northern Gulf" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid ${EDGE};">
+        <div style="font-family:${F};font-size:15px;font-weight:bold;color:${INK};padding-top:8px;">Sea Surface Temperature</div>
+        <div style="font-family:${F};font-size:12px;color:${SOFT};padding-top:2px;">NASA MUR, daily field</div>
+      </td>
     </tr></table></div>`)}
 
-  ${wrap(`<div style="padding:30px 0 0;">${label('Changes this month')}${changeCards}
-    <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${MUTE};line-height:1.55;padding-top:12px;">Verified against ${esc(p.agency)} and NOAA before this went out.</div></div>`)}
+  ${wrap(`<div style="padding:32px 0 0;">${sec('Season &amp; Regulation Watch')}${changeCards}
+    <div style="font-family:${F};font-size:13px;color:${SOFT};line-height:1.55;padding-top:12px;">
+      Season dates only &mdash; bag, size and gear rules can change without a season change.
+      Verified against ${esc(p.agency)} and NOAA Fisheries before this went out.
+    </div></div>`)}
 
-  ${wrap(`<div style="padding:30px 0 0;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid #FFC857;border-radius:14px;">
-      <tr><td style="padding:22px;font-family:Arial,Helvetica,sans-serif;text-align:center;">
-        <div style="font-size:18px;font-weight:bold;color:${INK};">Send us your personal best</div>
-        <div style="font-size:13.5px;color:${SOFT};line-height:1.6;padding:8px 0 16px;">Every angler who submits one gets a ReelIntel shirt. Whether it runs in this email is up to you &mdash; there is a box to tick when you send it.</div>
-        <a href="https://www.reelintel.ai/" style="display:inline-block;background:${BRASS};color:#06212f;font-size:15px;font-weight:bold;text-decoration:none;padding:14px 28px;border-radius:12px;">Submit your PB</a>
+  ${wrap(`<div style="padding:34px 0 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${GOLD};border-radius:12px;">
+      <tr><td style="padding:22px;font-family:${F};" align="center">
+        <img src="${SITE}/brand/reelintel-new-pb.png" width="200" alt="New PB!" style="display:block;width:200px;max-width:60%;height:auto;border:0;margin:0 auto;">
+        <div style="font-size:24px;font-weight:bold;color:${INK};padding-top:14px;">A New Personal Best? Let&rsquo;s See It.</div>
+        <div style="font-size:14px;color:${SOFT};line-height:1.6;padding:8px 0 4px;">Send us your personal-best catch and get a ReelIntel shirt. You choose whether we feature your catch.</div>
+        <img src="${SITE}/brand/newsletter-shirt.jpg" width="560" alt="ReelIntel shirt, front and back" style="display:block;width:100%;max-width:560px;height:auto;border-radius:10px;border:0;margin:14px auto 0;">
+        <div style="font-size:12px;color:${SOFT};padding-top:10px;">One per angler while supplies last.</div>
+        <a href="${SITE}/" style="display:inline-block;background:${GOLD};color:#06212f;font-size:16px;font-weight:bold;text-decoration:none;padding:15px 30px;border-radius:10px;margin-top:14px;">Submit Your PB</a>
       </td></tr>
     </table></div>`)}
 
-  ${wrap(`<div style="padding:30px 0 30px;border-top:1px solid ${EDGE};margin-top:30px;font-family:Arial,Helvetica,sans-serif;">
-    <div style="font-size:12px;color:${MUTE};line-height:1.65;">You get this because you fish ${esc(p.jurisdiction_name)}.</div>
-    <div style="font-size:11.5px;color:#64748B;line-height:1.6;padding-top:10px;">Regulations change without notice. Confirm with ${esc(p.agency)} or NOAA before you fish.</div>
+  ${wrap(`<div style="padding:32px 0 34px;border-top:1px solid ${EDGE};margin-top:32px;font-family:${F};">
+    <div style="font-size:13px;color:${SOFT};line-height:1.65;">You&rsquo;re receiving this because you selected <b style="color:${INK};">${esc(p.jurisdiction_name)}</b>.</div>
+    <div style="font-size:12px;color:#7C90A2;line-height:1.6;padding-top:12px;">
+      Regulations change. Confirm current rules with ${esc(p.agency)} and NOAA Fisheries before you fish.
+    </div>
   </div>`)}
 
 </table></td></tr></table></body></html>`;
@@ -602,7 +688,8 @@ function renderHtml(p: any, best: Day | undefined): string {
 
 function renderText(p: any, best: Day | undefined): string {
   const lines: string[] = [];
-  lines.push(`${p.jurisdiction_name} & ${p.federal_name} — week of ${p.week_start}`, '');
+  lines.push(`${p.jurisdiction_name} & ${p.federal_name} — ${p.date_range || p.week_start}`, '');
+  if (p.summary) lines.push(p.summary, '');
   if (best) lines.push(`BEST DAY: ${best.dayLabel} — ${best.grade}`,
     `  ${best.windKt != null ? best.windDir + ' ' + best.windKt + ' kt' : ''}${best.waveFt != null ? ' · ' + best.waveFt + ' ft' : ''}`, '');
   lines.push('THE WEEK AHEAD');
