@@ -689,13 +689,27 @@ function renderHtml(p: any, best: Day | undefined): string {
 
   ${wrap(`<div style="padding:34px 0 0;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${GOLD};border-radius:12px;">
-      <tr><td style="padding:22px;font-family:${F};" align="center">
-        <img src="${SITE}/brand/reelintel-new-pb.png" width="200" alt="New PB!" style="display:block;width:200px;max-width:60%;height:auto;border:0;margin:0 auto;">
-        <div style="font-size:24px;font-weight:bold;color:${INK};padding-top:14px;">A New Personal Best? Let&rsquo;s See It.</div>
-        <div style="font-size:14px;color:${SOFT};line-height:1.6;padding:8px 0 4px;">Send us your personal-best catch and get a ReelIntel shirt. You choose whether we feature your catch.</div>
-        <img src="${SITE}/brand/newsletter-shirt.jpg" width="560" alt="ReelIntel shirt, front and back" style="display:block;width:100%;max-width:560px;height:auto;border-radius:10px;border:0;margin:14px auto 0;">
-        <div style="font-size:12px;color:${SOFT};padding-top:10px;">One per angler while supplies last.</div>
-        <a href="${SITE}/" style="display:inline-block;background:${GOLD};color:#06212f;font-size:16px;font-weight:bold;text-decoration:none;padding:15px 30px;border-radius:10px;margin-top:14px;">Submit Your PB</a>
+      <tr><td style="padding:22px;font-family:${F};">
+        <!-- Artwork left of the copy in every client. A two-cell table
+             rather than flex: Outlook has no flex, and a stacked version
+             on mobile is what was asked NOT to happen. The left column is
+             fixed so the lettering never squeezes to nothing. -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="150" valign="middle" style="padding-right:16px;">
+              <img src="${SITE}/brand/reelintel-new-pb.png" width="150" alt="New PB!"
+                   style="display:block;width:150px;height:auto;border:0;">
+            </td>
+            <td valign="middle" style="font-family:${F};">
+              <div style="font-size:22px;font-weight:bold;color:${INK};line-height:1.2;">A New Personal Best? Let&rsquo;s See It.</div>
+              <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:8px;">Send us your personal-best catch and get a ReelIntel shirt. You choose whether we feature your catch.</div>
+              <a href="${SITE}/" style="display:inline-block;background:${GOLD};color:#06212f;font-size:15px;font-weight:bold;text-decoration:none;padding:13px 24px;border-radius:10px;margin-top:14px;">Submit Your PB</a>
+            </td>
+          </tr>
+        </table>
+        <img src="${SITE}/brand/newsletter-shirt.jpg" width="560" alt="ReelIntel shirt, front and back"
+             style="display:block;width:100%;max-width:560px;height:auto;border-radius:10px;border:0;margin:18px auto 0;">
+        <div style="font-size:12px;color:${SOFT};padding-top:10px;text-align:center;">One per angler while supplies last.</div>
       </td></tr>
     </table></div>`)}
 
