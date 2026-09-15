@@ -160,7 +160,9 @@ export default function WeeklyEmailTab() {
             <pre style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: T.inkSoft,
                           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-{JSON.stringify(lastReply.error ? { error: lastReply.error } : lastReply.data, null, 2)}
+{JSON.stringify(
+  lastReply.error ? { error: lastReply.error, detail: lastReply.data } : lastReply.data,
+  null, 2)}
             </pre>
           </div>
         )}
