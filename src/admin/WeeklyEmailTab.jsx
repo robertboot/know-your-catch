@@ -315,11 +315,12 @@ export default function WeeklyEmailTab() {
                     <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
                       These are regulations this edition would have printed. Fix them in Regulations,
                       then generate the draft again.
-                      {r.payload?.refresh_timed_out && (
+                      {r.payload?.refresh_started > 0 && (
                         <>
-                          {' '}The automatic re-check ran out of time on this pass — it is still working
-                          through them in the background, so generating again in a few minutes may clear
-                          some without any work from you.
+                          {' '}A re-check of {r.payload.refresh_started}{' '}
+                          {r.payload.refresh_started === 1 ? 'regulation is' : 'regulations are'} running in
+                          the background now. Give it a minute and hit Regenerate — it usually clears
+                          without any work from you.
                         </>
                       )}
                     </div>

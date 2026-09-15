@@ -49,10 +49,6 @@ const HORIZON_DAYS = 30;
 // How many printed regulations a single generate may re-research.
 // This is the whole marginal AI cost of the weekly email.
 const MAX_REFRESH = 8;
-// How long generate may wait on the regulation researcher before
-// giving up on it. The admin console is a browser holding this
-// request open; it must come back well inside a tab's patience.
-const REFRESH_BUDGET_MS = 25_000;
 // How far back a season change is still worth mentioning.
 const LOOKBACK_DAYS = 14;
 
@@ -302,42 +298,30 @@ async function handle(req: Request): Promise<Response> {
     return age == null || age > STALE_DAYS;
   }).slice(0, MAX_REFRESH);
 
-  let refreshed = 0;
-  let refreshTimedOut = false;
+  // Kick the re-check off and DO NOT wait for it. One pair takes the
+  // researcher longer than any budget a browser will sit through — the
+  // 25-second cap timed out on a single row — so waiting bought nothing
+  // but a slow failure. The request is handed to waitUntil so the
+  // runtime keeps it alive after this response returns, and the operator
+  // regenerates in a minute to pick up the result.
+  let refreshStarted = 0;
   if (needsRefresh.length && !body.skip_refresh) {
-    try {
-      // Bounded. The researcher makes one AI call per pair with
-      // concurrency 3, which can run for minutes — and the admin console
-      // is a browser waiting on this response. Unbounded, the tab gives
-      // up first and the operator sees "Load failed" with no idea that
-      // anything is still running. Whatever has not come back inside the
-      // budget simply is not refreshed, and the gate below then blocks
-      // the edition, which is the correct outcome rather than a silent
-      // one.
-      const res = await fetch(`${URL_}/functions/v1/auto-update-regulations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SR}`,
-          'x-cron-secret': SECRET,
-        },
-        body: JSON.stringify({ pairs: needsRefresh }),
-        signal: AbortSignal.timeout(REFRESH_BUDGET_MS),
-      });
-      if (res.ok) {
-        refreshed = needsRefresh.length;
-        // Re-read: the gate below must judge the rows as they are NOW,
-        // not as they were before the refresh ran.
-        const { data: fresh } = await db.from('regulations')
-          .select('species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, updated_at, verified_at, last_checked_at')
-          .in('jurisdiction_id', [jid, jur.federal]);
-        if (fresh) regs = fresh;
-      }
-    } catch (e) {
-      // Timed out or errored. Not fatal: the gate still decides, and a
-      // row that could not be re-checked will block the send.
-      refreshTimedOut = String(e).includes('Timeout') || String(e).includes('abort');
-    }
+    const job = fetch(`${URL_}/functions/v1/auto-update-regulations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SR}`,
+        'x-cron-secret': SECRET,
+      },
+      body: JSON.stringify({ pairs: needsRefresh }),
+    }).catch((e) => { console.error('background re-check failed', e); });
+
+    // Supabase's runtime cancels in-flight work when the handler returns
+    // unless it is registered. Without this the research request dies
+    // mid-flight and the next generate finds the rows exactly as stale.
+    const rt = (globalThis as any).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(job);
+    refreshStarted = needsRefresh.length;
   }
 
   // ---- the freshness gate, scoped to what the email actually prints ----
@@ -408,7 +392,7 @@ async function handle(req: Request): Promise<Response> {
     // Not a blocker — the updater's own backlog, surfaced so it is
     // visible in admin rather than invisible until it matters.
     stale_coverage: staleCoverage, total_rows: (regs || []).length,
-    refreshed_before_send: refreshed, refresh_timed_out: refreshTimedOut,
+    refresh_started: refreshStarted,
     satellite: {
       chl: `${URL_}/storage/v1/object/public/ocean-maps/chl-latest.png`,
       sst: `${URL_}/storage/v1/object/public/ocean-maps/sst-latest.png`,
@@ -439,7 +423,7 @@ async function handle(req: Request): Promise<Response> {
   return json({
     ok: true, id: saved.id, status: saved.status, week_start: week,
     recipients: recipients.length, changes: changes.length, blocked: blockers.length,
-    refreshed, refresh_timed_out: refreshTimedOut,
+    refresh_started: refreshStarted,
   });
 }
 
