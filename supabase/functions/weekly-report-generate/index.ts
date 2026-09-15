@@ -627,6 +627,28 @@ function renderHtml(p: any, best: Day | undefined): string {
     <div style="font-size:13px;color:${SOFT};padding-top:6px;">Forecast for <b style="color:${INK};">${esc(p.place)}</b> &middot; ${esc(fmtCoord(p.lat, p.lon))}</div>
   </td></tr>
 
+  <!-- A named human opens the email and is the person to reply to. The
+       copy is fixed rather than generated: a greeting that changes every
+       week reads as machinery, and this one is the only part of the email
+       that is not a measurement. -->
+  ${wrap(`<div style="padding:26px 0 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${EDGE};border-radius:12px;">
+      <tr><td style="padding:18px 20px;font-family:${F};">
+        <div style="font-size:15px;color:${INK};line-height:1.6;">
+          Morning &mdash; here&rsquo;s your week on the water, pulled fresh this morning
+          from ${esc(p.place)}.
+        </div>
+        <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:8px;">
+          Questions about anything in here, or a season date that looks wrong to you?
+          Just hit reply &mdash; it comes straight to me.
+        </div>
+        <div style="font-size:14px;color:${INK};font-weight:bold;padding-top:10px;">Harper Wells</div>
+        <div style="font-size:13px;color:${SOFT};">Marketing Manager, ReelIntel &middot;
+          <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a>
+        </div>
+      </td></tr>
+    </table></div>`)}
+
   ${wrap(`<div style="padding:26px 0 0;">${sec("This Week's Outlook")}
     <div style="font-family:${F};font-size:19px;line-height:1.45;color:${INK};font-weight:bold;">${esc(p.summary || '')}</div></div>`)}
 
@@ -713,6 +735,19 @@ function renderHtml(p: any, best: Day | undefined): string {
       </td></tr>
     </table></div>`)}
 
+  ${wrap(`<div style="padding:30px 0 0;font-family:${F};">
+    <div style="font-size:15px;color:${INK};line-height:1.6;">
+      Tight lines this week. If something in here helped you pick a day &mdash; or if it got it wrong &mdash;
+      I&rsquo;d genuinely like to hear about it.
+    </div>
+    <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:10px;">
+      <b style="color:${INK};">Harper Wells</b><br>
+      Marketing Manager, ReelIntel<br>
+      <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a> &middot;
+      <a href="${SITE}" style="color:${CYAN};text-decoration:none;">reelintel.ai</a>
+    </div>
+  </div>`)}
+
   ${wrap(`<div style="padding:32px 0 34px;border-top:1px solid ${EDGE};margin-top:32px;font-family:${F};">
     <div style="font-size:13px;color:${SOFT};line-height:1.65;">You&rsquo;re receiving this because you selected <b style="color:${INK};">${esc(p.jurisdiction_name)}</b>.</div>
     <div style="font-size:12px;color:#7C90A2;line-height:1.6;padding-top:12px;">
@@ -726,6 +761,9 @@ function renderHtml(p: any, best: Day | undefined): string {
 function renderText(p: any, best: Day | undefined): string {
   const lines: string[] = [];
   lines.push(`${p.jurisdiction_name} & ${p.federal_name} — ${p.date_range || p.week_start}`, '');
+  lines.push('Morning — here\u2019s your week on the water, pulled fresh this morning.',
+    'Questions, or a season date that looks wrong? Just hit reply — it comes straight to me.',
+    'Harper Wells, Marketing Manager, ReelIntel — harper@reelintel.ai', '');
   if (p.summary) lines.push(p.summary, '');
   lines.push(`Forecast for ${p.place} — Open-Meteo, pulled ${p.fetched_at}`, '');
   if (best) lines.push(`BEST DAY: ${best.dayLabel} — ${best.grade}`,
@@ -744,6 +782,7 @@ function renderText(p: any, best: Day | undefined): string {
       if (c.season_text) lines.push(`      ${c.season_text}`);
     }
   }
+  lines.push('', 'Tight lines this week. — Harper Wells, harper@reelintel.ai', '');
   lines.push('', 'Send us your personal best — every angler who submits one gets a ReelIntel shirt.',
     'https://www.reelintel.ai/', '',
     `Regulations change without notice. Confirm with ${p.agency} or NOAA before you fish.`);
