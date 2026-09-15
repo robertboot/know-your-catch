@@ -94,7 +94,7 @@ export default function WeeklyEmailTab() {
      boot crash, a 500, a CORS preflight rejection and a network drop all
      read identically, which is three rounds of guessing. This reports
      the status line and the body. */
-  const generate = async (jurisdiction) => {
+  const generate = async (jurisdiction, exclude) => {
     setBusy('generate'); setErr('');
     const url = `${SUPABASE_URL}/functions/v1/weekly-report-generate`;
     try {
@@ -108,7 +108,7 @@ export default function WeeklyEmailTab() {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ jurisdiction, force: true }),
+        body: JSON.stringify({ jurisdiction, force: true, exclude: exclude || [] }),
       });
       const raw = await res.text();
       let parsed = null;
@@ -305,9 +305,21 @@ export default function WeeklyEmailTab() {
                     </div>
                     <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.6 }}>
                       {blockers.slice(0, 12).map((b, i) => (
-                        <div key={i}>
-                          {b.species_id} in {b.jurisdiction_id} — {b.reason}
-                          {b.days != null ? ` (${b.days} days old)` : ''}
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10,
+                                              flexWrap: 'wrap', padding: '3px 0' }}>
+                          <span style={{ flex: 1, minWidth: 200 }}>
+                            {b.species_id} in {b.jurisdiction_id} — {b.reason}
+                            {b.days != null ? ` (${b.days} days old)` : ''}
+                          </span>
+                          {/* Leaving one row out beats both alternatives: printing
+                              a season nobody confirmed, or an edition that can
+                              never send because one record is stuck. The reader is
+                              told what was left out. */}
+                          <GhostButton
+                            disabled={busy === 'generate'}
+                            onClick={() => generate(r.jurisdiction_id,
+                              [`${b.species_id}|${b.jurisdiction_id}`])}
+                          >Leave out &amp; regenerate</GhostButton>
                         </div>
                       ))}
                       {blockers.length > 12 && <div>…and {blockers.length - 12} more</div>}
@@ -366,6 +378,13 @@ export default function WeeklyEmailTab() {
                     <GhostButton disabled={busy === r.id} onClick={() => discard(r.id)}>Discard</GhostButton>
                   )}
                 </div>
+
+                {Array.isArray(r.payload?.excluded) && r.payload.excluded.length > 0 && (
+                  <div style={{ fontSize: 12.5, color: T.warn, marginTop: 10, lineHeight: 1.55 }}>
+                    Left out of this edition, and named as such in the email:{' '}
+                    {r.payload.excluded.map(x => `${x.species} (${x.jurisdiction_label})`).join(', ')}
+                  </div>
+                )}
 
                 {r.send_error && (
                   <div style={{ fontSize: 12.5, color: T.warn, marginTop: 10, lineHeight: 1.5 }}>

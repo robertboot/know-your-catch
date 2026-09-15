@@ -186,6 +186,13 @@ async function handle(req: Request): Promise<Response> {
   try { body = await req.json(); } catch { /* generate with defaults */ }
   const jid = String(body.jurisdiction || 'al_state');
   const force = body.force === true;
+  // Regulations the operator has chosen to leave out of THIS edition,
+  // as "species_id|jurisdiction_id". A row that cannot be verified has
+  // three possible fates and only two of them are acceptable: print it
+  // unverified (never), block the edition forever (what happens today
+  // when a row is stuck), or leave it out and say so. This is the third.
+  const exclude = new Set(
+    Array.isArray(body.exclude) ? body.exclude.map((x: unknown) => String(x)) : []);
   const jur = JURISDICTIONS[jid];
   if (!jur) return json({ error: 'unknown_jurisdiction', jurisdiction: jid }, 400);
 
@@ -273,6 +280,12 @@ async function handle(req: Request): Promise<Response> {
   // Soonest first — a season closing in three days outranks one closing
   // in three weeks, and the reader's attention is finite.
   // Soonest first, and anything still ahead before anything already past.
+  const excluded = changes.filter((c: any) => exclude.has(`${c.species_id}|${c.jurisdiction_id}`));
+  for (const c of excluded) {
+    const i = changes.indexOf(c);
+    if (i >= 0) changes.splice(i, 1);
+  }
+
   changes.sort((a: any, b: any) => {
     const ax = a.days_away < 0 ? 1 : 0, bx = b.days_away < 0 ? 1 : 0;
     return ax - bx || Math.abs(a.days_away) - Math.abs(b.days_away);
@@ -389,6 +402,8 @@ async function handle(req: Request): Promise<Response> {
     fetched_at: new Date().toISOString(),
     days, changes, blockers, recipient_count: recipients.length,
     summary, date_range: dateRange,
+    excluded: excluded.map((c: any) => ({ species: c.species, species_id: c.species_id,
+      jurisdiction_id: c.jurisdiction_id, jurisdiction_label: c.jurisdiction_label })),
     // Not a blocker — the updater's own backlog, surfaced so it is
     // visible in admin rather than invisible until it matters.
     stale_coverage: staleCoverage, total_rows: (regs || []).length,
@@ -423,7 +438,7 @@ async function handle(req: Request): Promise<Response> {
   return json({
     ok: true, id: saved.id, status: saved.status, week_start: week,
     recipients: recipients.length, changes: changes.length, blocked: blockers.length,
-    refresh_started: refreshStarted,
+    refresh_started: refreshStarted, excluded: excluded.length,
   });
 }
 
@@ -755,7 +770,12 @@ function renderHtml(p: any, best: Day | undefined): string {
   ${wrap(`<div style="padding:32px 0 0;">${sec('Season & Regulation Watch')}${changeCards}
     <div style="font-family:${F};font-size:13px;color:${SOFT};line-height:1.55;padding-top:12px;">
       Season dates only &mdash; bag, size and gear rules can change without a season change.
-      Verified against ${esc(p.agency)} and NOAA Fisheries before this went out.
+      Verified against ${esc(p.agency)} and NOAA Fisheries before this went out.${
+        (p.excluded || []).length
+          ? ` One regulation could not be re-verified in time and has been left out of this issue: ${
+              (p.excluded as any[]).map((x) => esc(`${x.species} (${x.jurisdiction_label})`)).join(', ')
+            }. Check it with the agency directly.`
+          : ''}
     </div></div>`)}
 
   ${wrap(`<div style="padding:34px 0 0;">
