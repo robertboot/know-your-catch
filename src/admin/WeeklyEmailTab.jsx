@@ -88,7 +88,9 @@ export default function WeeklyEmailTab() {
         data: parsed ?? raw.slice(0, 1200),
         error: res.ok ? null : `HTTP ${res.status}`,
       });
-      if (!res.ok) setErr(`Generate failed — HTTP ${res.status}. See the box above.`);
+      if (!res.ok) setErr(parsed?.detail
+        ? `Generate failed — ${parsed.error}. Detail in the box above.`
+        : `Generate failed — HTTP ${res.status}. See the box above.`);
       else if (parsed?.skipped) setErr(`Nothing generated: ${parsed.skipped}`);
       await load();
     } catch (e) {

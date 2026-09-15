@@ -145,6 +145,19 @@ function scoreHour(h: { wind?: number|null; gust?: number|null; waveFt?: number|
 }
 
 Deno.serve(async (req: Request) => {
+  // Everything below runs inside one catch. An unhandled throw returns a
+  // platform 500 that carries no CORS headers, so a browser sees a bare
+  // network failure and the operator learns nothing — which is exactly
+  // how this went undiagnosed for several rounds.
+  try {
+    return await handle(req);
+  } catch (e) {
+    console.error('weekly-report-generate threw', e);
+    return json({ error: 'unhandled', detail: String(e?.stack || e).slice(0, 1500) }, 500);
+  }
+});
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
@@ -374,7 +387,9 @@ Deno.serve(async (req: Request) => {
   // database value, not something anyone says.
   const ws = new Date(week + 'T12:00:00Z');
   const we = new Date(ws.getTime() + 6 * 86400000);
-  const md = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const MONTHS_LONG = ['January','February','March','April','May','June',
+    'July','August','September','October','November','December'];
+  const md = (d: Date) => `${MONTHS_LONG[d.getUTCMonth()]} ${d.getUTCDate()}`;
   const dateRange = ws.getUTCMonth() === we.getUTCMonth()
     ? `${md(ws)}\u2013${we.getUTCDate()}, ${we.getUTCFullYear()}`
     : `${md(ws)} \u2013 ${md(we)}, ${we.getUTCFullYear()}`;
@@ -422,7 +437,7 @@ Deno.serve(async (req: Request) => {
     recipients: recipients.length, changes: changes.length, blocked: blockers.length,
     refreshed, refresh_timed_out: refreshTimedOut,
   });
-});
+}
 
 /* Season text is free-form prose written by the auto-updater from an
    agency page, and it is the only place an opening or closing lives.
@@ -497,6 +512,11 @@ function notableEdge(seasonText: string | null, horizonDays: number, lookbackDay
   return future ?? past;
 }
 
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDayLabel = (d: Date) =>
+  `${WD[d.getUTCDay()]}, ${MO[d.getUTCMonth()]} ${d.getUTCDate()}`;
+
 type Day = { date: string; dayLabel: string; score: number; grade: string; color: string;
              windKt: number | null; windDir: string; waveFt: number | null; periodS: number | null };
 
@@ -544,7 +564,7 @@ async function weekForecast(lat: number, lon: number): Promise<Day[]> {
     const score = Math.round(mean * 0.6 + worst * 0.4);
     const d = new Date(date + 'T12:00:00Z');
     return {
-      date, dayLabel: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+      date, dayLabel: fmtDayLabel(d),
       score, grade: grade(score), color: fishColor(score),
       windKt: avg(b.wind) != null ? Math.round(avg(b.wind)!) : null,
       windDir: dirName(avg(b.dir)),
@@ -570,9 +590,15 @@ const fmtCoord = (lat: number, lon: number) =>
   `${Math.abs(lat).toFixed(2)}\u00B0${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}\u00B0${lon >= 0 ? 'E' : 'W'}`;
 
 const fmtWhen = (iso: string) => {
+  // Formatted by hand in UTC rather than with a named time zone: the edge
+  // runtime does not reliably carry zone data, and an unsupported zone
+  // throws rather than falling back.
   try {
-    return new Date(iso).toLocaleString('en-US',
-      { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' }) + ' CT';
+    const d = new Date(iso);
+    const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${M} ${d.getUTCDate()}, ${hh}:${mm} UTC`;
   } catch { return iso; }
 };
 
