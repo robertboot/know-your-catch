@@ -690,10 +690,18 @@ function renderHtml(p: any, best: Day | undefined): string {
           Questions about anything in here, or a season date that looks wrong to you?
           Just hit reply &mdash; it comes straight to me.
         </div>
-        <div style="font-size:14px;color:${INK};font-weight:bold;padding-top:10px;">Harper Wells</div>
-        <div style="font-size:13px;color:${SOFT};">Marketing Manager, ReelIntel &middot;
-          <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a>
-        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;">
+          <tr>
+            <td width="48" valign="middle" style="padding-right:12px;">
+              <img src="${SITE}/brand/newsletter-harper.jpg" width="48" height="48" alt=""
+                   style="display:block;width:48px;height:48px;border-radius:24px;border:0;">
+            </td>
+            <td valign="middle" style="font-family:${F};">
+              <div style="font-size:14px;color:${INK};font-weight:bold;">Harper Wells</div>
+              <div style="font-size:13px;color:${SOFT};">Marketing Manager, ReelIntel</div>
+            </td>
+          </tr>
+        </table>
       </td></tr>
     </table></div>`)}
 
@@ -788,18 +796,28 @@ function renderHtml(p: any, best: Day | undefined): string {
       Tight lines this week. If something in here helped you pick a day &mdash; or if it got it wrong &mdash;
       I&rsquo;d genuinely like to hear about it.
     </div>
-    <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:10px;">
-      <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a>
-    </div>
-    <!-- The signature card is on a white ground, so it sits on its own
-         white plate rather than floating on the navy with a hard edge.
-         The mailto above it is live text, because a third of readers
-         will never load this image. -->
-    <div style="background:#FFFFFF;border-radius:10px;padding:10px;margin-top:14px;">
-      <img src="${SITE}/brand/newsletter-signature.jpg" width="560"
-           alt="Harper Wells, Marketing Manager, ReelIntel — harper@reelintel.ai"
-           style="display:block;width:100%;max-width:560px;height:auto;border:0;">
-    </div>
+    <!-- Built as markup rather than dropped in as the white signature
+         card: that card carries its own white ground and would sit on the
+         navy as a bright rectangle. This keeps her name and address as
+         live text, which is what a reader with images blocked needs, and
+         the photo degrades to nothing rather than to a broken white box. -->
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:16px;">
+      <tr>
+        <td width="72" valign="top" style="padding-right:14px;">
+          <img src="${SITE}/brand/newsletter-harper.jpg" width="72" height="72" alt=""
+               style="display:block;width:72px;height:72px;border-radius:36px;border:0;">
+        </td>
+        <td valign="middle" style="font-family:${F};">
+          <div style="font-size:16px;font-weight:bold;color:${INK};">Harper Wells</div>
+          <div style="font-size:13px;color:${SOFT};padding-top:2px;">Marketing Manager &middot; ReelIntel, LLC</div>
+          <div style="font-size:13px;padding-top:6px;">
+            <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a>
+            <span style="color:#4A6478;"> &middot; </span>
+            <a href="${SITE}" style="color:${CYAN};text-decoration:none;">reelintel.ai</a>
+          </div>
+        </td>
+      </tr>
+    </table>
   </div>`)}
 
   ${wrap(`<div style="padding:32px 0 34px;border-top:1px solid ${EDGE};margin-top:32px;font-family:${F};">
