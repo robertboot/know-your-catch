@@ -741,10 +741,16 @@ function renderHtml(p: any, best: Day | undefined): string {
       I&rsquo;d genuinely like to hear about it.
     </div>
     <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:10px;">
-      <b style="color:${INK};">Harper Wells</b><br>
-      Marketing Manager, ReelIntel<br>
-      <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a> &middot;
-      <a href="${SITE}" style="color:${CYAN};text-decoration:none;">reelintel.ai</a>
+      <a href="mailto:harper@reelintel.ai" style="color:${CYAN};text-decoration:none;">harper@reelintel.ai</a>
+    </div>
+    <!-- The signature card is on a white ground, so it sits on its own
+         white plate rather than floating on the navy with a hard edge.
+         The mailto above it is live text, because a third of readers
+         will never load this image. -->
+    <div style="background:#FFFFFF;border-radius:10px;padding:10px;margin-top:14px;">
+      <img src="${SITE}/brand/newsletter-signature.jpg" width="560"
+           alt="Harper Wells, Marketing Manager, ReelIntel — harper@reelintel.ai"
+           style="display:block;width:100%;max-width:560px;height:auto;border:0;">
     </div>
   </div>`)}
 
