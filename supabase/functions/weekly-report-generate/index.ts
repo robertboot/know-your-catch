@@ -830,7 +830,12 @@ function renderHtml(p: any, best: Day | undefined): string {
   </div>`)}
 
   ${wrap(`<div style="padding:32px 0 34px;border-top:1px solid ${EDGE};margin-top:32px;font-family:${F};">
-    <div style="font-size:13px;color:${SOFT};line-height:1.65;">You&rsquo;re receiving this because you selected <b style="color:${INK};">${esc(p.jurisdiction_name)}</b>.</div>
+    <div style="font-size:13px;color:${SOFT};line-height:1.65;">You&rsquo;re receiving this because you selected <b style="color:${INK};">${esc(p.jurisdiction_name)}</b> in the ReelIntel app.</div>
+    <div style="font-size:13px;line-height:1.65;padding-top:8px;">
+      <a href="mailto:harper@reelintel.ai?subject=Change%20my%20waters" style="color:${CYAN};text-decoration:none;">Change your waters</a>
+      <span style="color:#4A6478;"> &middot; </span>
+      <a href="mailto:harper@reelintel.ai?subject=Unsubscribe&body=Please%20stop%20sending%20me%20the%20weekly%20report." style="color:${CYAN};text-decoration:none;">Unsubscribe</a>
+    </div>
     <div style="font-size:12px;color:#7C90A2;line-height:1.6;padding-top:12px;">
       Regulations change. Confirm current rules with ${esc(p.agency)} and NOAA Fisheries before you fish.
     </div>
@@ -867,6 +872,8 @@ function renderText(p: any, best: Day | undefined): string {
   lines.push('', 'Send Harper your personal best — every angler who submits one gets a ReelIntel shirt.',
     'Email harper@reelintel.ai with the species, size, where and when, plus your shirt size and address.',
     'Say whether we may feature the catch; the shirt is yours either way.', '',
-    `Regulations change without notice. Confirm with ${p.agency} or NOAA before you fish.`);
+    `Regulations change without notice. Confirm with ${p.agency} or NOAA before you fish.`,
+    '',
+    `To stop receiving this, reply with "unsubscribe" or email harper@reelintel.ai.`);
   return lines.join('\n');
 }

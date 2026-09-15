@@ -130,7 +130,20 @@ async function mail(key: string, to: string, subject: string, html: string, text
     const res = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM_ADDRESS, reply_to: REPLY_TO, to: [to], subject, html, text }),
+      body: JSON.stringify({
+        from: FROM_ADDRESS, reply_to: REPLY_TO, to: [to], subject, html, text,
+        // Bulk mail without a List-Unsubscribe header is a spam signal at
+        // Gmail and Apple regardless of how well the domain authenticates,
+        // and since February 2024 it is a stated requirement for anyone
+        // sending in volume. The mailto is the one-click target; the
+        // header is what the client reads to draw its own unsubscribe
+        // button above the message.
+        headers: {
+          'List-Unsubscribe': `<mailto:${REPLY_TO}?subject=Unsubscribe>`,
+          'List-Id': `ReelIntel Weekly Waters Report <weekly.reelintel.ai>`,
+          'Precedence': 'bulk',
+        },
+      }),
     });
     if (!res.ok) return { ok: false, detail: `${res.status} ${(await res.text()).slice(0, 300)}` };
     return { ok: true, detail: '' };
