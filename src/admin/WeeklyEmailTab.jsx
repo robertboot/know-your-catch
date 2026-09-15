@@ -32,6 +32,17 @@ const STATUS = {
   discarded: { label: 'Discarded',       color: T.inkMute },
 };
 
+/* The Thursday this week's editions belong to. Must match weekStart()
+   in weekly-report-generate — if the two disagree, the board looks at a
+   different week than the one the cron is filling and every edition
+   reads as 'not generated'. */
+function thisWeekStart(now = new Date()) {
+  const d = new Date(now);
+  const back = (d.getUTCDay() - 4 + 7) % 7;   // 4 = Thursday
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+
 const fmt = (t) => t ? new Date(t).toLocaleString(undefined,
   { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 
@@ -41,10 +52,15 @@ export default function WeeklyEmailTab() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');
   const [openId, setOpenId] = useState(null);
+  const week = thisWeekStart();
   // The function's own reply. Kept and shown because three rounds of
   // 'it looks the same' were three rounds of guessing at what a
   // successful-looking call actually returned.
   const [lastReply, setLastReply] = useState(null);
+  // How many anglers each water would actually reach. Without this the
+  // operator cannot tell which editions are worth generating, and five
+  // of the six buttons do nothing for reasons the screen never states.
+  const [counts, setCounts] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -57,6 +73,21 @@ export default function WeeklyEmailTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const c = client();
+      if (!c) return;
+      const out = {};
+      for (const w of WATERS) {
+        const { data } = await c.rpc('weekly_email_audience', { p_jurisdiction: w.id });
+        out[w.id] = Array.isArray(data) ? data.length : 0;
+      }
+      if (alive) setCounts(out);
+    })();
+    return () => { alive = false; };
+  }, [rows]);
 
   /* Raw fetch rather than functions.invoke. invoke collapses every
      failure into "Failed to send a request to the Edge Function" — a
@@ -138,19 +169,68 @@ export default function WeeklyEmailTab() {
       </div>
 
       <Card style={{ marginBottom: 16, padding: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginBottom: 10 }}>
-          GENERATE A DRAFT NOW
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                      gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute }}>
+            THIS WEEK — {week}
+          </div>
+          <div style={{ fontSize: 11.5, color: T.inkMute }}>
+            Drafts auto-generate Thursday. Nothing sends without you.
+          </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {WATERS.map(w => (
-            <GhostButton key={w.id} disabled={busy === 'generate'} onClick={() => generate(w.id)}>
-              {w.label}
-            </GhostButton>
-          ))}
+
+        <div style={{ display: 'grid', gap: 6 }}>
+          {WATERS.map(w => {
+            const n = counts ? counts[w.id] : null;
+            const row = rows.find(r => r.jurisdiction_id === w.id && r.week_start === week);
+            const st = row ? (STATUS[row.status] || STATUS.draft) : null;
+            const sent = row?.status === 'sent';
+            const none = n === 0;
+
+            // What this water is waiting on, in one phrase.
+            const state = none            ? { label: 'No subscribers', color: T.inkMute }
+                        : sent            ? { label: `Sent to ${row.recipient_count}`, color: T.open }
+                        : row?.status === 'blocked'  ? { label: 'Blocked', color: T.closed }
+                        : row?.status === 'approved' ? { label: 'Approved, sending', color: T.warn }
+                        : row?.status === 'discarded'? { label: 'Discarded', color: T.inkMute }
+                        : row             ? { label: 'Ready to review', color: T.brass }
+                                          : { label: 'Not generated', color: T.warn };
+
+            return (
+              <div key={w.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                padding: '10px 12px', borderRadius: 10,
+                background: sent ? 'rgba(50,209,123,0.07)' : T.oceanDeep,
+                border: `1px solid ${sent ? `${T.open}44` : T.cardEdge}`,
+                opacity: none ? 0.55 : 1,
+              }}>
+                {/* A sent edition carries a tick, so 'done' reads without
+                    having to parse a word. */}
+                <span style={{ width: 18, flexShrink: 0, color: sent ? T.open : T.inkMute, fontSize: 15 }}>
+                  {sent ? '✓' : '·'}
+                </span>
+                <div style={{ flex: 1, minWidth: 130, fontSize: 14, fontWeight: 700, color: T.ink }}>
+                  {w.label}
+                </div>
+                <div style={{ fontSize: 12.5, color: T.inkMute, minWidth: 96 }}>
+                  {n == null ? '…' : n === 1 ? '1 subscriber' : `${n} subscribers`}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: state.color, minWidth: 128 }}>
+                  {state.label}
+                </div>
+                {!none && !sent && (
+                  <GhostButton disabled={busy === 'generate'} onClick={() => generate(w.id)}>
+                    {row ? 'Regenerate' : 'Generate'}
+                  </GhostButton>
+                )}
+                {sent && (
+                  <div style={{ fontSize: 11.5, color: T.inkMute }}>{fmt(row.sent_at)}</div>
+                )}
+              </div>
+            );
+          })}
         </div>
-        <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 10, lineHeight: 1.5 }}>
-          Waters with no subscribers build nothing and say so.
-        </div>
+
         {lastReply && (
           <div style={{ marginTop: 12, padding: 10, background: T.oceanDeep,
                         border: `1px solid ${T.cardEdge}`, borderRadius: 8 }}>
