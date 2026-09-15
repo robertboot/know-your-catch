@@ -31,6 +31,10 @@ const JURISDICTIONS: Record<string, {
   fl_atlantic: { name: 'Florida Atlantic State Waters', agency: 'FWC',          federal: 'fed_satlantic', lat: 27.200, lon: -80.100, place: 'Fort Pierce, FL' },
 };
 
+// Who may call this from the admin console. The cron uses the shared
+// secret instead; both paths are checked below.
+const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
+
 const FEDERAL_NAME: Record<string, string> = {
   fed_gulf:      'Federal Gulf',
   fed_satlantic: 'Federal South Atlantic',
