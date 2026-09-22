@@ -1643,7 +1643,7 @@ export function ResetPasswordPage() {
    /testers — private early-access recruiting page
    ============================================================
    NOT the public marketing homepage. This URL is texted directly to
-   ~25 anglers the founder knows personally, so it is unlisted (no nav
+   ~50 anglers the founder knows personally, so it is unlisted (no nav
    or footer link) and served with X-Robots-Tag: noindex (vercel.json).
 
    It reuses the site's design system wholesale — the `rl-*` classes,
@@ -1664,7 +1664,7 @@ const TESTER_APP_URL = APP_STORE_URL;
    (one completed submission = one claimed spot) and falls back to this
    constant otherwise — so the page is correct before any backend work
    and self-maintaining after it. */
-const TESTER_SPOTS_TOTAL = 25;
+const TESTER_SPOTS_TOTAL = 50;
 const TESTER_SPOTS_CLAIMED_FALLBACK = 0;
 
 function AppleIcon({ size = 19, color = 'currentColor' }) {
@@ -2098,7 +2098,7 @@ export function TestersPage() {
             </h1>
             <p className="rl-tt-sub">
               ReelIntel is live on the App Store, but we’re not marketing it heavily yet.
-              I’m looking for 25 anglers to put it through real-world testing, log some
+              I’m looking for 50 anglers to put it through real-world testing, log some
               catches, and help me make it better before the public launch.
             </p>
 
