@@ -3,11 +3,11 @@
   "private": true,
   "version": "1.0.0-beta.1",
   "type": "module",
-  "description": "ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
+  "description": "ReelIntel \u2014 identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "web:build": "NODE_OPTIONS=--max-old-space-size=4096 KYC_BASE=/ KYC_ADMIN=true KYC_WEB=true vite build --outDir dist-web",
+    "web:build": "NODE_OPTIONS=--max-old-space-size=4096 KYC_BASE=/ KYC_ADMIN=true KYC_WEB=true vite build --outDir dist-web && node scripts/make-route-previews.mjs dist-web",
     "web:preview": "vite preview --outDir dist-web",
     "preview": "vite preview",
     "validate-feeds": "node regulations/validate.mjs",

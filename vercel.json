@@ -21,6 +21,10 @@
       "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=queue"
     },
     {
+      "source": "/testers",
+      "destination": "/testers.html"
+    },
+    {
       "source": "/privacy",
       "destination": "/privacy.html"
     },
