@@ -39,11 +39,14 @@ BATCH_SIZE = 32
 DEFAULT_EPOCHS = 35          # was 20 — fine-tuning needs longer to converge
 FROZEN_EPOCHS = 8            # was 5 — let the head settle before unfreezing
 UNFREEZE_LAST_N = 80         # was 20 — adapt more of the backbone to fish
-DEFAULT_MIN_IMAGES = 45      # per-class floor on TOTAL images (train+val).
-                             # Matches the admin coverage count (verified
-                             # images), so "45" means the same thing in both
+DEFAULT_MIN_IMAGES = 30      # per-class floor on TOTAL images (train+val).
+                             # MUST match MIN_TRAIN_THRESHOLD in
+                             # src/training-store.js (admin coverage count),
+                             # so the number means the same thing in both
                              # places. Below it a species is excluded — too
-                             # few photos to learn, only adds noise.
+                             # few photos to learn, only adds noise. 30 is
+                             # the floor's floor: ~3 val images; lower and
+                             # the per-class metrics are coin-flip noise.
 
 
 def unzip_export(zip_path: Path, work_dir: Path) -> tuple[Path, dict]:

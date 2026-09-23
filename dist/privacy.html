@@ -142,8 +142,8 @@
   // is registered as a Rollup input specifically so this substitution
   // runs). If either is empty, we skip the fetch entirely.
   (function () {
-    var url = '%VITE_SUPABASE_URL%';
-    var key = '%VITE_SUPABASE_ANON_KEY%';
+    var url = 'https://hfptpsmdfemduhkueyoz.supabase.co';
+    var key = 'sb_publishable_GmKeILiR7nbmeS3bcg_ZUQ_LEIuq9kn';
     if (!url || url.indexOf('%VITE') === 0 || !key || key.indexOf('%VITE') === 0) return;
     var endpoint = url.replace(/\/$/, '') +
       '/rest/v1/legal_docs?slug=eq.privacy&select=title,body_html,updated_at';

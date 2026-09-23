@@ -103,7 +103,7 @@ function xhrJson({ method, url, headers = {}, body, timeoutMs = 30_000 }) {
    --min-images floor (training/train_fish_id.py DEFAULT_MIN_IMAGES):
    both count total images per species, so a species shown as "excluded"
    here is exactly the set the trainer will drop. Change them together. */
-export const MIN_TRAIN_THRESHOLD  = 45;
+export const MIN_TRAIN_THRESHOLD  = 30; // MUST match DEFAULT_MIN_IMAGES in training/train_fish_id.py
 export const ADEQUATE_THRESHOLD   = 75;
 export const TARGET_COVERAGE      = 200;
 
