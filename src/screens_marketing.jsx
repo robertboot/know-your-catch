@@ -1171,9 +1171,9 @@ function PromoVideo() {
   return (
     <section className="rl-section" id="video">
       <div className="rl-container">
-        <h2 className="rl-h2" style={{ textAlign: 'center' }}>See it on the water</h2>
+        <h2 className="rl-h2" style={{ textAlign: 'center' }}>We need 50 testers</h2>
         <p className="rl-lead" style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 28px' }}>
-          Ninety seconds on what ReelIntel does the moment you are holding a fish.
+          Watch this, then take a spot. Finish the checklist and the shirt is yours.
         </p>
         <div className="rl-video">
           <video
@@ -1185,6 +1185,15 @@ function PromoVideo() {
             <source src={`${import.meta.env.BASE_URL}marketing/reelintel-promo.mp4`} type="video/mp4" />
             Your browser cannot play this video.
           </video>
+        </div>
+        {/* The ask, directly under the thing that makes it. A video that
+            asks for testers and then leaves the viewer on a page with no
+            way to become one has wasted the ninety seconds. */}
+        <div style={{ textAlign: 'center', marginTop: 26 }}>
+          <a className="rl-btn rl-btn-primary" href="/testers">Take a tester spot</a>
+          <p style={{ marginTop: 12, fontSize: 13, color: P.inkMute }}>
+            iPhone and iPad. Free while testing.
+          </p>
         </div>
       </div>
     </section>
