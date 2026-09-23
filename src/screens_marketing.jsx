@@ -26,6 +26,7 @@ import { T } from './theme.js';
 import { updatePassword, subscribe as subscribeAuth } from './auth.js';
 import { client as supabaseClient } from './supabase-client.js';
 import AnnouncementBanner from './AnnouncementBanner.jsx';
+import { TESTER_SPOTS_TOTAL } from './tester-spots.js';
 
 const M = `${import.meta.env.BASE_URL}marketing/`;
 const LOGO_HORIZONTAL = `${import.meta.env.BASE_URL}brand/reelintel-horizontal.png`;
@@ -1713,12 +1714,12 @@ export function ResetPasswordPage() {
 /* Every download CTA on the page points here. */
 const TESTER_APP_URL = APP_STORE_URL;
 
-/* Tester spots. SPOTS_TOTAL is the promise in the copy; the claimed
-   count is read from the backend when the tester_feedback table exists
-   (one completed submission = one claimed spot) and falls back to this
-   constant otherwise — so the page is correct before any backend work
-   and self-maintaining after it. */
-const TESTER_SPOTS_TOTAL = 50;
+/* Tester spots. The total lives in src/tester-spots.js because the
+   admin Testers tab shows it too; the claimed count is read from the
+   backend when the tester_feedback table exists (one completed
+   submission = one claimed spot) and falls back to the constant
+   otherwise — so the page is correct before any backend work and
+   self-maintaining after it. */
 const TESTER_SPOTS_CLAIMED_FALLBACK = 0;
 
 function AppleIcon({ size = 19, color = 'currentColor' }) {

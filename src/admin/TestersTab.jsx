@@ -12,13 +12,16 @@
    unreadable with the anon key, so the join happens server-side behind
    an admin check (supabase/tester-feedback-admin.sql). */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { TESTER_SPOTS_TOTAL } from '../tester-spots.js';
 import { T } from '../theme.js';
 import { Card, GhostButton, SectionLabel } from '../components.jsx';
 import { client } from '../supabase-client.js';
 import { getLastSession } from '../auth.js';
 import { draftToHtml, draftToText } from '../email-signature.js';
 
-const SPOTS_TOTAL = 25;
+// Shared with the /testers page so the console and the public page
+// can never quote different numbers again.
+const SPOTS_TOTAL = TESTER_SPOTS_TOTAL;
 
 const FIELDS = [
   ['tested',    'What did you test?'],
