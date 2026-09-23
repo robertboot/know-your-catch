@@ -2053,7 +2053,15 @@ function TesterFeedback() {
             broke: form.broke, wish: form.wish, screenshot_path,
           },
         },
-      }).catch(() => { /* the feedback is saved; the email is a courtesy */ });
+      }).then(({ error }) => {
+        // Not shown to the angler — their feedback is saved either way —
+        // but a silent catch here meant a missing alert looked identical
+        // to a working one. The console is where this gets diagnosed.
+        if (error) console.error('[testers] alert failed:', error.message || error);
+        else console.info('[testers] alert sent');
+      }).catch((e) => {
+        console.error('[testers] alert never reached the function:', e?.message || e);
+      });
 
       setDone(true);
     } catch {
