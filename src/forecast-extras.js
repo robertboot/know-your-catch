@@ -1,0 +1,394 @@
+/* ============================================================
+   Forecast extras — Windy-style heat colours, a solunar bite
+   index, and NOAA tide-station lookup.
+   ============================================================
+   Pure helpers only (no network, no React) so they can be unit-
+   reasoned and reused. The screens layer does the fetching and
+   renders these into the hourly matrix. */
+
+import { sunPosition } from './helpers.js';
+
+/* ---- colour scales -------------------------------------------------
+   Each scale maps a value to a translucent fill that sits over the
+   dark card, echoing Windy's green→red wind ramp and blue water ramp
+   while keeping the light text on top readable. */
+
+function _hex(h) {
+  const s = h.replace('#', '');
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+
+// Piecewise-linear interpolation across [threshold, hex] stops → rgba().
+function scaleColor(value, stops, alpha = 0.4) {
+  if (value == null || Number.isNaN(value)) return 'transparent';
+  if (value <= stops[0][0]) { const [r, g, b] = _hex(stops[0][1]); return `rgba(${r},${g},${b},${alpha})`; }
+  const last = stops[stops.length - 1];
+  if (value >= last[0]) { const [r, g, b] = _hex(last[1]); return `rgba(${r},${g},${b},${alpha})`; }
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [v0, c0] = stops[i];
+    const [v1, c1] = stops[i + 1];
+    if (value >= v0 && value <= v1) {
+      const t = (value - v0) / (v1 - v0);
+      const a = _hex(c0), b = _hex(c1);
+      const r = Math.round(a[0] + (b[0] - a[0]) * t);
+      const g = Math.round(a[1] + (b[1] - a[1]) * t);
+      const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+      return `rgba(${r},${g},${bl},${alpha})`;
+    }
+  }
+  return 'transparent';
+}
+
+// Palettes tuned to Windy's grid: wind ramps green(calm)→olive→amber→red,
+// waves in blues, and fish-activity/bite in a teal→vivid-green scale.
+const AIR_STOPS  = [[50, '#2f6fb0'], [65, '#2aa0a0'], [75, '#3fa34d'], [84, '#c9b03a'], [92, '#d98330'], [100, '#c0392b']];
+const WIND_STOPS = [[4, '#4a9e4a'], [8, '#9bb03a'], [11, '#d1a838'], [15, '#d98330'], [19, '#c0392b'], [26, '#8f2417']]; // knots — ambers by ~11 kt like Windy
+const WAVE_STOPS = [[0, '#123a5e'], [1, '#17518a'], [2, '#1f77c2'], [4, '#2aa0e0'], [7, '#5ac8f5']];
+const CURR_STOPS = [[0, '#123a5e'], [0.3, '#1f77c2'], [0.8, '#2aa0e0'], [1.5, '#5ac8f5']];
+// Windy fish-activity greens: teal at the low end → vivid green at the top.
+const ACT_STOPS  = [[40, '#2f9e8f'], [52, '#4a9e5a'], [65, '#57b34d'], [78, '#6fce55'], [92, '#8ee35a']];
+
+export const airColor  = (f)   => scaleColor(f, AIR_STOPS, 0.5);
+export const sstColor  = (f)   => scaleColor(f, AIR_STOPS, 0.44);
+export const windColor = (kt) => scaleColor(kt, WIND_STOPS, 0.62);
+export const waveColor = (ft)  => scaleColor(ft, WAVE_STOPS, 0.55);
+export const currColor = (kt)  => scaleColor(kt, CURR_STOPS, 0.55);
+export const actColor  = (pct) => scaleColor(pct, ACT_STOPS, 1);   // solid, Windy-style boxes
+export const rainColor = (pct) => (pct ? `rgba(42,160,224,${Math.min(0.5, (pct / 100) * 0.55)})` : 'transparent');
+
+/* ---- solunar bite index -------------------------------------------
+   A 0–100 estimate (NOT a fetched value): feeding peaks at dawn/dusk
+   (sun near the horizon) and is amplified near the new and full moon.
+   Deliberately simple and labelled as an estimate in the UI. */
+export function biteIndex(date, lat, lon, moonIllumination = 0) {
+  const alt = sunPosition(date, lat, lon).altitudeDeg;
+  const dawnDusk = Math.max(0, 1 - Math.abs(alt) / 6); // 1 at horizon → 0 by ±6°
+  const base = alt > 0 ? 0.34 : 0.48;                  // night edges out bright midday
+  const moonFactor = (Math.max(moonIllumination, 1 - moonIllumination) - 0.5) * 2; // 0 half → 1 new/full
+  const score = base + 0.5 * dawnDusk + 0.14 * moonFactor;
+  return Math.round(Math.max(0, Math.min(1, score)) * 100);
+}
+
+/* ---- NOAA tide stations -------------------------------------------
+   Curated harmonic-prediction stations across the app's waters (Gulf
+   + FL Atlantic). Nearest-by-distance is plenty for a tide curve and
+   avoids fetching NOAA's full ~3k-station metadata file on device. */
+export const TIDE_STATIONS = [
+  { id: '8760922', name: 'Pilottown, LA',        lat: 29.179, lon: -89.258 },
+  { id: '8761724', name: 'Grand Isle, LA',       lat: 29.263, lon: -89.957 },
+  { id: '8764044', name: 'Berwick, LA',          lat: 29.668, lon: -91.238 },
+  { id: '8768094', name: 'Calcasieu Pass, LA',   lat: 29.768, lon: -93.343 },
+  { id: '8770570', name: 'Sabine Pass, TX',      lat: 29.728, lon: -93.870 },
+  { id: '8771013', name: 'Eagle Point, TX',      lat: 29.480, lon: -94.917 },
+  { id: '8771450', name: 'Galveston Pier 21, TX',lat: 29.310, lon: -94.793 },
+  { id: '8775870', name: 'Bob Hall Pier, TX',    lat: 27.580, lon: -97.217 },
+  { id: '8779770', name: 'Port Isabel, TX',      lat: 26.061, lon: -97.215 },
+  { id: '8735180', name: 'Dauphin Island, AL',   lat: 30.250, lon: -88.075 },
+  { id: '8737048', name: 'Mobile State Docks, AL',lat: 30.708, lon: -88.043 },
+  { id: '8729108', name: 'Panama City, FL',      lat: 30.152, lon: -85.667 },
+  { id: '8728690', name: 'Apalachicola, FL',     lat: 29.727, lon: -84.981 },
+  { id: '8727520', name: 'Cedar Key, FL',        lat: 29.135, lon: -83.032 },
+  { id: '8726520', name: 'St. Petersburg, FL',   lat: 27.760, lon: -82.627 },
+  { id: '8726607', name: 'Old Port Tampa, FL',   lat: 27.858, lon: -82.553 },
+  { id: '8725520', name: 'Fort Myers, FL',       lat: 26.648, lon: -81.871 },
+  { id: '8725110', name: 'Naples, FL',           lat: 26.132, lon: -81.807 },
+  { id: '8723214', name: 'Virginia Key, FL',     lat: 25.731, lon: -80.162 },
+  { id: '8723970', name: 'Vaca Key, FL',         lat: 24.711, lon: -81.106 },
+  { id: '8724580', name: 'Key West, FL',         lat: 24.556, lon: -81.808 },
+  { id: '8721604', name: 'Trident Pier, FL',     lat: 28.416, lon: -80.593 },
+  { id: '8720218', name: 'Mayport, FL',          lat: 30.398, lon: -81.428 },
+];
+
+/* ---- fishability scoring -------------------------------------------
+   Turns raw conditions into a 0–100 "should I go?" score weighted for
+   catching fish AND a comfortable ride. Sub-scores are exposed so the
+   "Why this score?" breakdown can show what helped or hurt. */
+
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+// Each sub-score 0–100. Missing marine data falls back gracefully.
+// Wind is in knots (the app's marine unit). Calibrated against typical
+// Gulf days: small seas with a short period are calm and fishable, so
+// period only bites hard when the seas are also up (steep chop).
+export function subScores(h) {
+  // Wind (kt): factor GUSTS in — gusty air is less safe/comfortable than
+  // the sustained number alone, so blend the two. Ideal stays at calm;
+  // unfishable by ~28 kt. A 22-kt small-craft advisory scores 27, not 0 —
+  // an advisory is a warning, not a wall, and the seas term carries the rest.
+  let wind = null;
+  if (h.wind != null) {
+    const eff = h.gust != null ? h.wind * 0.65 + h.gust * 0.35 : h.wind;
+    wind = Math.round(clamp01((28 - eff) / 22) * 100);
+  }
+  let seas = null;
+  if (h.waveFt != null) {
+    // Steepness, not height, is what makes a sea hard to ride: deep-water
+    // wave length is 5.12*T^2 ft, so the same 3 ft is a gentle roll at 7 s
+    // and a square wall at 3 s. Judge height against that, then run the
+    // existing curve on the adjusted number. Clamped both ends so a long
+    // swell can never shrink a genuinely big sea to nothing.
+    let eff = h.waveFt;
+    if (h.periodS != null && h.periodS > 0) {
+      const steepness = h.waveFt / (5.12 * h.periodS * h.periodS);
+      const factor = Math.max(0.8, Math.min(1.8, Math.pow(steepness / 0.018, 0.4)));
+      eff = h.waveFt * factor;
+    }
+    seas = Math.round(clamp01((6 - eff) / 5) * 100);
+  }
+  // Wave period, judged in context of wave height:
+  //   • small seas (≤2.5 ft): short period is tolerable but not "great"
+  //   • bigger seas: a longer period is needed to ride comfortably
+  let period = null;
+  if (h.periodS != null) {
+    period = (h.waveFt ?? 0) <= 2.5
+      ? Math.round(60 + clamp01((h.periodS - 1) / 5) * 35)  // calm seas: ~3.6 s→78
+      : Math.round(clamp01((h.periodS - 3) / 5) * 100);     // bigger seas: 3 s→0, 8 s+→100
+    period = Math.max(0, Math.min(100, period));
+  }
+  return { wind, seas, period };
+}
+
+/* Severe-weather ceiling, keyed on WMO weather codes (Open-Meteo).
+   This is a CAP, not another weighted term, on purpose: lightning is a
+   go/no-go call. If it were a weighted factor, 8 kt of wind and flat
+   seas would average a thunderstorm morning back up to an A — which is
+   exactly the bug this fixes. Applied AFTER the weights and the bite
+   nudge so nothing can dilute it. */
+export function weatherCapInfo(code) {
+  if (code == null) return null;
+  if (code === 95 || code === 96 || code === 99) return { cap: 35, reason: 'Thunderstorms' };        // hard F
+  if (code === 82) return { cap: 62, reason: 'Violent rain showers' };                               // D-
+  if (code === 65 || code === 67) return { cap: 62, reason: 'Heavy rain' };                          // D-
+  if (code === 81 || code === 63) return { cap: 74, reason: 'Moderate rain' };                       // C
+  if (code === 55 || code === 57) return { cap: 74, reason: 'Heavy drizzle' };                       // C
+  return null;
+}
+
+export function fishabilityHour(h) {
+  const s = subScores(h);
+  // Wind is weighted highest — it's the safety driver — then wave height,
+  // then period. Renormalized over whatever data is present.
+  const terms = [];
+  if (s.wind != null)   terms.push([s.wind, 0.42]);
+  if (s.seas != null)   terms.push([s.seas, 0.36]);
+  if (s.period != null) terms.push([s.period, 0.22]);
+  let score;
+  if (terms.length) {
+    const wsum = terms.reduce((a, [, w]) => a + w, 0);
+    score = terms.reduce((a, [v, w]) => a + v * w, 0) / wsum;
+  } else {
+    score = 50; // no marine data → neutral, let bite nudge it
+  }
+  // Small solunar nudge only — the three factors dominate (±5).
+  if (h.bite != null) score = score * 0.9 + h.bite * 0.1;
+  // Severe-weather ceiling last — see weatherCapInfo for why it's a cap.
+  const wc = weatherCapInfo(h.weatherCode);
+  if (wc) score = Math.min(score, wc.cap);
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+// Continuous red→amber→green ramp so neighbouring scores read as
+// neighbouring colours (no hard cliff at a band edge). Solid (alpha 1)
+// for legible badges/gauge.
+//
+// The stops sit at the CENTRE of each letter grade, so the colour and
+// the letter always agree. They did not before: red topped out at 40
+// while an F runs to 59, so a failing day painted orange and the whole
+// F–B- range (60–82) collapsed into one amber-to-yellow smear you could
+// not rank days by. Change these and fishabilityGrade() together.
+const FISH_STOPS = [
+  [30, '#8f2417'],  // below F  — deep red, stay in
+  [55, '#c0392b'],  // F  centre — red
+  [66, '#e07b2f'],  // D  centre — orange
+  [76, '#d9b038'],  // C  centre — gold
+  [84, '#9bb03a'],  // B  centre — yellow-green
+  [92, '#4fa64a'],  // A  centre — green
+  [98, '#63e08a'],  // A+        — bright green
+];
+export function fishabilityColor(score) {
+  if (score == null) return '#7d8ca0';
+  return scaleColor(score, FISH_STOPS, 1);
+}
+
+// Letter grade with +/- (school-style) — everyone reads A/B/C/D/F instantly.
+export function fishabilityGrade(score) {
+  if (score == null) return '—';
+  const s = Math.max(0, Math.min(100, score));
+  if (s >= 97) return 'A+'; if (s >= 93) return 'A'; if (s >= 90) return 'A-';
+  if (s >= 87) return 'B+'; if (s >= 83) return 'B'; if (s >= 80) return 'B-';
+  if (s >= 77) return 'C+'; if (s >= 73) return 'C'; if (s >= 70) return 'C-';
+  if (s >= 67) return 'D+'; if (s >= 63) return 'D'; if (s >= 60) return 'D-';
+  return 'F';
+}
+
+export function fishabilityLabel(score) {
+  if (score == null) return '—';
+  if (score >= 90) return 'GREAT';
+  if (score >= 75) return 'GOOD';
+  if (score >= 60) return 'FAIR';
+  return 'POOR';
+}
+
+export function ratingWord(score) {
+  if (score == null) return '—';
+  if (score >= 90) return 'Excellent';
+  if (score >= 75) return 'Good';
+  if (score >= 60) return 'Fair';
+  return 'Poor';
+}
+
+/* Best fishing window: scan daylight (+ dawn/dusk) units over the feed,
+   score each, and pick the highest-scoring contiguous run. Prefer the
+   earliest strong window so the recommendation is actionable today/
+   tomorrow rather than days out. Returns null if nothing qualifies.
+   stepMs is the unit width — 1 h by default (existing callers), pass
+   6*3600000 when reducing six-hour blocks. */
+export function bestWindow(hours, stepMs = 3600000) {
+  if (!hours || !hours.length) return null;
+  // Minimum run: 2+ consecutive units on the hourly series, but a
+  // SINGLE unit qualifies on coarser steps — two 6-hour blocks would
+  // demand a 12-hour window, too coarse to ever fire.
+  const minRun = stepMs > 3600000 ? 1 : 2;
+  const scored = hours.map(h => ({
+    when: h.when,
+    isDay: !!h.isDaylight,
+    score: fishabilityHour(h),
+  }));
+  // Candidate hours: daylight or civil-ish edge (we approximate with isDay).
+  let best = null;
+  let i = 0;
+  while (i < scored.length) {
+    if (!scored[i].isDay) { i++; continue; }
+    let j = i;
+    while (j + 1 < scored.length && scored[j + 1].isDay) j++;
+    // Within this daylight block, find the best contiguous sub-run whose
+    // hours are all within 12 pts of the block's peak.
+    const block = scored.slice(i, j + 1);
+    const peak = Math.max(...block.map(b => b.score));
+    let runStart = null;
+    for (let k = 0; k <= block.length; k++) {
+      const good = k < block.length && block[k].score >= peak - 12;
+      if (good && runStart == null) runStart = k;
+      if (!good && runStart != null) {
+        const run = block.slice(runStart, k);
+        const avg = run.reduce((a, b) => a + b.score, 0) / run.length;
+        if (run.length >= minRun && (!best || avg > best.avg)) {
+          best = { startMs: run[0].when, endMs: run[run.length - 1].when + stepMs, avg: Math.round(avg) };
+        }
+        runStart = null;
+      }
+    }
+    i = j + 1;
+  }
+  return best;
+}
+
+/* Aggregate an hourly series into 6-hour blocks (00/06/12/18 local) for
+   the 10-day matrix. Each block averages the hour values it spans and
+   carries a fishability score so the outlook reads like Windy's grid. */
+export function sixHourBlocks(hours) {
+  if (!hours || !hours.length) return [];
+  // Severity rank for picking the block's icon code: the block must show
+  // its WORST weather, not whatever hour happened to come first — five
+  // clear hours and one thunderstorm hour is a thunderstorm block.
+  const codeRank = (c) => c == null ? -1
+    : (c === 95 || c === 96 || c === 99) ? 3
+    : (c === 82 || c === 65 || c === 67) ? 2
+    : (c === 81 || c === 63 || c === 55 || c === 57) ? 1
+    : 0;
+  const map = new Map();
+  for (const x of hours) {
+    if (!x.isoHour) continue;
+    const date = x.isoHour.slice(0, 10);
+    const slot = Math.floor(parseInt(x.isoHour.slice(11, 13), 10) / 6); // 0..3
+    const key = `${date}#${slot}`;
+    let b = map.get(key);
+    if (!b) { b = { date, slot, when: x.when, code: x.weatherCode, dl: 0, nt: 0, t: [], w: [], wdir: [], g: [], h: [], p: [], wd: [], sst: [], cv: [], cd: [], rn: [], bi: [], pr: [], sc: [] }; map.set(key, b); }
+    if (codeRank(x.weatherCode) > codeRank(b.code)) b.code = x.weatherCode;
+    // Score the hour on its own terms, then reduce. Scoring the block's
+    // AVERAGED conditions instead dropped gusts on the floor entirely —
+    // the aggregate never carried a gust field — so a 24-kt afternoon
+    // graded the same as a still one.
+    if (x.wind != null || x.waveFt != null) b.sc.push(fishabilityHour(x));
+    if (x.isDaylight) b.dl++; else b.nt++;
+    if (x.temp != null) b.t.push(x.temp);
+    if (x.wind != null) b.w.push(x.wind);
+    if (x.windDir != null) b.wdir.push(x.windDir);
+    if (x.gust != null) b.g.push(x.gust);
+    if (x.waveFt != null) b.h.push(x.waveFt);
+    if (x.periodS != null) b.p.push(x.periodS);
+    if (x.waveDir != null) b.wd.push(x.waveDir);
+    if (x.sstF != null) b.sst.push(x.sstF);
+    if (x.currentKt != null) b.cv.push(x.currentKt);
+    if (x.currentDir != null) b.cd.push(x.currentDir);
+    if (x.precipPct != null) b.rn.push(x.precipPct);
+    if (x.bite != null) b.bi.push(x.bite);
+    if (x.pressureMb != null) b.pr.push(x.pressureMb);
+  }
+  const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const max = (a) => a.length ? Math.max(...a) : null;
+  const min = (a) => a.length ? Math.min(...a) : null;
+  // A block is "past" only once its whole 6-hour window has closed. Judge
+  // it by the SLOT boundary, not by b.when: b.when is the first hour that
+  // survived the caller's trim, so a half-elapsed block starts mid-window
+  // and would otherwise look like it began in the future.
+  const nowMs = Date.now();
+  return [...map.values()].sort((a, b) => a.when - b.when).map((b) => {
+    const temp = avg(b.t), wind = avg(b.w), gust = max(b.g), waveFt = avg(b.h), periodS = avg(b.p), bite = avg(b.bi);
+    const slotStart = new Date(`${b.date}T${String(b.slot * 6).padStart(2, '0')}:00:00`).getTime();
+    const slotEnd = slotStart + 6 * 3600 * 1000;
+    return {
+      when: b.when, date: b.date, slot: b.slot, weatherCode: b.code,
+      isPast: slotEnd <= nowMs,
+      isNow: slotStart <= nowMs && nowMs < slotEnd,
+      isDaylight: b.dl >= b.nt,
+      label: ['12a', '6a', '12p', '6p'][b.slot],
+      isoHour: `${b.date}T${String(b.slot * 6).padStart(2, '0')}`, // for tide lookup
+      temp, wind, windDir: avg(b.wdir), gust, waveFt, periodS, waveDir: avg(b.wd),
+      sstF: avg(b.sst), currentKt: avg(b.cv), currentDir: avg(b.cd),
+      precipPct: avg(b.rn), bite, pressureMb: avg(b.pr),
+      // Weighted toward the mean but with real pull from the worst hour:
+      // two blown-out hours in six should not average away to an A. The
+      // grid still reports averaged CONDITIONS — this is the go/no-go
+      // read on the window as a whole.
+      // Per-hour scores already carry the weather cap (fishabilityHour
+      // applies it), and the 0.4 pull toward the worst hour lets it flow
+      // through — do NOT cap again here. The fallback path scores fresh,
+      // so it passes the block's worst code for the same cap.
+      score: b.sc.length
+        ? Math.round(avg(b.sc) * 0.6 + min(b.sc) * 0.4)
+        : fishabilityHour({ wind, gust, waveFt, periodS, bite, weatherCode: b.code }),
+    };
+  });
+}
+
+// One distance expression shared by nearestTideStation and
+// nearbyTideStations — if these two ever disagreed, the picker would
+// recommend a station the auto-pick then refuses to use.
+const stationDistSq = (s, lat, lon) => {
+  const dLat = s.lat - lat, dLon = (s.lon - lon) * Math.cos(lat * Math.PI / 180);
+  return dLat * dLat + dLon * dLon;
+};
+
+export function nearestTideStation(lat, lon) {
+  if (lat == null || lon == null) return null;
+  let best = null, bestD = Infinity;
+  for (const s of TIDE_STATIONS) {
+    const d = stationDistSq(s, lat, lon);
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  // ~1.5° guard (~100 mi): don't attach a wildly distant station.
+  return bestD <= 2.25 ? best : null;
+}
+
+/* Stations nearest a point, sorted by distance, for the tide-station
+   picker. Deliberately NO guard radius: a spot with nothing within
+   100 miles still gets choices, even far ones — the angler may know
+   better. `miles` is approximate (1° ≈ 69 mi), for display only. */
+export function nearbyTideStations(lat, lon, limit = 8) {
+  if (lat == null || lon == null) return [];
+  return TIDE_STATIONS
+    .map(s => { const d = stationDistSq(s, lat, lon); return { ...s, d, miles: Math.round(Math.sqrt(d) * 69) }; })
+    .sort((a, b) => a.d - b.d)
+    .slice(0, limit);
+}

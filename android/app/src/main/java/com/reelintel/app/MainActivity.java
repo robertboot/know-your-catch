@@ -1,0 +1,5 @@
+package com.reelintel.app;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}

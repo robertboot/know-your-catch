@@ -1,0 +1,709 @@
+{
+  "schema": "kyc-photos/v1",
+  "updated": "2026-06-27",
+  "note": "primary: proprietary | fallback | none. Proprietary = repo file under photos/proprietary/. Fallback = a licensed external photo (url + credit + license). none = app shows the FishMark illustration.",
+  "species": {
+    "red_snapper": {
+      "name": "Red Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Snapper-Red-NOAAFisheries.png?itok=aFLfRzjN",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "vermilion_snapper": {
+      "name": "Vermilion Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Snapper-Vermilion-NOAAFisheries.png?itok=le6cWMtw",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "lane_snapper": {
+      "name": "Lane Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_oIvT89saRSg3.jpg?1564021409",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "mangrove_snapper": {
+      "name": "Mangrove Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_c6eYwd8Es617.jpg?1564020942",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "mutton_snapper": {
+      "name": "Mutton Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_gAqUiAeehOQ3.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "yellowtail_snapper": {
+      "name": "Yellowtail Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_c5z77GXVQnA5.jpg?1564016177",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "red_grouper": {
+      "name": "Red Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Grouper-Red-NOAAFisheries.png?itok=0BFduruv",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "gag_grouper": {
+      "name": "Gag Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Grouper-Gag-NOAAFisheries.png?itok=lSzt2PoW",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "black_grouper": {
+      "name": "Black Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Grouper-Black-NOAAFisheries.png?itok=f6jBXPqQ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "scamp": {
+      "name": "Scamp",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_sFlmUdztZt85.jpg?1539636050",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "greater_amberjack": {
+      "name": "Greater Amberjack",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Amberjack-Greater-NOAAFisheries.png?itok=2uGqXs4W",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "lesser_amberjack": {
+      "name": "Lesser Amberjack",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_MVN4Jxu6Ymt9.jpg?1564016030",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "almaco_jack": {
+      "name": "Almaco Jack",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-02/640x427-Almaco-Jack-NOAAFisheries.png?itok=R7QNSttH",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "banded_rudderfish": {
+      "name": "Banded Rudderfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_MeYdapnDJ966.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "spanish_mackerel": {
+      "name": "Spanish Mackerel",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Mackerel-Spanish-NOAAFisheries.png?itok=cVL9x4ET",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "king_mackerel": {
+      "name": "King Mackerel",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Mackerel-King-NOAAFisheries.png?itok=4HMsizeA",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "cero_mackerel": {
+      "name": "Cero Mackerel",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "yellowfin_tuna": {
+      "name": "Yellowfin Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tuna-Yellowfin-NOAAFisheries.png?itok=wQ7Q4GIZ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blackfin_tuna": {
+      "name": "Blackfin Tuna",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "blue_marlin": {
+      "name": "Blue Marlin",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "sailfish": {
+      "name": "Atlantic Sailfish",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "white_marlin": {
+      "name": "White Marlin",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "gray_triggerfish": {
+      "name": "Gray Triggerfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-10/640x427-Triggerfish-Gray-NOAAFisheries.png?itok=kgwLtS0L",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blacktip_shark": {
+      "name": "Blacktip Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-07/640x427-Shark-Blacktip-NOAAFisheries.png?itok=NZxuDIEH",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "cobia": {
+      "name": "Cobia",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Cobia-NOAAFisheries.png?itok=ZbQQ_f85",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "wahoo": {
+      "name": "Wahoo",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Wahoo-NOAAFisheries.png?itok=0Aw3meE3",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "mahi": {
+      "name": "Mahi-Mahi",
+      "primary": "fallback",
+      "proprietary": "photos/proprietary/mahi.jpg",
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Mahimahi-NOAAFisheries.png?itok=tp6TjGnu",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-05-15"
+    },
+    "golden_tilefish": {
+      "name": "Golden Tilefish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tilefish-Golden-NOAAFisheries.png?itok=Q2j3ywYb",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blueline_tilefish": {
+      "name": "Blueline Tilefish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Tilefish-Blueline-NOAAFisheries.png?itok=TENdZZdA",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "short_bigeye": {
+      "name": "Short Bigeye",
+      "primary": "none",
+      "proprietary": null,
+      "fallback": null,
+      "updated": "2026-05-15"
+    },
+    "bluefin_tuna": {
+      "name": "Atlantic Bluefin Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Tuna-Bluefin-NOAAFisheries.png?itok=xC7NNr5_",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "albacore_tuna": {
+      "name": "Albacore Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Tuna-Albacore-NOAAFisheries.png?itok=juwiBfWn",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "swordfish": {
+      "name": "Swordfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Swordfish-NOAAFisheries.png?itok=_U6aj-6A",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "bigeye_tuna": {
+      "name": "Bigeye Tuna",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-07/640x427-Tuna-Bigeye-NOAAFisheries.png?itok=94aSx4Gc",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_cod": {
+      "name": "Atlantic Cod",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-07/640x427-Cod-Atlantic-NOAAFisheries.png?itok=LaaW5W6M",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "goliath_grouper": {
+      "name": "Goliath Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Goliath-Grouper-NOAAFisheries.png?itok=R5b8YGwS",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_mackerel": {
+      "name": "Atlantic Mackerel",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Mackerel-Atlantic-NOAAFisheries.png?itok=jSV2Bm5b",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_menhaden": {
+      "name": "Atlantic Menhaden",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Menhaden-Atlantic-NOAAFisheries.png?itok=oTzVz2yQ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_sharpnose_shark": {
+      "name": "Atlantic Sharpnose Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Shark-Atlantic-Sharpnose-NOAAFisheries.png?itok=2YBYqfsX",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "shortfin_mako_shark": {
+      "name": "Shortfin Mako Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Shortfin-Mako-Shark-NOAAFisheries.png?itok=EwXL5SCD",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "atlantic_sturgeon": {
+      "name": "Atlantic Sturgeon",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-atlantic-sturgeon.png?itok=IoNWHq8G",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "winter_flounder": {
+      "name": "Winter Flounder",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2021-05/640x427-Flounder-Winter-NB-W.jpg?itok=nibRqSut",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "summer_flounder": {
+      "name": "Summer Flounder",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Flounder-Summer-NOAAFisheries.png?itok=wtEaG1bU",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "scup": {
+      "name": "Scup",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Scup-NOAAFisheries_0.png?itok=TFoWqRrr",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "black_sea_bass": {
+      "name": "Black Sea Bass",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Black-Sea-Bass-NOAAFisheries.png?itok=ZYwb9K_D",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blacknose_shark": {
+      "name": "Blacknose Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-01/640x427-Blacknose-Shark-NOAAFisheries.png?itok=xK662Omw",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "sandbar_shark": {
+      "name": "Sandbar Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2023-09/640x427-Shark-Sandbar-NOAAFisheries.png?itok=P6Qzy66B",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "great_white_shark": {
+      "name": "Great White Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2021-11/640x427-Shark_Great_White_NB_W.jpg?itok=au9jev1E",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "winter_skate": {
+      "name": "Winter Skate",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-skate-winter.jpg?itok=1DgNVhtG",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "smalltooth_sawfish": {
+      "name": "Smalltooth Sawfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2023-03/640x427-Sawfish-Smalltooth-markedDW_0.png?itok=ZlDt-C-T",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "scalloped_hammerhead": {
+      "name": "Scalloped Hammerhead",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-scalloped-hammerhead.png?itok=mnttWSNA",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "oceanic_whitetip_shark": {
+      "name": "Oceanic Whitetip Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-oceanic-whitetip-shark.png?itok=9tscNcu1",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "opah": {
+      "name": "Opah",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Opah-Moonfish-NOAAFisheries.png?itok=Z_SnIOGt",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "bonnethead_shark": {
+      "name": "Bonnethead Shark",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2024-10/640x427-Bonnethead-Shark-NOAAFisheries.png?itok=xxOu9y4E",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "bluefish": {
+      "name": "Bluefish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Bluefish-NOAAFisheries.png?itok=CZZFQ7NZ",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "butterfish": {
+      "name": "Butterfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-08/640x427-Butterfish-NOAAFisheries.png?itok=YzIy_I5r",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "nassau_grouper": {
+      "name": "Nassau Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/dam-migration/640x427-nassau-grouper.jpg?itok=h87q7k11",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "warsaw_grouper": {
+      "name": "Warsaw Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_oKcUrEgwcOP0.jpg?1564019856",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "silk_snapper": {
+      "name": "Silk Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_QJFHmyVDbJQ0.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "cubera_snapper": {
+      "name": "Cubera Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_gGWvrjNvqge6.jpg?1564016043",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "blackfin_snapper": {
+      "name": "Blackfin Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_Q8TExuF8uKZ4.jpg?1564020398",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "queen_snapper": {
+      "name": "Queen Snapper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_gO2eAaLngJS4.jpg?-62169955200",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "yellowmouth_grouper": {
+      "name": "Yellowmouth Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_IRKMi4RU9iM9.jpg?1564016009",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "wreckfish": {
+      "name": "Wreckfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://www.fisheries.noaa.gov/s3//styles/original/s3/2022-09/640x427-Wreckfish-NOAAFisheries.png?itok=d6Bqw_O3",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "snowy_grouper": {
+      "name": "Snowy Grouper",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_ITZIFUpyQxt0.jpg?1538059461",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    },
+    "hogfish": {
+      "name": "Hogfish",
+      "primary": "fallback",
+      "proprietary": null,
+      "fallback": {
+        "url": "https://media.fisheries.noaa.gov/dam-migration-miss/150th_sm_EGBKdbt60QW1.jpg?1564016173",
+        "credit": "NOAA Fisheries",
+        "license": "Public domain"
+      },
+      "updated": "2026-06-27"
+    }
+  }
+}

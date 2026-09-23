@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#031B33" />
+    <meta name="description" content="ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America." />
+    <title>ReelIntel</title>
+    <link rel="icon" type="image/png" href="%BASE_URL%brand/reelintel-icon.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%brand/reelintel-icon.png" />
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ReelIntel" />
+
+    <!-- Link previews. Facebook and iMessage read these before any
+         JavaScript runs, so they have to be in the served HTML — a SPA
+         that sets them at runtime shares as a bare URL, which is what
+         reelintel.ai was doing. Absolute URLs: a crawler has no page to
+         resolve a relative one against. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ReelIntel" />
+    <meta property="og:title" content="ReelIntel — Fish smarter. Catch more." />
+    <meta property="og:description" content="Identify your catch, check the rules for your exact waters, log it, and find better spots. Built for the Gulf." />
+    <meta property="og:url" content="https://www.reelintel.ai/" />
+    <meta property="og:image" content="https://www.reelintel.ai/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ReelIntel — Your Offshore Outlook" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ReelIntel — Fish smarter. Catch more." />
+    <meta name="twitter:description" content="Identify your catch, check the rules for your exact waters, log it, and find better spots. Built for the Gulf." />
+    <meta name="twitter:image" content="https://www.reelintel.ai/og-image.jpg" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
