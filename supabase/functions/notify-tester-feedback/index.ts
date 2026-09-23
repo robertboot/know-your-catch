@@ -16,7 +16,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const FROM_ADDRESS = 'ReelIntel <hello@reelintel.ai>';
-const TO_ADDRESSES = ['robertb1023@me.com', 'annelies@reelintel.ai'];
+// Harper runs the tester programme, so she is on the alert.
+const TO_ADDRESSES = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

@@ -2035,6 +2035,25 @@ function TesterFeedback() {
         confusing: form.confusing, broke: form.broke, wish: form.wish, screenshot_path,
       });
       if (insErr) throw insErr;
+
+      // Fire the alert from here rather than relying only on a database
+      // webhook. The webhook is configured by hand in the Supabase
+      // dashboard, is invisible from this repo, and has been silently
+      // absent before — a submission sat in the table for days because
+      // nothing told anyone it had arrived. Awaiting this would make the
+      // angler wait on an email they will never see, so it is fired and
+      // dropped: the row is already saved, and a missed notification is
+      // recoverable from the Testers tab.
+      c.functions.invoke('notify-tester-feedback', {
+        body: {
+          record: {
+            name: form.name, email: form.email, tested: form.tested,
+            worked: form.worked, confusing: form.confusing,
+            broke: form.broke, wish: form.wish, screenshot_path,
+          },
+        },
+      }).catch(() => { /* the feedback is saved; the email is a courtesy */ });
+
       setDone(true);
     } catch {
       // Table/bucket not provisioned (or offline) — hand it to email instead.

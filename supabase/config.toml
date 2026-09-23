@@ -24,3 +24,11 @@ verify_jwt = false
 # Cron-invoked (pg_net, x-cron-secret) — no user JWT.
 [functions.auto-update-regulations]
 verify_jwt = false
+
+# The /testers form fires this directly after a successful insert, from
+# a signed-OUT browser — a tester has no account. A database webhook
+# also calls it with no user JWT. Either way there is no session to
+# verify; the function accepts a webhook-shaped body and only ever
+# sends an internal alert.
+[functions.notify-tester-feedback]
+verify_jwt = false
