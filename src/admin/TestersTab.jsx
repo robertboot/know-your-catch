@@ -15,7 +15,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { TESTER_SPOTS_TOTAL } from '../tester-spots.js';
 import { T } from '../theme.js';
 import { Card, GhostButton, SectionLabel } from '../components.jsx';
-import { client } from '../supabase-client.js';
+import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase-client.js';
 import { getLastSession } from '../auth.js';
 import { draftToHtml, draftToText } from '../email-signature.js';
 
@@ -256,6 +256,41 @@ export default function TestersTab() {
     return { total: rows.length, withAcct, noAcct: rows.length - withAcct, used };
   }, [rows]);
 
+  /* Fire the alert function and show exactly what came back.
+     Submissions have twice arrived with no email and no sign of why —
+     invoke() collapses a 401, a 500 and a dead function into one
+     useless string, so this uses a plain fetch and prints the status
+     and body. */
+  const [alertTest, setAlertTest] = useState(null);
+  const [testing, setTesting] = useState(false);
+  const testAlert = async () => {
+    setTesting(true); setAlertTest(null);
+    const url = `${SUPABASE_URL}/functions/v1/notify-tester-feedback`;
+    try {
+      const c = client();
+      const { data: sess } = await c.auth.getSession();
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${sess?.session?.access_token || SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          record: {
+            name: 'Admin test', email: 'test@reelintel.ai',
+            tested: 'Alert path only — sent from the Testers tab.',
+            worked: '', confusing: '', broke: '', wish: '', screenshot_path: null,
+          },
+        }),
+      });
+      const raw = await res.text();
+      setAlertTest({ status: `${res.status} ${res.statusText}`, body: raw.slice(0, 800) });
+    } catch (e) {
+      setAlertTest({ status: 'no response', body: `${url}\n${e?.message || e}` });
+    } finally { setTesting(false); }
+  };
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Card>
@@ -269,8 +304,28 @@ export default function TestersTab() {
               {' '}<strong>{stats.used}</strong> have logged a catch
             </div>
           </div>
+          <GhostButton onClick={testAlert} disabled={testing}>
+            {testing ? 'Sending…' : 'Test alert email'}
+          </GhostButton>
           <GhostButton onClick={load} disabled={busy}>{busy ? 'Loading…' : 'Refresh'}</GhostButton>
         </div>
+        {alertTest && (
+          <div style={{
+            marginTop: 10, padding: 10, borderRadius: 8,
+            background: T.oceanDeep, border: `1px solid ${T.cardEdge}`,
+          }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2,
+                          color: T.inkMute, marginBottom: 6 }}>
+              ALERT FUNCTION — {alertTest.status}
+            </div>
+            <pre style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: T.inkSoft,
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+{alertTest.body || '(empty body)'}
+            </pre>
+          </div>
+        )}
+
         {error && (
           <div role="alert" style={{
             marginTop: 10, padding: 10, borderRadius: 8,
