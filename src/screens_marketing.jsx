@@ -850,6 +850,17 @@ body { margin: 0; }
   background: ${P.accentDim}; border: 1px solid ${P.borderHi};
   display: inline-flex; align-items: center; justify-content: center;
 }
+.rl-video {
+  max-width: 900px; margin: 0 auto;
+  border-radius: 20px; overflow: hidden;
+  border: 1px solid rgba(25,212,242,0.22);
+  box-shadow: 0 26px 60px rgba(0,0,0,0.55);
+  background: #06182b;
+}
+/* aspect-ratio rather than a padding hack: the box is the right shape
+   before the file loads, so nothing on the page jumps when it does. */
+.rl-video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #06182b; }
+
 .rl-priv-card h4 { font-size: 16px; font-weight: 800; color: ${P.ink}; margin: 0 0 10px; line-height: 1.25; }
 .rl-priv-card p { font-size: 13.5px; line-height: 1.55; color: ${P.inkSoft}; margin: 0; }
 
@@ -1146,6 +1157,39 @@ const PRIVACY_CARDS = [
   { icon: DownloadIcon,    title: 'Export Anytime',          body: 'Download your catches, photos, and logs whenever you want.' },
   { icon: ShieldXIcon,     title: 'We Never Sell Your Spots', body: 'If you opt in, we use anonymous trends to improve insights—your exact locations stay private.' },
 ];
+
+/* Promo video. Placed directly under the hero: someone who scrolls past
+   a headline will give a video ten seconds, and this is the one asset
+   that shows the app moving.
+
+   Not autoplaying and not muted-looping in the background. It carries
+   sound and a message, a background loop would waste 23 MB on visitors
+   who never look at it, and `preload="none"` means the file is not
+   fetched at all until someone presses play — the page still costs what
+   it did before for everyone else. */
+function PromoVideo() {
+  return (
+    <section className="rl-section" id="video">
+      <div className="rl-container">
+        <h2 className="rl-h2" style={{ textAlign: 'center' }}>See it on the water</h2>
+        <p className="rl-lead" style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 28px' }}>
+          Ninety seconds on what ReelIntel does the moment you are holding a fish.
+        </p>
+        <div className="rl-video">
+          <video
+            controls
+            playsInline
+            preload="none"
+            poster={`${import.meta.env.BASE_URL}marketing/reelintel-promo-poster.jpg`}
+          >
+            <source src={`${import.meta.env.BASE_URL}marketing/reelintel-promo.mp4`} type="video/mp4" />
+            Your browser cannot play this video.
+          </video>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function YourDataYourRules() {
   return (
@@ -1468,6 +1512,7 @@ export function MarketingLanding() {
         <AnnouncementBanner />
       </div>
       <Hero />
+      <PromoVideo />
       <MarineIntel />
       <YourDataYourRules />
       <AiLearnsWaters />
