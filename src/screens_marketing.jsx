@@ -2153,10 +2153,10 @@ export function TestersPage() {
                    onError={() => setShirtIdx(i => i + 1)} loading="lazy" />
             )}
             <div>
-              <h2 className="rl-tt-h2">First 25 testers get a<br /><span className="accent">free ReelIntel t‑shirt.</span></h2>
+              <h2 className="rl-tt-h2">First {TESTER_SPOTS_TOTAL} testers get a<br /><span className="accent">free ReelIntel t‑shirt.</span></h2>
               <p className="rl-tt-lead" style={{ marginBottom: 0 }}>
                 Complete the tester checklist and send us your feedback. If you’re one of
-                the first 25 to finish, we’ll send you a ReelIntel shirt as a thank-you.
+                the first {TESTER_SPOTS_TOTAL} to finish, we’ll send you a ReelIntel shirt as a thank-you.
               </p>
               <div className="rl-tt-prog-wrap">
                 <div className="rl-tt-prog-top">
@@ -2168,7 +2168,7 @@ export function TestersPage() {
                      aria-label="Tester spots claimed">
                   <div className="rl-tt-prog-fill" style={{ width: `${Math.max(pct, 2)}%` }} />
                 </div>
-                <p className="rl-tt-fine">Limited to the first 25 completed tester submissions.</p>
+                <p className="rl-tt-fine">Limited to the first {TESTER_SPOTS_TOTAL} completed tester submissions.</p>
               </div>
             </div>
           </div>
