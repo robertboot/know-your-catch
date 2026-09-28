@@ -299,8 +299,10 @@ function SignedInShell({ email, onExit }) {
      Default is still the dashboard, so a bare #/admin lands on the
      health queue as before. */
   const tabFromHash = () => {
-    const m = /^#\/admin\/([a-z-]+)/.exec(window.location.hash || '');
-    return m ? m[1] : 'dashboard';
+    // #/admin/training/models -> 'training:models'
+    const m = /^#\/admin\/([a-z-]+)(?:\/([a-z-]+))?/.exec(window.location.hash || '');
+    if (!m) return 'dashboard';
+    return m[2] ? `${m[1]}:${m[2]}` : m[1];
   };
   const [tab, setTab] = useState(tabFromHash);
 
@@ -320,7 +322,7 @@ function SignedInShell({ email, onExit }) {
     // replaceState, not a hash assignment: switching tabs should not
     // stack a history entry per click, or Back becomes a tour of every
     // tab you glanced at.
-    const next = t === 'dashboard' ? '#/admin' : `#/admin/${t}`;
+    const next = t === 'dashboard' ? '#/admin' : `#/admin/${t.replace(':', '/')}`;
     if (window.location.hash !== next) {
       window.history.replaceState(null, '', window.location.pathname + next);
     }
@@ -341,18 +343,24 @@ function SignedInShell({ email, onExit }) {
           </div>
         </>
       )}
-      {tab === 'dashboard'     && !detailView && <HomeDashboard onGoTab={switchTab} />}
-      {tab === 'species'       && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
-      {tab === 'regulations'   && !detailView && <RegulationsTab />}
-      {tab === 'branding'      && !detailView && <BrandingTab />}
-      {tab === 'categories'    && !detailView && <CategoriesTab />}
-      {tab === 'training'      && !detailView && <TrainingTab />}
-      {tab === 'ocean'         && !detailView && <OceanHeatmapPanel />}
-      {tab === 'notifications' && !detailView && <NotificationsTab />}
-      {tab === 'testers'       && !detailView && <TestersTab />}
-      {tab === 'errors'        && !detailView && <ErrorsTab />}
-      {tab === 'weekly'        && !detailView && <WeeklyEmailTab />}
-      {tab === 'legal'         && !detailView && <LegalTab />}
+      {/* `tab` may carry a sub-panel ("training:models"); the screens
+          below switch on the tab half, and TrainingTab takes the panel. */}
+      {(() => { const { tab: _t } = splitRoute(tab); return (
+      <>
+      {_t === 'dashboard'     && !detailView && <HomeDashboard onGoTab={switchTab} />}
+      {_t === 'species'       && <SpeciesTab  detailView={detailView} setDetailView={setDetailView} />}
+      {_t === 'regulations'   && !detailView && <RegulationsTab />}
+      {_t === 'branding'      && !detailView && <BrandingTab />}
+      {_t === 'categories'    && !detailView && <CategoriesTab />}
+      {_t === 'training'      && !detailView && <TrainingTab initialPanel={splitRoute(tab).panel} />}
+      {_t === 'ocean'         && !detailView && <OceanHeatmapPanel />}
+      {_t === 'notifications' && !detailView && <NotificationsTab />}
+      {_t === 'testers'       && !detailView && <TestersTab />}
+      {_t === 'errors'        && !detailView && <ErrorsTab />}
+      {_t === 'weekly'        && !detailView && <WeeklyEmailTab />}
+      {_t === 'legal'         && !detailView && <LegalTab />}
+      </>
+      ); })()}
     </Chrome>
   );
 }
@@ -367,32 +375,100 @@ function useIsNarrow(bp = 720) {
   return narrow;
 }
 
+/* Admin navigation.
+ *
+ * Twelve flat tabs had no grouping and no room to grow; related work sat
+ * next to unrelated work and the bar wrapped to two lines. These are the
+ * groups the work actually falls into.
+ *
+ * A route is "tab" or "tab:panel" — the second form deep-links into a
+ * sub-panel, which is how the seven Fish ID pages each get their own
+ * entry instead of hiding behind one label. */
+const NAV = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'weekly',    label: 'Newsletter' },
+  { key: 'testers',   label: 'Beta Testers' },
+  {
+    label: 'Fish ID',
+    children: [
+      { key: 'training:upload',   label: 'Upload' },
+      { key: 'training:review',   label: 'Review' },
+      { key: 'training:swipe',    label: 'Swipe' },
+      { key: 'training:coverage', label: 'Coverage' },
+      { key: 'training:export',   label: 'Export' },
+      { key: 'training:models',   label: 'Models' },
+      { key: 'training:test',     label: 'Test image' },
+    ],
+  },
+  {
+    label: 'Database',
+    children: [
+      { key: 'species',     label: 'Species' },
+      { key: 'categories',  label: 'Categories' },
+      { key: 'regulations', label: 'Regulations' },
+      { key: 'ocean',       label: 'Marine Conditions' },
+    ],
+  },
+  {
+    label: 'Branding & Marketing',
+    children: [
+      { key: 'branding',      label: 'Branding' },
+      { key: 'legal',         label: 'Legal' },
+      { key: 'notifications', label: 'Notifications' },
+    ],
+  },
+  { key: 'errors', label: 'Errors' },
+];
+
+/* 'training:models' -> { tab: 'training', panel: 'models' } */
+const splitRoute = (route) => {
+  const [tab, panel] = String(route || 'dashboard').split(':');
+  return { tab, panel: panel || null };
+};
+const groupOf = (route) => {
+  const { tab } = splitRoute(route);
+  return NAV.find(g => g.children?.some(c => splitRoute(c.key).tab === tab)) || null;
+};
+
 function TabBar({ tab, onTab }) {
-  const tabs = [
-    { id: 'dashboard',     label: 'Dashboard' },
-    { id: 'species',       label: 'Species' },
-    { id: 'regulations',   label: 'Regulations' },
-    { id: 'training',      label: 'Training' },
-    { id: 'ocean',         label: 'Ocean' },
-    { id: 'notifications', label: 'Notifications' },
-    { id: 'categories',    label: 'Categories' },
-    { id: 'branding',      label: 'Branding' },
-    { id: 'weekly',        label: 'Weekly email' },
-    { id: 'testers',       label: 'Testers' },
-    { id: 'errors',        label: 'Errors' },
-    { id: 'legal',         label: 'Legal' },
-  ];
   const narrow = useIsNarrow();
   const [open, setOpen] = useState(false);
-  const current = tabs.find(t => t.id === tab);
+  // Which group's menu is showing. Opened on hover for a mouse and on
+  // click for everything else — a hover-only menu is unusable on the
+  // iPad this console is often driven from.
+  const [openGroup, setOpenGroup] = useState(null);
+  const closeTimer = useRef(null);
 
-  // Mobile: one hamburger. Keeps the nav from eating the whole screen.
+  const flat = NAV.flatMap(g => g.children || [g]);
+  const current = flat.find(x => x.key === tab)
+    || flat.find(x => splitRoute(x.key).tab === splitRoute(tab).tab);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setOpenGroup(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+
+  // A small grace period on leaving: without it the menu vanishes while
+  // the pointer crosses the gap between the button and the panel.
+  const hoverOpen = (label) => { clearTimeout(closeTimer.current); setOpenGroup(label); };
+  const hoverClose = () => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpenGroup(null), 160);
+  };
+
+  const go = (key) => { setOpenGroup(null); setOpen(false); onTab(key); };
+
+  /* ---------- narrow: one hamburger, groups as headings ---------- */
   if (narrow) {
     return (
       <div style={{ borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px 8px' }}>
-          <div style={{ flex: 1, color: T.brass, fontWeight: 800, fontSize: 16 }}>{current?.label || 'Menu'}</div>
-          <button onClick={() => setOpen(o => !o)} aria-label="Menu" style={{
+          <div style={{ flex: 1, color: T.brass, fontWeight: 800, fontSize: 16 }}>
+            {current?.label || 'Menu'}
+          </div>
+          <button onClick={() => setOpen(o => !o)} aria-label="Menu" aria-expanded={open} style={{
             width: 42, height: 42, borderRadius: 8, cursor: 'pointer',
             background: open ? T.brass : 'transparent',
             border: `1px solid ${open ? T.brass : T.cardEdge}`,
@@ -406,13 +482,28 @@ function TabBar({ tab, onTab }) {
         </div>
         {open && (
           <div style={{ display: 'grid', gap: 2, paddingBottom: 8 }}>
-            {tabs.map(t => (
-              <button key={t.id} onClick={() => { onTab(t.id); setOpen(false); }} style={{
+            {NAV.map(g => g.children ? (
+              <div key={g.label} style={{ marginTop: 6 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 800, letterSpacing: 1.3, color: T.inkMute,
+                  textTransform: 'uppercase', padding: '8px 12px 4px',
+                }}>{g.label}</div>
+                {g.children.map(c => (
+                  <button key={c.key} onClick={() => go(c.key)} style={{
+                    display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 6,
+                    background: tab === c.key ? T.parchmentDeep : 'transparent',
+                    color: tab === c.key ? T.brass : T.ink,
+                    padding: '12px 12px 12px 20px', fontSize: 15.5, fontWeight: 600, cursor: 'pointer',
+                  }}>{c.label}</button>
+                ))}
+              </div>
+            ) : (
+              <button key={g.key} onClick={() => go(g.key)} style={{
                 textAlign: 'left', border: 'none', borderRadius: 6,
-                background: tab === t.id ? T.parchmentDeep : 'transparent',
-                color: tab === t.id ? T.brass : T.ink,
+                background: tab === g.key ? T.parchmentDeep : 'transparent',
+                color: tab === g.key ? T.brass : T.ink,
                 padding: '13px 12px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
-              }}>{t.label}</button>
+              }}>{g.label}</button>
             ))}
           </div>
         )}
@@ -420,18 +511,75 @@ function TabBar({ tab, onTab }) {
     );
   }
 
+  /* ---------- wide: mega menu ---------- */
+  const activeGroup = groupOf(tab);
+
   return (
-    <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${T.cardEdge}`,
-                  marginBottom: 4, flexWrap: 'wrap' }}>
-      {tabs.map(t => (
-        <button key={t.id} onClick={() => onTab(t.id)} style={{
-          background: 'transparent', border: 'none',
-          color: tab === t.id ? T.brass : T.inkMute,
-          padding: '10px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-          borderBottom: `2px solid ${tab === t.id ? T.brass : 'transparent'}`,
-          marginBottom: -1,
-        }}>{t.label}</button>
-      ))}
+    <div style={{ position: 'relative', borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        {NAV.map(g => {
+          const isGroup = !!g.children;
+          const active = isGroup ? activeGroup?.label === g.label : tab === g.key;
+          const showing = openGroup === g.label;
+          return (
+            <div
+              key={g.key || g.label}
+              onMouseEnter={() => isGroup && hoverOpen(g.label)}
+              onMouseLeave={() => isGroup && hoverClose()}
+              style={{ position: 'relative' }}
+            >
+              <button
+                onClick={() => isGroup
+                  ? setOpenGroup(showing ? null : g.label)
+                  : go(g.key)}
+                aria-haspopup={isGroup || undefined}
+                aria-expanded={isGroup ? showing : undefined}
+                style={{
+                  background: 'transparent', border: 'none',
+                  color: active || showing ? T.brass : T.inkMute,
+                  padding: '10px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                  borderBottom: `2px solid ${active ? T.brass : 'transparent'}`,
+                  marginBottom: -1, whiteSpace: 'nowrap',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {g.label}
+                {isGroup && (
+                  <span style={{
+                    fontSize: 9, lineHeight: 1, opacity: 0.8,
+                    transform: showing ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 120ms ease',
+                  }}>▾</span>
+                )}
+              </button>
+
+              {isGroup && showing && (
+                <div
+                  onMouseEnter={() => hoverOpen(g.label)}
+                  onMouseLeave={hoverClose}
+                  style={{
+                    position: 'absolute', top: '100%', left: 0, zIndex: 40,
+                    minWidth: 210, padding: 6, marginTop: 1,
+                    background: T.card, border: `1px solid ${T.cardEdge}`,
+                    borderRadius: 12, boxShadow: '0 18px 44px rgba(0,0,0,0.55)',
+                    display: 'grid', gap: 2,
+                  }}
+                >
+                  {g.children.map(c => (
+                    <button key={c.key} onClick={() => go(c.key)} style={{
+                      textAlign: 'left', border: 'none', borderRadius: 8,
+                      background: tab === c.key ? T.parchmentDeep : 'transparent',
+                      color: tab === c.key ? T.brass : T.ink,
+                      padding: '10px 12px', fontSize: 13.5, fontWeight: 600,
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}>{c.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

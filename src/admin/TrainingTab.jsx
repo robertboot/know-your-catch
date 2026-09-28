@@ -120,8 +120,11 @@ function classifyUploadErrors(errorRows) {
 /* ============================================================
    Top-level TrainingTab
    ============================================================ */
-export default function TrainingTab() {
-  const [panel, setPanel] = useState('upload'); // 'upload' | 'review' | 'coverage'
+export default function TrainingTab({ initialPanel }) {
+  // The Fish ID menu deep-links into a panel, so the opening panel comes
+  // from the route when there is one.
+  const [panel, setPanel] = useState(initialPanel || 'upload');
+  useEffect(() => { if (initialPanel) setPanel(initialPanel); }, [initialPanel]);
   // Coverage → Upload jump: when set, UploadPanel preselects this
   // species in Batch mode. Cleared once consumed so navigating back
   // doesn't re-force the picker.
