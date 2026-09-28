@@ -22,7 +22,10 @@ const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 // someone hits reply, reaches someone who can answer.
 const FROM_ADDRESS = 'Harper Wells, ReelIntel <harper@reelintel.ai>';
 const REPLY_TO = 'harper@reelintel.ai';
-const ADMINS = ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'];
+const ADMINS = ['robertb1023@me.com', 'robert@reelintel.ai', 'harper@reelintel.ai'];
+// A draft goes to one person for approval, never back to whoever
+// happened to prepare it.
+const APPROVER = 'robert@reelintel.ai';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -74,10 +77,10 @@ Deno.serve(async (req: Request) => {
     // the signed-in user would mail the preparer, not the approver.
     // Restricted to the admin list: this is not a way to mail anyone.
     const asked = String(body.to || '').toLowerCase().trim();
-    const to = asked && ADMINS.includes(asked) ? asked : callerEmail;
     if (asked && !ADMINS.includes(asked)) {
       return json({ error: 'recipient_not_admin', detail: asked }, 403);
     }
+    const to = asked || APPROVER;
     const r = await mail(KEY, to, `[REVIEW] ${ed.subject}`,
       reviewWrapper(ed, callerEmail), reviewText(ed, callerEmail));
     return r.ok ? json({ ok: true, test: true, to })

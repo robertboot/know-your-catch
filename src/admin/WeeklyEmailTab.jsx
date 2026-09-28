@@ -24,6 +24,9 @@ const WATERS = [
   { id: 'fl_atlantic', label: 'Florida Atlantic' },
 ];
 
+// The one person who approves an edition before it goes out.
+const APPROVER = 'robert@reelintel.ai';
+
 const STATUS = {
   draft:     { label: 'Ready to review', color: T.brass },
   blocked:   { label: 'Blocked',         color: T.closed },
@@ -355,15 +358,13 @@ export default function WeeklyEmailTab() {
                 />
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-                  <GhostButton disabled={busy === r.id} onClick={() => act(r.id, { test: true })}>
-                    Send a test to me
-                  </GhostButton>
-                  {/* Whoever prepares the edition is often not whoever
-                      approves it, and "test to me" mails the preparer. */}
+                  {/* One destination, whoever is signed in. There is a
+                      single approver, so a button that mails the draft to
+                      "me" invites the preparer to review their own work. */}
                   <GhostButton
                     disabled={busy === r.id}
-                    onClick={() => act(r.id, { test: true, to: 'robert@reelintel.ai' })}
-                  >Send draft to Rob for review</GhostButton>
+                    onClick={() => act(r.id, { test: true, to: APPROVER })}
+                  >Send draft to {APPROVER} for approval</GhostButton>
                   {r.status === 'draft' && (
                     <button
                       disabled={busy === r.id}
