@@ -401,7 +401,7 @@ async function handle(req: Request): Promise<Response> {
     place: jur.place, lat: jur.lat, lon: jur.lon,
     fetched_at: new Date().toISOString(),
     days, changes, blockers, recipient_count: recipients.length,
-    summary, date_range: dateRange,
+    summary, date_range: dateRange, spotlight: PB_SPOTLIGHT,
     excluded: excluded.map((c: any) => ({ species: c.species, species_id: c.species_id,
       jurisdiction_id: c.jurisdiction_id, jurisdiction_label: c.jurisdiction_label })),
     // Not a blocker — the updater's own backlog, surfaced so it is
@@ -596,6 +596,21 @@ const SITE = 'https://www.reelintel.ai';
    is a choice they make rather than one made for them by having
    pressed a button, and it says plainly that the shirt does not
    depend on it. */
+/* This week's featured personal best. One block to change each week:
+   swap the image in public/brand, the three lines here, and the
+   spotlight is done. Set to null and the section falls back to the ask
+   alone, which is the right state when nobody has submitted.
+
+   Featured with the angler's permission — the submission email asks for
+   it explicitly, and a catch goes in here only if that line was kept. */
+const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = {
+  image: 'pb-spotlight.jpg',
+  alt: 'Craig with a 48 inch wahoo caught in Alabama state waters',
+  headline: 'Craig\u2019s first wahoo \u2014 and a new PB',
+  body: '48 inches, Alabama state waters, September 26. First wahoo of his life and '
+      + 'straight into the record book. Congratulations Craig, and thank you for sending it in.',
+};
+
 const PB_MAILTO = "mailto:harper@reelintel.ai?subject=My%20personal%20best&body=Hi%20Harper%2C%0A%0AHere%27s%20my%20personal%20best%20%E2%80%94%20photo%20attached.%0A%0ASpecies%3A%0ALength%20/%20weight%3A%0AGeneral%20area%20%28no%20exact%20numbers%20needed%29%3A%0ADate%20caught%3A%0A%0AShirt%20size%3A%0AMailing%20address%3A%0A%0A%0A---%20Permission%20---%0AKeep%20the%20line%20below%20if%20you%27re%20happy%20for%20us%20to%20run%20this%20catch%20in%20the%0Aweekly%20newsletter.%20Delete%20it%20if%20you%27d%20rather%20we%20didn%27t%20%E2%80%94%20either%20way%20the%0Ashirt%20is%20yours.%0A%0AI%20give%20ReelIntel%20permission%20to%20feature%20this%20catch%2C%20my%20first%20name%20and%20this%0Aphoto%20in%20the%20ReelIntel%20weekly%20email.%20My%20exact%20location%20will%20not%20be%20shared.%0A%0AThanks%2C%0A";
 
 const fmtCoord = (lat: number, lon: number) =>
@@ -780,6 +795,14 @@ function renderHtml(p: any, best: Day | undefined): string {
 
   ${wrap(`<div style="padding:34px 0 0;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${GOLD};border-radius:12px;">
+      ${p.spotlight ? `<tr><td style="padding:22px 22px 0;font-family:${F};">
+        <div style="font-size:12px;font-weight:bold;letter-spacing:1.6px;color:${GOLD};text-transform:uppercase;">This week&rsquo;s catch</div>
+        <img src="${SITE}/brand/${esc(p.spotlight.image)}" width="560" alt="${esc(p.spotlight.alt)}"
+             style="display:block;width:100%;max-width:560px;height:auto;border-radius:12px;border:0;margin:12px auto 0;">
+        <div style="font-size:19px;font-weight:bold;color:${INK};padding-top:14px;">${esc(p.spotlight.headline)}</div>
+        <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:6px;">${esc(p.spotlight.body)}</div>
+        <div style="border-top:1px solid ${EDGE};margin-top:20px;"></div>
+      </td></tr>` : ''}
       <tr><td style="padding:22px;font-family:${F};">
         <!-- Artwork left of the copy in every client. A two-cell table
              rather than flex: Outlook has no flex, and a stacked version
@@ -873,6 +896,8 @@ function renderText(p: any, best: Day | undefined): string {
     }
   }
   lines.push('', 'Tight lines this week. — Harper Wells, harper@reelintel.ai', '');
+  if (p.spotlight) lines.push('', 'THIS WEEK\u2019S CATCH', '  ' + p.spotlight.headline,
+    '  ' + p.spotlight.body);
   lines.push('', 'Send Harper your personal best — every angler who submits one gets a ReelIntel shirt.',
     'Email harper@reelintel.ai with the species, size, where and when, plus your shirt size and address.',
     'Say whether we may feature the catch; the shirt is yours either way.', '',
