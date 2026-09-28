@@ -11,7 +11,7 @@
      2. Action queue  — every "someone should look at this" number
                         with a jump-to-tab CTA.
      3. Species       — coverage gaps (photo, scientific name,
-                        category, tier-2 fields).
+                        category).
      4. Regulations   — jurisdiction × status grid + oldest verified.
      5. Training      — per-species coverage buckets, total pending.
      6. Categories    — species-per-category with orphan flag.
@@ -414,7 +414,12 @@ async function fetchSpeciesCoverage() {
   const all = SPECIES;
   const active = all.filter(s => s.active !== false);
 
-  const missing = { photo: [], scientific: [], category: [], tier2: [], altNames: [] };
+  /* Tier-2 fields and alt names were scored here and read 0% across all
+     171 species, which made the board look alarming about something
+     nobody is filling in. They are not part of what the app needs to be
+     correct, so they are not measured — a coverage bar that has read
+     zero since it was added is not a gap, it is a metric nobody wanted. */
+  const missing = { photo: [], scientific: [], category: [] };
   for (const sp of active) {
     // Photo: prefer live overrides, then bundled sp.photos.
     const overrides = speciesPhotoOverrideAll(sp.id) || [];
@@ -424,12 +429,6 @@ async function fetchSpeciesCoverage() {
     // Empty OR the '_admin' "needs category" bucket both count as needing
     // a category (new species default to '_admin' until an admin files them).
     if (!sp.category || sp.category === '_admin')             missing.category.push(sp);
-    // Tier-2 = at least typical length AND edibility populated.
-    // Both come from the species-tier-fields migration; blank means
-    // the researcher pass hasn't happened for this row yet.
-    if (sp.typical_length_in == null || !sp.edibility)        missing.tier2.push(sp);
-    if (!sp.alt_names || (Array.isArray(sp.alt_names) && sp.alt_names.length === 0))
-      missing.altNames.push(sp);
   }
 
   return {
@@ -1231,16 +1230,6 @@ function SpeciesCoveragePanel({ data, err, loading, onGoTab }) {
                          total={data.active}
                          onClick={() => onGoTab?.('species')}
                          examples={data.missing.category.slice(0, 6).map(s => s.commonName)} />
-            <CoverageBar label="Has tier-2 fields (size + edibility)"
-                         missing={data.missing.tier2.length}
-                         total={data.active}
-                         onClick={() => onGoTab?.('species')}
-                         examples={data.missing.tier2.slice(0, 6).map(s => s.commonName)} />
-            <CoverageBar label="Has alt names"
-                         missing={data.missing.altNames.length}
-                         total={data.active}
-                         onClick={() => onGoTab?.('species')}
-                         examples={data.missing.altNames.slice(0, 6).map(s => s.commonName)} />
           </div>
         </Card>
       )}
