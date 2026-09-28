@@ -17,6 +17,8 @@ import 'leaflet/dist/leaflet.css';
 import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
 import { SUPABASE_URL } from './supabase-client.js';
+import { imageUrl, cacheAge } from './tile-cache.js';
+import { describeAge } from './marine-cache.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
 const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
@@ -33,6 +35,28 @@ const snapshotUrl = (layerKey) => {
   const base = SNAPSHOT_BASE();
   return base ? `${base}/${layerKey}-latest.png` : null;
 };
+/* Basemap tiles, cache-first.
+   Leaflet's default layer goes straight to the network and shows nothing
+   when that fails — which offshore means a grey void with a chlorophyll
+   blob floating in it. This subclass serves a stored tile when there is
+   one, stores every tile it fetches, and leaves the tile blank rather
+   than broken when neither works. */
+const CachedTileLayer = L.TileLayer.extend({
+  createTile(coords, done) {
+    const img = document.createElement('img');
+    img.alt = '';
+    const url = this.getTileUrl(coords);
+    imageUrl(url).then(({ url: src }) => {
+      if (!src) { done(null, img); return; }   // blank, not a broken icon
+      img.onload = () => done(null, img);
+      img.onerror = () => done(null, img);
+      img.src = src;
+    }).catch(() => done(null, img));
+    return img;
+  },
+});
+const cachedTileLayer = (url, opts) => new CachedTileLayer(url, opts);
+
 const GULF_CENTER = [26.0, -88.0];
 const GULF_ZOOM = 5;
 const REGION_BOUNDS = [[22.0, -98.5], [31.5, -77.5]]; // [SW, NE] lat,lon
@@ -90,6 +114,8 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
   const landGeoRef = useRef(null);
   const [active, setActive] = useState(initialLayer === 'sst' ? 'sst' : 'chl');
   const [status, setStatus] = useState('loading');
+  // Non-null when the image on screen came from the device.
+  const [overlayAge, setOverlayAge] = useState(null);
   const [dateISO, setDateISO] = useState('');
   const [showLand, setShowLand] = useState(true);
   const [landReady, setLandReady] = useState(false); // GeoJSON loaded → (re)draw mask
@@ -102,7 +128,7 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
       zoomControl: true, attributionControl: true,
       maxBounds: REGION_BOUNDS, maxBoundsViscosity: 1.0,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    cachedTileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
     }).addTo(map);
     // Land mask above the color overlay so data clips to water only.
@@ -116,7 +142,7 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450;
     map.getPane('coastline').style.pointerEvents = 'none';
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+    cachedTileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd', maxZoom: 19, pane: 'coastline',
     }).addTo(map);
     mapRef.current = map;
@@ -162,14 +188,22 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
       return `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
     };
 
+    /* The data overlay, cache-first like the tiles. A stored image is
+       shown immediately and refreshed behind the screen, so the map is
+       useful the moment it opens and current the moment there is signal. */
     const addOverlay = (url, onError) => {
-      const layer = L.imageOverlay(url, REGION_BOUNDS, {
-        opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA',
-      });
-      layer.on('load', () => setStatus('ok'));
-      layer.on('error', () => { map.removeLayer(layer); onError?.(); });
-      layer.addTo(map);
-      overlayRef.current = layer;
+      imageUrl(url).then(({ url: src, cached }) => {
+        if (!src) { onError?.(); return; }
+        const layer = L.imageOverlay(src, REGION_BOUNDS, {
+          opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA',
+        });
+        layer.on('load', () => setStatus('ok'));
+        layer.on('error', () => { map.removeLayer(layer); onError?.(); });
+        layer.addTo(map);
+        overlayRef.current = layer;
+        if (cached) cacheAge(url).then(ms => setOverlayAge(ms)).catch(() => {});
+        else setOverlayAge(null);
+      }).catch(() => onError?.());
     };
 
     // "Latest" reads the pre-rendered snapshot; if it's missing (bucket
@@ -245,7 +279,21 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
             background: T.closedBg, color: T.closed, border: `1px solid ${T.closed}`,
             padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, maxWidth: 300,
           }}>
-            This layer didn't load — the composite may be cloud-covered for this window. Try an earlier date.
+            This layer didn't load — the composite may be cloud-covered for this window, or you have no
+            signal and nothing saved for it yet. Try an earlier date.
+          </div>
+        )}
+
+        {/* Same rule as the forecast: imagery from the device says so, with
+            its age. A three-day-old chlorophyll edge is still worth seeing —
+            a three-day-old edge you believe is today's is not. */}
+        {overlayAge != null && status === 'ok' && (
+          <div style={{
+            position: 'absolute', top: 10, left: 10, zIndex: 500,
+            background: T.warnBg, color: T.warn, border: `1px solid ${T.warn}88`,
+            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, maxWidth: 320,
+          }}>
+            Saved image · {describeAge(overlayAge)} — no signal, showing what your phone downloaded.
           </div>
         )}
       </div>
@@ -255,7 +303,11 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <SectionLabel style={{ margin: 0 }}>{cfg.label} · {cfg.units}</SectionLabel>
           {status === 'loading' && <span style={{ fontSize: 12, color: T.inkMute }}>Loading…</span>}
-          {status === 'ok' && <span style={{ fontSize: 12, color: T.open, fontWeight: 700 }}>{dateISO ? `Near ${dateISO}` : 'Latest composite'}</span>}
+          {status === 'ok' && (
+            <span style={{ fontSize: 12, color: overlayAge != null ? T.warn : T.open, fontWeight: 700 }}>
+              {overlayAge != null ? `Saved · ${describeAge(overlayAge)}` : (dateISO ? `Near ${dateISO}` : 'Latest composite')}
+            </span>
+          )}
         </div>
         <div style={{
           height: 14, borderRadius: 4, marginTop: 10,
