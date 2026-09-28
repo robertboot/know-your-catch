@@ -671,7 +671,7 @@ export default function App() {
   // preview where the session may not be present, but on the web
   // build we require a real session to prevent anyone from unlocking
   // admin by typing an email into onboarding.
-  if (__KYC_ADMIN__ && AdminApp && hashRoute === 'admin') {
+  if (__KYC_ADMIN__ && AdminApp && (hashRoute === 'admin' || hashRoute.startsWith('admin/'))) {
     const sessionEmail = (session?.user?.email || '').trim().toLowerCase();
     const localEmail   = (state.anglerEmail   || '').trim().toLowerCase();
     const authedEmail  = __KYC_WEB__ ? sessionEmail : (sessionEmail || localEmail);

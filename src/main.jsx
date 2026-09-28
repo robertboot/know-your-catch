@@ -50,7 +50,11 @@ function pickRoot() {
   if (!__KYC_WEB__ || !MarketingLanding) return <App />;
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/admin') {
-    if (window.location.hash !== '#/admin') window.location.hash = '#/admin';
+    // Accept a tab in the hash (#/admin/weekly) so a refresh lands where
+    // you were. Only rewrite when it is not an admin route at all —
+    // clobbering it unconditionally is what sent every reload back to
+    // the dashboard.
+    if (!/^#\/admin(\/|$)/.test(window.location.hash)) window.location.hash = '#/admin';
     return <App />;
   }
   if (path === '/testers') {

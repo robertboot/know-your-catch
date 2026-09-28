@@ -291,16 +291,40 @@ function SignedInShell({ email, onExit }) {
     if (typeof window !== 'undefined') window.__kycAdminEmail = email || null;
     return () => { if (typeof window !== 'undefined') window.__kycAdminEmail = null; };
   }, [email]);
-  // Default landing = Dashboard so the admin sees the health/action
-  // queue before anything else. Deep-linking into a specific tab
-  // still works from HomeDashboard tiles via `switchTab`.
-  const [tab, setTab] = useState('dashboard');
+  /* The open tab lives in the URL (#/admin/weekly) rather than in state
+     alone. A refresh used to drop you back on the dashboard, which is
+     punishing on a tab you are iterating in — and it makes a tab
+     linkable and the back button work.
+
+     Default is still the dashboard, so a bare #/admin lands on the
+     health queue as before. */
+  const tabFromHash = () => {
+    const m = /^#\/admin\/([a-z-]+)/.exec(window.location.hash || '');
+    return m ? m[1] : 'dashboard';
+  };
+  const [tab, setTab] = useState(tabFromHash);
+
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [detailView, setDetailView] = useState(null); // e.g. { kind:'species-edit', id }
 
   const signOut = async () => { await client()?.auth?.signOut(); };
 
   const clearDetail = () => setDetailView(null);
-  const switchTab = (t) => { setDetailView(null); setTab(t); };
+  const switchTab = (t) => {
+    setDetailView(null);
+    setTab(t);
+    // replaceState, not a hash assignment: switching tabs should not
+    // stack a history entry per click, or Back becomes a tour of every
+    // tab you glanced at.
+    const next = t === 'dashboard' ? '#/admin' : `#/admin/${t}`;
+    if (window.location.hash !== next) {
+      window.history.replaceState(null, '', window.location.pathname + next);
+    }
+  };
 
   return (
     <Chrome
