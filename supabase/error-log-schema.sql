@@ -37,11 +37,11 @@ create policy error_log_anon_insert on public.error_log
 
 drop policy if exists error_log_admin_read on public.error_log;
 create policy error_log_admin_read on public.error_log
-  for select using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
+  for select using (public.is_admin());
 
 drop policy if exists error_log_admin_update on public.error_log;
 create policy error_log_admin_update on public.error_log
-  for update using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
+  for update using (public.is_admin());
 
 -- Grouped view for the admin tab: one row per distinct fault, newest
 -- first. Counting occurrences matters more than listing them — the same
@@ -64,7 +64,7 @@ language sql security definer stable as $$
          count(*) filter (where e.is_guest)                  as guests,
          count(*) filter (where e.resolved_at is null)        as unresolved
   from public.error_log e
-  where lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com'
+  where public.is_admin()
     and e.occurred_at > now() - make_interval(hours => since_hours)
   group by e.fingerprint
   order by max(e.occurred_at) desc;
@@ -76,7 +76,7 @@ create or replace function public.error_log_resolve(fp text)
 returns integer language plpgsql security definer as $$
 declare n integer;
 begin
-  if lower(coalesce(auth.jwt() ->> 'email', '')) <> 'robertb1023@me.com' then
+  if not public.is_admin() then
     raise exception 'not authorised';
   end if;
   update public.error_log set resolved_at = now()

@@ -28,7 +28,7 @@ declare
 begin
   -- SECURITY DEFINER runs as the owner, so the caller check is the only
   -- thing standing between any authenticated user and the job table.
-  if lower(coalesce((auth.jwt() ->> 'email'), '')) <> 'robertb1023@me.com' then
+  if not public.is_admin() then
     raise exception 'forbidden';
   end if;
 

@@ -9,11 +9,11 @@
    This is a UX gate, not a security boundary. It decides what the
    browser draws. What actually protects the data is RLS in Postgres,
    which checks the same addresses inside the database; keep this list
-   and public.is_admin() in step (supabase/add-admin-harper.sql). */
+   and public.is_admin() in step (supabase/admin-gates-use-is-admin.sql). */
 export const ADMIN_EMAILS = [
   'robertb1023@me.com',
-  'annelies@reelintel.ai',
   'harper@reelintel.ai',
+  'robert@reelintel.ai',
 ];
 
 export const isAdminEmail = (e) =>

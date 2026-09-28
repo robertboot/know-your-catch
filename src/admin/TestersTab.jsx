@@ -241,7 +241,7 @@ export default function TestersTab() {
     if (err) {
       setError(
         /not authorised/i.test(err.message)
-          ? 'Signed-in email is not the admin allowlist address.'
+          ? 'This sign-in is not in public.is_admin() — run supabase/admin-gates-use-is-admin.sql.'
           : `${err.message} — has supabase/tester-feedback-admin.sql been run?`);
       return;
     }

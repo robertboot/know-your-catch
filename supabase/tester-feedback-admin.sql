@@ -41,8 +41,11 @@ declare
   nc integer;
   np integer;
 begin
-  -- security definer bypasses RLS, so the gate lives here.
-  if lower(coalesce(auth.jwt() ->> 'email', '')) <> 'robertb1023@me.com' then
+  -- security definer bypasses RLS, so the gate lives here. Defer to
+  -- public.is_admin() rather than naming an address: this function was
+  -- the one place a second admin (harper@) could sign in, see the
+  -- Testers tab, and still be told "not authorised".
+  if not public.is_admin() then
     raise exception 'not authorised';
   end if;
 
@@ -103,7 +106,7 @@ grant  execute on function public.tester_feedback_admin() to authenticated;
 -- Signed URL for a submitted screenshot (private bucket).
 create or replace function public.tester_feedback_is_admin()
 returns boolean language sql stable as $$
-  select lower(coalesce(auth.jwt() ->> 'email', '')) = 'robertb1023@me.com';
+  select public.is_admin();
 $$;
 grant execute on function public.tester_feedback_is_admin() to authenticated;
 

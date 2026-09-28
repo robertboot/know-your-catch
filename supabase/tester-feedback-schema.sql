@@ -34,7 +34,7 @@ create policy tester_feedback_anon_insert on public.tester_feedback
 drop policy if exists tester_feedback_admin_read on public.tester_feedback;
 create policy tester_feedback_admin_read on public.tester_feedback
   for select
-  using (lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com');
+  using (public.is_admin());
 
 -- The spots-claimed counter uses a HEAD count, which needs select. Anon
 -- must be able to COUNT without reading contents; Postgres has no
@@ -60,7 +60,7 @@ create policy tester_shots_admin_read on storage.objects
   for select
   using (
     bucket_id = 'tester-feedback'
-    and lower(coalesce((auth.jwt() ->> 'email'), '')) = 'robertb1023@me.com'
+    and public.is_admin()
   );
 
 notify pgrst, 'reload schema';

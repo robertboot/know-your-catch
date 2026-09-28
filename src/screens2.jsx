@@ -13,6 +13,7 @@ import {
   DATA_VERSION, DATA_BUILD_DATE,
 } from './data.js';
 import { saveState } from './storage.js';
+import { isAdminEmail } from './admin-emails.js';
 import {
   savePhoto, deletePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl, resolvePhotoDisplay,
 } from './photos-store.js';
@@ -2000,7 +2001,7 @@ export function SettingsScreen({ state, jurisdiction, update, session, syncStatu
       {/* Admin console entry — web-only, admin allowlist only. When
           __KYC_ADMIN__ is false (ios:build) the whole Card constant-
           folds out and never reaches the iOS bundle. */}
-      {__KYC_ADMIN__ && ['robertb1023@me.com', 'annelies@reelintel.ai', 'harper@reelintel.ai'].includes((state.anglerEmail || '').trim().toLowerCase()) && (
+      {__KYC_ADMIN__ && isAdminEmail(state.anglerEmail) && (
         <Card style={{ marginBottom: 10 }}>
           <SectionLabel style={{ marginBottom: 6 }}>Admin</SectionLabel>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
