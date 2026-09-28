@@ -386,7 +386,6 @@ function useIsNarrow(bp = 720) {
  * entry instead of hiding behind one label. */
 const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
-  { key: 'weekly',    label: 'Newsletter' },
   { key: 'testers',   label: 'Beta Testers' },
   {
     label: 'Fish ID',
@@ -407,17 +406,18 @@ const NAV = [
       { key: 'categories',  label: 'Categories' },
       { key: 'regulations', label: 'Regulations' },
       { key: 'ocean',       label: 'Marine Conditions' },
+      { key: 'errors',      label: 'Errors' },
     ],
   },
   {
-    label: 'Branding & Marketing',
+    label: 'Marketing',
     children: [
+      { key: 'weekly',        label: 'Newsletter' },
       { key: 'branding',      label: 'Branding' },
-      { key: 'legal',         label: 'Legal' },
       { key: 'notifications', label: 'Notifications' },
+      { key: 'legal',         label: 'Legal' },
     ],
   },
-  { key: 'errors', label: 'Errors' },
 ];
 
 /* 'training:models' -> { tab: 'training', panel: 'models' } */
@@ -437,6 +437,11 @@ function TabBar({ tab, onTab }) {
   // click for everything else — a hover-only menu is unusable on the
   // iPad this console is often driven from.
   const [openGroup, setOpenGroup] = useState(null);
+  // A menu opened by hover closes itself when the pointer leaves. One
+  // opened by a click stays until it is dismissed — otherwise hovering
+  // then clicking the same button reads as "click closes the menu",
+  // which is the opposite of what the click was for.
+  const [pinned, setPinned] = useState(false);
   const closeTimer = useRef(null);
 
   const flat = NAV.flatMap(g => g.children || [g]);
@@ -444,21 +449,36 @@ function TabBar({ tab, onTab }) {
     || flat.find(x => splitRoute(x.key).tab === splitRoute(tab).tab);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') setOpenGroup(null); };
+    const onKey = (e) => { if (e.key === 'Escape') { setPinned(false); setOpenGroup(null); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useEffect(() => {
+    if (!pinned) return undefined;
+    const onDown = (e) => { if (!e.target.closest('[data-adminnav]')) { setPinned(false); setOpenGroup(null); } };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [pinned]);
 
   // A small grace period on leaving: without it the menu vanishes while
   // the pointer crosses the gap between the button and the panel.
-  const hoverOpen = (label) => { clearTimeout(closeTimer.current); setOpenGroup(label); };
+  const hoverOpen = (label) => {
+    clearTimeout(closeTimer.current);
+    if (!pinned) setOpenGroup(label);
+  };
   const hoverClose = () => {
+    if (pinned) return;
     clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => setOpenGroup(null), 160);
   };
+  const clickGroup = (label) => {
+    clearTimeout(closeTimer.current);
+    if (pinned && openGroup === label) { setPinned(false); setOpenGroup(null); }
+    else { setPinned(true); setOpenGroup(label); }
+  };
 
-  const go = (key) => { setOpenGroup(null); setOpen(false); onTab(key); };
+  const go = (key) => { setPinned(false); setOpenGroup(null); setOpen(false); onTab(key); };
 
   /* ---------- narrow: one hamburger, groups as headings ---------- */
   if (narrow) {
@@ -515,7 +535,7 @@ function TabBar({ tab, onTab }) {
   const activeGroup = groupOf(tab);
 
   return (
-    <div style={{ position: 'relative', borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
+    <div data-adminnav style={{ position: 'relative', borderBottom: `1px solid ${T.cardEdge}`, marginBottom: 4 }}>
       <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         {NAV.map(g => {
           const isGroup = !!g.children;
@@ -529,9 +549,7 @@ function TabBar({ tab, onTab }) {
               style={{ position: 'relative' }}
             >
               <button
-                onClick={() => isGroup
-                  ? setOpenGroup(showing ? null : g.label)
-                  : go(g.key)}
+                onClick={() => isGroup ? clickGroup(g.label) : go(g.key)}
                 aria-haspopup={isGroup || undefined}
                 aria-expanded={isGroup ? showing : undefined}
                 style={{
