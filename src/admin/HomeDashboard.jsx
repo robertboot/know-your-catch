@@ -23,7 +23,7 @@
    in that section's card, the rest of the dashboard still loads.
    The refresh button re-runs every fetch in parallel. */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { T } from '../theme.js';
 import { SPECIES, JURISDICTIONS } from '../data.js';
 import { client } from '../supabase-client.js';
@@ -168,7 +168,7 @@ async function fetchModelInfo() {
 }
 
 async function fetchHealth(modelInfo) {
-  const [bundles, lastAi, autoRun, cron, coverage] = await Promise.all([
+  const [bundles, lastAi, autoRun, cron, coverage, perDay] = await Promise.all([
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
       const c = client();
@@ -196,6 +196,21 @@ async function fetchHealth(modelInfo) {
     })(),
     getCronHealth().catch(() => null),
     adminRegsCoverage().catch(() => null),
+    // Observed throughput over the last week, so the coverage estimate
+    // reflects the cadence actually running rather than one written
+    // into the code months ago.
+    (async () => {
+      const c = client();
+      if (!c) return null;
+      try {
+        const since = new Date(Date.now() - 7 * 86400000).toISOString();
+        const { data, error } = await c.from('regs_auto_runs')
+          .select('ran_at, checked').gte('ran_at', since);
+        if (error || !data?.length) return null;
+        const total = data.reduce((a, r) => a + (r.checked || 0), 0);
+        return Math.max(1, Math.round(total / 7));
+      } catch { return null; }
+    })(),
   ]);
 
   const prod = modelInfo?.row || null;
@@ -210,7 +225,7 @@ async function fetchHealth(modelInfo) {
     lastAiDraftSpecies: lastAi?.species_id || null,
     autoRun,
     cron,
-    coverage: coverage?.ok ? coverage : null,
+    coverage: coverage?.ok ? { ...coverage, perDay } : null,
   };
 }
 
@@ -609,6 +624,152 @@ async function fetchRecentActivity() {
    Rendering
    ============================================================ */
 
+/* ============================================================
+   Daily brief
+   ============================================================
+   The dashboard below is eight sections of detail. This is the part
+   that answers "what needs doing today" without reading any of it —
+   written for someone (or something) checking every morning.
+
+   Two rules keep it useful. Only items with an action go in: a large
+   standing number that nobody is expected to act on today is context,
+   not a task, and putting it here would train the reader to skim past
+   real ones. And when there is nothing, it says so plainly rather than
+   padding itself — a brief that is never empty is never read. */
+
+const SEV = {
+  critical: { rank: 0, label: 'BROKEN',   color: T.closed },
+  action:   { rank: 1, label: 'TO DO',    color: T.warn },
+  watch:    { rank: 2, label: 'WATCH',    color: T.brass },
+};
+
+function buildBrief({ health, queue, coverage, training }) {
+  const items = [];
+  const add = (sev, text, tab, detail) => items.push({ sev, text, tab, detail });
+
+  // --- broken ---------------------------------------------------
+  const http = health?.cron?.recentHttp || [];
+  const badCalls = http.filter(r => r.status_code == null || r.status_code >= 400);
+  if (badCalls.length) {
+    add('critical',
+      `${badCalls.length} of the last ${http.length} scheduled job calls failed`,
+      null,
+      badCalls[0].error_msg
+        || (badCalls[0].status_code == null
+              ? 'the request never completed — the job fired but nothing answered'
+              : `HTTP ${badCalls[0].status_code}`));
+  }
+  const inactive = (health?.cron?.jobs || []).filter(j => !j.active);
+  if (inactive.length) {
+    add('critical', `${inactive.length} scheduled job${inactive.length === 1 ? ' is' : 's are'} disabled`,
+      null, inactive.map(j => j.jobname).join(', '));
+  }
+
+  // --- to do ----------------------------------------------------
+  if (queue?.suggestionsPending > 0) {
+    add('action', `${queue.suggestionsPending} species suggestion${queue.suggestionsPending === 1 ? '' : 's'} waiting on approval`,
+      'species', 'Anglers submitted these from the app.');
+  }
+  if (queue?.trainingPending > 0) {
+    add('action', `${queue.trainingPending} training photo${queue.trainingPending === 1 ? '' : 's'} waiting on review`,
+      'training:review', null);
+  }
+  if (queue?.ownerBacklog > 0) {
+    add('action', `${queue.ownerBacklog} of your own uploads are unverified`, 'training:review', null);
+  }
+  if (queue?.regsDraftsOld > 0) {
+    add('action', `${queue.regsDraftsOld} AI regulation drafts older than 7 days are still unverified`,
+      'regulations', 'Anglers never see a draft — these are invisible in the app until verified.');
+  }
+  if (queue?.regsStale > 0) {
+    add('action', `${queue.regsStale} verified regulations are over a year old`, 'regulations', null);
+  }
+
+  // --- watch ----------------------------------------------------
+  const readyRows = training?.newSincePublish ?? null;
+  if (readyRows != null && readyRows >= 500) {
+    add('watch', `${readyRows} new verified photos since the live model was built`,
+      'training:export', 'Enough to be worth a retrain.');
+  }
+  const pub = health?.model?.publishedAt ? new Date(health.model.publishedAt) : null;
+  if (pub) {
+    const days = Math.floor((Date.now() - pub.getTime()) / 86400000);
+    if (days >= 60) {
+      add('watch', `The live Fish ID model is ${days} days old`, 'training:models', null);
+    }
+  }
+  if (coverage && coverage.neverChecked > 0 && coverage.perDay) {
+    const daysLeft = Math.ceil(coverage.neverChecked / coverage.perDay);
+    if (daysLeft > 45) {
+      add('watch', `Regulation coverage will take about ${daysLeft} more days at the current cadence`,
+        null, `${coverage.neverChecked} pairs have never been checked.`);
+    }
+  }
+
+  items.sort((a, b) => SEV[a.sev].rank - SEV[b.sev].rank);
+  return items;
+}
+
+function DailyBrief({ state, onGoTab }) {
+  const items = useMemo(() => buildBrief({
+    health: state.health, queue: state.queue,
+    coverage: state.health?.coverage, training: state.pipeline,
+  }), [state.health, state.queue, state.pipeline]);
+
+  const worst = items[0]?.sev;
+  const edge = worst ? SEV[worst].color : T.open;
+
+  return (
+    <Card style={{ borderColor: `${edge}66` }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <SectionLabel style={{ margin: 0 }}>Today</SectionLabel>
+        <span style={{ fontSize: 12, color: T.inkMute }}>
+          {state.loading ? 'checking…'
+            : items.length === 0 ? 'nothing needs attention'
+            : `${items.length} item${items.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
+
+      {!state.loading && items.length === 0 && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, color: T.ink }}>
+          <span style={{ color: T.open, fontSize: 16 }}>✓</span>
+          Everything is running and nothing is waiting on a decision.
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        {items.map((it, i) => {
+          const s = SEV[it.sev];
+          return (
+            <div key={i} style={{
+              display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap',
+              padding: '10px 12px', borderRadius: 10,
+              background: T.oceanDeep, border: `1px solid ${s.color}33`,
+            }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: 1, color: s.color,
+                border: `1px solid ${s.color}55`, padding: '3px 7px', borderRadius: 999,
+                whiteSpace: 'nowrap', marginTop: 1,
+              }}>{s.label}</span>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontSize: 14, color: T.ink, fontWeight: 600, lineHeight: 1.45 }}>{it.text}</div>
+                {it.detail && (
+                  <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 3, lineHeight: 1.5 }}>{it.detail}</div>
+                )}
+              </div>
+              {it.tab && (
+                <GhostButton onClick={() => onGoTab?.(it.tab)} style={{ padding: '7px 12px', fontSize: 12.5 }}>
+                  Open
+                </GhostButton>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 export default function HomeDashboard({ onGoTab }) {
   const { state, refresh } = useDashboardData();
 
@@ -619,6 +780,8 @@ export default function HomeDashboard({ onGoTab }) {
         refreshedAt={state.refreshedAt}
         onRefresh={refresh}
       />
+
+      <DailyBrief state={state} onGoTab={onGoTab} />
 
       <HealthStrip data={state.health} err={state.errors.health} loading={state.loading} />
 
@@ -913,9 +1076,14 @@ function RegsCoverageTile({ cov }) {
   const { checked, totalPairs, neverChecked, speciesCount, jurisdictionCount } = cov;
   const pct = totalPairs ? Math.round((checked / totalPairs) * 100) : 0;
   const done = neverChecked === 0;
-  // 120 pairs/day at batch 5 hourly. Rough, but it answers "how long
-  // until I can throttle this".
-  const daysLeft = done ? 0 : Math.ceil(neverChecked / 120);
+  /* This used to say "~Nd at 120/day", which was the old hourly batch-5
+     cadence. The cron now runs batch 8 twice daily — about 16 a day — so
+     the tile was quoting a finish date roughly seven times too
+     optimistic. Rather than hardcode a second number that will go stale
+     the same way, the rate comes from the updater's own recent runs and
+     the estimate is simply omitted when there is nothing to measure. */
+  const perDay = cov.perDay ?? null;
+  const daysLeft = done || !perDay ? null : Math.ceil(neverChecked / perDay);
 
   return (
     <Tile
@@ -924,7 +1092,8 @@ function RegsCoverageTile({ cov }) {
       tone={done ? 'ok' : 'neutral'}
       hint={done
         ? `First pass COMPLETE — switch cron to seasonal (${speciesCount}×${jurisdictionCount})`
-        : `${checked}/${totalPairs} pairs · ${neverChecked} left · ~${daysLeft}d at 120/day`}
+        : `${checked}/${totalPairs} pairs · ${neverChecked} never checked${
+            daysLeft ? ` · ~${daysLeft}d at ${perDay}/day` : ''}`}
     />
   );
 }
@@ -957,13 +1126,20 @@ function CronTile({ cron }) {
   const value = jobs.length === 0
     ? 'NONE SCHEDULED'
     : bad.length > 0
-      ? `${bad.length}/${http.length} FAILING`
+      ? `${bad.length} OF LAST ${http.length} CALLS FAILED`
       : `${jobs.length} OK`;
 
   const hint = jobs.length === 0
     ? 'No pg_cron jobs found'
     : bad.length > 0
-      ? `Last error: ${bad[0].error_msg || `HTTP ${bad[0].status_code}`}`
+      /* "HTTP null" told nobody anything. A queued call that never
+         completed has no status code at all, which is a different
+         failure from a 500 and deserves different words. */
+      ? `Last failure: ${bad[0].error_msg
+          || (bad[0].status_code == null
+                ? 'request never completed (queued, no response)'
+                : `HTTP ${bad[0].status_code}`)}${
+          bad[0].created ? ` · ${relativeTime(bad[0].created)}` : ''}`
       : lastCall
         ? `Last call HTTP ${lastCall.status_code} · ${relativeTime(lastCall.created)}`
         : 'Scheduled, no calls recorded yet';
@@ -995,18 +1171,13 @@ function ActionQueue({ data, err, loading, onGoTab }) {
                       hint="Photos submitted but not yet approved/rejected"
                       ctaLabel="Review"
                       urgent={data.trainingPending > 0}
-                      onClick={() => onGoTab?.('training')} />
-          <ActionTile label="Rejected photos"
-                      count={data.trainingRejected}
-                      hint="Some may be recoverable via crop-to-recover"
-                      ctaLabel="Open Rejected"
-                      onClick={() => onGoTab?.('training')} />
+                      onClick={() => onGoTab?.('training:review')} />
           <ActionTile label="My owner-upload backlog"
                       count={data.ownerBacklog}
                       hint="Uploads pending under your admin email"
                       ctaLabel="Verify mine"
                       urgent={data.ownerBacklog > 0}
-                      onClick={() => onGoTab?.('training')} />
+                      onClick={() => onGoTab?.('training:review')} />
           <ActionTile label="Regs drafts > 7d"
                       count={data.regsDraftsOld}
                       hint="AI drafts that haven't been verified"
