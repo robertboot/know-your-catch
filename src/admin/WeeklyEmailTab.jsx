@@ -358,6 +358,12 @@ export default function WeeklyEmailTab() {
                   <GhostButton disabled={busy === r.id} onClick={() => act(r.id, { test: true })}>
                     Send a test to me
                   </GhostButton>
+                  {/* Whoever prepares the edition is often not whoever
+                      approves it, and "test to me" mails the preparer. */}
+                  <GhostButton
+                    disabled={busy === r.id}
+                    onClick={() => act(r.id, { test: true, to: 'robert@reelintel.ai' })}
+                  >Send draft to Rob for review</GhostButton>
                   {r.status === 'draft' && (
                     <button
                       disabled={busy === r.id}

@@ -69,8 +69,18 @@ Deno.serve(async (req: Request) => {
   // about the edition's status. This is how you read the real thing in a
   // real mail client before committing to the audience.
   if (testOnly) {
-    const r = await mail(KEY, callerEmail, `[TEST] ${ed.subject}`, ed.html, ed.text_body);
-    return r.ok ? json({ ok: true, test: true, to: callerEmail })
+    // A review copy may be addressed to another admin — Harper prepares
+    // the edition and Rob approves it, so "send a test" defaulting to
+    // the signed-in user would mail the preparer, not the approver.
+    // Restricted to the admin list: this is not a way to mail anyone.
+    const asked = String(body.to || '').toLowerCase().trim();
+    const to = asked && ADMINS.includes(asked) ? asked : callerEmail;
+    if (asked && !ADMINS.includes(asked)) {
+      return json({ error: 'recipient_not_admin', detail: asked }, 403);
+    }
+    const r = await mail(KEY, to, `[REVIEW] ${ed.subject}`,
+      reviewWrapper(ed, callerEmail), reviewText(ed, callerEmail));
+    return r.ok ? json({ ok: true, test: true, to })
                 : json({ error: 'resend_failed', detail: r.detail }, 502);
   }
 
@@ -124,6 +134,67 @@ Deno.serve(async (req: Request) => {
 
   return json({ ok: done, sent, failed, total: sent + failed });
 });
+
+/* The review copy carries an approval block the real send never has.
+   Approving used to mean replying in a separate chat, which left no
+   record tying a yes to a specific edition — and the edition is what
+   matters, since regenerating replaces its contents entirely.
+
+   These are mailto links rather than one-click web buttons on purpose:
+   a URL that sends a newsletter to hundreds of people the moment it is
+   fetched will eventually be fetched by a link scanner. A reply is a
+   deliberate act by a person. */
+function reviewWrapper(ed: any, preparedBy: string): string {
+  const count = ed.recipient_count ?? 0;
+  const week = ed.week_start;
+  const subj = (s: string) =>
+    encodeURIComponent(`${s}: ${ed.jurisdiction_id} ${week}`);
+  const approveBody = encodeURIComponent(
+    `Approved. Send the ${ed.jurisdiction_id} edition for the week of ${week} to all ${count} subscribers.\n\n` +
+    `Edition id: ${ed.id}\n`);
+  const changeBody = encodeURIComponent(
+    `Changes needed before this goes out.\n\n` +
+    `What to change:\n  - \n\nEdition id: ${ed.id}\n`);
+
+  const banner = `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFC343;">
+<tr><td align="center" style="padding:0;">
+  <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:640px;max-width:640px;">
+    <tr><td style="padding:18px 32px;font-family:Arial,Helvetica,sans-serif;color:#06212f;">
+      <div style="font-size:13px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase;">Review copy &mdash; not sent to anglers</div>
+      <div style="font-size:15px;line-height:1.55;padding-top:6px;">
+        <b>${ed.jurisdiction_id}</b> &middot; week of ${week} &middot; goes to <b>${count}</b> subscriber${count === 1 ? '' : 's'} when approved.
+        Prepared by ${preparedBy}.
+      </div>
+      <div style="padding-top:14px;">
+        <a href="mailto:${preparedBy}?subject=${subj('APPROVED')}&amp;body=${approveBody}"
+           style="display:inline-block;background:#06212f;color:#FFC343;font-size:15px;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:9px;margin-right:8px;">Approve &amp; send</a>
+        <a href="mailto:${preparedBy}?subject=${subj('CHANGES')}&amp;body=${changeBody}"
+           style="display:inline-block;background:transparent;color:#06212f;border:2px solid #06212f;font-size:15px;font-weight:bold;text-decoration:none;padding:10px 20px;border-radius:9px;">Request changes</a>
+      </div>
+      <div style="font-size:12px;line-height:1.5;padding-top:12px;opacity:0.8;">
+        Either button opens a reply. Approving does not send anything by itself &mdash;
+        ${preparedBy} presses send in the console once your reply arrives.
+      </div>
+    </td></tr>
+  </table>
+</td></tr></table>`;
+
+  // Injected after <body> so it sits above the masthead without touching
+  // the edition's own markup, which is what actually gets sent.
+  return String(ed.html).replace(/(<body[^>]*>)/i, `$1${banner}`);
+}
+
+function reviewText(ed: any, preparedBy: string): string {
+  return [
+    'REVIEW COPY — not sent to anglers.',
+    `${ed.jurisdiction_id} · week of ${ed.week_start} · ${ed.recipient_count ?? 0} subscribers when approved.`,
+    `Prepared by ${preparedBy}. Reply APPROVED to send, or reply with changes.`,
+    `Edition id: ${ed.id}`,
+    '', '----------------------------------------', '',
+    ed.text_body,
+  ].join('\n');
+}
 
 async function mail(key: string, to: string, subject: string, html: string, text: string) {
   try {
