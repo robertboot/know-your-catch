@@ -19,7 +19,7 @@ import {
 import {
   speciesById, jurisdictionById, federalJurisdictionFor, getComparison,
   formatSize, formatWeight, regStatus, differs, cleanSeason, seasonState, speciesPhoto,
-  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos, appleMapsLink,
+  sunPosition, moonPhase, buildPBReport, buildCatchReport, pbPhotos, catchPhotos,
   shareReport, fetchWeatherForTime, PROHIBITED_RE,
   isAnglerVisible, seasonTransition, dataUrlToFile,} from './helpers.js';
 
@@ -31,16 +31,34 @@ import {
 // PhotoImg is now shared — imported below from components.jsx so the
 // PB Spotlight and this screen use one resolver + one fallback path.
 
-/* Render a coordinate value as a tappable Apple Maps link. */
+/* A coordinate, tappable — opens the spot on a map INSIDE the app.
+ *
+ * It used to hand off to Apple Maps. That leaves ReelIntel, and on a
+ * boat it leaves it for an app whose own tiles are not cached, so the
+ * angler traded a working screen for a grey one. Same map and same
+ * chrome as "Pin on map" in the editor, minus the pin. */
 function CoordsLink({ lat, lon }) {
-  const href = appleMapsLink(lat, lon);
+  const [open, setOpen] = useState(false);
   const label = `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`;
-  if (!href) return <>{label}</>;
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer"
-      style={{ color: T.brass, textDecoration: 'underline', textDecorationThickness: '1px' }}>
-      {label}
-    </a>
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          background: 'transparent', border: 'none', padding: 0, font: 'inherit',
+          color: T.brass, textDecoration: 'underline', textDecorationThickness: '1px',
+          cursor: 'pointer',
+        }}
+      >{label}</button>
+      {open && (
+        <LocationPickerModal
+          initialLat={lat}
+          initialLon={lon}
+          readOnly
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }
 import {
@@ -2148,7 +2166,7 @@ function compassDir(deg) {
 /* ============================================================
    LOCATION PICKER — map-based pin drop, dark theme, draggable.
    ============================================================ */
-export function LocationPickerModal({ initialLat, initialLon, onSave, onClose }) {
+export function LocationPickerModal({ initialLat, initialLon, onSave, onClose, readOnly = false }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -2183,7 +2201,7 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
 
     const setPin = (lat, lng) => {
       if (!markerRef.current) {
-        markerRef.current = L.marker([lat, lng], { draggable: true, icon: pinIcon }).addTo(map);
+        markerRef.current = L.marker([lat, lng], { draggable: !readOnly, icon: pinIcon }).addTo(map);
         markerRef.current.on('dragend', (e) => {
           const ll = e.target.getLatLng();
           setCoords({ lat: ll.lat, lon: ll.lng });
@@ -2196,7 +2214,9 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
     };
 
     if (placed) setPin(startLat, startLon);
-    map.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
+    // Read-only: the pin marks where the fish was caught. Dragging it
+    // would imply the record can be edited from here, and it cannot.
+    if (!readOnly) map.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
 
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
@@ -2210,9 +2230,11 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
       {/* Header */}
       <div style={{ padding: '12px 14px', background: T.oceanDeep, borderBottom: `1px solid ${T.cardEdge}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
-          <H1 size={17} style={{ marginBottom: 2 }}>Pin catch location</H1>
+          <H1 size={17} style={{ marginBottom: 2 }}>{readOnly ? 'Catch location' : 'Pin catch location'}</H1>
           <div style={{ fontSize: 12, color: T.inkSoft }}>
-            Tap the map to drop a pin, or drag an existing one. Pinch to zoom.
+            {readOnly
+              ? 'Pinch to zoom. Tiles you have already viewed work offline.'
+              : 'Tap the map to drop a pin, or drag an existing one. Pinch to zoom.'}
           </div>
         </div>
         <button onClick={onClose} aria-label="Close" style={{
@@ -2235,10 +2257,26 @@ export function LocationPickerModal({ initialLat, initialLon, onSave, onClose })
             <span style={{ fontSize: 14, color: T.inkMute, fontStyle: 'italic' }}>Tap the map to place a pin</span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <GhostButton onClick={onClose} style={{ flex: 1 }}>Cancel</GhostButton>
-          <PrimaryButton onClick={save} disabled={!placed} style={{ flex: 2 }}>Save pin</PrimaryButton>
-        </div>
+        {readOnly ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            {/* Copy replaces the Apple Maps handoff: the one thing that
+                handoff was genuinely useful for was getting the numbers
+                somewhere else. */}
+            <GhostButton
+              onClick={() => {
+                const s = `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`;
+                try { navigator.clipboard?.writeText(s); } catch { /* clipboard blocked */ }
+              }}
+              style={{ flex: 1 }}
+            >Copy coordinates</GhostButton>
+            <PrimaryButton onClick={onClose} style={{ flex: 1 }}>Done</PrimaryButton>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <GhostButton onClick={onClose} style={{ flex: 1 }}>Cancel</GhostButton>
+            <PrimaryButton onClick={save} disabled={!placed} style={{ flex: 2 }}>Save pin</PrimaryButton>
+          </div>
+        )}
       </div>
     </div>
   );
