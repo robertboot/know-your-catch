@@ -3,7 +3,7 @@ import {
   Fish, Search, ChevronRight, AlertTriangle, Plus, Pencil, BookOpen, Calendar,
   Trophy, Camera, Trash2, Mail, Anchor, ListChecks, Wrench, Layers, X,
   RotateCcw, Image as ImageIcon, Sparkles, ArrowLeft, Check, Flag,
-  MapPin, Ruler, ClipboardList, CloudSun, Wind, Waves, Thermometer,
+  MapPin, Ruler, ClipboardList, CloudSun, CloudOff, Wind, Waves, Thermometer,
   ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
   Crosshair, Crop, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
   Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog,
@@ -29,6 +29,7 @@ import {
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
+import { readMarineCache, writeMarineCache, describeAge, fetchWithTimeout } from './marine-cache.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
 import { savePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
@@ -409,6 +410,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [gaugeOn, setGaugeOn] = useState(false);
+  const [cachedAt, setCachedAt] = useState(null);
   const [tick, setTick] = useState(0); // bumped to re-fetch (foreground + interval)
 
   // Keep conditions fresh: refetch every 15 min while mounted, and
@@ -453,7 +455,9 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
           + `&current=wave_height,wave_period,sea_surface_temperature`
           + `&hourly=wave_height,wave_period,sea_surface_temperature&forecast_days=2&timezone=auto`;
-        const [r, mr] = await Promise.all([fetch(url), fetch(marineUrl).catch(() => null)]);
+        const [r, mr] = await Promise.all([
+          fetchWithTimeout(url), fetchWithTimeout(marineUrl).catch(() => null),
+        ]);
         if (!r.ok) throw new Error('wx');
         const j = await r.json();
         const cur = j.current || {};
@@ -545,8 +549,21 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score, scoreCode, bestWin,
           tMax: j.daily?.temperature_2m_max?.[0], tMin: j.daily?.temperature_2m_min?.[0],
         });
+        writeMarineCache('home', lat, lon, {
+          placeName: place.name,
+          tempF: cur.temperature_2m, windKt: cur.wind_speed_10m, windDir: cur.wind_direction_10m,
+          gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score,
+          tMax: j.daily?.temperature_2m_max?.[0], tMin: j.daily?.temperature_2m_min?.[0],
+        });
+        setCachedAt(null);
         setStatus('ok');
-      } catch { if (alive) setStatus('error'); }
+      } catch {
+        if (!alive) return;
+        // Offshore. Show what the device remembers rather than "unavailable".
+        const hit = readMarineCache('home', place.lat, place.lon);
+        if (hit) { setData(hit.data); setCachedAt(hit.at); setStatus('ok'); }
+        else setStatus('error');
+      }
     })();
     return () => { alive = false; };
   }, [state?.catchLog, jurisdiction, state?.fishingSpots, tick]);
@@ -586,7 +603,20 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
       </div>
 
       {status === 'loading' && <div style={{ padding: 24, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>Loading conditions…</div>}
-      {status === 'error' && <div style={{ padding: 16, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>Conditions unavailable right now.</div>}
+      {status === 'error' && <div style={{ padding: 16, textAlign: 'center', color: T.inkMute, fontSize: 14 }}>No signal, and nothing saved for these waters yet.</div>}
+
+      {/* A stale reading passed off as current is worse offshore than no
+          reading: you can plan around numbers you know are six hours old. */}
+      {cachedAt && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px', marginBottom: 12,
+          background: T.warnBg, border: `1px solid ${T.warn}55`, borderRadius: 10,
+          fontSize: sz(11.5, 12.5, 14), color: T.warn, fontWeight: 700,
+        }}>
+          <CloudOff size={sz(13, 15, 17)} />
+          Saved forecast · {describeAge(Date.now() - cachedAt)}
+        </div>
+      )}
 
       {status === 'ok' && data && (
         <>
@@ -2918,6 +2948,8 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
   const [coords, setCoords]   = useState(null);
   const [locLabel, setLocLabel] = useState('');
   const [refreshTick, setRefreshTick] = useState(0); // re-fetch on foreground + interval
+  // When set, everything on screen came from the device, not the network.
+  const [cachedAt, setCachedAt] = useState(null);
   const resolvedRef = useRef(false); // resolve the default location only once
   // Saved fishing spots — synced user state. selectedSpotId tracks
   // which chip is active ('current' = live GPS).
@@ -3024,7 +3056,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
         }
       }
       const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(namePart)}&count=20&language=en&format=json`;
-      const r = await fetch(url);
+      const r = await fetchWithTimeout(url);
       if (!r.ok) throw new Error(`geocoding ${r.status}`);
       const j = await r.json();
       let results = (j?.results || []).map(x => ({
@@ -3145,9 +3177,12 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&daily=wave_height_max,wave_period_max,wave_direction_dominant`
           + `&forecast_days=10&past_days=1&timezone=auto`;
+        // A boat has one bar, not zero. An unbounded fetch on a weak
+        // link hangs forever, and the screen then sits on a spinner over
+        // a perfectly good cached forecast.
         const [r, marineRes] = await Promise.all([
-          fetch(url),
-          fetch(marineUrl).catch(() => null),
+          fetchWithTimeout(url),
+          fetchWithTimeout(marineUrl).catch(() => null),
         ]);
         if (!r.ok) throw new Error(`open-meteo ${r.status}`);
         const j = await r.json();
@@ -3278,9 +3313,35 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
         setHourly(marked.slice(Math.max(0, nowIdx - HOURLY_PAST), nowIdx + 24));
         // 6-hour blocks across the whole 10-day feed for the outlook matrix.
         setBlocks(sixHourBlocks(marked.slice(Math.max(0, nowIdx - BLOCK_PAST))));
+        // Keep what we just rendered. Everything below this point is
+        // already on screen, so caching here caches a known-good set
+        // rather than a half-parsed one.
+        writeMarineCache('forecast', lat, lon, {
+          current: j.current || null, days, hourly: marked.slice(Math.max(0, nowIdx - HOURLY_PAST), nowIdx + 24),
+          blocks: sixHourBlocks(marked.slice(Math.max(0, nowIdx - BLOCK_PAST))),
+          marine: marineHourly ? null : null, locLabel,
+        });
+        setCachedAt(null);
       } catch (e) {
         if (!alive) return;
-        setError(e?.message || 'Could not load forecast.');
+        /* Offshore this is the normal path, not the exceptional one. A
+           cached forecast with an honest age beats a blank screen: the
+           angler can plan around numbers they know are six hours old,
+           and cannot plan around a dash. */
+        const hit = readMarineCache('forecast', coords.lat, coords.lon);
+        if (hit) {
+          setCurrent(hit.data.current || null);
+          setDaily(hit.data.days || []);
+          setHourly(hit.data.hourly || []);
+          setBlocks(hit.data.blocks || []);
+          setCachedAt(hit.at);
+          setError('');
+        } else {
+          setCachedAt(null);
+          setError(e?.name === 'AbortError'
+            ? 'No signal, and nothing saved for these waters yet.'
+            : (e?.message || 'Could not load forecast.'));
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -3320,7 +3381,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
       const tideUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=ReelIntel`
         + `&begin_date=${begin}&end_date=${end}&datum=MLLW&station=${tideStation.id}&time_zone=lst_ldt&units=english&interval=h&format=json`;
       try {
-        const res = await fetch(tideUrl).catch(() => null);
+        const res = await fetchWithTimeout(tideUrl).catch(() => null);
         const tj = res && res.ok ? await res.json() : null;
         const preds = tj?.predictions;
         if (!alive) return;
@@ -3574,6 +3635,24 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
         </Card>
       )}
 
+      {/* Same honesty as the Home card: a stale reading that looks live
+          is worse offshore than an obviously stale one. */}
+      {cachedAt && !loading && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 9, padding: '11px 14px', marginBottom: 12,
+          background: T.warnBg, border: `1px solid ${T.warn}55`, borderRadius: 12,
+        }}>
+          <CloudOff size={isTablet ? 17 : 15} color={T.warn} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: isTablet ? 13.5 : 12.5, color: T.warn, fontWeight: 700, lineHeight: 1.45 }}>
+            Saved forecast &middot; {describeAge(Date.now() - cachedAt)}
+            <div style={{ fontWeight: 500, color: T.inkSoft, marginTop: 3 }}>
+              No signal out here. These are the last readings your phone downloaded — they will
+              refresh by themselves the moment you have a bar.
+            </div>
+          </div>
+        </div>
+      )}
+
       {current && !loading && (
         <>
           {/* ---- Decision-first dashboard: best-window hero + score gauge --- */}
@@ -3807,6 +3886,13 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
 
           <div style={{ fontSize: isTablet ? 12 : 11, color: T.inkMute, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>
             Data from Open-Meteo. Always confirm marine conditions with your local NOAA/NWS forecast before heading out.
+            <br /><br />
+            {/* Says it once, permanently, where someone planning a trip will
+                read it — the offline banner only appears once it is already
+                too late to do anything about it. */}
+            <strong style={{ color: T.inkSoft }}>Offshore:</strong> your phone keeps the last forecast it
+            downloaded and shows it when there is no signal, marked with its age. Open the app before you
+            leave the dock so what it saves is current.
           </div>
         </>
       )}
