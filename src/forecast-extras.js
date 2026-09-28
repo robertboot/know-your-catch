@@ -120,30 +120,38 @@ export function subScores(h) {
     const eff = h.gust != null ? h.wind * 0.65 + h.gust * 0.35 : h.wind;
     wind = Math.round(clamp01((28 - eff) / 22) * 100);
   }
+  // Steepness is the one number both sea terms below are really asking
+  // about: deep-water wave length is 5.12*T^2 ft, so the same 3 ft is a
+  // gentle roll at 7 s and a square wall at 3 s. ~0.010 is a lazy swell,
+  // ~0.045 is the wall.
+  const steepness = (h.waveFt != null && h.periodS != null && h.periodS > 0)
+    ? h.waveFt / (5.12 * h.periodS * h.periodS)
+    : null;
+
   let seas = null;
   if (h.waveFt != null) {
-    // Steepness, not height, is what makes a sea hard to ride: deep-water
-    // wave length is 5.12*T^2 ft, so the same 3 ft is a gentle roll at 7 s
-    // and a square wall at 3 s. Judge height against that, then run the
-    // existing curve on the adjusted number. Clamped both ends so a long
-    // swell can never shrink a genuinely big sea to nothing.
-    let eff = h.waveFt;
-    if (h.periodS != null && h.periodS > 0) {
-      const steepness = h.waveFt / (5.12 * h.periodS * h.periodS);
-      const factor = Math.max(0.8, Math.min(1.8, Math.pow(steepness / 0.018, 0.4)));
-      eff = h.waveFt * factor;
-    }
-    seas = Math.round(clamp01((6 - eff) / 5) * 100);
+    // Judge height against steepness, then run the existing curve on the
+    // adjusted number. Clamped both ends so a long swell can never shrink
+    // a genuinely big sea to nothing.
+    const factor = steepness == null ? 1
+      : Math.max(0.8, Math.min(1.8, Math.pow(steepness / 0.018, 0.4)));
+    seas = Math.round(clamp01((6 - h.waveFt * factor) / 5) * 100);
   }
-  // Wave period, judged in context of wave height:
-  //   • small seas (≤2.5 ft): short period is tolerable but not "great"
-  //   • bigger seas: a longer period is needed to ride comfortably
+
+  // Wave period, judged against the sea it carries. A period is only
+  // "short" relative to its own height: 4 s under 1 ft is a ripple, 4 s
+  // under 2.3 ft is the square, slapping chop you cannot drive through.
+  // The old version scored both of those 81, because all it asked was
+  // whether the sea was under 2.5 ft — and that test was a cliff:
+  // 2.5 ft at 4 s scored 81 while 2.6 ft at 4 s scored 20, so one inch
+  // of swell moved a day two grades. Steepness answers both questions at
+  // once and is continuous.
   let period = null;
-  if (h.periodS != null) {
-    period = (h.waveFt ?? 0) <= 2.5
-      ? Math.round(60 + clamp01((h.periodS - 1) / 5) * 35)  // calm seas: ~3.6 s→78
-      : Math.round(clamp01((h.periodS - 3) / 5) * 100);     // bigger seas: 3 s→0, 8 s+→100
-    period = Math.max(0, Math.min(100, period));
+  if (steepness != null) {
+    period = Math.round(clamp01((0.045 - steepness) / 0.035) * 100);
+  } else if (h.periodS != null) {
+    // No height to judge it against — fall back to the raw interval.
+    period = Math.round(clamp01((h.periodS - 3) / 5) * 100);
   }
   return { wind, seas, period };
 }

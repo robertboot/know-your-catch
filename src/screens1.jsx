@@ -447,14 +447,20 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         // The `current` nowcast block still drives the instantaneous
         // display readings (big temp, sky icon, chips). forecast_days=2 so
         // the current hour exists even late in the day.
+        // cell_selection=sea: Open-Meteo otherwise answers from the grid
+        // cell the coordinates land in, and a saved spot named for a town
+        // sits on land. A sheltered land cell reported 7 kt one Friday
+        // morning while it was blowing 15 offshore, which graded a
+        // hard-to-drive sea a B-. The marine endpoint already snaps to
+        // water; this makes the wind agree with the waves.
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,weather_code`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
           + `&daily=temperature_2m_max,temperature_2m_min&forecast_days=2`
-          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
+          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`;
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
           + `&current=wave_height,wave_period,sea_surface_temperature`
-          + `&hourly=wave_height,wave_period,sea_surface_temperature&forecast_days=2&timezone=auto`;
+          + `&hourly=wave_height,wave_period,sea_surface_temperature&forecast_days=2&timezone=auto&cell_selection=sea`;
         const [r, mr] = await Promise.all([
           fetchWithTimeout(url), fetchWithTimeout(marineUrl).catch(() => null),
         ]);
@@ -3162,12 +3168,18 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
       setError('');
       try {
         const { lat, lon } = coords;
+        // cell_selection=sea: Open-Meteo otherwise answers from the grid
+        // cell the coordinates land in, and a saved spot named for a town
+        // sits on land. A sheltered land cell reported 7 kt one Friday
+        // morning while it was blowing 15 offshore, which graded a
+        // hard-to-drive sea a B-. The marine endpoint already snaps to
+        // water; this makes the wind agree with the waves.
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,precipitation,pressure_msl,weather_code`
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code,pressure_msl`
           + `&forecast_days=10&past_days=1`
-          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto`;
+          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`;
         // Marine data lives on a separate Open-Meteo endpoint with water-only
         // coverage (inland points return nulls), so fetch it alongside — not
         // blocking — the main forecast. Heights are meters → feet, SST is
@@ -3176,7 +3188,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&current=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction`
           + `&daily=wave_height_max,wave_period_max,wave_direction_dominant`
-          + `&forecast_days=10&past_days=1&timezone=auto`;
+          + `&forecast_days=10&past_days=1&timezone=auto&cell_selection=sea`;
         // A boat has one bar, not zero. An unbounded fetch on a weak
         // link hangs forever, and the screen then sits on a spinner over
         // a perfectly good cached forecast.
