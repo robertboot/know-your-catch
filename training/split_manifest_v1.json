@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated_at": "2026-09-23T19:14:10.659406+00:00",
+ "generated_at": "2026-10-01T21:22:35.718292+00:00",
  "salt": "reelintel-split-v1",
  "fractions": {
   "train": 0.8,
@@ -9,9 +9,9 @@
  },
  "grouping": "inat observation id where recoverable, else per-image singleton",
  "counts": {
-  "images": 63748,
-  "groups": 48128,
-  "singleton_fallback_images": 9468,
+  "images": 63750,
+  "groups": 48130,
+  "singleton_fallback_images": 9470,
   "group_conflicts_repaired": 0
  },
  "assignments": {
@@ -15982,6 +15982,7 @@
   "4024f5a2-4e9f-3441-5f00-833ca8077392": "train",
   "4026495b-b24d-c770-29ee-44af895bf722": "train",
   "40266cbf-9885-b16e-ac50-ad8ed4bcb562": "train",
+  "4027d3db-62d4-48c8-8840-18aa19ae65dd": "train",
   "402b10c3-9e63-40e2-8d18-7acf2381249d": "train",
   "402b1706-a9d3-6f4f-3a32-90497d23292d": "train",
   "402b6991-7bdb-f2bb-deba-573e4bd09c7a": "train",
@@ -60390,6 +60391,7 @@
   "f1fc2f06-69f7-b3ce-d99b-659fd2cea020": "train",
   "f1fc8f38-73a3-4b04-7c83-d0fe8035f6de": "val",
   "f1fdf8d1-8a2f-e466-b732-32a48adc403e": "train",
+  "f200ce4b-23b1-46fa-8349-78113a51b177": "train",
   "f2032736-8d3f-478f-42b5-074406c65596": "test",
   "f2035e88-63ba-6ad2-22b8-301f1a41f427": "train",
   "f20392eb-21df-b353-3a76-9c1392531fa8": "train",
@@ -79732,6 +79734,7 @@
   "4024f5a2-4e9f-3441-5f00-833ca8077392": "inat:167680477",
   "4026495b-b24d-c770-29ee-44af895bf722": "inat:309725119",
   "40266cbf-9885-b16e-ac50-ad8ed4bcb562": "inat:8942443",
+  "4027d3db-62d4-48c8-8840-18aa19ae65dd": "self:4027d3db-62d4-48c8-8840-18aa19ae65dd",
   "402b10c3-9e63-40e2-8d18-7acf2381249d": "self:402b10c3-9e63-40e2-8d18-7acf2381249d",
   "402b1706-a9d3-6f4f-3a32-90497d23292d": "inat:70228245",
   "402b6991-7bdb-f2bb-deba-573e4bd09c7a": "inat:214674614",
@@ -124140,6 +124143,7 @@
   "f1fc2f06-69f7-b3ce-d99b-659fd2cea020": "inat:318892496",
   "f1fc8f38-73a3-4b04-7c83-d0fe8035f6de": "inat:246039084",
   "f1fdf8d1-8a2f-e466-b732-32a48adc403e": "inat:4352447",
+  "f200ce4b-23b1-46fa-8349-78113a51b177": "self:f200ce4b-23b1-46fa-8349-78113a51b177",
   "f2032736-8d3f-478f-42b5-074406c65596": "inat:237374186",
   "f2035e88-63ba-6ad2-22b8-301f1a41f427": "inat:256708007",
   "f20392eb-21df-b353-3a76-9c1392531fa8": "inat:258703628",
@@ -143482,6 +143486,7 @@
   "4024f5a2-4e9f-3441-5f00-833ca8077392": "sandbar_shark",
   "4026495b-b24d-c770-29ee-44af895bf722": "sand",
   "40266cbf-9885-b16e-ac50-ad8ed4bcb562": "gag_grouper",
+  "4027d3db-62d4-48c8-8840-18aa19ae65dd": "sand",
   "402b10c3-9e63-40e2-8d18-7acf2381249d": "black_grouper",
   "402b1706-a9d3-6f4f-3a32-90497d23292d": "atlantic_croaker",
   "402b6991-7bdb-f2bb-deba-573e4bd09c7a": "gafftopsail_catfish",
@@ -187890,6 +187895,7 @@
   "f1fc2f06-69f7-b3ce-d99b-659fd2cea020": "winter_flounder",
   "f1fc8f38-73a3-4b04-7c83-d0fe8035f6de": "bay_anchovy",
   "f1fdf8d1-8a2f-e466-b732-32a48adc403e": "southern_flounder",
+  "f200ce4b-23b1-46fa-8349-78113a51b177": "wahoo",
   "f2032736-8d3f-478f-42b5-074406c65596": "atlantic_croaker",
   "f2035e88-63ba-6ad2-22b8-301f1a41f427": "sand_seatrout",
   "f20392eb-21df-b353-3a76-9c1392531fa8": "bull_shark",
