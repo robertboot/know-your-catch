@@ -26,3 +26,6 @@ supabase/.temp/
 training/near_duplicate_report.json
 training/colab_cell.py
 supabase/.temp/
+
+android/key.properties
+android/upload-keystore.jks
