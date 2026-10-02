@@ -1714,14 +1714,6 @@ export function ResetPasswordPage() {
 /* Every download CTA on the page points here. */
 const TESTER_APP_URL = APP_STORE_URL;
 
-/* Tester spots. The total lives in src/tester-spots.js because the
-   admin Testers tab shows it too; the claimed count is read from the
-   backend when the tester_feedback table exists (one completed
-   submission = one claimed spot) and falls back to the constant
-   otherwise — so the page is correct before any backend work and
-   self-maintaining after it. */
-const TESTER_SPOTS_CLAIMED_FALLBACK = 0;
-
 function AppleIcon({ size = 19, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
@@ -1867,20 +1859,7 @@ const TESTERS_CSS = `
   border: 1px solid ${P.border};
 }
 .rl-tt-shirt-svg { width: 100%; max-width: 240px; height: auto; display: block; margin: 0 auto; }
-.rl-tt-prog-wrap { max-width: 420px; margin-top: 22px; }
-@media (max-width: 760px) { .rl-tt-prog-wrap { margin-left: auto; margin-right: auto; } }
-.rl-tt-prog-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.rl-tt-prog-n { font-size: 15px; font-weight: 900; color: ${P.ink}; }
-.rl-tt-prog-n .accent { color: ${P.accent}; }
-.rl-tt-prog-l { font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase; color: ${P.inkMute}; font-weight: 700; }
-.rl-tt-prog-track { height: 9px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
-.rl-tt-prog-fill {
-  height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, ${P.accent}, ${T.warn});
-  box-shadow: 0 0 16px rgba(25,212,242,0.5);
-  transition: width 600ms ease;
-}
-.rl-tt-fine { font-size: 12.5px; color: ${P.inkMute}; margin: 12px 0 0; }
+.rl-tt-fine { font-size: 12.5px; color: ${P.inkMute}; margin: 14px 0 0; }
 
 /* ---- feedback form ---- */
 .rl-tt-form { display: grid; gap: 16px; max-width: 760px; margin: 0 auto; }
@@ -2116,28 +2095,6 @@ function TesterFeedback() {
 
 export function TestersPage() {
   const cssRef = useMemo(() => CSS, []);
-  const [claimed, setClaimed] = useState(TESTER_SPOTS_CLAIMED_FALLBACK);
-
-  // Claimed spots = completed feedback submissions. Silently keeps the
-  // fallback if the table isn't provisioned yet.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const c = supabaseClient();
-        if (!c) return;
-        // RPC, not a select: RLS keeps responses admin-only, so anon
-        // cannot count rows directly. tester_feedback_count() exposes
-        // just the number.
-        const { data, error } = await c.rpc('tester_feedback_count');
-        if (!alive || error || typeof data !== 'number') return;
-        setClaimed(Math.min(data, TESTER_SPOTS_TOTAL));
-      } catch { /* keep the fallback */ }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  const pct = Math.round((claimed / TESTER_SPOTS_TOTAL) * 100);
   // Photo source chain: jpg (correct for a photograph) -> png -> the
   // drawn tee. Saves a naming mistake from silently showing line art.
   const SHIRT_SRCS = [`${M}tester-tshirt.jpg`, `${M}tester-tshirt.png`];
@@ -2240,18 +2197,7 @@ export function TestersPage() {
                 Complete the tester checklist and send us your feedback. If you’re one of
                 the first {TESTER_SPOTS_TOTAL} to finish, we’ll send you a ReelIntel shirt as a thank-you.
               </p>
-              <div className="rl-tt-prog-wrap">
-                <div className="rl-tt-prog-top">
-                  <span className="rl-tt-prog-n"><span className="accent">{claimed}</span> / {TESTER_SPOTS_TOTAL}</span>
-                  <span className="rl-tt-prog-l">Spots claimed</span>
-                </div>
-                <div className="rl-tt-prog-track" role="progressbar" aria-valuenow={claimed}
-                     aria-valuemin={0} aria-valuemax={TESTER_SPOTS_TOTAL}
-                     aria-label="Tester spots claimed">
-                  <div className="rl-tt-prog-fill" style={{ width: `${Math.max(pct, 2)}%` }} />
-                </div>
-                <p className="rl-tt-fine">Limited to the first {TESTER_SPOTS_TOTAL} completed tester submissions.</p>
-              </div>
+              <p className="rl-tt-fine">Limited to {TESTER_SPOTS_TOTAL} testers.</p>
             </div>
           </div>
         </div>
