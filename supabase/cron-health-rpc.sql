@@ -60,7 +60,12 @@ begin
     'recent_http', (
       select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb)
       from (
-        select status_code, error_msg, created
+        -- timed_out matters as much as the status: pg_net's default
+        -- 5 s ceiling expires on any edge function that does real work,
+        -- and that is a slow call, not a dead one. Without this column
+        -- the dashboard could only see a null status and had to call it
+        -- "nothing answered".
+        select status_code, timed_out, error_msg, created
         from net._http_response
         order by created desc
         limit 20

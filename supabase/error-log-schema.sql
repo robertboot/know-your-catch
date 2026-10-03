@@ -105,6 +105,7 @@ select cron.schedule(
   '20 13 * * *',        -- 13:20 UTC ≈ 8:20am Central
   $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/error-digest',
     headers := jsonb_build_object(
       'Content-Type',   'application/json',

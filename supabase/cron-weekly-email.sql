@@ -21,6 +21,7 @@ select cron.schedule(
   '0 11 * * 4',
   $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/weekly-report-generate',
     headers := jsonb_build_object(
                  'Content-Type',  'application/json',
@@ -40,6 +41,7 @@ select cron.schedule(
 -- land on Open-Meteo at the same instant.
 select cron.schedule('weekly-report-generate-ms', '1 11 * * 4', $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/weekly-report-generate',
     headers := jsonb_build_object('Content-Type','application/json',
       'Authorization','Bearer PASTE_ANON_KEY','x-cron-secret','PASTE_CRON_SECRET'),
@@ -47,6 +49,7 @@ select cron.schedule('weekly-report-generate-ms', '1 11 * * 4', $$
 
 select cron.schedule('weekly-report-generate-la', '2 11 * * 4', $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/weekly-report-generate',
     headers := jsonb_build_object('Content-Type','application/json',
       'Authorization','Bearer PASTE_ANON_KEY','x-cron-secret','PASTE_CRON_SECRET'),
@@ -54,6 +57,7 @@ select cron.schedule('weekly-report-generate-la', '2 11 * * 4', $$
 
 select cron.schedule('weekly-report-generate-tx', '3 11 * * 4', $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/weekly-report-generate',
     headers := jsonb_build_object('Content-Type','application/json',
       'Authorization','Bearer PASTE_ANON_KEY','x-cron-secret','PASTE_CRON_SECRET'),
@@ -61,6 +65,7 @@ select cron.schedule('weekly-report-generate-tx', '3 11 * * 4', $$
 
 select cron.schedule('weekly-report-generate-flg', '4 11 * * 4', $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/weekly-report-generate',
     headers := jsonb_build_object('Content-Type','application/json',
       'Authorization','Bearer PASTE_ANON_KEY','x-cron-secret','PASTE_CRON_SECRET'),
@@ -68,6 +73,7 @@ select cron.schedule('weekly-report-generate-flg', '4 11 * * 4', $$
 
 select cron.schedule('weekly-report-generate-fla', '5 11 * * 4', $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/weekly-report-generate',
     headers := jsonb_build_object('Content-Type','application/json',
       'Authorization','Bearer PASTE_ANON_KEY','x-cron-secret','PASTE_CRON_SECRET'),

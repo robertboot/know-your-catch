@@ -647,8 +647,15 @@ function buildBrief({ health, queue, coverage, training }) {
   const add = (sev, text, tab, detail) => items.push({ sev, text, tab, detail });
 
   // --- broken ---------------------------------------------------
+  // A timed-out call is NOT a failed one. pg_net gives up waiting after
+  // its configured ceiling and writes a row with no status code; the job
+  // still fired and the function still ran. Reporting that as BROKEN sent
+  // us hunting a dead scheduled job that was working the whole time, so
+  // the two are now counted and worded separately.
   const http = health?.cron?.recentHttp || [];
-  const badCalls = http.filter(r => r.status_code == null || r.status_code >= 400);
+  const slowCalls = http.filter(r => r.status_code == null && r.timed_out);
+  const badCalls = http.filter(r => !(r.status_code == null && r.timed_out)
+                                 && (r.status_code == null || r.status_code >= 400));
   if (badCalls.length) {
     add('critical',
       `${badCalls.length} of the last ${http.length} scheduled job calls failed`,
@@ -657,6 +664,13 @@ function buildBrief({ health, queue, coverage, training }) {
         || (badCalls[0].status_code == null
               ? 'the request never completed — the job fired but nothing answered'
               : `HTTP ${badCalls[0].status_code}`));
+  }
+  if (slowCalls.length) {
+    add('watch',
+      `${slowCalls.length} of the last ${http.length} scheduled job calls ran past the time limit`,
+      null,
+      'The job fired and the function ran — the database stopped waiting for the reply. '
+      + 'Raise the job\u2019s timeout if it keeps happening.');
   }
   const inactive = (health?.cron?.jobs || []).filter(j => !j.active);
   if (inactive.length) {
@@ -1117,31 +1131,39 @@ function CronTile({ cron }) {
   const jobs = cron.jobs || [];
   const http = cron.recentHttp || [];
   const inactive = jobs.filter(j => !j.active).length;
-  // A queued-but-failed call has a null status_code and an error_msg.
-  const bad = http.filter(r => r.status_code == null || r.status_code >= 400);
+  // Three outcomes, not two: answered, answered badly, and not waited for.
+  // pg_net writes a row with no status code when it stops waiting, and
+  // counting those as failures made a working job look dead.
+  const slow = http.filter(r => r.status_code == null && r.timed_out);
+  const bad = http.filter(r => !(r.status_code == null && r.timed_out)
+                            && (r.status_code == null || r.status_code >= 400));
   const lastCall = http[0];
 
-  const tone = bad.length > 0 ? 'warn' : (jobs.length === 0 || inactive > 0 ? 'warn' : 'ok');
+  const tone = bad.length > 0 || jobs.length === 0 || inactive > 0 ? 'warn' : 'ok';
   const value = jobs.length === 0
     ? 'NONE SCHEDULED'
     : bad.length > 0
       ? `${bad.length} OF LAST ${http.length} CALLS FAILED`
-      : `${jobs.length} OK`;
+      : slow.length > 0
+        ? `${jobs.length} OK · ${slow.length} SLOW`
+        : `${jobs.length} OK`;
 
   const hint = jobs.length === 0
     ? 'No pg_cron jobs found'
     : bad.length > 0
-      /* "HTTP null" told nobody anything. A queued call that never
-         completed has no status code at all, which is a different
-         failure from a 500 and deserves different words. */
+      /* "HTTP null" told nobody anything. A call with no status code is a
+         different failure from a 500 and deserves different words. */
       ? `Last failure: ${bad[0].error_msg
           || (bad[0].status_code == null
                 ? 'request never completed (queued, no response)'
                 : `HTTP ${bad[0].status_code}`)}${
           bad[0].created ? ` · ${relativeTime(bad[0].created)}` : ''}`
-      : lastCall
-        ? `Last call HTTP ${lastCall.status_code} · ${relativeTime(lastCall.created)}`
-        : 'Scheduled, no calls recorded yet';
+      : slow.length > 0
+        ? `Ran past the time limit — the function still ran${
+            slow[0].created ? ` · ${relativeTime(slow[0].created)}` : ''}`
+        : lastCall
+          ? `Last call HTTP ${lastCall.status_code} · ${relativeTime(lastCall.created)}`
+          : 'Scheduled, no calls recorded yet';
 
   return <Tile label="Scheduled jobs" value={value} tone={tone} hint={hint} />;
 }

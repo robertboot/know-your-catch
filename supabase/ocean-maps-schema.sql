@@ -74,6 +74,7 @@ select cron.schedule(
   '42 */6 * * *',   -- :42, every 6h — staggered off regs-auto-update-hourly (:17)
   $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/refresh-ocean-maps',
     headers := jsonb_build_object(
                  'Content-Type',   'application/json',

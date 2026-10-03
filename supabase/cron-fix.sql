@@ -51,6 +51,7 @@ select cron.schedule(
   '17 * * * *',
   $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/auto-update-regulations',
     headers := jsonb_build_object(
                  'Content-Type',  'application/json',
@@ -69,6 +70,7 @@ select cron.schedule(
   '23 13 * * *',   -- 13:23 UTC daily
   $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/scan-regulation-alerts',
     headers := jsonb_build_object(
                  'Content-Type',  'application/json',
@@ -86,6 +88,7 @@ select cron.schedule(
   '42 */6 * * *',
   $$
   select net.http_post(
+    timeout_milliseconds := 60000,
     url     := 'https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/refresh-ocean-maps',
     headers := jsonb_build_object(
                  'Content-Type',  'application/json',
