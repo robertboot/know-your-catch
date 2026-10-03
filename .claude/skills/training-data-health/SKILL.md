@@ -145,6 +145,24 @@ accuracy number the retrain reports.
   with a `generated_at`. Check the date before trusting a count; both were
   read months stale during one investigation.
 
+## A gate must understand resolution, not just presence
+
+Colab's preflight blocked three runs on "80 conflicted images are STILL in
+the verified split". All 80 were the single surviving copy of a pair whose
+twin had been quarantined, or photos in two classes that had since been
+merged into one. They were the resolution, and the gate was reading them as
+the problem — it tested whether a conflicted id was present at all.
+
+A duplicate only matters while it is CONTRADICTORY. The split manifest
+carries each image's current species, so the question is: of the members
+still in the split, do any two sit under *different* labels? One survivor,
+or several now under one merged label, is resolved. `preflight.py` asks
+that now.
+
+Worth remembering when writing any gate: a check that cannot tell a fixed
+problem from a live one will be overridden, and `REELINTEL_SKIP_PREFLIGHT=1`
+is right there in the error message.
+
 ## Order of work before a retrain
 
 Data first, export second, Colab third. A retrain on unexamined data buys

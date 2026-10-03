@@ -176,28 +176,65 @@ def check_export_matches_split(man):
 
 
 def check_cross_species_dupes(man):
+    """A duplicate is only a problem while it is CONTRADICTORY.
+
+    This used to fail if any id from the conflict report was still in the
+    split — including the single surviving copy of a resolved pair, which
+    is exactly what a resolution leaves behind. It also could not see a
+    merge: after two labels become one, the report still names the old
+    pair, and the check kept failing on photos that no longer disagree
+    with anything.
+
+    The split manifest carries each image's CURRENT species, so ask the
+    question that actually matters: of the members still in the split, do
+    any two sit under DIFFERENT labels? One survivor, or several now
+    under one merged label, is resolved.
+    """
     if not CONFLICTS.exists():
         record("no cross-species duplicates", WARN,
                "no conflict report — run audit_cross_species_dupes.py")
         return
     rep = json.loads(CONFLICTS.read_text())
-    ids = {m["training_id"] for c in rep.get("conflicts", [])
-           for m in c["members"]}
-    if not ids:
+    groups = rep.get("conflicts", [])
+    if not groups:
         record("no cross-species duplicates", OK, "none found")
         return
     if not man:
         record("no cross-species duplicates", FAIL,
-               f"{len(ids)} conflicted images and no manifest to check them against")
+               f"{len(groups)} conflict groups and no manifest to check them against")
         return
-    still = ids & set(man["assignments"].keys())
-    if still:
+
+    in_split = set(man["assignments"].keys())
+    species_of = man.get("species") or {}
+    if not species_of:
+        # Older manifest with no per-image species: fall back to the old,
+        # stricter test rather than passing something unverified.
+        still = {m["training_id"] for c in groups for m in c["members"]} & in_split
+        record("no cross-species duplicates",
+               FAIL if still else OK,
+               f"{len(still)} conflicted images still in the split (manifest has no "
+               f"species map, so resolved pairs cannot be told from unresolved ones "
+               f"— re-run make_split.py)" if still else "none left in the split")
+        return
+
+    unresolved = []
+    for c in groups:
+        live = [m["training_id"] for m in c["members"] if m["training_id"] in in_split]
+        labels = {species_of.get(i) for i in live}
+        labels.discard(None)
+        if len(labels) > 1:
+            unresolved.append((c.get("sha256", "?")[:12], sorted(labels)))
+
+    if unresolved:
+        shown = "; ".join(f"{h} -> {'/'.join(l)}" for h, l in unresolved[:5])
         record("no cross-species duplicates", FAIL,
-               f"{len(still)} conflicted images are STILL in the verified split "
-               f"— run supabase/quarantine-cross-species-dupes.sql")
+               f"{len(unresolved)} of {len(groups)} conflict groups still have the same "
+               f"photo under two labels (first: {shown}) — quarantine one side, or "
+               f"merge the labels if a photograph cannot tell them apart")
     else:
         record("no cross-species duplicates", OK,
-               f"all {len(ids)} conflicted images quarantined out of the split")
+               f"all {len(groups)} conflict groups resolved — no photograph is in the "
+               f"split under two labels")
 
 
 # Labels that are structurally invalid regardless of what the species
