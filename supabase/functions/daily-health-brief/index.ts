@@ -30,7 +30,9 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-const FROM  = 'ReelIntel <hello@reelintel.ai>';
+// Harper sends the automated mail, same as the newsletter — one voice,
+// one address to allow-list, one address to trust.
+const FROM  = 'Harper Wells, ReelIntel <harper@reelintel.ai>';
 const TO    = 'robert@reelintel.ai';
 const ADMIN = 'https://reelintel.ai/#/admin';
 
@@ -267,7 +269,7 @@ Deno.serve(async (req: Request) => {
   const res = await fetch(RESEND_ENDPOINT, {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [TO], subject, html }),
+    body: JSON.stringify({ from: FROM, reply_to: 'harper@reelintel.ai', to: [TO], subject, html }),
   });
   if (!res.ok) return json({ error: 'resend_failed', detail: await res.text() }, 502);
 
