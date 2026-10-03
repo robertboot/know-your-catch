@@ -51,12 +51,13 @@ Merged so far:
 |---|---|---|
 | `glass_minnow` "Glass Minnow" | `bay_anchovy`, `striped_anchovy` | Anchoa spp., separated by stripe width in the hand. 883 identical photos across the three. |
 | `gulf_sturgeon` "Sturgeon" | `atlantic_sturgeon` | Subspecies of *A. oxyrinchus*, separated by spleen and head-length ratios. What decides is where it was caught. |
+| `smalltooth_sawfish` "Sawfish" | `largetooth_sawfish` | Distinguishable in principle (22-29 rostral tooth pairs vs 14-22), but all 110 Smalltooth photos were the same iNaturalist photo already filed under Largetooth, so there is no data to learn the difference from. Merged until there is. |
 
-**Not** merged, and should not be: **Smalltooth vs Largetooth Sawfish**.
-Those differ visibly — 22–29 rostral tooth pairs vs 14–22, and smalltooth
-has almost no lower tail lobe. (Shortcut for review: largetooth is
-effectively gone from US waters, so a Gulf sawfish is almost certainly
-smalltooth.)
+Visible difference is **not** sufficient on its own. The sawfish pair does
+differ visibly — 22–29 rostral tooth pairs vs 14–22, and smalltooth has
+almost no lower tail lobe — and was still merged, because there is no
+genuine data for one side to learn it from. Ask both questions: *can a
+photograph decide it*, and *do we hold photographs that did*.
 
 The test is **"can a photograph decide?"**, not "are these different
 animals?". Sturgeon subspecies are different animals and still one label.
@@ -66,6 +67,36 @@ When merging, keep the id the app actually shows, re-point
 to the surviving id, deactivate the absorbed row (`is_active = false`,
 never delete), and give the survivor a name that is not wrong in the other
 subspecies' water — "Sturgeon", not "Gulf Sturgeon".
+
+### 2b. The same photograph fetched twice under two names
+
+Before sending duplicate pairs to a human for review, **check whether they
+are even two photographs.** Our filenames carry the source photo id
+(`<species>_<inat_photo_id>.jpg`), so this is a one-line test:
+
+```python
+# do both members of a conflict carry the SAME iNaturalist photo id?
+re.search(r'_(\d+)\.jpg$', filename).group(1)
+```
+
+All 110 Smalltooth/Largetooth Sawfish conflicts shared an id. So did all 56
+Gulf/Atlantic Sturgeon ones. Those were never two fish — they were one
+picture downloaded twice under two species names, the `taxon_name`
+mis-resolution that also fetched 999 oarfish as Atlantic Bonito.
+`fetch_inat_photos.py` resolves by `taxon_id` now, but older photos predate
+that fix.
+
+Two consequences, both easy to get wrong:
+
+- **A human cannot resolve it.** 88 sawfish photos went out for review and
+  every call was the same picture twice. There was nothing to decide.
+- **It can mean a class has no data at all.** Smalltooth's entire class —
+  31 verified plus 79 rejected — was exactly those 110 duplicates. Not one
+  photograph of its own. When that happens you do not know which species
+  the surviving pictures show, so do not name either: merge, and split
+  again when there are genuine taxon-verified photos. (Both sawfish are
+  no-take, so the regulation was unaffected. Check that before merging two
+  species whose rules differ.)
 
 ### 3. The quarantine rejects BOTH copies and picks no label
 
