@@ -20,6 +20,7 @@ import {
 } from '../components.jsx';
 import { dataUrlToFile } from '../helpers.js';
 import { getProductionModel, listModelVersions, modelSignedUrl } from '../model-store.js';
+import { imageToRgb } from '../identify/preprocess.js';
 import { saveModelFeedback } from '../training-store.js';
 import { SpeciesPickerModal } from './pickers.jsx';
 
@@ -97,7 +98,6 @@ export default function TestImagePanel() {
   const [pickerOpen, setPickerOpen]     = useState(false);
   const [saving, setSaving]             = useState(false);
   const [toast, setToast]               = useState(''); // "Added kingfish to training data"
-  const canvasRef                       = useRef(null);
   const fileInputRef                    = useRef(null);
 
   const speciesOptions = useMemo(
@@ -147,7 +147,7 @@ export default function TestImagePanel() {
           minConfidence:  prod.labels_json?.min_confidence  ?? 0.6,
           highConfidence: prod.labels_json?.high_confidence ?? 0.85,
           inputSize:      prod.labels_json?.input_size      ?? IMG_SIZE,
-          inputDtype:     prod.labels_json?.input_dtype     ?? 'uint8',
+          inputDtype:     prod.labels_json?.input_dtype     ?? 'float32',
         });
         setError('');
       } catch (e) {
@@ -290,25 +290,19 @@ export default function TestImagePanel() {
       // canvas, strip alpha, and hand the runtime a Tensor whose
       // backing values are already what the graph wants — its
       // Uint8Array.from(dataSync()) then becomes a same-range copy.
-      const canvas = canvasRef.current;
-      canvas.width = runtime.inputSize;
-      canvas.height = runtime.inputSize;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, runtime.inputSize, runtime.inputSize);
-      const rgba = ctx.getImageData(0, 0, runtime.inputSize, runtime.inputSize).data;
-      const pixelCount = runtime.inputSize * runtime.inputSize;
-      const rgb = new Uint8Array(pixelCount * 3);
-      for (let i = 0; i < pixelCount; i++) {
-        rgb[i * 3]     = rgba[i * 4];
-        rgb[i * 3 + 1] = rgba[i * 4 + 1];
-        rgb[i * 3 + 2] = rgba[i * 4 + 2];
-      }
+      // Same preprocessing the app uses, from the same function — the
+      // local copy here squashed the photo into a square instead of
+      // letterboxing it, so this panel was scoring a distorted fish and
+      // calling the difference a model problem.
+      const rgb = imageToRgb(img, runtime.inputSize);
       // float16/float32 models take a float32 [0,255] tensor (Rescaling
-      // normalises inside the graph); legacy INT8 models took uint8 (fed
-      // as int32). Default to the legacy path.
-      const input = runtime.inputDtype === 'float32'
-        ? tf.tensor4d(Float32Array.from(rgb), [1, runtime.inputSize, runtime.inputSize, 3], 'float32')
-        : tf.tensor4d(rgb, [1, runtime.inputSize, runtime.inputSize, 3], 'int32');
+      // normalises inside the graph); only a legacy INT8 export wants
+      // uint8 fed as int32. Every DeepBlue 12.x model is float32, and
+      // defaulting to the legacy path silently mis-fed any export whose
+      // labels_json omits input_dtype.
+      const input = runtime.inputDtype === 'uint8'
+        ? tf.tensor4d(rgb, [1, runtime.inputSize, runtime.inputSize, 3], 'int32')
+        : tf.tensor4d(Float32Array.from(rgb), [1, runtime.inputSize, runtime.inputSize, 3], 'float32');
       console.log('[test-image] input tensor built', input.shape, input.dtype, 'first bytes:', Array.from(rgb.slice(0, 6)));
 
       const out = runtime.tflite.predict(input);
@@ -488,7 +482,6 @@ export default function TestImagePanel() {
                       </GhostButton>
                     )}
                   </div>
-                  <canvas ref={canvasRef} style={{ display: 'none' }} />
                   {predictions && (
                     <div style={{ marginTop: 14 }}>
                       <ConfidenceBanner

@@ -17,6 +17,7 @@
    degradation, not a crash. */
 
 import { getReadyModel, getModelInfo, initModel } from '../model-loader.js';
+import { imageToRgb } from './preprocess.js';
 
 /* Kept for the identify pipeline import — populated at build time
    when we bake in the label→speciesId map for edge cases. Empty means
@@ -77,46 +78,6 @@ function loadImage(src) {
    tf.browser.fromPixels' int32 route so the tflite runtime never has
    to insert an int32→uint8 conversion op (which hangs on Safari's
    CPU fallback). */
-/* region (optional): { x, y, w, h } in 0..1 of the source image, so a
-   caller can classify a sub-crop without re-encoding the photo.
-
-   Aspect is PRESERVED (letterboxed), not squashed. This used to be
-   drawImage(img, 0, 0, size, size), which stretched a 3:4 portrait into
-   a square — body proportions are a primary ID cue, so the model was
-   being handed a distorted fish. */
-function imageToRgb(img, size, region) {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  // Neutral grey padding — black would read as a dark object.
-  ctx.fillStyle = '#808080';
-  ctx.fillRect(0, 0, size, size);
-
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-  const sx = region ? Math.max(0, Math.round(region.x * iw)) : 0;
-  const sy = region ? Math.max(0, Math.round(region.y * ih)) : 0;
-  const sw = region ? Math.max(1, Math.round(region.w * iw)) : iw;
-  const sh = region ? Math.max(1, Math.round(region.h * ih)) : ih;
-
-  const scale = Math.min(size / sw, size / sh);
-  const dw = Math.max(1, Math.round(sw * scale));
-  const dh = Math.max(1, Math.round(sh * scale));
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, sx, sy, sw, sh,
-    Math.round((size - dw) / 2), Math.round((size - dh) / 2), dw, dh);
-  const rgba = ctx.getImageData(0, 0, size, size).data;
-  const pixelCount = size * size;
-  const rgb = new Uint8Array(pixelCount * 3);
-  for (let i = 0; i < pixelCount; i++) {
-    rgb[i * 3]     = rgba[i * 4];
-    rgb[i * 3 + 1] = rgba[i * 4 + 1];
-    rgb[i * 3 + 2] = rgba[i * 4 + 2];
-  }
-  return rgb;
-}
 
 /* Dequantize + renormalize the TFLite output to a proper softmax
    distribution. Verbatim copy of the admin Test Image path — see
