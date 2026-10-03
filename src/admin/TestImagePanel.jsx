@@ -162,14 +162,21 @@ export default function TestImagePanel() {
     const aliveRef = { current: true };
     (async () => {
       setLoading(true);
-      const [prod, all] = await Promise.all([getProductionModel(), listModelVersions()]);
+      const [prod, res] = await Promise.all([getProductionModel(), listModelVersions()]);
       if (!aliveRef.current) return;
-      setVersions(all || []);
+      // listModelVersions() returns { ok, rows, error } — not an array.
+      // Treated as one, versions.length was undefined, so the version
+      // picker never rendered and this panel could only ever test the
+      // promoted model: exactly the one that does not need testing.
+      const all = res?.ok ? (res.rows || []) : [];
+      setVersions(all);
       setProductionId(prod?.id || null);
-      if (!prod && !(all || []).length) {
+      if (!prod && !all.length) {
         setProduction(null);
         setLoading(false);
-        setError('No models yet. Import a version on the Models tab first.');
+        setError(res && res.ok === false
+          ? `Could not list models: ${res.error}`
+          : 'No models yet. Import a version on the Models tab first.');
         return;
       }
       await loadVersion(prod || all[0], aliveRef);
