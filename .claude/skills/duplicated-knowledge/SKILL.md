@@ -42,7 +42,7 @@ else?* Then either
 | SST colour range | `src/screens_ocean.jsx`, `supabase/functions/refresh-ocean-maps` | **no** — add a rule if it drifts |
 | Species categories | `src/data.js` + live Supabase `species` table | **no** — cloud overlay assigns `_admin` on mismatch |
 | Updater grid definition | `adminRegsCoverage()` in `regulations-store.js`, `auto-update-regulations/index.ts` | **no** — both must filter live species by `is_active !== false` and exclude `category === 'bait'`; if they drift the coverage tile reports progress against a grid the cron isn't working |
-| **Model preprocessing** | `imageToRgb()` in `src/identify/adapter.js`, `build_datasets()` in `training/train_fish_id.py` | **no** — and it silently drifted for months. See below. |
+| **Model preprocessing** | `imageToRgb()` in `src/identify/preprocess.js` (imported by the app AND the admin Test Image panel), `build_datasets()` in `training/train_fish_id.py` | **partly** — `scripts/ship.sh` rejects a second JS copy; the Python half is still unguarded. See below. |
 
 The preprocessing pair is the most expensive instance so far, because
 it degraded accuracy rather than breaking anything. The app letterboxed
@@ -58,7 +58,22 @@ grep two JS files or a JS file and a TS file. JS vs Python vs a training
 notebook is where these hide, and where the failure is a quality
 regression rather than an exception.
 
-A fourth instance of the same shape, worth naming because it was a
+**It had a third copy, and the third one cost the most.** The admin Test
+Image panel kept its own preprocessing and was never updated when the app
+started letterboxing. In October it reported DeepBlue 12.2 and 12.3
+missing species they had always been sure of, and answering "tripletail"
+for nearly everything — landscape photos squashed into a square come out
+short and deep-bodied, and tripletail is the deepest-bodied of the 135
+labels. The fix on the table was a Colab retrain of a model that was fine.
+
+The lesson is narrower than "don't duplicate": **a measuring tool with its
+own copy of a transform does not measure the thing you think it does.**
+`imageToRgb()` now lives in `src/identify/preprocess.js`, both JS paths
+import it, and `scripts/ship.sh` fails the build if a second definition
+or an aspect-squashing `drawImage(img, 0, 0, inputSize, inputSize)`
+appears. See [[harness-parity]].
+
+A further instance of the same shape, worth naming because it was a
 *comment* that drifted rather than code: `regulations-auto-update-schema.sql`
 still says the grid is "95 species × 6 jurisdictions ≈ 570 pairs". It is
 164 × 8 = 1312. Nothing broke, but any cadence or cost estimate taken

@@ -58,7 +58,21 @@ did exactly that to save a tap and it cost accuracy.
   thin.
 - **Aspect must be preserved.** The original `drawImage(img,0,0,size,size)`
   squashed 3:4 into a square, distorting body proportions — a primary ID
-  cue. `imageToRgb` now letterboxes with neutral grey. Keep this.
+  cue. `imageToRgb` letterboxes with neutral grey. Keep this.
+- **The admin Test Image panel is not evidence unless it shares the app's
+  code.** It kept its own squashing copy of the preprocessing until Oct
+  2026 and reported 12.2 and 12.3 as broken — missing sure species, and
+  answering "tripletail" for almost everything, because a landscape photo
+  squashed to a square is short and deep-bodied and tripletail is the
+  deepest-bodied label. A Colab retrain was nearly ordered for it.
+  Preprocessing now lives in `src/identify/preprocess.js`, imported by
+  both, and `scripts/ship.sh` fails on a second copy. See
+  [[harness-parity]] before blaming weights again.
+- **Every photo returning the same species is an input fault, not a
+  training fault.** A badly trained class is wrong in varied ways;
+  constant output means the model is seeing constant or degenerate
+  input — wrong dtype, wrong range, or a transform that flattens the
+  differences.
 
 ## If asked for Google-Lens-style auto-selection again
 

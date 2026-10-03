@@ -17,6 +17,34 @@ set -euo pipefail
 
 MSG="${1:-}"
 
+# ---- Model input parity -------------------------------------------------
+# The admin Test Image panel and the app's identify path each had their own
+# copy of the preprocessing. They drifted: the app letterboxed, the admin
+# squashed the photo into a square, and the admin panel's results were read
+# as the MODEL being wrong. Two models were nearly retrained over it.
+#
+# There is now one copy, in src/identify/preprocess.js. This refuses to
+# build a second one.
+echo "▶ Checking model input preprocessing has one copy…"
+DUPES="$(grep -rln "function imageToRgb" src/ --include=*.js --include=*.jsx \
+         | grep -v "^src/identify/preprocess.js$" || true)"
+if [ -n "$DUPES" ]; then
+  echo "✗ imageToRgb is defined outside src/identify/preprocess.js:"
+  echo "$DUPES"
+  echo "  Import it from there instead — see .claude/skills/harness-parity."
+  exit 1
+fi
+# A squashing drawImage into a model-sized canvas is the exact bug.
+SQUASH="$(grep -rn "drawImage([a-zA-Z]*, *0, *0, *\(runtime\.\)\?input[Ss]ize" src/ \
+          --include=*.js --include=*.jsx || true)"
+if [ -n "$SQUASH" ]; then
+  echo "✗ Aspect-squashing drawImage into the model input:"
+  echo "$SQUASH"
+  echo "  Model input must be letterboxed — use imageToRgb()."
+  exit 1
+fi
+echo "✓ one preprocessing copy, no aspect squash"
+
 echo "▶ Building iOS bundle (KYC_ADMIN=false)…"
 npm run ios:build >/tmp/ship-ios.log 2>&1 || { echo "✗ ios:build FAILED"; tail -20 /tmp/ship-ios.log; exit 1; }
 echo "✓ ios:build passed"
