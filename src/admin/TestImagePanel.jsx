@@ -19,7 +19,7 @@ import {
   Card, PrimaryButton, GhostButton, SectionLabel, CropStep,
 } from '../components.jsx';
 import { dataUrlToFile } from '../helpers.js';
-import { getProductionModel, modelSignedUrl } from '../model-store.js';
+import { getProductionModel, listModelVersions, modelSignedUrl } from '../model-store.js';
 import { saveModelFeedback } from '../training-store.js';
 import { SpeciesPickerModal } from './pickers.jsx';
 
@@ -81,7 +81,9 @@ function loadTfliteRuntime() {
 }
 
 export default function TestImagePanel() {
-  const [production, setProduction]     = useState(null); // model_versions row
+  const [production, setProduction]     = useState(null); // model_versions row currently LOADED (any version, not only promoted)
+  const [versions, setVersions]         = useState([]);   // all model_versions rows for the picker
+  const [productionId, setProductionId] = useState(null); // id of the actually-promoted row
   const [runtime, setRuntime]           = useState(null); // { tflite, labels, excluded }
   const [loading, setLoading]           = useState(true);
   const [inferring, setInferring]       = useState(false);
@@ -104,20 +106,13 @@ export default function TestImagePanel() {
     []
   );
 
-  // On mount: fetch which model is promoted, then lazy-load the
-  // runtime and the .tflite bytes into memory.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
+  // Load ANY model_versions row into the runtime — the picker calls this
+  // with imported-but-not-promoted versions so they can be tested before
+  // anything reaches users.
+  const loadVersion = async (prod, aliveRef) => {
+      const alive = () => !aliveRef || aliveRef.current;
       setLoading(true);
-      const prod = await getProductionModel();
-      if (!alive) return;
-      if (!prod) {
-        setProduction(null);
-        setLoading(false);
-        setError('No production model yet. Promote a version on the Models tab first.');
-        return;
-      }
+      setPredictions(null);
       setProduction(prod);
       try {
         const url = await modelSignedUrl(prod.model_file_path);
@@ -144,7 +139,7 @@ export default function TestImagePanel() {
           new Uint8Array(bytes),
           { numThreads: 1, enableXnnpackDelegate: false },
         );
-        if (!alive) return;
+        if (!alive()) return;
         setRuntime({
           tflite: model,
           labels: prod.labels_json?.labels || [],
@@ -156,12 +151,31 @@ export default function TestImagePanel() {
         });
         setError('');
       } catch (e) {
-        if (alive) setError(e?.message || String(e));
+        if (alive()) setError(e?.message || String(e));
       } finally {
-        if (alive) setLoading(false);
+        if (alive()) setLoading(false);
       }
+  };
+
+  // On mount: list every version, then load the promoted one by default.
+  useEffect(() => {
+    const aliveRef = { current: true };
+    (async () => {
+      setLoading(true);
+      const [prod, all] = await Promise.all([getProductionModel(), listModelVersions()]);
+      if (!aliveRef.current) return;
+      setVersions(all || []);
+      setProductionId(prod?.id || null);
+      if (!prod && !(all || []).length) {
+        setProduction(null);
+        setLoading(false);
+        setError('No models yet. Import a version on the Models tab first.');
+        return;
+      }
+      await loadVersion(prod || all[0], aliveRef);
     })();
-    return () => { alive = false; };
+    return () => { aliveRef.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFile = (file) => {
@@ -339,18 +353,47 @@ export default function TestImagePanel() {
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Card>
-        <SectionLabel>Production model</SectionLabel>
+        <SectionLabel>Model under test</SectionLabel>
+        {versions.length > 0 && (
+          <select
+            value={production?.id || ''}
+            disabled={loading || inferring}
+            onChange={(e) => {
+              const row = versions.find(v => v.id === e.target.value);
+              if (row) loadVersion(row, null);
+            }}
+            style={{
+              marginTop: 8, width: '100%', padding: '8px 10px', borderRadius: 8,
+              background: T.parchmentDeep, color: T.ink, border: `1px solid ${T.cardEdge}`,
+              fontSize: 13, fontWeight: 700,
+            }}>
+            {versions.map(v => (
+              <option key={v.id} value={v.id}>
+                {v.version_name}{v.id === productionId ? ' — PRODUCTION' : ''}
+              </option>
+            ))}
+          </select>
+        )}
         {loading && <div style={{ fontSize: 12, color: T.inkMute, marginTop: 6 }}>Loading model…</div>}
         {!loading && production && (
           <div style={{ marginTop: 6 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: T.ink }}>
               {production.version_name}
-              <span style={{
-                marginLeft: 8,
-                fontSize: 9, letterSpacing: 1, fontWeight: 800,
-                background: T.brass, color: T.oceanDeep,
-                padding: '2px 7px', borderRadius: 999,
-              }}>PRODUCTION</span>
+              {production.id === productionId ? (
+                <span style={{
+                  marginLeft: 8,
+                  fontSize: 9, letterSpacing: 1, fontWeight: 800,
+                  background: T.brass, color: T.oceanDeep,
+                  padding: '2px 7px', borderRadius: 999,
+                }}>PRODUCTION</span>
+              ) : (
+                <span style={{
+                  marginLeft: 8,
+                  fontSize: 9, letterSpacing: 1, fontWeight: 800,
+                  background: T.cardEdge, color: T.ink,
+                  padding: '2px 7px', borderRadius: 999,
+                }}>NOT PROMOTED</span>
+              )}
             </div>
             <div style={{ fontSize: 11, color: T.inkMute, marginTop: 4 }}>
               {runtime ? `${runtime.labels.length} labels · thresholds: low < ${runtime.minConfidence} · high >= ${runtime.highConfidence}` : 'loading…'}
@@ -359,7 +402,7 @@ export default function TestImagePanel() {
         )}
         {!loading && !production && (
           <div style={{ marginTop: 6, fontSize: 12, color: T.inkMute }}>
-            No promoted model. Go to Models → pick a version → Promote, then come back.
+            No models. Go to Models → Import, then come back.
           </div>
         )}
       </Card>
