@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# ship.sh — verify + commit + push a web/admin change in one step.
+#
+# The build-then-commit-then-push loop was run dozens of times by hand.
+# This scripts the mechanical part: it type-checks via the real builds
+# (ios AND web/admin, since a change can break either target) and only
+# commits + pushes if BOTH pass — so a broken build never lands.
+#
+# Usage:
+#   scripts/ship.sh "commit subject line"        # build → commit -A → push
+#   scripts/ship.sh --check                        # build only, no commit
+#
+# The commit body/trailers are intentionally NOT added here (they are
+# per-session), so pass a full message via git yourself when you need
+# trailers, or use --check and commit manually.
+set -euo pipefail
+
+MSG="${1:-}"
+
+# ---- Model input parity -------------------------------------------------
+# The admin Test Image panel and the app's identify path each had their own
+# copy of the preprocessing. They drifted: the app letterboxed, the admin
+# squashed the photo into a square, and the admin panel's results were read
+# as the MODEL being wrong. Two models were nearly retrained over it.
+#
+# There is now one copy, in src/identify/preprocess.js. This refuses to
+# build a second one.
+echo "▶ Checking model input preprocessing has one copy…"
+DUPES="$(grep -rln "function imageToRgb" src/ --include=*.js --include=*.jsx \
+         | grep -v "^src/identify/preprocess.js$" || true)"
+if [ -n "$DUPES" ]; then
+  echo "✗ imageToRgb is defined outside src/identify/preprocess.js:"
+  echo "$DUPES"
+  echo "  Import it from there instead — see .claude/skills/harness-parity."
+  exit 1
+fi
+# A squashing drawImage into a model-sized canvas is the exact bug.
+SQUASH="$(grep -rn "drawImage([a-zA-Z]*, *0, *0, *\(runtime\.\)\?input[Ss]ize" src/ \
+          --include=*.js --include=*.jsx || true)"
+if [ -n "$SQUASH" ]; then
+  echo "✗ Aspect-squashing drawImage into the model input:"
+  echo "$SQUASH"
+  echo "  Model input must be letterboxed — use imageToRgb()."
+  exit 1
+fi
+echo "✓ one preprocessing copy, no aspect squash"
+
+echo "▶ Building iOS bundle (KYC_ADMIN=false)…"
+npm run ios:build >/tmp/ship-ios.log 2>&1 || { echo "✗ ios:build FAILED"; tail -20 /tmp/ship-ios.log; exit 1; }
+echo "✓ ios:build passed"
+
+echo "▶ Building web/admin bundle…"
+npm run web:build >/tmp/ship-web.log 2>&1 || { echo "✗ web:build FAILED"; tail -20 /tmp/ship-web.log; exit 1; }
+echo "✓ web:build passed"
+
+if [ "$MSG" = "--check" ] || [ -z "$MSG" ]; then
+  echo "✓ Build check only — nothing committed."
+  exit 0
+fi
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+git add -A
+git commit -m "$MSG"
+git push -u origin "$BRANCH"
+echo "✓ Shipped to $BRANCH"
