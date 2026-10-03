@@ -34,7 +34,9 @@ existing species with more data.
   on a different branch, update that constant or Colab trains stale code.
 - **Trainer**: MobileNetV3-**Large**, `IMG_SIZE=224`, 35 epochs (8 frozen then
   fine-tune), **class weights** (rare vs common), per-class floor
-  `DEFAULT_MIN_IMAGES=45` on total train+val.
+  `DEFAULT_MIN_IMAGES=30` on total train+val — kept in lock-step with
+  `MIN_TRAIN_THRESHOLD` in `src/training-store.js`. The floor only keeps
+  junk out; it does not make a class good. See [[training-data-health]].
 - **Quantization is float16** (NOT full-INT8 — INT8 collapsed accuracy). The
   trainer writes `input_dtype` into `labels.json`, and `evaluate_tflite` reports
   the *quantized* accuracy, not just the float model's.
@@ -130,7 +132,8 @@ is one scientific name on two active species rows:
     from species where is_active
     group by scientific having count(*) > 1;
 
-**Before any retrain, run `training/audit_taxa.py`** (read-only; reports
+**Before any retrain, read [[training-data-health]] and run
+`training/audit_taxa.py`** (read-only; reports
 which folders hold the wrong fish) and the query above. `dedupe_photos.py`
 previews by default and quarantines to `_dupes/` rather than deleting.
 
