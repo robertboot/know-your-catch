@@ -25,18 +25,13 @@ update training_images
    set species_id = 'gulf_sturgeon'
  where species_id = 'atlantic_sturgeon';
 
--- 2. The duplicates quarantined BETWEEN these two are no longer
---    contradictory — they were only ever "the same photo under two labels",
---    and there is now one label. They go back for review rather than
---    straight to verified, because some were also rejected for real reasons.
-update training_images
-   set status           = 'pending',
-       reviewed_by      = null,
-       reviewed_at      = null,
-       rejection_reason = null
- where species_id = 'gulf_sturgeon'
-   and status = 'rejected'
-   and rejection_reason = 'duplicate';
+-- 2. The duplicates quarantined BETWEEN these two stay rejected.
+--    They are NOT two photographs: all 56 pairs carry the same iNaturalist
+--    photo id on both sides. Restoring them puts one picture in the class
+--    twice, and make_split.py groups by observation rather than by content,
+--    so the copies can land in train and val and inflate the retrain's
+--    numbers. An earlier version of this file restored them; that was wrong
+--    and supabase/drop-sturgeon-duplicate-copies.sql undoes it.
 
 -- 3. Logged catches, so nobody's logbook loses its fish.
 update catches
