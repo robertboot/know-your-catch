@@ -86,6 +86,13 @@ and `lastSubjectBox()` in `adapter.js` are constants returning
 "disabled"/false/null, and `screens1.jsx` already draws `_subjectBox`
 over the results photo when present. A real detector is a one-file change.
 
+## Before blaming the model
+
+A wrong species is a data question first. [[training-data-health]] holds
+the class-size floor, the species pairs that must be one label, and what
+the duplicate quarantine leaves behind — including the two protected
+species it silently emptied to zero.
+
 ## Diagnostics
 
 `identifyPhoto` attaches `_diag` and `_cropTrace`; the results screen
