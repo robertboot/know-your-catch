@@ -26,6 +26,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from '../theme.js';
 import { Card, SectionLabel } from '../components.jsx';
+import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
 const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
 
@@ -102,10 +103,9 @@ export default function OceanHeatmapPanel() {
       maxBoundsViscosity: 1.0,
     });
     // Dark base to match the admin theme.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-      subdomains: 'abcd',
-      maxZoom: 19,
+    L.tileLayer(BASEMAP_URL, {
+      attribution: BASEMAP_ATTRIBUTION,
+      maxZoom: BASEMAP_MAX_ZOOM,
     }).addTo(map);
     // Land mask ABOVE the color overlay: the ERDDAP image is a rectangle,
     // so its coarse coastal cells bleed the color onto land. A dark land
@@ -121,9 +121,8 @@ export default function OceanHeatmapPanel() {
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450; // above landmask (440)
     map.getPane('coastline').style.pointerEvents = 'none';
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 19,
+    L.tileLayer(BASEMAP_LABELS_URL, {
+      maxZoom: BASEMAP_MAX_ZOOM,
       pane: 'coastline',
     }).addTo(map);
     mapRef.current = map;

@@ -19,6 +19,7 @@ import { H1, Card, SectionLabel } from './components.jsx';
 import { SUPABASE_URL } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
 import { describeAge } from './marine-cache.js';
+import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from './basemap.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
 const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
@@ -128,8 +129,8 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
       zoomControl: true, attributionControl: true,
       maxBounds: REGION_BOUNDS, maxBoundsViscosity: 1.0,
     });
-    cachedTileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
+    cachedTileLayer(BASEMAP_URL, {
+      attribution: BASEMAP_ATTRIBUTION, maxZoom: BASEMAP_MAX_ZOOM,
     }).addTo(map);
     // Land mask above the color overlay so data clips to water only.
     map.createPane('landmask');
@@ -142,8 +143,8 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450;
     map.getPane('coastline').style.pointerEvents = 'none';
-    cachedTileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 19, pane: 'coastline',
+    cachedTileLayer(BASEMAP_LABELS_URL, {
+      maxZoom: BASEMAP_MAX_ZOOM, pane: 'coastline',
     }).addTo(map);
     mapRef.current = map;
     map.setView([26, -85], 6);

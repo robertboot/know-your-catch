@@ -20,6 +20,7 @@ import { getLastSession } from '../auth.js';
 import { TRIP_MODES } from '../trip-modes.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast-extras.js';
 import { SPECIES } from '../data.js';
+import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
 const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
 
@@ -202,11 +203,11 @@ export default function TripPlanningPanel() {
   useEffect(() => {
     if (!mapElRef.current || mapRef.current) return;
     const map = L.map(mapElRef.current, { zoomControl: true, attributionControl: true });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 12,
+    L.tileLayer(BASEMAP_URL, {
+      attribution: BASEMAP_ATTRIBUTION, maxZoom: BASEMAP_MAX_ZOOM,
     }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
-      maxZoom: 12, pane: 'shadowPane',
+    L.tileLayer(BASEMAP_LABELS_URL, {
+      maxZoom: BASEMAP_MAX_ZOOM, pane: 'shadowPane',
     }).addTo(map);
     map.setView([29.2, -87.7], 7);
     mapRef.current = map;
@@ -283,7 +284,9 @@ export default function TripPlanningPanel() {
   const activeMode = TRIP_MODES.find(m => m.key === mode);
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
+    // minmax(0,1fr): without it the day ribbon widens the page instead of
+    // scrolling inside its own card, and the admin header scrolls off-screen.
+    <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1fr)' }}>
       {/* Waters sits with the page title, not in a card of its own: it is
           the scope of everything below, not another setting to scroll past. */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
