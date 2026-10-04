@@ -84,7 +84,10 @@ export default function TripPlanningPanel() {
   // against the colour line means fading one UNDER the other, and a single
   // control can only fade both together.
   const [opacity, setOpacity] = useState({ sst: 0.72, chl: 0.55 });
-  const [showCatches, setShowCatches] = useState(true);
+  // 'mine' | 'all' | 'off'. Defaults to mine: on a map of 71 points the
+  // useful question is "where have I been", and everyone else's marks
+  // answer a different one.
+  const [catchView, setCatchView] = useState('mine');
   const [catches, setCatches] = useState([]);
   const [pbIds, setPbIds] = useState(() => new Set());
   const [sstRange, setSstRange] = useState(null);
@@ -301,7 +304,7 @@ export default function TripPlanningPanel() {
   // Where fish have actually come from. The satellite says where the water
   // changes; the logbook says where that mattered.
   useEffect(() => {
-    if (!region || !showCatches) { setCatches([]); return; }
+    if (!region || catchView === 'off') { setCatches([]); return; }
     let alive = true;
     (async () => {
       const c = client();
@@ -325,7 +328,7 @@ export default function TripPlanningPanel() {
       setCatches((data || []).filter(r => r.lat != null && r.lon != null));
     })();
     return () => { alive = false; };
-  }, [region, showCatches]);
+  }, [region, catchView]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -344,11 +347,17 @@ export default function TripPlanningPanel() {
     }
 
     // Catches first so a spot marker is never hidden behind one.
-    for (const c of catches) {
+    const myId = getLastSession()?.user?.id || null;
+    const shown = catchView === 'mine' && myId
+      ? catches.filter(c => c.user_id === myId)
+      : catches;
+    for (const c of shown) {
+      const mine = !myId || c.user_id === myId;
       const name = SPECIES_NAME.get(c.species_id) || c.species_id || 'Catch';
       const when = c.caught_at || c.date_iso;
       const label = `${name}${when ? ` · ${String(when).slice(0, 10)}` : ''}`
-        + (pbIds.has(c.id) ? ' · personal best' : '');
+        + (pbIds.has(c.id) ? ' · personal best' : '')
+        + (mine ? '' : ' · another angler');
       // The species photo, same source the app uses, so a catch on this map
       // is recognisable at a glance instead of being one more dot among the
       // spots. Falls back to a plain mark where a species has no photo —
@@ -371,12 +380,15 @@ export default function TripPlanningPanel() {
                   + `<img src="${photo.url}" alt="" style="width:26px;height:26px;`
                   + `border-radius:50%;object-fit:cover;display:block;`
                   + `border:1.5px solid ${isPB ? '#f5c542' : T.brass};`
-                  + `box-shadow:0 1px 4px rgba(0,0,0,.5)">${star}</div>`,
+                  + `box-shadow:0 1px 4px rgba(0,0,0,.5);`
+                  // Other anglers' catches sit back a little so your own
+                  // track still reads as a track.
+                  + `opacity:${mine ? 1 : 0.55}">${star}</div>`,
             }),
           })
         : L.circleMarker([c.lat, c.lon], {
-            radius: 4, color: '#ffffff', weight: 1, opacity: 0.7,
-            fillColor: T.brass, fillOpacity: 0.55,
+            radius: 4, color: '#ffffff', weight: 1, opacity: mine ? 0.7 : 0.4,
+            fillColor: T.brass, fillOpacity: mine ? 0.55 : 0.3,
           });
       marker.bindTooltip(label, { direction: 'top' }).addTo(group);
     }
@@ -402,7 +414,7 @@ export default function TripPlanningPanel() {
     } else if (region) {
       map.fitBounds([[region.south, region.west], [region.north, region.east]], { padding: [20, 20] });
     }
-  }, [spots, region, selected, catches, pbIds]);
+  }, [spots, region, selected, catches, pbIds, catchView]);
 
   // ---- recompute -----------------------------------------------------
   const recompute = async () => {
@@ -596,15 +608,16 @@ export default function TripPlanningPanel() {
                 </div>
               ))}
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button onClick={() => setShowCatches(v => !v)}
-                  style={{
-                    padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
-                    fontWeight: 800, color: T.ink,
-                    background: showCatches ? T.parchmentDeep : 'transparent',
-                    border: `1px solid ${showCatches ? T.brass : T.cardEdge}`,
-                  }}>
-                  Past catches{showCatches && catches.length ? ` (${catches.length})` : ''}
-                </button>
+                <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Catches</span>
+                {[['mine', 'Mine'], ['all', 'Everyone'], ['off', 'Off']].map(([k, lab]) => (
+                  <button key={k} onClick={() => setCatchView(k)}
+                    style={{
+                      padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
+                      fontWeight: 800, color: T.ink,
+                      background: catchView === k ? T.parchmentDeep : 'transparent',
+                      border: `1px solid ${catchView === k ? T.brass : T.cardEdge}`,
+                    }}>{lab}</button>
+                ))}
                 {sstRange && (
                   <span style={{ fontSize: 11.5, color: T.inkMute }}>
                     Temperature scale {(sstRange.lo * 9 / 5 + 32).toFixed(0)}–
