@@ -71,6 +71,27 @@ harnesses and hold them to the same rule:
 | Newsletter review copy | what `weekly-report-send` actually mails |
 | Anything run with service_role | what the app sees through RLS |
 
+## A build that passes is not a page that renders
+
+esbuild checks syntax, not whether an identifier resolves. A panel that
+references a variable nobody declared compiles cleanly and throws
+"Can't find variable" the instant it renders. This has now shipped twice —
+`isAdminEmail` removed while still called, and a `currents` state that a
+patch silently failed to insert while fifteen uses of it landed.
+
+`scripts/ship.sh` now mounts each admin panel in headless Chromium and
+fails on the first uncaught error (`scripts/smoke-render.mjs`). Panels are
+mounted signed-out and offline on purpose: every one has to survive a cold
+first paint anyway, and that is the state a reviewer hits.
+
+Verified to fail on the real bug before being trusted — removing the
+declaration reproduced the exact ReferenceError the console reported.
+
+**When editing a file by script, assert every replacement.** The missing
+state came from a `.replace()` whose pattern no longer matched after
+another session edited the same line; the other replacements in the same
+patch applied, so nothing looked wrong.
+
 ## Related
 
 - [[duplicated-knowledge]] — why a second copy is a bug waiting its turn.

@@ -49,6 +49,16 @@ echo "▶ Building iOS bundle (KYC_ADMIN=false)…"
 npm run ios:build >/tmp/ship-ios.log 2>&1 || { echo "✗ ios:build FAILED"; tail -20 /tmp/ship-ios.log; exit 1; }
 echo "✓ ios:build passed"
 
+# ---- Smoke render -------------------------------------------------------
+# esbuild checks syntax, not whether an identifier resolves. A panel that
+# references a variable nobody declared builds perfectly and throws
+# "Can't find variable" the moment it renders — twice now, both times
+# reaching the live console first. Mounting the component is the cheapest
+# thing that catches it. Verified to fail on the real bug before being
+# trusted.
+echo "▶ Smoke-rendering admin panels…"
+node scripts/smoke-render.mjs || { echo "✗ smoke render FAILED"; exit 1; }
+
 echo "▶ Building web/admin bundle…"
 npm run web:build >/tmp/ship-web.log 2>&1 || { echo "✗ web:build FAILED"; tail -20 /tmp/ship-web.log; exit 1; }
 echo "✓ web:build passed"

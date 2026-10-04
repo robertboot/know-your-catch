@@ -113,7 +113,8 @@ export default function TripPlanningPanel() {
   // OFF by default. The species zones are the subject of this map, and
   // even at 20% the satellite wash sat on top of them — raise a slider
   // when you want to read a break against the zones.
-  const [opacity, setOpacity] = useState({ sst: 0, chl: 0 });
+  const [opacity, setOpacity] = useState({ sst: 0, chl: 0, cur: 0.75 });
+  const [currents, setCurrents] = useState(null);
   // 'mine' | 'all' | 'off'. Defaults to mine: on a map of 71 points the
   // useful question is "where have I been", and everyone else's marks
   // answer a different one.
