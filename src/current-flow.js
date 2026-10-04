@@ -22,9 +22,13 @@ const toRad = (d) => (d * Math.PI) / 180;
 /* Particles move at a multiple of real speed — at true scale a 1 kt
    current crawls about a pixel a minute and reads as a still image. */
 const TIME_SCALE = 2600;
-const PARTICLE_COUNT = 1400;
+const PARTICLE_COUNT = 700;
 const MAX_AGE_FRAMES = 90;
 const TRAIL_FADE = 0.90;   // lower = shorter tails
+// 30fps, not 60. Flow reads identically at half the frame rate and costs
+// half as much — and this runs beside a Leaflet map with image overlays
+// and several hundred markers, which is where the budget actually goes.
+const FRAME_MS = 1000 / 30;
 
 export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
   // vectors: [lat, lon, kt, dirDegToward]
@@ -106,6 +110,22 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
       const ctx = this._canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, size.x, size.y);
+
+      /* Precomputed lat/lon → pixel mapping for THIS view.
+         The first cut called map.latLngToContainerPoint twice per particle
+         per frame: 2,800 projections a frame, each allocating a Point, and
+         the whole tab lagged. Over one region view the mapping is close
+         enough to linear that two multiplies replace it. Rebuilt on every
+         move and zoom, which is exactly when it stops being valid. */
+      const c = map.getCenter();
+      const o = map.latLngToContainerPoint([c.lat, c.lng]);
+      const dx = map.latLngToContainerPoint([c.lat, c.lng + 0.1]);
+      const dy = map.latLngToContainerPoint([c.lat + 0.1, c.lng]);
+      this._proj = {
+        lat0: c.lat, lon0: c.lng, x0: o.x, y0: o.y,
+        pxPerLon: (dx.x - o.x) / 0.1,
+        pxPerLat: (dy.y - o.y) / 0.1,     // negative: north is up
+      };
       this._seed();
       if ((this._opacity ?? 1) > 0) this._start();
     },
@@ -131,7 +151,13 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
 
     _start() {
       if (this._raf || !this._canvas) return;
-      const tick = () => { this._frame(); this._raf = requestAnimationFrame(tick); };
+      let last = 0;
+      const tick = (t) => {
+        this._raf = requestAnimationFrame(tick);
+        if (t - last < FRAME_MS) return;
+        last = t;
+        this._frame();
+      };
       this._raf = requestAnimationFrame(tick);
     },
 
@@ -142,7 +168,10 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
 
     _frame() {
       const map = this._map, cv = this._canvas;
-      if (!map || !cv || !this._bounds) return;
+      // No overlap with the data: stop outright rather than spinning on a
+      // frame that draws nothing, which is how an invisible layer still
+      // costs a phone its battery.
+      if (!map || !cv || !this._bounds || !this._particles.length) { this._stop(); return; }
       const ctx = cv.getContext('2d');
       const size = map.getSize();
 
@@ -155,6 +184,8 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
       ctx.lineWidth = 1.1;
       ctx.beginPath();
       const { s, n, w, e } = this._bounds;
+      const pr = this._proj;
+      if (!pr) return;
       for (const p of this._particles) {
         const f = sample(p.lat, p.lon);
         if (!f || p.age++ > MAX_AGE_FRAMES) {
@@ -168,11 +199,13 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
         // A degree of longitude is shorter than a degree of latitude away
         // from the equator; without this, everything drifts east.
         const dLon = (u * KT_TO_DEG_LAT_PER_SEC * TIME_SCALE) / Math.cos(toRad(p.lat));
-        const a = map.latLngToContainerPoint([p.lat, p.lon]);
+        const ax = pr.x0 + (p.lon - pr.lon0) * pr.pxPerLon;
+        const ay = pr.y0 + (p.lat - pr.lat0) * pr.pxPerLat;
         p.lat += dLat; p.lon += dLon;
-        const b2 = map.latLngToContainerPoint([p.lat, p.lon]);
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b2.x, b2.y);
+        const bx = pr.x0 + (p.lon - pr.lon0) * pr.pxPerLon;
+        const by = pr.y0 + (p.lat - pr.lat0) * pr.pxPerLat;
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
       }
       ctx.strokeStyle = 'rgba(190, 240, 255, 0.85)';
       ctx.stroke();

@@ -148,6 +148,7 @@ export default function TripPlanningPanel() {
   const layerRef = useRef(null);
   const overlayRef = useRef([]);
   const flowRef = useRef(null);
+  const [zoom, setZoom] = useState(7);
 
   const region = useMemo(
     () => regions.find(r => r.id === regionId) || null,
@@ -311,6 +312,8 @@ export default function TripPlanningPanel() {
       maxZoom: BASEMAP_MAX_ZOOM, pane: 'shadowPane',
     }).addTo(map);
     map.fitBounds(SNAPSHOT_BOUNDS, { padding: [10, 10] });
+    map.on('zoomend', () => setZoom(map.getZoom()));
+    setZoom(map.getZoom());
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 200);
   }, []);
@@ -595,7 +598,10 @@ export default function TripPlanningPanel() {
       // is recognisable at a glance instead of being one more dot among the
       // spots. Falls back to a plain mark where a species has no photo —
       // a broken image icon would read as a fault.
-      const photo = speciesPhoto(c.species_id);
+      // Photos only once they are big enough to recognise. At region zoom a
+      // 26px fish is an indistinct blob, and 500 of them is 500 DOM nodes
+      // each fetching an image — which is what made the whole page lag.
+      const photo = zoom >= 9 ? speciesPhoto(c.species_id) : null;
       const isPB = pbIds.has(c.id);
       // The star sits beside the photo rather than on it: a badge over the
       // fish hides the one thing the icon exists to show.
@@ -620,8 +626,14 @@ export default function TripPlanningPanel() {
             }),
           })
         : L.circleMarker([c.lat, c.lon], {
-            radius: 4, color: '#ffffff', weight: 1, opacity: mine ? 0.7 : 0.4,
-            fillColor: T.brass, fillOpacity: mine ? 0.55 : 0.3,
+            // Zoomed out the ring is the only thing left to say "best", so
+            // it carries the gold instead of the star.
+            radius: isPB ? 5 : 4,
+            color: isPB ? '#f5c542' : '#ffffff',
+            weight: isPB ? 2 : 1,
+            opacity: mine ? 0.75 : 0.4,
+            fillColor: isPB ? '#f5c542' : T.brass,
+            fillOpacity: mine ? 0.6 : 0.3,
           });
       marker.bindTooltip(label, { direction: 'top' }).addTo(group);
     }
@@ -641,7 +653,7 @@ export default function TripPlanningPanel() {
         .addTo(group);
     }
 
-  }, [spots, regions, selected, catches, pbIds, catchView, anglers]);
+  }, [spots, regions, selected, catches, pbIds, catchView, anglers, zoom]);
 
   // ---- recompute -----------------------------------------------------
   const recompute = async () => {
@@ -854,20 +866,10 @@ export default function TripPlanningPanel() {
                     </button>
                   );
                 })}
-                <button onClick={() => setShowCurrents(v => !v)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
-                    fontWeight: 800, color: T.ink,
-                    background: showCurrents ? T.parchmentDeep : 'transparent',
-                    border: `1px solid ${showCurrents ? '#cfeaff' : T.cardEdge}`,
-                  }}>
-                  <span style={{ color: '#cfeaff' }}>➤</span> Currents
-                </button>
                 <span style={{ fontSize: 11.5, color: T.inkMute, flexBasis: '100%' }}>
                   Where each species' water is this week — temperature band, season, depth and the
                   edges, from last night's satellite pass. Deeper colour = that species' best water.
-                  Arrows are the surface current (loop current and eddies); bigger = faster.
+                  Surface current has its own control above.
                   {!zoneRows.length && ' No zones for this region yet — Regenerate, or wait for tonight.'}
                 </span>
               </div>
