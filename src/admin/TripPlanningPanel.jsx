@@ -18,6 +18,7 @@ import { Card, GhostButton, SectionLabel } from '../components.jsx';
 import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase-client.js';
 import { getLastSession } from '../auth.js';
 import { TRIP_MODES } from '../trip-modes.js';
+import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast-extras.js';
 import { SPECIES } from '../data.js';
 
 const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
@@ -52,6 +53,13 @@ export default function TripPlanningPanel() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  // A planner without a date is just a map. Default to today because that
+  // is the trip you might still make, but the useful case is Thursday on a
+  // Sunday evening — which is why the strip runs out to the end of the
+  // marine forecast rather than stopping at tomorrow.
+  const [dayIso, setDayIso] = useState(() => new Date().toISOString().slice(0, 10));
+  const [cond, setCond] = useState(null);
+  const [condErr, setCondErr] = useState('');
 
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
@@ -101,6 +109,94 @@ export default function TripPlanningPanel() {
   }, [regionId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ---- conditions for the chosen day ---------------------------------
+  // The edges are OBSERVED and cannot be forecast; the weather can. So the
+  // day you pick does not change which breaks exist — it changes whether
+  // you can get to them, and how stale the satellite will be by then.
+  useEffect(() => {
+    if (!region) return;
+    let alive = true;
+    const lat = (region.south + region.north) / 2;
+    const lon = (region.west + region.east) / 2;
+    (async () => {
+      setCondErr('');
+      try {
+        const wx = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+          + `&hourly=wind_speed_10m,wind_gusts_10m,weather_code`
+          + `&forecast_days=10&timezone=auto&wind_speed_unit=kn&cell_selection=sea`;
+        const mr = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
+          + `&hourly=wave_height,wave_period&forecast_days=10&timezone=auto&cell_selection=sea`;
+        const [a, b] = await Promise.all([fetch(wx), fetch(mr).catch(() => null)]);
+        if (!a.ok) throw new Error(`weather ${a.status}`);
+        const j = await a.json();
+        const m = b && b.ok ? await b.json() : null;
+        if (!alive) return;
+        const times = j.hourly?.time || [];
+        const byDay = {};
+        for (let i = 0; i < times.length; i++) {
+          const d = times[i].slice(0, 10);
+          // Daylight hours only. A 3am gale does not stop a trip that
+          // leaves at seven, and averaging it in says the day is unfishable
+          // when it is not.
+          const hr = Number(times[i].slice(11, 13));
+          if (hr < 6 || hr > 18) continue;
+          (byDay[d] ||= []).push({
+            wind: j.hourly.wind_speed_10m?.[i],
+            gust: j.hourly.wind_gusts_10m?.[i],
+            weatherCode: j.hourly.weather_code?.[i],
+            waveFt: m?.hourly?.wave_height?.[i] != null ? m.hourly.wave_height[i] * 3.28084 : null,
+            periodS: m?.hourly?.wave_period?.[i] ?? null,
+          });
+        }
+        const out = {};
+        for (const [d, hrs] of Object.entries(byDay)) {
+          const avg = (k) => {
+            const v = hrs.map(h => h[k]).filter(x => x != null);
+            return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null;
+          };
+          const scores = hrs.map(fishabilityHour).filter(x => x != null);
+          out[d] = {
+            wind: avg('wind'),
+            gust: Math.max(...hrs.map(h => h.gust ?? 0)) || null,
+            waveFt: avg('waveFt'),
+            periodS: avg('periodS'),
+            // Worst-case weighted, same as the 6-hour blocks: a day with one
+            // ugly stretch is not the average of its hours.
+            score: scores.length
+              ? Math.round(0.6 * (scores.reduce((x, y) => x + y, 0) / scores.length)
+                           + 0.4 * Math.min(...scores))
+              : null,
+          };
+        }
+        setCond(out);
+      } catch (e) {
+        if (alive) { setCond(null); setCondErr(String(e?.message || e)); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [region]);
+
+  const days = useMemo(() => {
+    const out = [];
+    const t0 = new Date(); t0.setHours(12, 0, 0, 0);
+    for (let i = 0; i < 10; i++) {
+      const d = new Date(t0.getTime() + i * 86400000);
+      out.push({
+        iso: d.toISOString().slice(0, 10),
+        label: i === 0 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }),
+        sub: d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
+      });
+    }
+    return out;
+  }, []);
+
+  const today = cond?.[dayIso] || null;
+  // How old the satellite will be on the day being planned. A break drifts
+  // with the current; past about four days it is a hint, not a position.
+  const edgeAgeDays = observedAt
+    ? Math.round((new Date(dayIso + 'T12:00:00') - new Date(observedAt)) / 86400000)
+    : null;
 
   // ---- map ----------------------------------------------------------
   useEffect(() => {
@@ -216,6 +312,51 @@ export default function TripPlanningPanel() {
       </Card>
 
       <Card>
+        <SectionLabel>When are you going?</SectionLabel>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, overflowX: 'auto', paddingBottom: 4 }}>
+          {days.map(d => {
+            const c = cond?.[d.iso];
+            const col = c?.score != null ? fishabilityColor(c.score) : T.cardEdge;
+            const on = dayIso === d.iso;
+            return (
+              <button key={d.iso} onClick={() => setDayIso(d.iso)}
+                style={{
+                  flex: '0 0 auto', minWidth: 74, padding: '8px 10px', borderRadius: 10,
+                  cursor: 'pointer', textAlign: 'center', color: T.ink,
+                  background: on ? T.parchmentDeep : 'transparent',
+                  border: `1px solid ${on ? T.brass : T.cardEdge}`,
+                  borderBottom: `3px solid ${col}`,
+                }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800 }}>{d.label}</div>
+                <div style={{ fontSize: 10.5, color: T.inkMute }}>{d.sub}</div>
+                <div style={{ fontSize: 13, fontWeight: 900, marginTop: 2, color: col }}>
+                  {c?.score != null ? fishabilityGrade(c.score) : '—'}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {today && (
+          <div style={{ fontSize: 13, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
+            {fmt(today.wind)} kt{today.gust ? ` gusting ${fmt(today.gust)}` : ''}
+            {today.waveFt != null ? ` · ${fmt(today.waveFt, 1)} ft` : ''}
+            {today.periodS != null ? ` at ${fmt(today.periodS, 1)} s` : ''}
+            {today.score != null && today.score < 60 && (
+              <span style={{ color: T.closed, fontWeight: 800 }}>
+                {' '}· too rough to be worth planning around
+              </span>
+            )}
+          </div>
+        )}
+        {condErr && (
+          <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 8 }}>
+            Conditions unavailable ({condErr}). The spots below are unaffected — they come
+            from the satellite, not the forecast.
+          </div>
+        )}
+      </Card>
+
+      <Card>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <SectionLabel>Waters</SectionLabel>
           <select value={regionId} onChange={e => setRegionId(e.target.value)}
@@ -230,10 +371,23 @@ export default function TripPlanningPanel() {
           </GhostButton>
         </div>
         {observedAt && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
             Satellite pass {new Date(observedAt).toLocaleString()} ·{' '}
             {spots.length} edge{spots.length === 1 ? '' : 's'} found
             {region ? ` · distances from ${region.port_name}` : ''}
+            {/* Breaks cannot be forecast — they are observed, and they drift
+                with the current. Saying how stale the picture will be on the
+                chosen day is the difference between a position and a hint. */}
+            {edgeAgeDays != null && edgeAgeDays >= 1 && (
+              <div style={{ marginTop: 4, color: edgeAgeDays >= 4 ? T.warn : T.inkMute }}>
+                {edgeAgeDays === 1
+                  ? 'One day old by your trip — expect it to have moved a few miles.'
+                  : `${edgeAgeDays} days old by your trip — ${
+                      edgeAgeDays >= 4
+                        ? 'treat these as a direction to look, not a position.'
+                        : 'expect it to have drifted with the current.'}`}
+              </div>
+            )}
           </div>
         )}
         {error && (
