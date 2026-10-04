@@ -20,6 +20,7 @@ import { getLastSession } from '../auth.js';
 import { TRIP_MODES } from '../trip-modes.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast-extras.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from '../ocean-snapshots.js';
+import { habitatScore } from '../species-habitat.js';
 import { SPECIES } from '../data.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
@@ -29,6 +30,28 @@ const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
    already know the answer. Resolved through SPECIES rather than written
    out again so a rename lands here too. */
 const SPECIES_NAME = new Map(SPECIES.map(s => [s.id, s.commonName]));
+
+/* Which of this mode's fish suit this particular water.
+ *
+ * Scored on the CLIENT, from the measurements the server already wrote on
+ * the row, rather than in the edge function. The habitat table is a set of
+ * claims about fish that Robert will want to argue with, and this way an
+ * edit to it changes what the map says without a redeploy — and there is
+ * never a second copy of it living in Deno. Depth is not in the rows yet,
+ * so it scores as unknown rather than as wrong.
+ *
+ * SST_GRAD_GOOD mirrors the edge function's threshold for a strong break;
+ * the two must move together. */
+const SST_GRAD_GOOD = 1.5;
+function speciesForSpot(spot, mode, monthIdx) {
+  const ids = TRIP_MODES.find(m => m.key === mode)?.species || [];
+  const edgeStrength = Math.min(1, (spot.sst_grad_f_nm || 0) / SST_GRAD_GOOD);
+  return ids
+    .map(id => ({ id, score: habitatScore(id, { sstF: spot.sst_f, edgeStrength, month: monthIdx }) }))
+    .filter(x => x.score != null && x.score > 0.35)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+}
 const speciesNames = (ids) =>
   (ids || []).map(id => SPECIES_NAME.get(id)).filter(Boolean).join(' · ');
 const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
@@ -371,6 +394,10 @@ export default function TripPlanningPanel() {
   };
 
   const activeMode = TRIP_MODES.find(m => m.key === mode);
+  // The month of the DAY BEING PLANNED. Scoring a Thursday in November
+  // against October's seasons is the sort of error nobody notices until a
+  // closed-season fish is being recommended.
+  const planMonth = Number(dayIso.slice(5, 7));
 
   return (
     // minmax(0,1fr): without it the day ribbon widens the page instead of
@@ -594,6 +621,23 @@ export default function TripPlanningPanel() {
                   <div style={{ fontSize: 13, color: T.inkMute, marginTop: 4, lineHeight: 1.45 }}>
                     {s.why}
                   </div>
+                  {(() => {
+                    const fish = speciesForSpot(s, mode, planMonth);
+                    if (!fish.length) return null;
+                    return (
+                      <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
+                        <span style={{ color: T.inkMute }}>Suits </span>
+                        {fish.map((f, k) => (
+                          <span key={f.id} style={{ color: T.ink, fontWeight: 700 }}>
+                            {k ? ', ' : ''}{SPECIES_NAME.get(f.id) || f.id}
+                            <span style={{ color: T.inkMute, fontWeight: 600 }}>
+                              {' '}{Math.round(f.score * 100)}%
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5, opacity: 0.85 }}>
                     {fmt(s.sst_grad_f_nm, 2)} °F/nm
                     {s.chl_grad != null ? ` · colour change ${fmt(s.chl_grad, 2)}` : ' · no colour change'}
