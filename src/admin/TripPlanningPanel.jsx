@@ -60,6 +60,9 @@ export default function TripPlanningPanel() {
   const [dayIso, setDayIso] = useState(() => new Date().toISOString().slice(0, 10));
   const [cond, setCond] = useState(null);
   const [condErr, setCondErr] = useState('');
+  // Closed by default. The map is the product; the species list is
+  // reference material you read once and then want out of the way.
+  const [showDetail, setShowDetail] = useState(false);
 
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
@@ -285,30 +288,53 @@ export default function TripPlanningPanel() {
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Card>
-        <SectionLabel>How are you fishing?</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8, marginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <SectionLabel>How are you fishing?</SectionLabel>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => setShowDetail(v => !v)}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                     color: T.brass, fontSize: 12.5, fontWeight: 800 }}>
+            {showDetail ? 'Hide details' : 'Details'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {TRIP_MODES.map(m => (
             <button key={m.key} onClick={() => setMode(m.key)}
               style={{
-                textAlign: 'left', padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                padding: '7px 12px', borderRadius: 999, cursor: 'pointer', color: T.ink,
                 background: mode === m.key ? T.parchmentDeep : 'transparent',
                 border: `1px solid ${mode === m.key ? T.brass : T.cardEdge}`,
-                color: T.ink,
+                fontSize: 13, fontWeight: 800, opacity: m.ready ? 1 : 0.65,
               }}>
-              <div style={{ fontSize: 13.5, fontWeight: 800 }}>
-                {m.label}
-                {!m.ready && (
-                  <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8,
-                                 color: T.inkMute, textTransform: 'uppercase' }}>no data yet</span>
-                )}
-              </div>
-              <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3, lineHeight: 1.35 }}>{m.blurb}</div>
-              <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 6, lineHeight: 1.5, opacity: 0.9 }}>
-                {speciesNames(m.species)}
-              </div>
+              {m.label}
+              {!m.ready && (
+                <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, letterSpacing: 0.8,
+                               color: T.inkMute, textTransform: 'uppercase' }}>soon</span>
+              )}
             </button>
           ))}
         </div>
+        {showDetail && (
+          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+            {TRIP_MODES.map(m => (
+              <div key={m.key}
+                style={{ padding: '9px 11px', borderRadius: 9,
+                         background: mode === m.key ? T.parchmentDeep : 'transparent',
+                         border: `1px solid ${mode === m.key ? T.brass : T.cardEdge}` }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.ink }}>
+                  {m.label}
+                  <span style={{ marginLeft: 8, fontSize: 11.5, fontWeight: 700, color: T.inkMute }}>
+                    {m.needs}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>{m.blurb}</div>
+                <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5, lineHeight: 1.5, opacity: 0.9 }}>
+                  {speciesNames(m.species)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>
