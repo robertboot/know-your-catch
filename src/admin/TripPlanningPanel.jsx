@@ -432,10 +432,22 @@ export default function TripPlanningPanel() {
       map.getPane('currentspane').style.pointerEvents = 'none';
     }
     if (currentsLayerRef.current) { map.removeLayer(currentsLayerRef.current); currentsLayerRef.current = null; }
-    const row = zoneRows.find(z => z.mode_key === '_currents');
-    if (!showCurrents || !row?.cells?.length) return;
+    // ALL regions' current rows, deduped at the box overlaps (same 0.25°
+    // grid everywhere, so identical lat,lon = the same measurement).
+    const curRows = zoneRows.filter(z => z.mode_key === '_currents' && z.cells?.length);
+    if (!showCurrents || !curRows.length) return;
+    const seen = new Set();
+    const vectors = [];
+    for (const z of curRows) {
+      for (const cell of z.cells) {
+        const k = `${cell[0]},${cell[1]}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        vectors.push(cell);
+      }
+    }
     const group = L.layerGroup();
-    for (const [lat, lon, kt, dir] of row.cells) {
+    for (const [lat, lon, kt, dir] of vectors) {
       const size = 13 + Math.min(13, kt * 9);          // faster = bigger arrow
       const op = 0.5;                                  // flat 50% — informative, never loud
       // Dark glyph with a light halo — the pale blue read as nothing on
