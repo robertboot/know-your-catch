@@ -352,19 +352,40 @@ export default function TripPlanningPanel() {
     const rows = zoneRows.filter(z => speciesOn.has(z.mode_key) && z.cells?.length);
     if (!rows.length) return;
     const group = L.layerGroup();
+    // One soft RASTER per species instead of hundreds of circles: paint
+    // the cells into a tiny canvas at grid resolution and let the browser
+    // stretch it — bilinear scaling melts the grid into the smooth
+    // organic areas the Sirius map draws. Circles overlapped into
+    // polka-dot soup the moment two neighbours were both hot.
     for (const z of rows) {
       const color = SPECIES_ZONE_COLORS[z.mode_key] || T.brass;
-      const stepM = (z.step_deg || 0.06) * 111000;
+      const [cr, cg, cb] = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
+      const step = z.step_deg || 0.06;
+      const lats = z.cells.map(c => c[0]), lons = z.cells.map(c => c[1]);
+      const latMin = Math.min(...lats), latMax = Math.max(...lats);
+      const lonMin = Math.min(...lons), lonMax = Math.max(...lons);
+      const W = Math.round((lonMax - lonMin) / step) + 1;
+      const H = Math.round((latMax - latMin) / step) + 1;
+      if (W < 1 || H < 1 || W * H > 400000) continue;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      const img = ctx.createImageData(W, H);
       const n = z.cells.length; // best-first from the server
-      // Faintest first so each species' prime water sits on top.
-      for (let idx = n - 1; idx >= 0; idx--) {
-        const [lat, lon] = z.cells[idx];
-        const o = idx < n * 0.15 ? 0.50 : idx < n * 0.40 ? 0.32 : 0.16;
-        L.circle([lat, lon], {
-          pane: 'zonespane', radius: stepM * 0.72, stroke: false,
-          fillColor: color, fillOpacity: o,
-        }).addTo(group);
-      }
+      z.cells.forEach(([lat, lon], idx) => {
+        const x = Math.round((lon - lonMin) / step);
+        const y = Math.round((latMax - lat) / step); // canvas y grows downward
+        if (x < 0 || x >= W || y < 0 || y >= H) return;
+        const a = idx < n * 0.15 ? 150 : idx < n * 0.40 ? 105 : 60;
+        const p = (y * W + x) * 4;
+        img.data[p] = cr; img.data[p + 1] = cg; img.data[p + 2] = cb;
+        img.data[p + 3] = Math.max(img.data[p + 3], a);
+      });
+      ctx.putImageData(img, 0, 0);
+      L.imageOverlay(canvas.toDataURL(), [
+        [latMin - step / 2, lonMin - step / 2],
+        [latMax + step / 2, lonMax + step / 2],
+      ], { pane: 'zonespane', opacity: 1, interactive: false }).addTo(group);
     }
     group.addTo(map);
     zonesLayerRef.current = group;
