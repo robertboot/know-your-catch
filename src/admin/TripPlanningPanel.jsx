@@ -21,6 +21,7 @@ import { TRIP_MODES } from '../trip-modes.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast-extras.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from '../ocean-snapshots.js';
 import { habitatScore } from '../species-habitat.js';
+import { speciesPhoto } from '../helpers.js';
 import { SPECIES } from '../data.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
@@ -332,14 +333,30 @@ export default function TripPlanningPanel() {
 
     // Catches first so a spot marker is never hidden behind one.
     for (const c of catches) {
-      L.circleMarker([c.lat, c.lon], {
-        radius: 3.5, color: '#ffffff', weight: 1, opacity: 0.7,
-        fillColor: T.brass, fillOpacity: 0.55,
-      }).bindTooltip(
-        `${c.species_id || 'catch'}${c.caught_at || c.date_iso
-          ? ` · ${String(c.caught_at || c.date_iso).slice(0, 10)}` : ''}`,
-        { direction: 'top' },
-      ).addTo(group);
+      const name = SPECIES_NAME.get(c.species_id) || c.species_id || 'Catch';
+      const when = c.caught_at || c.date_iso;
+      const label = `${name}${when ? ` · ${String(when).slice(0, 10)}` : ''}`;
+      // The species photo, same source the app uses, so a catch on this map
+      // is recognisable at a glance instead of being one more dot among the
+      // spots. Falls back to a plain mark where a species has no photo —
+      // a broken image icon would read as a fault.
+      const photo = speciesPhoto(c.species_id);
+      const marker = photo?.url
+        ? L.marker([c.lat, c.lon], {
+            icon: L.divIcon({
+              className: '',
+              iconSize: [26, 26],
+              iconAnchor: [13, 13],
+              html: `<img src="${photo.url}" alt="" style="width:26px;height:26px;`
+                  + `border-radius:50%;object-fit:cover;display:block;`
+                  + `border:1.5px solid ${T.brass};box-shadow:0 1px 4px rgba(0,0,0,.5)">`,
+            }),
+          })
+        : L.circleMarker([c.lat, c.lon], {
+            radius: 4, color: '#ffffff', weight: 1, opacity: 0.7,
+            fillColor: T.brass, fillOpacity: 0.55,
+          });
+      marker.bindTooltip(label, { direction: 'top' }).addTo(group);
     }
 
     for (const s of spots) {
