@@ -323,14 +323,25 @@ export default function TripPlanningPanel() {
     if (zonesLayerRef.current) { map.removeLayer(zonesLayerRef.current); zonesLayerRef.current = null; }
     if (!showZones || !zoneRow?.cells?.length) return;
     const stepM = (zoneRow.step_deg || 0.06) * 111000;
-    const zoneColor = (s) =>
-      s >= 75 ? '#ff5a3d' : s >= 55 ? '#ffd23d' : s >= 40 ? '#8ee35a' : '#2f9e8f';
+    // RELATIVE banding, like Sirius: the question is "where is best THIS
+    // week", not "how does this week compare to a perfect one". Absolute
+    // 0-100 bands rendered a 43-point October pass entirely in the
+    // faintest colour — technically true, practically invisible.
+    const cells = zoneRow.cells; // already sorted best-first by the server
+    const n = cells.length;
+    const bandOf = (idx) =>
+      idx < n * 0.12 ? { c: '#ff5a3d', o: 0.50 }   // prime — top 12%
+      : idx < n * 0.34 ? { c: '#ffd23d', o: 0.38 } // strong
+      : idx < n * 0.67 ? { c: '#8ee35a', o: 0.26 } // good
+      : { c: '#2f9e8f', o: 0.16 };                 // fair
     const group = L.layerGroup();
-    for (const [lat, lon, score] of zoneRow.cells) {
+    // Add faintest first so the prime cells always sit on top.
+    for (let idx = n - 1; idx >= 0; idx--) {
+      const [lat, lon] = cells[idx];
+      const b = bandOf(idx);
       L.circle([lat, lon], {
         pane: 'zonespane', radius: stepM * 0.72, stroke: false,
-        fillColor: zoneColor(score),
-        fillOpacity: 0.10 + 0.30 * Math.min(1, score / 100),
+        fillColor: b.c, fillOpacity: b.o,
       }).addTo(group);
     }
     group.addTo(map);
