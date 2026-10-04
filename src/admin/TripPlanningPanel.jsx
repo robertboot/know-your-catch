@@ -117,7 +117,7 @@ export default function TripPlanningPanel() {
   // Species map — one zone row per pelagic species, each its own colour.
   const [zoneRows, setZoneRows] = useState([]);   // hotspot_zones rows, keyed by species
   const [speciesOn, setSpeciesOn] = useState(() => new Set(['mahi', 'yellowfin_tuna', 'wahoo', 'blackfin_tuna', 'sailfish']));
-  const [showCurrents, setShowCurrents] = useState(true);
+  const [showCurrents, setShowCurrents] = useState(false); // off by default — opt in
   const zonesLayerRef = useRef(null);
   const currentsLayerRef = useRef(null);
   const [pbIds, setPbIds] = useState(() => new Set());
