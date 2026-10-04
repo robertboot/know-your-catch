@@ -19,6 +19,7 @@ import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase-client.js';
 import { getLastSession } from '../auth.js';
 import { TRIP_MODES } from '../trip-modes.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast-extras.js';
+import { SNAPSHOT_BOUNDS, snapshotUrl } from '../ocean-snapshots.js';
 import { SPECIES } from '../data.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
@@ -54,6 +55,12 @@ export default function TripPlanningPanel() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  // You cannot judge an edge without seeing the water it is in. Sea surface
+  // temperature is on by default because that is the layer the breaks are
+  // measured from — a spot floating on an empty map is an assertion, not
+  // evidence.
+  const [overlay, setOverlay] = useState('sst');
+  const [overlayErr, setOverlayErr] = useState('');
   // A planner without a date is just a map. Default to today because that
   // is the trip you might still make, but the useful case is Thursday on a
   // Sunday evening — which is why the strip runs out to the end of the
@@ -65,6 +72,7 @@ export default function TripPlanningPanel() {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
+  const overlayRef = useRef(null);
 
   const region = useMemo(
     () => regions.find(r => r.id === regionId) || null,
@@ -213,6 +221,33 @@ export default function TripPlanningPanel() {
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 200);
   }, []);
+
+  // The satellite picture underneath, straight off the snapshot the
+  // refresh-ocean-maps function renders every six hours. Same image the app
+  // shows, same bounds, so what you see here is what a user would see.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
+    setOverlayErr('');
+    if (overlay === 'none') return;
+    const url = snapshotUrl(overlay);
+    if (!url) { setOverlayErr('Supabase is not configured in this build.'); return; }
+    const layer = L.imageOverlay(url, SNAPSHOT_BOUNDS, {
+      opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA',
+    });
+    // A missing snapshot removes itself rather than leaving a broken image
+    // stretched across the Gulf.
+    layer.on('error', () => {
+      map.removeLayer(layer);
+      // Say so. A silently missing overlay looks exactly like water with
+      // nothing in it, which is the wrong conclusion to let someone draw.
+      setOverlayErr(`No ${overlay === 'sst' ? 'temperature' : 'chlorophyll'} snapshot yet — `
+        + 'the refresh-ocean-maps job writes it every six hours.');
+    });
+    layer.addTo(map);
+    overlayRef.current = layer;
+  }, [overlay]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -427,7 +462,22 @@ export default function TripPlanningPanel() {
         </Card>
       ) : (
         <>
-          <Card>
+            <Card style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+              <SectionLabel>Water</SectionLabel>
+              {[['sst', 'Temperature'], ['chl', 'Chlorophyll'], ['none', 'Off']].map(([k, lab]) => (
+                <button key={k} onClick={() => setOverlay(k)}
+                  style={{
+                    padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
+                    fontWeight: 800, color: T.ink,
+                    background: overlay === k ? T.parchmentDeep : 'transparent',
+                    border: `1px solid ${overlay === k ? T.brass : T.cardEdge}`,
+                  }}>{lab}</button>
+              ))}
+            </div>
+            {overlayErr && (
+              <div style={{ fontSize: 12.5, color: T.inkMute, marginBottom: 8 }}>{overlayErr}</div>
+            )}
             <div ref={mapElRef}
                  style={{ height: 460, width: '100%', borderRadius: 10, overflow: 'hidden',
                           background: T.parchmentDeep }} />

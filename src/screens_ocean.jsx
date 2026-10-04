@@ -21,6 +21,7 @@ import { SUPABASE_URL, client } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
 import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from './basemap.js';
+import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
 const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
@@ -31,12 +32,6 @@ const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
    render. Only the "Latest" view is snapshotted — the −8d/−16d/−24d
    chips are an explicit opt-in to historical data and still go
    straight to ERDDAP, slow path and all. */
-const SNAPSHOT_BASE = () =>
-  SUPABASE_URL ? `${SUPABASE_URL}/storage/v1/object/public/ocean-maps` : null;
-const snapshotUrl = (layerKey) => {
-  const base = SNAPSHOT_BASE();
-  return base ? `${base}/${layerKey}-latest.png` : null;
-};
 /* Basemap tiles, cache-first.
    Leaflet's default layer goes straight to the network and shows nothing
    when that fails — which offshore means a grey void with a chlorophyll
@@ -61,7 +56,10 @@ const cachedTileLayer = (url, opts) => new CachedTileLayer(url, opts);
 
 const GULF_CENTER = [26.0, -88.0];
 const GULF_ZOOM = 5;
-const REGION_BOUNDS = [[22.0, -98.5], [31.5, -77.5]]; // [SW, NE] lat,lon
+// Bounds and snapshot URLs come from src/ocean-snapshots.js — drawing an
+// overlay with bounds other than the ones it was rendered over gives a
+// map that looks reasonable and is a hundred miles wrong.
+const REGION_BOUNDS = SNAPSHOT_BOUNDS;
 
 /* SST colour range, in °C, by month.
 
