@@ -61,6 +61,23 @@ const compass = (deg) => (deg == null ? '' : COMPASS[Math.round(deg / 22.5) % 16
 /* Score colour. Deliberately the same ramp idea as Fishability: a score
    and its colour must never disagree, or the map says one thing and the
    card says another. */
+/* The pelagic list comes from TRIP_MODES — one copy; the zone rows the
+   server writes are keyed by these same ids. Colours one per species,
+   chosen to stay tellable-apart over blue water. */
+const PELAGIC_SPECIES = TRIP_MODES.find(m => m.key === 'troll_pelagic').species;
+const SPECIES_ZONE_COLORS = {
+  mahi:          '#2BE07F',
+  yellowfin_tuna:'#ffd23d',
+  blackfin_tuna: '#c08cff',
+  bigeye_tuna:   '#8ab4ff',
+  bluefin_tuna:  '#5ac8f5',
+  wahoo:         '#ff5a3d',
+  blue_marlin:   '#4f7bff',
+  white_marlin:  '#bfe3ff',
+  sailfish:      '#ff9a3d',
+  little_tunny:  '#2f9e8f',
+};
+
 function scoreColor(s) {
   if (s == null) return '#7d8ca0';
   if (s >= 85) return '#63e08a';
@@ -70,7 +87,10 @@ function scoreColor(s) {
 }
 
 export default function TripPlanningPanel() {
-  const [mode, setMode] = useState('troll_pelagic');
+  // Pelagic trolling is THE mode now — the HOW selector is gone. Like the
+  // Sirius app, the map answers one question: where is each trolled
+  // species most likely to be.
+  const mode = 'troll_pelagic';
   const [regions, setRegions] = useState([]);
   const [regionId, setRegionId] = useState('');
   const [spots, setSpots] = useState([]);
@@ -91,9 +111,9 @@ export default function TripPlanningPanel() {
   // answer a different one.
   const [catchView, setCatchView] = useState('mine');
   const [catches, setCatches] = useState([]);
-  // Predictive zones — the Sirius-style blobs for the selected mode.
-  const [showZones, setShowZones] = useState(true);
-  const [zoneRow, setZoneRow] = useState(null); // hotspot_zones row or null
+  // Species map — one zone row per pelagic species, each its own colour.
+  const [zoneRows, setZoneRows] = useState([]);   // hotspot_zones rows, keyed by species
+  const [speciesOn, setSpeciesOn] = useState(() => new Set(['mahi', 'yellowfin_tuna', 'wahoo', 'blackfin_tuna', 'sailfish']));
   const zonesLayerRef = useRef(null);
   const [pbIds, setPbIds] = useState(() => new Set());
   const [anglers, setAnglers] = useState(() => new Map());
@@ -294,24 +314,27 @@ export default function TripPlanningPanel() {
     overlayRef.current = added;
   }, [opacity]);
 
-  // Predictive zones for the selected region+mode — one small row, written
-  // nightly by find-hotspots from habitat priors × edge strength.
+  // Species zones for the region — one small row per pelagic species,
+  // written nightly by find-hotspots from habitat priors (temperature
+  // band, season, depth) × edge strength.
   useEffect(() => {
     let alive = true;
     (async () => {
-      setZoneRow(null);
+      setZoneRows([]);
       if (!regionId) return;
       const c = client();
       if (!c) return;
       const { data } = await c.from('hotspot_zones')
-        .select('*').eq('region_id', regionId).eq('mode_key', mode).maybeSingle();
-      if (alive) setZoneRow(data || null);
+        .select('*').eq('region_id', regionId).in('mode_key', PELAGIC_SPECIES);
+      if (alive) setZoneRows(data || []);
     })();
     return () => { alive = false; };
-  }, [regionId, mode]);
+  }, [regionId]);
 
-  // Draw the blobs on their own pane UNDER the catch/spot markers —
-  // an area wash, not pins; pins must stay readable on top of it.
+  // Draw each toggled-on species in its own colour, on a pane UNDER the
+  // catch/spot markers. Opacity ranks WITHIN the species (relative, like
+  // Sirius): the densest mahi water this week is full-strength even in a
+  // mediocre week.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -321,32 +344,26 @@ export default function TripPlanningPanel() {
       map.getPane('zonespane').style.pointerEvents = 'none';
     }
     if (zonesLayerRef.current) { map.removeLayer(zonesLayerRef.current); zonesLayerRef.current = null; }
-    if (!showZones || !zoneRow?.cells?.length) return;
-    const stepM = (zoneRow.step_deg || 0.06) * 111000;
-    // RELATIVE banding, like Sirius: the question is "where is best THIS
-    // week", not "how does this week compare to a perfect one". Absolute
-    // 0-100 bands rendered a 43-point October pass entirely in the
-    // faintest colour — technically true, practically invisible.
-    const cells = zoneRow.cells; // already sorted best-first by the server
-    const n = cells.length;
-    const bandOf = (idx) =>
-      idx < n * 0.12 ? { c: '#ff5a3d', o: 0.50 }   // prime — top 12%
-      : idx < n * 0.34 ? { c: '#ffd23d', o: 0.38 } // strong
-      : idx < n * 0.67 ? { c: '#8ee35a', o: 0.26 } // good
-      : { c: '#2f9e8f', o: 0.16 };                 // fair
+    const rows = zoneRows.filter(z => speciesOn.has(z.mode_key) && z.cells?.length);
+    if (!rows.length) return;
     const group = L.layerGroup();
-    // Add faintest first so the prime cells always sit on top.
-    for (let idx = n - 1; idx >= 0; idx--) {
-      const [lat, lon] = cells[idx];
-      const b = bandOf(idx);
-      L.circle([lat, lon], {
-        pane: 'zonespane', radius: stepM * 0.72, stroke: false,
-        fillColor: b.c, fillOpacity: b.o,
-      }).addTo(group);
+    for (const z of rows) {
+      const color = SPECIES_ZONE_COLORS[z.mode_key] || T.brass;
+      const stepM = (z.step_deg || 0.06) * 111000;
+      const n = z.cells.length; // best-first from the server
+      // Faintest first so each species' prime water sits on top.
+      for (let idx = n - 1; idx >= 0; idx--) {
+        const [lat, lon] = z.cells[idx];
+        const o = idx < n * 0.15 ? 0.50 : idx < n * 0.40 ? 0.32 : 0.16;
+        L.circle([lat, lon], {
+          pane: 'zonespane', radius: stepM * 0.72, stroke: false,
+          fillColor: color, fillOpacity: o,
+        }).addTo(group);
+      }
     }
     group.addTo(map);
     zonesLayerRef.current = group;
-  }, [showZones, zoneRow]);
+  }, [zoneRows, speciesOn]);
 
   // Who logged what. Several of these 71 catches are testers entering mock
   // data, and a spot built from invented fish is worse than no spot at all.
@@ -548,27 +565,6 @@ export default function TripPlanningPanel() {
         </GhostButton>
       </div>
 
-      <Card>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <SectionLabel>How</SectionLabel>
-          <select value={mode} onChange={e => setMode(e.target.value)}
-            style={{ padding: '7px 10px', borderRadius: 8, background: T.parchmentDeep,
-                     color: T.ink, border: `1px solid ${T.cardEdge}`, fontSize: 13.5, fontWeight: 800,
-                     flex: '1 1 220px', maxWidth: 340 }}>
-            {TRIP_MODES.map(m => (
-              <option key={m.key} value={m.key}>
-                {m.label}{m.ready ? '' : ' — no data yet'}
-              </option>
-            ))}
-          </select>
-        </div>
-        {/* The fish, not the jargon: "pelagic" is a word for people who
-            already know the answer. */}
-        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 7, lineHeight: 1.5 }}>
-          {speciesNames(activeMode?.species)}
-        </div>
-      </Card>
-
       <Card style={{ minWidth: 0, overflow: 'hidden' }}>
         <SectionLabel>When are you going?</SectionLabel>
         {/* The ribbon scrolls. On iPad the tenth day was half off the edge
@@ -684,28 +680,36 @@ export default function TripPlanningPanel() {
                   </span>
                 </div>
               ))}
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Predicted zones</span>
-                <button onClick={() => setShowZones(v => !v)}
-                  style={{
-                    padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
-                    fontWeight: 800, color: T.ink,
-                    background: showZones ? T.parchmentDeep : 'transparent',
-                    border: `1px solid ${showZones ? T.brass : T.cardEdge}`,
-                  }}>{showZones ? 'On' : 'Off'}</button>
-                {showZones && (
-                  zoneRow?.cells?.length
-                    ? <span style={{ fontSize: 11.5, color: T.inkMute }}>
-                        Habitat fit for this trip mode, from last night's satellite pass —
-                        <span style={{ color: '#2f9e8f', fontWeight: 800 }}> fair</span> ·
-                        <span style={{ color: '#8ee35a', fontWeight: 800 }}> good</span> ·
-                        <span style={{ color: '#ffd23d', fontWeight: 800 }}> strong</span> ·
-                        <span style={{ color: '#ff5a3d', fontWeight: 800 }}> prime</span>
-                      </span>
-                    : <span style={{ fontSize: 11.5, color: T.inkMute }}>
-                        No zones computed yet for this mode — run Recompute, or wait for tonight's pass.
-                      </span>
-                )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Species map</span>
+                {PELAGIC_SPECIES.map((sp) => {
+                  const on = speciesOn.has(sp);
+                  const hasData = zoneRows.some(z => z.mode_key === sp && z.cells?.length);
+                  return (
+                    <button key={sp}
+                      onClick={() => setSpeciesOn(prev => {
+                        const next = new Set(prev);
+                        if (next.has(sp)) next.delete(sp); else next.add(sp);
+                        return next;
+                      })}
+                      title={hasData ? '' : 'No habitable water in this region this week'}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
+                        fontWeight: 800, color: T.ink, opacity: hasData || !zoneRows.length ? 1 : 0.45,
+                        background: on ? T.parchmentDeep : 'transparent',
+                        border: `1px solid ${on ? (SPECIES_ZONE_COLORS[sp] || T.brass) : T.cardEdge}`,
+                      }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 5, background: SPECIES_ZONE_COLORS[sp] || T.brass, display: 'inline-block' }} />
+                      {SPECIES_NAME.get(sp) || sp}
+                    </button>
+                  );
+                })}
+                <span style={{ fontSize: 11.5, color: T.inkMute, flexBasis: '100%' }}>
+                  Where each species' water is this week — temperature band, season, depth and the
+                  edges, from last night's satellite pass. Deeper colour = that species' best water.
+                  {!zoneRows.length && ' No zones for this region yet — Recompute, or wait for tonight.'}
+                </span>
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Catches</span>

@@ -54,12 +54,19 @@ const MAX_SPOTS     = 12;     // a captain reads three. Twelve is generous.
 // a "hotspot" is one angler's spot with a satellite picture behind it.
 const MIN_DISTINCT_ANGLERS = 3;
 
-// Predictive zones (the SiriusXM-style blobs). Coarser than the edge
-// grid — a blob is an area statement, ~6 km cells read fine at region
-// zoom — and capped so a row stays a few KB for the phone's cache.
+// Predictive zones (the SiriusXM-style blobs), PER SPECIES — "where is
+// the mahi water", not "where is trolling generally good". Coarser than
+// the edge grid — a blob is an area statement, ~6 km cells read fine at
+// region zoom — and capped so a row stays a few KB for the phone's cache.
+// Scored from temperature band + season + depth band (ETOPO bathymetry)
+// + edge strength (temperature OR colour). Currents and surface weather
+// are deliberately not in here yet: weather decides whether you GO
+// (Fishability's job), not where the fish are.
 const ZONE_STRIDE    = 3;    // every 3rd SST cell
-const ZONE_MIN_SCORE = 25;   // habitat fit below this isn't worth painting
-const ZONE_MAX_CELLS = 450;
+const ZONE_MIN_SCORE = 20;   // habitat fit below this isn't worth painting
+const ZONE_MAX_CELLS = 300;  // per species
+const DEPTH_DATASET  = 'etopo180';   // static bathymetry, meters (negative = depth)
+const PELAGIC_SPECIES = TRIP_MODES.find((m) => m.key === 'troll_pelagic')!.species;
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b, null, 2), {
@@ -214,13 +221,18 @@ Deno.serve(async (req: Request) => {
     try {
       const box = (stride: number) =>
         `[(last)][(${reg.south}):${stride}:(${reg.north})][(${reg.west}):${stride}:(${reg.east})]`;
-      const [sstDoc, chlDoc] = await Promise.all([
+      // Bathymetry has no time dimension; stride 4 (~4 km) is plenty for
+      // "is this 300 ft or 3000 ft" — the only question the priors ask.
+      const depthBox = `[(${reg.south}):4:(${reg.north})][(${reg.west}):4:(${reg.east})]`;
+      const [sstDoc, chlDoc, depthDoc] = await Promise.all([
         fetchJson(`${ERDDAP}/${SST_DATASET}.json?analysed_sst${box(SST_STRIDE)}`),
         fetchJson(`${ERDDAP}/${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE)}`).catch(() => null),
+        fetchJson(`${ERDDAP}/${DEPTH_DATASET}.json?altitude${depthBox}`).catch(() => null),
       ]);
 
       const sst = toGrid(sstDoc, 'analysed_sst');
       const chl = chlDoc ? toGrid(chlDoc, 'chlorophyll') : null;
+      const bathy = depthDoc ? toGrid(depthDoc, 'altitude') : null;
 
       // SST arrives in °C. Work in °F throughout: it is what the card says,
       // and converting once here means no unit lives in two places.
@@ -327,36 +339,42 @@ Deno.serve(async (req: Request) => {
         .sort((a, b) => b.score - a.score)
         .slice(0, MAX_SPOTS);
 
-      // ---- predictive zones, one per trip mode ------------------------
-      // Every ~6 km cell scored by how well the water suits the mode's
-      // species RIGHT NOW: habitat fit (temperature band + season priors
-      // from species-habitat.js) amplified by edge strength. An area
-      // statement, not a pin — this is what paints the Sirius-style blobs.
+      // ---- predictive zones, one per PELAGIC SPECIES ------------------
+      // Every ~6 km cell scored for each trolled species: temperature
+      // band + season + depth band + edge strength, all from the priors
+      // in species-habitat.js. The Sirius-style species map — each
+      // species gets its own row of cells, each drawn in its own colour.
       const month = new Date(observed).getUTCMonth() + 1;
-      const zoneRows = TRIP_MODES.map((mode) => {
+      const zoneRows = PELAGIC_SPECIES.map((sp) => {
         const zcells: [number, number, number][] = [];
         for (let i = 1; i < sst.lats.length - 1; i += ZONE_STRIDE) {
           for (let j = 1; j < sst.lons.length - 1; j += ZONE_STRIDE) {
             const v = sst.v[i][j];
             if (v == null) continue;
+            const lat = sst.lats[i], lon = sst.lons[j];
             const sstF = cToF(v);
-            const edgeStrength = clamp01((sstGrad[i][j] ?? 0) / SST_GRAD_GOOD);
-            let sum = 0, n = 0;
-            for (const sp of mode.species) {
-              const s = habitatScore(sp, { sstF, edgeStrength, month });
-              if (s != null) { sum += s; n++; }
-            }
-            if (!n) continue;
-            const score = Math.round(100 * (sum / n));
+            // Edge strength: temperature OR colour break, whichever is
+            // stronger — pelagics work both kinds of line.
+            const sg = clamp01((sstGrad[i][j] ?? 0) / SST_GRAD_GOOD);
+            const cgRaw = chl && chlGrad ? sampleAt(chl, chlGrad, lat, lon) : null;
+            const cg = cgRaw == null ? 0 : clamp01(cgRaw / CHL_GRAD_GOOD);
+            const edgeStrength = Math.max(sg, cg);
+            // ETOPO altitude: negative metres = depth. Land (>= 0) scores 0
+            // through the depth gate inside habitatScore.
+            const alt = bathy ? sampleAt(bathy, bathy.v, lat, lon) : null;
+            const depthFt = alt == null ? null : (alt < 0 ? -alt * 3.28084 : 1);
+            const s = habitatScore(sp, { sstF, depthFt, edgeStrength, month });
+            if (s == null) continue;
+            const score = Math.round(100 * s);
             if (score >= ZONE_MIN_SCORE) {
-              zcells.push([Number(sst.lats[i].toFixed(3)), Number(sst.lons[j].toFixed(3)), score]);
+              zcells.push([Number(lat.toFixed(3)), Number(lon.toFixed(3)), score]);
             }
           }
         }
         zcells.sort((a, b) => b[2] - a[2]);
         return {
           region_id: reg.id,
-          mode_key: mode.key,
+          mode_key: sp,                 // one row per species now
           observed_at: observed,
           step_deg: Number(((sst.lats[1] - sst.lats[0]) * ZONE_STRIDE).toFixed(4)),
           cells: zcells.slice(0, ZONE_MAX_CELLS),
@@ -375,8 +393,10 @@ Deno.serve(async (req: Request) => {
       if (upErr) throw upErr;
 
       // Zones replace wholesale — perishable, no history worth keeping.
-      const { error: zErr } = await db.from('hotspot_zones')
-        .upsert(zoneRows, { onConflict: 'region_id,mode_key' });
+      // Delete-then-insert also clears rows keyed by retired mode/species
+      // ids (the first cut keyed rows by trip mode, not species).
+      await db.from('hotspot_zones').delete().eq('region_id', reg.id);
+      const { error: zErr } = await db.from('hotspot_zones').insert(zoneRows);
       if (zErr) throw zErr;
 
       // Keep a fortnight. These are perishable — a week-old break has
