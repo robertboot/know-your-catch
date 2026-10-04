@@ -36,3 +36,7 @@ verify_jwt = false
 # Cron-invoked with x-cron-secret — no user JWT.
 [functions.daily-health-brief]
 verify_jwt = false
+
+# Cron-invoked with x-cron-secret — no user JWT.
+[functions.find-hotspots]
+verify_jwt = false
