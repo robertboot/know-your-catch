@@ -17,43 +17,17 @@ import { T } from '../theme.js';
 import { Card, GhostButton, SectionLabel } from '../components.jsx';
 import { client, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase-client.js';
 import { getLastSession } from '../auth.js';
-
-/* The four ways people fish out here, and what each one needs to know.
-   Kings and Spanish are TROLLED but are not pelagic: they follow bait and
-   nearshore temperature, not the blue-water edge. Filing them with tuna
-   would send someone 40 miles for a fish that is off the beach. */
-const MODES = [
-  {
-    key: 'troll_pelagic',
-    label: 'Trolling — pelagic',
-    blurb: 'Tuna, mahi, wahoo, billfish. Blue water past the shelf.',
-    needs: 'Temperature and colour breaks',
-    ready: true,
-  },
-  {
-    key: 'bottom',
-    label: 'Bottom — red fishing',
-    blurb: 'Snapper and grouper on structure, roughly 100–300 ft.',
-    needs: 'Platforms, pipelines and hard bottom',
-    ready: false,
-  },
-  {
-    key: 'deep_drop',
-    label: 'Deep drop',
-    blurb: 'Swordfish, tilefish, snowy grouper. 600 ft and down.',
-    needs: 'High-resolution bathymetry and bottom relief',
-    ready: false,
-  },
-  {
-    key: 'troll_coastal',
-    label: 'Trolling — coastal',
-    blurb: 'King and Spanish mackerel. Trolled, but not offshore fish.',
-    needs: 'Nearshore temperature and bait',
-    ready: false,
-  },
-];
+import { TRIP_MODES } from '../trip-modes.js';
+import { SPECIES } from '../data.js';
 
 const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
+
+/* Mode cards name the fish, because "pelagic" is a word for people who
+   already know the answer. Resolved through SPECIES rather than written
+   out again so a rename lands here too. */
+const SPECIES_NAME = new Map(SPECIES.map(s => [s.id, s.commonName]));
+const speciesNames = (ids) =>
+  (ids || []).map(id => SPECIES_NAME.get(id)).filter(Boolean).join(' · ');
 const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const compass = (deg) => (deg == null ? '' : COMPASS[Math.round(deg / 22.5) % 16]);
 
@@ -210,14 +184,14 @@ export default function TripPlanningPanel() {
     }
   };
 
-  const activeMode = MODES.find(m => m.key === mode);
+  const activeMode = TRIP_MODES.find(m => m.key === mode);
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Card>
         <SectionLabel>How are you fishing?</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8, marginTop: 8 }}>
-          {MODES.map(m => (
+          {TRIP_MODES.map(m => (
             <button key={m.key} onClick={() => setMode(m.key)}
               style={{
                 textAlign: 'left', padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
@@ -233,6 +207,9 @@ export default function TripPlanningPanel() {
                 )}
               </div>
               <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3, lineHeight: 1.35 }}>{m.blurb}</div>
+              <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 6, lineHeight: 1.5, opacity: 0.9 }}>
+                {speciesNames(m.species)}
+              </div>
             </button>
           ))}
         </div>
