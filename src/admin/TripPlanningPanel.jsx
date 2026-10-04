@@ -90,6 +90,7 @@ export default function TripPlanningPanel() {
   const [catchView, setCatchView] = useState('mine');
   const [catches, setCatches] = useState([]);
   const [pbIds, setPbIds] = useState(() => new Set());
+  const [anglers, setAnglers] = useState(() => new Map());
   const [sstRange, setSstRange] = useState(null);
   // A planner without a date is just a map. Default to today because that
   // is the trip you might still make, but the useful case is Thursday on a
@@ -287,6 +288,18 @@ export default function TripPlanningPanel() {
     overlayRef.current = added;
   }, [opacity]);
 
+  // Who logged what. Several of these 71 catches are testers entering mock
+  // data, and a spot built from invented fish is worse than no spot at all.
+  useEffect(() => {
+    let alive = true;
+    const c = client();
+    if (!c) return;
+    c.rpc('admin_angler_emails').then(({ data }) => {
+      if (alive && data) setAnglers(new Map(data.map(r => [r.user_id, r.email])));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   // The scale the image was actually drawn with, published beside it. A
   // legend that recomputes the range is a legend that can disagree with
   // its own colours.
@@ -348,16 +361,20 @@ export default function TripPlanningPanel() {
 
     // Catches first so a spot marker is never hidden behind one.
     const myId = getLastSession()?.user?.id || null;
+    // The live table uses user_id; older rows carry angler_id. Reading only
+    // one would quietly show an empty "Mine".
+    const ownerOf = (c) => c.user_id || c.angler_id || null;
     const shown = catchView === 'mine' && myId
-      ? catches.filter(c => c.user_id === myId)
+      ? catches.filter(c => ownerOf(c) === myId)
       : catches;
     for (const c of shown) {
-      const mine = !myId || c.user_id === myId;
+      const owner = ownerOf(c);
+      const mine = !myId || owner === myId;
       const name = SPECIES_NAME.get(c.species_id) || c.species_id || 'Catch';
       const when = c.caught_at || c.date_iso;
       const label = `${name}${when ? ` · ${String(when).slice(0, 10)}` : ''}`
         + (pbIds.has(c.id) ? ' · personal best' : '')
-        + (mine ? '' : ' · another angler');
+        + (mine ? '' : ` · ${anglers.get(owner) || 'another angler'}`);
       // The species photo, same source the app uses, so a catch on this map
       // is recognisable at a glance instead of being one more dot among the
       // spots. Falls back to a plain mark where a species has no photo —
@@ -414,7 +431,7 @@ export default function TripPlanningPanel() {
     } else if (region) {
       map.fitBounds([[region.south, region.west], [region.north, region.east]], { padding: [20, 20] });
     }
-  }, [spots, region, selected, catches, pbIds, catchView]);
+  }, [spots, region, selected, catches, pbIds, catchView, anglers]);
 
   // ---- recompute -----------------------------------------------------
   const recompute = async () => {
