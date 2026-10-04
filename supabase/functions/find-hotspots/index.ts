@@ -48,8 +48,28 @@ const SST_GRAD_MIN  = 0.40;
 const SST_GRAD_GOOD = 1.50;
 const CHL_GRAD_MIN  = 0.12;   // log10(mg/m³) per nautical mile
 const CHL_GRAD_GOOD = 0.60;
-const MIN_SCORE     = 45;     // below this it is not worth a card
-const MAX_SPOTS     = 12;     // a captain reads three. Twelve is generous.
+// Bottom relief, in feet of depth change per nautical mile. The shelf
+// break off Alabama falls away at hundreds of feet per mile; flat mud
+// reads near zero. This is what separates a break that has something
+// under it from one drifting over featureless bottom.
+const SLOPE_MIN     = 40;
+const SLOPE_GOOD    = 300;
+// Geostrophic current speed in knots. Under ~0.2 kt nothing is being
+// concentrated; the Loop Current edge runs well over 1.
+const CUR_MIN       = 0.20;
+const CUR_GOOD      = 1.20;
+
+/* How strict to be. These were 45 / 3 / 12 and produced a map of
+   every wobble in the sea surface — which is the same as no map, because
+   a dozen mediocre spots tell a captain nothing about which one to run to.
+   A spot now has to clear a high bar AND be corroborated by a second
+   signal AND stand alone from its neighbours. */
+const MIN_SCORE     = 65;     // below this it is not worth a card
+const MIN_CELLS     = 5;      // a line, not a few hot pixels
+const MAX_SPOTS     = 8;
+// Two cards four miles apart describing the same wall is one card and a
+// duplicate. Keep the stronger.
+const MIN_SEPARATION_NM = 4;
 // Community catch influence is gated on this — see PRIVACY above. Below it,
 // a "hotspot" is one angler's spot with a satellite picture behind it.
 const MIN_DISTINCT_ANGLERS = 3;
@@ -181,7 +201,12 @@ function sampleAt(g: Grid, vals: (number | null)[][], lat: number, lon: number) 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const cToF = (c: number) => c * 9 / 5 + 32;
 
-type Cell = { i: number; j: number; lat: number; lon: number; sg: number; cg: number | null; score: number };
+type Cell = {
+  i: number; j: number; lat: number; lon: number;
+  sg: number; cg: number | null;
+  slope: number | null; depthFt: number | null; curKt: number | null;
+  score: number;
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -249,6 +274,16 @@ Deno.serve(async (req: Request) => {
       // is dominated by the green inshore water. log10 makes the edge
       // between 0.1 and 0.3 as visible as the one between 1 and 3.
       const chlGrad = chl ? gradient(chl, (x) => Math.log10(Math.max(x, 0.001))) : null;
+      // Bottom slope, in FEET per nautical mile. ETOPO altitude is metres
+      // and negative below sea level, so the sign is flipped first — a
+      // gradient taken on negative numbers is still a gradient, but every
+      // threshold downstream would read backwards.
+      const slopeGrad = bathy ? gradient(bathy, (m) => -m * 3.28084) : null;
+      // Current speed from the altimetry u/v pair. Speed, not direction:
+      // what concentrates bait is the shear between fast and slow water,
+      // and a knot is a knot whichever way it runs.
+      const curU = curDoc ? toGrid(curDoc, 'ugos') : null;
+      const curV = curDoc ? toGrid(curDoc, 'vgos') : null;
 
       // ---- score every cell -----------------------------------------
       const cells: Cell[] = [];
@@ -258,16 +293,44 @@ Deno.serve(async (req: Request) => {
           if (sg == null || sg < SST_GRAD_MIN) continue;
           const lat = sst.lats[i], lon = sst.lons[j];
           const cg = chl && chlGrad ? sampleAt(chl, chlGrad, lat, lon) : null;
+          const slope = bathy && slopeGrad ? sampleAt(bathy, slopeGrad, lat, lon) : null;
+          const altM = bathy ? sampleAt(bathy, bathy.v, lat, lon) : null;
+          const depthFt = altM == null || altM >= 0 ? null : -altM * 3.28084;
+          const u = curU ? sampleAt(curU, curU.v, lat, lon) : null;
+          const v = curV ? sampleAt(curV, curV.v, lat, lon) : null;
+          const curKt = (u == null || v == null) ? null : Math.hypot(u, v) * MS_TO_KT;
 
           const sPart = clamp01((sg - SST_GRAD_MIN) / (SST_GRAD_GOOD - SST_GRAD_MIN));
           const cPart = cg == null ? 0
             : clamp01((cg - CHL_GRAD_MIN) / (CHL_GRAD_GOOD - CHL_GRAD_MIN));
+          const bPart = slope == null ? 0
+            : clamp01((slope - SLOPE_MIN) / (SLOPE_GOOD - SLOPE_MIN));
+          const uPart = curKt == null ? 0
+            : clamp01((curKt - CUR_MIN) / (CUR_GOOD - CUR_MIN));
+
           // A temperature break alone is worth something. A temperature
           // break ON a colour change is worth far more than the sum — that
           // is the clean-water line, and it is the whole reason to look at
-          // two satellites instead of one.
-          const score = Math.round(100 * clamp01(0.55 * sPart + 0.25 * cPart + 0.45 * sPart * cPart));
-          cells.push({ i, j, lat, lon, sg, cg, score });
+          // two satellites instead of one. Bottom relief and current get
+          // the same treatment: a wall standing on the shelf edge, with
+          // water moving across it, is the thing worth forty miles.
+          const score = Math.round(100 * clamp01(
+            0.40 * sPart + 0.20 * cPart + 0.16 * bPart + 0.08 * uPart
+            + 0.30 * sPart * cPart
+            + 0.16 * sPart * bPart,
+          ));
+
+          // CORROBORATION. A temperature wobble over flat bottom in dead
+          // water is noise dressed as a spot, however steep it looks —
+          // satellites see cloud edges and sensor seams too. Something
+          // else has to agree before it may be drawn.
+          const corroborated =
+            (cg != null && cg >= CHL_GRAD_MIN) ||
+            (slope != null && slope >= SLOPE_MIN * 2) ||
+            (curKt != null && curKt >= CUR_MIN * 2);
+          if (!corroborated) continue;
+
+          cells.push({ i, j, lat, lon, sg, cg, slope, depthFt, curKt, score });
         }
       }
 
@@ -322,11 +385,24 @@ Deno.serve(async (req: Request) => {
         const dropF = peak.sg * Math.max(1, Math.min(lengthNm, 4));
         const chlV = chl ? sampleAt(chl, chl.v, peak.lat, peak.lon) : null;
 
+        // The card has to say WHY, in the order a captain would ask: what
+        // the break is, what it is standing on, and what the water is doing
+        // across it.
+        const depthPhrase = peak.depthFt == null ? ''
+          : peak.depthFt >= 600
+            ? `, over ${Math.round(peak.depthFt / 6 / 100) * 100} fathoms`
+            : `, in ${Math.round(peak.depthFt / 10) * 10} ft`;
+        const slopePhrase = peak.slope != null && peak.slope >= SLOPE_GOOD * 0.5
+          ? ' on the drop-off' : '';
+        const curPhrase = peak.curKt != null && peak.curKt >= CUR_MIN * 2
+          ? `, ${peak.curKt.toFixed(1)} kt of current across it` : '';
+
         const why =
           `${sstF != null ? `${sstF.toFixed(1)}°F ` : ''}temperature break` +
           `${dropF >= 1 ? `, about ${dropF.toFixed(1)}° across it` : ''}` +
           `${lengthNm >= 2 ? `, running ${lengthNm.toFixed(0)} nm ${compass(bearing)}` : ''}` +
           `${peak.cg != null && peak.cg >= CHL_GRAD_MIN ? ', on a colour change' : ''}` +
+          `${depthPhrase}${slopePhrase}${curPhrase}` +
           `. ${dist.toFixed(0)} nm ${compass(brg)} of ${reg.port_name}.`;
 
         return {
@@ -337,15 +413,28 @@ Deno.serve(async (req: Request) => {
           score: peak.score,
           sst_f: sstF, sst_drop_f: dropF, sst_grad_f_nm: peak.sg,
           chl_mg_m3: chlV, chl_grad: peak.cg,
+          depth_ft: peak.depthFt, slope_ft_nm: peak.slope, current_kt: peak.curKt,
           length_nm: lengthNm, bearing_deg: bearing,
           dist_nm: dist, from_port_deg: brg,
           why,
         };
       })
-        // A single hot pixel is noise, not a wall.
-        .filter((s, idx) => s.score >= MIN_SCORE && groups[idx].length >= 3)
+        // A few hot pixels are noise, not a wall.
+        .filter((s, idx) => s.score >= MIN_SCORE && groups[idx].length >= MIN_CELLS)
         .sort((a, b) => b.score - a.score)
-        .slice(0, MAX_SPOTS);
+        .slice(0, MAX_SPOTS * 4);
+
+      // Thin out near-duplicates: two cards four miles apart describing the
+      // same wall is one card and a distraction. The list is already sorted
+      // by score, so the first one kept in any neighbourhood is the
+      // strongest one.
+      const spaced: typeof spots = [];
+      for (const sp of spots) {
+        const tooClose = spaced.some(
+          o => distBearing(o.lat, o.lon, sp.lat, sp.lon).dist < MIN_SEPARATION_NM);
+        if (!tooClose) spaced.push(sp);
+        if (spaced.length >= MAX_SPOTS) break;
+      }
 
       // ---- predictive zones, one per PELAGIC SPECIES ------------------
       // Every ~6 km cell scored for each trolled species: temperature
@@ -391,13 +480,13 @@ Deno.serve(async (req: Request) => {
 
       if (body.dry_run) {
         out.push({ region: reg.id, observed, grid: `${sst.lats.length}x${sst.lons.length}`,
-                   candidates: cells.length, groups: groups.length, spots,
+                   candidates: cells.length, groups: groups.length, spots: spaced,
                    zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
         continue;
       }
 
       const { error: upErr } = await db.from('hotspots')
-        .upsert(spots, { onConflict: 'region_id,observed_at,lat,lon' });
+        .upsert(spaced, { onConflict: 'region_id,observed_at,lat,lon' });
       if (upErr) throw upErr;
 
       // ---- current vectors, one row keyed '_currents' ------------------

@@ -49,7 +49,11 @@ function speciesForSpot(spot, mode, monthIdx) {
   const edgeStrength = Math.min(1, (spot.sst_grad_f_nm || 0) / SST_GRAD_GOOD);
   return ids
     .map(id => ({ id, score: habitatScore(id, {
-      sstF: spot.sst_f, chlMgM3: spot.chl_mg_m3, edgeStrength, month: monthIdx,
+      sstF: spot.sst_f, chlMgM3: spot.chl_mg_m3, depthFt: spot.depth_ft,
+      // Bottom relief reads as structure: a ledge is structure whether or
+      // not anyone has sunk anything on it.
+      structureNear: spot.slope_ft_nm == null ? 0 : Math.min(1, spot.slope_ft_nm / 300),
+      edgeStrength, month: monthIdx,
     }) }))
     .filter(x => x.score != null && x.score > 0.35)
     .sort((a, b) => b.score - a.score)
@@ -908,6 +912,9 @@ export default function TripPlanningPanel() {
                   })()}
                   <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5, opacity: 0.85 }}>
                     {fmt(s.sst_grad_f_nm, 2)} °F/nm
+                    {s.depth_ft != null ? ` · ${fmt(s.depth_ft)} ft` : ''}
+                    {s.slope_ft_nm != null ? ` · ${fmt(s.slope_ft_nm)} ft/nm slope` : ''}
+                    {s.current_kt != null ? ` · ${fmt(s.current_kt, 1)} kt` : ''}
                     {s.chl_grad != null ? ` · colour change ${fmt(s.chl_grad, 2)}` : ' · no colour change'}
                     {s.length_nm != null ? ` · ${fmt(s.length_nm)} nm long` : ''}
                   </div>
