@@ -48,7 +48,9 @@ function speciesForSpot(spot, mode, monthIdx) {
   const ids = TRIP_MODES.find(m => m.key === mode)?.species || [];
   const edgeStrength = Math.min(1, (spot.sst_grad_f_nm || 0) / SST_GRAD_GOOD);
   return ids
-    .map(id => ({ id, score: habitatScore(id, { sstF: spot.sst_f, edgeStrength, month: monthIdx }) }))
+    .map(id => ({ id, score: habitatScore(id, {
+      sstF: spot.sst_f, chlMgM3: spot.chl_mg_m3, edgeStrength, month: monthIdx,
+    }) }))
     .filter(x => x.score != null && x.score > 0.35)
     .sort((a, b) => b.score - a.score)
     .slice(0, 4);
