@@ -29,7 +29,7 @@ export const TRIP_MODES = [
     ready: true,
     species: [
       'yellowfin_tuna', 'blackfin_tuna', 'bigeye_tuna', 'bluefin_tuna',
-      'mahi', 'wahoo', 'blue_marlin', 'white_marlin', 'sailfish', 'little_tunny',
+      'mahi', 'wahoo', 'blue_marlin', 'white_marlin', 'sailfish', 'swordfish',
     ],
   },
   {

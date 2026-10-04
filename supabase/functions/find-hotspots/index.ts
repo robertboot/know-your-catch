@@ -66,6 +66,12 @@ const ZONE_STRIDE    = 3;    // every 3rd SST cell
 const ZONE_MIN_SCORE = 20;   // habitat fit below this isn't worth painting
 const ZONE_MAX_CELLS = 300;  // per species
 const DEPTH_DATASET  = 'etopo180';   // static bathymetry, meters (negative = depth)
+// Geostrophic surface currents from altimetry (sea-surface height) —
+// the loop current and its eddies, which is the current picture that
+// matters offshore. 0.25°, daily, lags a few days; eddies move slowly
+// enough that this is still the right map.
+const CUR_DATASET = 'nesdisSSH1day';
+const MS_TO_KT = 1.94384;
 const PELAGIC_SPECIES = TRIP_MODES.find((m) => m.key === 'troll_pelagic')!.species;
 
 const json = (b: unknown, s = 200) =>
@@ -224,10 +230,12 @@ Deno.serve(async (req: Request) => {
       // Bathymetry has no time dimension; stride 4 (~4 km) is plenty for
       // "is this 300 ft or 3000 ft" — the only question the priors ask.
       const depthBox = `[(${reg.south}):4:(${reg.north})][(${reg.west}):4:(${reg.east})]`;
-      const [sstDoc, chlDoc, depthDoc] = await Promise.all([
+      const curBox = `[(last)][(${reg.south}):1:(${reg.north})][(${reg.west}):1:(${reg.east})]`;
+      const [sstDoc, chlDoc, depthDoc, curDoc] = await Promise.all([
         fetchJson(`${ERDDAP}/${SST_DATASET}.json?analysed_sst${box(SST_STRIDE)}`),
         fetchJson(`${ERDDAP}/${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE)}`).catch(() => null),
         fetchJson(`${ERDDAP}/${DEPTH_DATASET}.json?altitude${depthBox}`).catch(() => null),
+        fetchJson(`${ERDDAP}/${CUR_DATASET}.json?ugos${curBox},vgos${curBox}`).catch(() => null),
       ]);
 
       const sst = toGrid(sstDoc, 'analysed_sst');
@@ -391,6 +399,37 @@ Deno.serve(async (req: Request) => {
       const { error: upErr } = await db.from('hotspots')
         .upsert(spots, { onConflict: 'region_id,observed_at,lat,lon' });
       if (upErr) throw upErr;
+
+      // ---- current vectors, one row keyed '_currents' ------------------
+      // cells here are [lat, lon, speed_kt, dir_deg] — dir is the compass
+      // direction the water flows TOWARD, which is how a captain says it.
+      // Underscore key can never collide with a species id.
+      if (curDoc) {
+        try {
+          const cur = toGrid(curDoc, 'ugos');
+          const curV = toGrid(curDoc, 'vgos');
+          const vec: [number, number, number, number][] = [];
+          for (let i = 0; i < cur.lats.length; i++) {
+            for (let j = 0; j < cur.lons.length; j++) {
+              const u = cur.v[i][j], v = curV.v[i][j];
+              if (u == null || v == null) continue;
+              const kt = Math.hypot(u, v) * MS_TO_KT;
+              if (kt < 0.1) continue; // still water isn't worth an arrow
+              let dir = Math.atan2(u, v) * 180 / Math.PI;
+              if (dir < 0) dir += 360;
+              vec.push([Number(cur.lats[i].toFixed(3)), Number(cur.lons[j].toFixed(3)),
+                        Number(kt.toFixed(2)), Math.round(dir)]);
+            }
+          }
+          zoneRows.push({
+            region_id: reg.id,
+            mode_key: '_currents',
+            observed_at: cur.time || observed,
+            step_deg: 0.25,
+            cells: vec as unknown as [number, number, number][],
+          });
+        } catch { /* currents are optional — zones still publish without them */ }
+      }
 
       // Zones replace wholesale — perishable, no history worth keeping.
       // Delete-then-insert also clears rows keyed by retired mode/species

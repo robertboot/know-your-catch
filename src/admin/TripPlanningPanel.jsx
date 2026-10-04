@@ -75,7 +75,7 @@ const SPECIES_ZONE_COLORS = {
   blue_marlin:   '#4f7bff',
   white_marlin:  '#bfe3ff',
   sailfish:      '#ff9a3d',
-  little_tunny:  '#2f9e8f',
+  swordfish:     '#ff7ab8',
 };
 
 function scoreColor(s) {
@@ -114,7 +114,9 @@ export default function TripPlanningPanel() {
   // Species map — one zone row per pelagic species, each its own colour.
   const [zoneRows, setZoneRows] = useState([]);   // hotspot_zones rows, keyed by species
   const [speciesOn, setSpeciesOn] = useState(() => new Set(['mahi', 'yellowfin_tuna', 'wahoo', 'blackfin_tuna', 'sailfish']));
+  const [showCurrents, setShowCurrents] = useState(true);
   const zonesLayerRef = useRef(null);
+  const currentsLayerRef = useRef(null);
   const [pbIds, setPbIds] = useState(() => new Set());
   const [anglers, setAnglers] = useState(() => new Map());
   const [sstRange, setSstRange] = useState(null);
@@ -325,7 +327,8 @@ export default function TripPlanningPanel() {
       const c = client();
       if (!c) return;
       const { data } = await c.from('hotspot_zones')
-        .select('*').eq('region_id', regionId).in('mode_key', PELAGIC_SPECIES);
+        .select('*').eq('region_id', regionId)
+        .in('mode_key', [...PELAGIC_SPECIES, '_currents']);
       if (alive) setZoneRows(data || []);
     })();
     return () => { alive = false; };
@@ -364,6 +367,40 @@ export default function TripPlanningPanel() {
     group.addTo(map);
     zonesLayerRef.current = group;
   }, [zoneRows, speciesOn]);
+
+  // Current arrows — geostrophic (loop current + eddies, from sea-surface
+  // height). Drawn above the zones, below the markers. dir is where the
+  // water flows TOWARD; the glyph '➤' points east at 0 rotation, so
+  // rotate by (dir - 90).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!map.getPane('currentspane')) {
+      map.createPane('currentspane');
+      map.getPane('currentspane').style.zIndex = 406;
+      map.getPane('currentspane').style.pointerEvents = 'none';
+    }
+    if (currentsLayerRef.current) { map.removeLayer(currentsLayerRef.current); currentsLayerRef.current = null; }
+    const row = zoneRows.find(z => z.mode_key === '_currents');
+    if (!showCurrents || !row?.cells?.length) return;
+    const group = L.layerGroup();
+    for (const [lat, lon, kt, dir] of row.cells) {
+      const size = 10 + Math.min(14, kt * 8);          // faster = bigger arrow
+      const op = Math.min(0.9, 0.35 + kt * 0.35);
+      L.marker([lat, lon], {
+        pane: 'currentspane', interactive: false,
+        icon: L.divIcon({
+          className: '',
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+          html: `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;`
+              + `transform:rotate(${dir - 90}deg);color:#cfeaff;opacity:${op};`
+              + `font-size:${size}px;line-height:1;text-shadow:0 0 3px rgba(0,0,0,.8)">➤</div>`,
+        }),
+      }).addTo(group);
+    }
+    group.addTo(map);
+    currentsLayerRef.current = group;
+  }, [zoneRows, showCurrents]);
 
   // Who logged what. Several of these 71 catches are testers entering mock
   // data, and a spot built from invented fish is worse than no spot at all.
@@ -705,9 +742,20 @@ export default function TripPlanningPanel() {
                     </button>
                   );
                 })}
+                <button onClick={() => setShowCurrents(v => !v)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
+                    fontWeight: 800, color: T.ink,
+                    background: showCurrents ? T.parchmentDeep : 'transparent',
+                    border: `1px solid ${showCurrents ? '#cfeaff' : T.cardEdge}`,
+                  }}>
+                  <span style={{ color: '#cfeaff' }}>➤</span> Currents
+                </button>
                 <span style={{ fontSize: 11.5, color: T.inkMute, flexBasis: '100%' }}>
                   Where each species' water is this week — temperature band, season, depth and the
                   edges, from last night's satellite pass. Deeper colour = that species' best water.
+                  Arrows are the surface current (loop current and eddies); bigger = faster.
                   {!zoneRows.length && ' No zones for this region yet — Recompute, or wait for tonight.'}
                 </span>
               </div>
