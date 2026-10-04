@@ -60,9 +60,6 @@ export default function TripPlanningPanel() {
   const [dayIso, setDayIso] = useState(() => new Date().toISOString().slice(0, 10));
   const [cond, setCond] = useState(null);
   const [condErr, setCondErr] = useState('');
-  // Closed by default. The map is the product; the species list is
-  // reference material you read once and then want out of the way.
-  const [showDetail, setShowDetail] = useState(false);
 
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
@@ -287,59 +284,55 @@ export default function TripPlanningPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      {/* Waters sits with the page title, not in a card of its own: it is
+          the scope of everything below, not another setting to scroll past. */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+                    marginTop: -4, marginBottom: 2 }}>
+        <select value={regionId} onChange={e => setRegionId(e.target.value)}
+          style={{ padding: '7px 10px', borderRadius: 8, background: T.parchmentDeep,
+                   color: T.ink, border: `1px solid ${T.cardEdge}`, fontSize: 14, fontWeight: 800 }}>
+          {regions.length === 0 && <option value="">No regions configured</option>}
+          {regions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+        <div style={{ flex: 1 }} />
+        <GhostButton onClick={recompute} disabled={running || !regionId}>
+          {running ? 'Reading satellites…' : 'Recompute'}
+        </GhostButton>
+      </div>
+
       <Card>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <SectionLabel>How are you fishing?</SectionLabel>
-          <div style={{ flex: 1 }} />
-          <button onClick={() => setShowDetail(v => !v)}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-                     color: T.brass, fontSize: 12.5, fontWeight: 800 }}>
-            {showDetail ? 'Hide details' : 'Details'}
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-          {TRIP_MODES.map(m => (
-            <button key={m.key} onClick={() => setMode(m.key)}
-              style={{
-                padding: '7px 12px', borderRadius: 999, cursor: 'pointer', color: T.ink,
-                background: mode === m.key ? T.parchmentDeep : 'transparent',
-                border: `1px solid ${mode === m.key ? T.brass : T.cardEdge}`,
-                fontSize: 13, fontWeight: 800, opacity: m.ready ? 1 : 0.65,
-              }}>
-              {m.label}
-              {!m.ready && (
-                <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, letterSpacing: 0.8,
-                               color: T.inkMute, textTransform: 'uppercase' }}>soon</span>
-              )}
-            </button>
-          ))}
-        </div>
-        {showDetail && (
-          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <SectionLabel>How</SectionLabel>
+          <select value={mode} onChange={e => setMode(e.target.value)}
+            style={{ padding: '7px 10px', borderRadius: 8, background: T.parchmentDeep,
+                     color: T.ink, border: `1px solid ${T.cardEdge}`, fontSize: 13.5, fontWeight: 800,
+                     flex: '1 1 220px', maxWidth: 340 }}>
             {TRIP_MODES.map(m => (
-              <div key={m.key}
-                style={{ padding: '9px 11px', borderRadius: 9,
-                         background: mode === m.key ? T.parchmentDeep : 'transparent',
-                         border: `1px solid ${mode === m.key ? T.brass : T.cardEdge}` }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: T.ink }}>
-                  {m.label}
-                  <span style={{ marginLeft: 8, fontSize: 11.5, fontWeight: 700, color: T.inkMute }}>
-                    {m.needs}
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: T.inkMute, marginTop: 3 }}>{m.blurb}</div>
-                <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5, lineHeight: 1.5, opacity: 0.9 }}>
-                  {speciesNames(m.species)}
-                </div>
-              </div>
+              <option key={m.key} value={m.key}>
+                {m.label}{m.ready ? '' : ' — no data yet'}
+              </option>
             ))}
-          </div>
-        )}
+          </select>
+        </div>
+        {/* The fish, not the jargon: "pelagic" is a word for people who
+            already know the answer. */}
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 7, lineHeight: 1.5 }}>
+          {speciesNames(activeMode?.species)}
+        </div>
       </Card>
 
       <Card>
         <SectionLabel>When are you going?</SectionLabel>
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, overflowX: 'auto', paddingBottom: 4 }}>
+        {/* The ribbon scrolls. On iPad the tenth day was half off the edge
+            with nothing to say it was reachable, so: momentum scrolling,
+            snap points, and days that cannot shrink below a readable width. */}
+        <div style={{
+          display: 'flex', gap: 6, marginTop: 8, paddingBottom: 6,
+          overflowX: 'auto', overflowY: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          scrollSnapType: 'x proximity',
+          scrollbarWidth: 'thin',
+        }}>
           {days.map(d => {
             const c = cond?.[d.iso];
             const col = c?.score != null ? fishabilityColor(c.score) : T.cardEdge;
@@ -348,6 +341,7 @@ export default function TripPlanningPanel() {
               <button key={d.iso} onClick={() => setDayIso(d.iso)}
                 style={{
                   flex: '0 0 auto', minWidth: 74, padding: '8px 10px', borderRadius: 10,
+                  scrollSnapAlign: 'start',
                   cursor: 'pointer', textAlign: 'center', color: T.ink,
                   background: on ? T.parchmentDeep : 'transparent',
                   border: `1px solid ${on ? T.brass : T.cardEdge}`,
@@ -381,45 +375,35 @@ export default function TripPlanningPanel() {
           </div>
         )}
       </Card>
+      {(observedAt || error) && (
+        <Card>
+          {observedAt && (
+            <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5 }}>
+              Satellite pass {new Date(observedAt).toLocaleString()} ·{' '}
+              {spots.length} edge{spots.length === 1 ? '' : 's'} found
+              {region ? ` · distances from ${region.port_name}` : ''}
+              {/* Breaks cannot be forecast — they are observed, and they drift
+                  with the current. Saying how stale the picture will be on the
+                  chosen day is the difference between a position and a hint. */}
+              {edgeAgeDays != null && edgeAgeDays >= 1 && (
+                <div style={{ marginTop: 4, color: edgeAgeDays >= 4 ? T.warn : T.inkMute }}>
+                  {edgeAgeDays === 1
+                    ? 'One day old by your trip — expect it to have moved a few miles.'
+                    : `${edgeAgeDays} days old by your trip — ${
+                        edgeAgeDays >= 4
+                          ? 'treat these as a direction to look, not a position.'
+                          : 'expect it to have drifted with the current.'}`}
+                </div>
+              )}
+            </div>
+          )}
+          {error && (
+            <div style={{ marginTop: observedAt ? 8 : 0, fontSize: 12.5, color: T.closed,
+                          whiteSpace: 'pre-wrap' }}>{error}</div>
+          )}
+        </Card>
+      )}
 
-      <Card>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <SectionLabel>Waters</SectionLabel>
-          <select value={regionId} onChange={e => setRegionId(e.target.value)}
-            style={{ padding: '7px 10px', borderRadius: 8, background: T.parchmentDeep,
-                     color: T.ink, border: `1px solid ${T.cardEdge}`, fontSize: 13, fontWeight: 700 }}>
-            {regions.length === 0 && <option value="">No regions configured</option>}
-            {regions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-          </select>
-          <div style={{ flex: 1 }} />
-          <GhostButton onClick={recompute} disabled={running || !regionId}>
-            {running ? 'Reading satellites…' : 'Recompute'}
-          </GhostButton>
-        </div>
-        {observedAt && (
-          <div style={{ fontSize: 12, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
-            Satellite pass {new Date(observedAt).toLocaleString()} ·{' '}
-            {spots.length} edge{spots.length === 1 ? '' : 's'} found
-            {region ? ` · distances from ${region.port_name}` : ''}
-            {/* Breaks cannot be forecast — they are observed, and they drift
-                with the current. Saying how stale the picture will be on the
-                chosen day is the difference between a position and a hint. */}
-            {edgeAgeDays != null && edgeAgeDays >= 1 && (
-              <div style={{ marginTop: 4, color: edgeAgeDays >= 4 ? T.warn : T.inkMute }}>
-                {edgeAgeDays === 1
-                  ? 'One day old by your trip — expect it to have moved a few miles.'
-                  : `${edgeAgeDays} days old by your trip — ${
-                      edgeAgeDays >= 4
-                        ? 'treat these as a direction to look, not a position.'
-                        : 'expect it to have drifted with the current.'}`}
-              </div>
-            )}
-          </div>
-        )}
-        {error && (
-          <div style={{ marginTop: 8, fontSize: 12.5, color: T.closed, whiteSpace: 'pre-wrap' }}>{error}</div>
-        )}
-      </Card>
 
       {!activeMode?.ready ? (
         <Card>
