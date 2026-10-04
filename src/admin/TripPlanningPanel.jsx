@@ -83,7 +83,9 @@ export default function TripPlanningPanel() {
   // Opacity per layer, not one shared slider: reading a temperature break
   // against the colour line means fading one UNDER the other, and a single
   // control can only fade both together.
-  const [opacity, setOpacity] = useState({ sst: 0.72, chl: 0.55 });
+  // 20% each by default. The satellite layers are context for the spots and
+  // the catch marks, not the subject — at full strength they bury both.
+  const [opacity, setOpacity] = useState({ sst: 0.2, chl: 0.2 });
   // 'mine' | 'all' | 'off'. Defaults to mine: on a map of 71 points the
   // useful question is "where have I been", and everyone else's marks
   // answer a different one.
