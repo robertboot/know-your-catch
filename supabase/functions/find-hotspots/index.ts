@@ -157,8 +157,19 @@ Deno.serve(async (req: Request) => {
   const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const CRON_SECRET = Deno.env.get('CRON_SECRET');
   if (!URL_ || !SR) return json({ error: 'missing env' }, 500);
-  if (CRON_SECRET && req.headers.get('x-cron-secret') !== CRON_SECRET) {
-    return json({ error: 'forbidden' }, 403);
+  // Two ways in: the scheduler's shared secret, or a signed-in admin
+  // pressing Recompute in the console. Without the second, the only way to
+  // see a new run would be to wait for tomorrow's cron, which is no way to
+  // judge whether the thresholds are right.
+  const presentedSecret = req.headers.get('x-cron-secret');
+  if (!CRON_SECRET || presentedSecret !== CRON_SECRET) {
+    const auth = req.headers.get('Authorization') || '';
+    const asCaller = createClient(URL_, Deno.env.get('SUPABASE_ANON_KEY') || '', {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false },
+    });
+    const { data: isAdmin, error: adminErr } = await asCaller.rpc('is_admin');
+    if (adminErr || isAdmin !== true) return json({ error: 'forbidden' }, 403);
   }
 
   let body: any = {};

@@ -28,6 +28,7 @@ import NotificationsTab from './NotificationsTab.jsx';
 import HomeDashboard from './HomeDashboard.jsx';
 import LegalTab from './LegalTab.jsx';
 import TestersTab from './TestersTab.jsx';
+import TripPlanningPanel from './TripPlanningPanel.jsx';
 import ErrorsTab from './ErrorsTab.jsx';
 import WeeklyEmailTab from './WeeklyEmailTab.jsx';
 import {
@@ -356,6 +357,7 @@ function SignedInShell({ email, onExit }) {
       {_t === 'ocean'         && !detailView && <OceanHeatmapPanel />}
       {_t === 'notifications' && !detailView && <NotificationsTab />}
       {_t === 'testers'       && !detailView && <TestersTab />}
+      {_t === 'planning'      && !detailView && <TripPlanningPanel />}
       {_t === 'errors'        && !detailView && <ErrorsTab />}
       {_t === 'weekly'        && !detailView && <WeeklyEmailTab />}
       {_t === 'legal'         && !detailView && <LegalTab />}
@@ -387,6 +389,7 @@ function useIsNarrow(bp = 720) {
 const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'testers',   label: 'Beta Testers' },
+  { key: 'planning',  label: 'Trip Planning' },
   {
     label: 'Fish ID',
     children: [
