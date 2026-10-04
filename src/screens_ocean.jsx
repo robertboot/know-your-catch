@@ -16,9 +16,10 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
-import { SUPABASE_URL } from './supabase-client.js';
+import { SPECIES } from './data.js';
+import { SUPABASE_URL, client } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
-import { describeAge } from './marine-cache.js';
+import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from './basemap.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
@@ -107,7 +108,19 @@ const LAYERS = {
   },
 };
 
-export function OceanMapsScreen({ isTablet, initialLayer }) {
+/* Suggested-spot colours by edge kind — match the popup copy. */
+const SPOT_COLORS = {
+  temp_break:  '#ff9a3d',
+  color_edge:  '#2BE07F',
+  convergence: '#c08cff',
+};
+const SPOT_LABELS = {
+  temp_break:  'Temp break',
+  color_edge:  'Color edge',
+  convergence: 'Convergence',
+};
+
+export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -120,6 +133,14 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
   const [dateISO, setDateISO] = useState('');
   const [showLand, setShowLand] = useState(true);
   const [landReady, setLandReady] = useState(false); // GeoJSON loaded → (re)draw mask
+  // Marker overlays on top of the colour layer. Independent toggles —
+  // these ADD to whichever satellite layer is active.
+  const [showCatches, setShowCatches] = useState(false);
+  const [showSpots, setShowSpots] = useState(true);
+  const [spots, setSpots] = useState(null);      // hotspot rows (null = not loaded)
+  const [spotsAge, setSpotsAge] = useState(null); // ms, when serving from cache
+  const catchesRef = useRef(null);
+  const spotsRef = useRef(null);
 
   // Init the map once.
   useEffect(() => {
@@ -221,6 +242,80 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
     }
   }, [active, dateISO]);
 
+  /* Suggested spots — the server-side find-hotspots cron reads the same
+     satellite grids nightly and writes the steepest temp/colour edges
+     with a plain-sentence `why`. The phone only reads rows (Sirius-style
+     suggestions without the subscription). Offline-first: last good rows
+     are cached and shown with their age when there's no signal. */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const cached = readMarineCache('hotspots', 0, 0);
+      if (cached && alive) { setSpots(cached.data); setSpotsAge(cached.ageMs); }
+      const c = client();
+      if (!c) return;
+      const since = new Date(Date.now() - 72 * 3600000).toISOString();
+      const { data, error } = await c.from('hotspots')
+        .select('kind,lat,lon,score,sst_f,sst_drop_f,chl_mg_m3,length_nm,dist_nm,from_port_deg,why,observed_at')
+        .gte('observed_at', since)
+        .order('score', { ascending: false })
+        .limit(60);
+      if (!alive || error || !data) return;
+      setSpots(data);
+      setSpotsAge(null);
+      writeMarineCache('hotspots', 0, 0, data);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Draw/remove the suggested-spot markers.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (spotsRef.current) { map.removeLayer(spotsRef.current); spotsRef.current = null; }
+    if (!showSpots || !spots?.length) return;
+    const group = L.layerGroup();
+    spots.forEach((h) => {
+      const color = SPOT_COLORS[h.kind] || T.brass;
+      // Glow + core, same pattern as the patterns-map hot spots.
+      L.circleMarker([h.lat, h.lon], { radius: 14, stroke: false, fillColor: color, fillOpacity: 0.18 }).addTo(group);
+      const core = L.circleMarker([h.lat, h.lon], {
+        radius: 6, stroke: true, color: '#06212f', weight: 1, opacity: 0.6,
+        fillColor: color, fillOpacity: 0.9,
+      }).addTo(group);
+      const bits = [
+        `<div style="font-weight:800;margin-bottom:4px">${SPOT_LABELS[h.kind] || h.kind} · score ${Math.round(h.score)}</div>`,
+        `<div style="margin-bottom:4px">${h.why || ''}</div>`,
+        h.dist_nm != null ? `<div style="opacity:.75">${Math.round(h.dist_nm)} nm at ${Math.round(h.from_port_deg || 0)}° from port</div>` : '',
+      ].join('');
+      core.bindPopup(`<div style="font-size:12px;max-width:230px">${bits}</div>`);
+    });
+    group.addTo(map);
+    spotsRef.current = group;
+  }, [showSpots, spots]);
+
+  // Draw/remove the angler's own catches.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (catchesRef.current) { map.removeLayer(catchesRef.current); catchesRef.current = null; }
+    if (!showCatches) return;
+    const catches = (state?.catchLog || []).filter(c => c.lat != null && c.lon != null);
+    if (!catches.length) return;
+    const group = L.layerGroup();
+    catches.forEach((c) => {
+      const m = L.circleMarker([c.lat, c.lon], {
+        radius: 5, stroke: true, color: '#06212f', weight: 1,
+        fillColor: '#5ac8f5', fillOpacity: 0.95,
+      }).addTo(group);
+      const name = SPECIES.find(s => s.id === c.speciesId)?.commonName || 'Catch';
+      const when = c.dateIso ? new Date(c.dateIso).toLocaleDateString() : '';
+      m.bindPopup(`<div style="font-size:12px"><b>${name}</b>${when ? `<br/>${when}` : ''}</div>`);
+    });
+    group.addTo(map);
+    catchesRef.current = group;
+  }, [showCatches, state?.catchLog]);
+
   // Add/remove the land mask when toggled (or once GeoJSON arrives).
   useEffect(() => {
     const map = mapRef.current;
@@ -251,9 +346,13 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
         Find the color and the temp breaks — free NOAA/NASA satellite layers for the Gulf & Florida Atlantic.
       </div>
 
-      {/* Layer toggle */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      {/* Layer toggle + marker overlays. Satellite layers are exclusive;
+          Spots and Catches stack on top of whichever is active. */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {Object.values(LAYERS).map(l => chip(active === l.key, l.label, () => setActive(l.key)))}
+        <span style={{ width: 1, background: T.cardEdge, margin: '4px 2px' }} />
+        {chip(showSpots, 'Suggested spots', () => setShowSpots(v => !v))}
+        {chip(showCatches, 'My catches', () => setShowCatches(v => !v))}
       </div>
 
       {/* Composite date + land overlay */}
@@ -320,6 +419,25 @@ export function OceanMapsScreen({ isTablet, initialLayer }) {
           {cfg.legendStops.map((s, i) => <span key={i} style={{ fontSize: 10, color: T.inkMute }}>{s}</span>)}
         </div>
         <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginTop: 10 }}>{cfg.blurb}</div>
+        {showSpots && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardEdge}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              {Object.entries(SPOT_LABELS).map(([k, lbl]) => (
+                <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.inkSoft, fontWeight: 700 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 5, background: SPOT_COLORS[k], display: 'inline-block' }} />
+                  {lbl}
+                </span>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 8 }}>
+              {spots === null
+                ? 'Suggested spots load when you have signal and are saved for offshore.'
+                : spots.length === 0
+                  ? 'No strong edges found in the last satellite pass — flat, even water across the region.'
+                  : `Computed nightly from the same NOAA grids above — the steepest temperature and color edges, scored and explained. Tap a dot for the why.${spotsAge != null ? ` Saved · ${describeAge(spotsAge)}.` : ''}`}
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8 }}>
           Data: NOAA CoastWatch / NASA Ocean Color (public domain). 8-day composites — cloud gaps fill in over time.
         </div>

@@ -1145,7 +1145,7 @@ export default function App() {
       body = <WeatherForecastScreen jurisdiction={jurisdiction} state={state} update={update} onOceanMaps={(layer) => push({ name: 'oceanmaps', layer })} />;
       break;
     case 'oceanmaps':
-      body = <OceanMapsScreen isTablet={size === 'tablet' || size === 'tablet-landscape'} initialLayer={screen.layer} />;
+      body = <OceanMapsScreen isTablet={size === 'tablet' || size === 'tablet-landscape'} initialLayer={screen.layer} state={state} />;
       break;
     case 'quiz':
       body = <QuizScreen state={state} jurisdiction={jurisdiction}
