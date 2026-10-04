@@ -113,7 +113,19 @@ export default function TripPlanningPanel() {
   // OFF by default. The species zones are the subject of this map, and
   // even at 20% the satellite wash sat on top of them — raise a slider
   // when you want to read a break against the zones.
-  const [opacity, setOpacity] = useState({ sst: 0, chl: 0, cur: 0.75 });
+  /* Layers are on or off, not a strength. The sliders invited fiddling
+     with a number nobody wanted to choose, and three rows of them pushed
+     the map down to a strip. Each layer has one sensible opacity, picked
+     so the satellite sits UNDER the spots rather than competing with
+     them. */
+  const [layerOn, setLayerOn] = useState({ sst: true, chl: false, cur: false });
+  const [layersOpen, setLayersOpen] = useState(false);
+  const opacity = useMemo(() => ({
+    sst: layerOn.sst ? 0.45 : 0,
+    chl: layerOn.chl ? 0.40 : 0,
+    cur: layerOn.cur ? 0.80 : 0,
+  }), [layerOn]);
+  const toggleLayer = (k) => setLayerOn(o => ({ ...o, [k]: !o[k] }));
   // Derived, not fetched. There was a second query for this that never ran,
   // so `currents` stayed null and the slider sat disabled for ever. The
   // vectors already arrive with the zones.
@@ -129,7 +141,7 @@ export default function TripPlanningPanel() {
     [zoneRows],
   );
   const [speciesOn, setSpeciesOn] = useState(() => new Set(['mahi', 'yellowfin_tuna', 'wahoo', 'blackfin_tuna', 'sailfish']));
-  const [showCurrents, setShowCurrents] = useState(false); // off by default — opt in
+  const showCurrents = layerOn.cur;   // one switch, in the layer menu
   const zonesLayerRef = useRef(null);
   const currentsLayerRef = useRef(null);
   const [pbIds, setPbIds] = useState(() => new Set());
@@ -686,6 +698,13 @@ export default function TripPlanningPanel() {
   };
 
   const activeMode = TRIP_MODES.find(m => m.key === mode);
+  const LAYER_TOGGLES = [
+    { key: 'sst', label: 'Sea temperature' },
+    { key: 'chl', label: 'Chlorophyll' },
+    // Altimetry lags a few days, so an absent current row is normal rather
+    // than a fault — say which it is instead of greying out in silence.
+    { key: 'cur', label: 'Currents', disabled: !currents, note: currents ? '' : 'no data' },
+  ];
   // The month of the DAY BEING PLANNED. Scoring a Thursday in November
   // against October's seasons is the sort of error nobody notices until a
   // closed-season fish is being recommended.
@@ -697,17 +716,18 @@ export default function TripPlanningPanel() {
     <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1fr)',
                   maxWidth: '100%', minWidth: 0 }}>
       {/* One map, the whole Gulf + Florida Atlantic — no waters picker.
-          The species zones cover every region at once. */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-                    marginTop: -4, marginBottom: 2 }}>
-        <div style={{ flex: 1 }} />
-        <GhostButton onClick={recompute} disabled={running}>
-          {running ? 'Reading satellites…' : 'Regenerate'}
-        </GhostButton>
-      </div>
-
+          The species zones cover every region at once.
+          Regenerate shares the day card's header rather than owning a row
+          of its own: it was a button alone on a line, costing the map 40px
+          of height to say nothing. */}
       <Card style={{ minWidth: 0, overflow: 'hidden' }}>
-        <SectionLabel>When are you going?</SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <SectionLabel>When are you going?</SectionLabel>
+          <div style={{ flex: 1 }} />
+          <GhostButton onClick={recompute} disabled={running}>
+            {running ? 'Reading satellites…' : 'Regenerate'}
+          </GhostButton>
+        </div>
         <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 4 }}>
           Graded for your fishing waters — {waters.name}, set when you set up the app.
         </div>
@@ -811,93 +831,104 @@ export default function TripPlanningPanel() {
         </Card>
       ) : (
         <>
-            <Card style={{ minWidth: 0 }}>
-            <div style={{ display: 'grid', gap: 7, marginBottom: 10 }}>
-              {[['sst', 'Temperature'], ['chl', 'Chlorophyll'], ['cur', 'Current']].map(([k, lab]) => {
-                // Current has an on/off as well as a strength, and the two
-                // belong on one line — they are the same decision.
-                const isCur = k === 'cur';
-                const off = isCur && (!currents || !showCurrents);
-                return (
-                  <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: T.ink, minWidth: 92 }}>{lab}</span>
-                    {isCur && (
-                      <button onClick={() => setShowCurrents(v => !v)} disabled={!currents}
+            <Card style={{ minWidth: 0, padding: 0, overflow: 'hidden', position: 'relative' }}>
+              {/* The layer menu floats ON the map, Windy-style, instead of
+                  stacking above it. Three rows of sliders and pills pushed
+                  the map down to a strip; the map IS the product, so the
+                  controls got out of its way. Left side, because the spot
+                  list reads down the right. */}
+              <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000,
+                            display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                            gap: 8, maxHeight: 'calc(100% - 20px)' }}>
+                <button onClick={() => setLayersOpen(v => !v)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7,
+                    padding: '8px 13px', borderRadius: 10, cursor: 'pointer',
+                    fontSize: 13, fontWeight: 800, color: T.ink,
+                    background: 'rgba(12,26,38,0.92)',
+                    border: `1px solid ${layersOpen ? T.brass : T.cardEdge}`,
+                    boxShadow: '0 2px 10px rgba(0,0,0,.45)',
+                  }}>
+                  <span style={{ fontSize: 14 }}>☰</span> Layers
+                </button>
+
+                {layersOpen && (
+                  <div style={{
+                    background: 'rgba(12,26,38,0.94)', border: `1px solid ${T.cardEdge}`,
+                    borderRadius: 12, padding: '10px 12px', minWidth: 210,
+                    boxShadow: '0 6px 22px rgba(0,0,0,.5)',
+                    overflowY: 'auto', maxHeight: '100%',
+                    backdropFilter: 'blur(6px)',
+                  }}>
+                    {LAYER_TOGGLES.map(({ key, label, disabled, note }) => (
+                      <label key={key}
                         style={{
-                          padding: '3px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 800,
-                          cursor: currents ? 'pointer' : 'not-allowed', color: T.ink,
-                          background: showCurrents ? T.parchmentDeep : 'transparent',
-                          border: `1px solid ${showCurrents ? T.brass : T.cardEdge}`,
-                          opacity: currents ? 1 : 0.5,
-                        }}>{showCurrents ? 'On' : 'Off'}</button>
-                    )}
-                    <input type="range" min="0" max="1" step="0.05" value={opacity[k]}
-                      disabled={off}
-                      onChange={e => setOpacity(o => ({ ...o, [k]: Number(e.target.value) }))}
-                      style={{ flex: 1, maxWidth: 240, accentColor: T.brass, opacity: off ? 0.4 : 1 }} />
-                    <span style={{ fontSize: 11.5, color: T.inkMute, minWidth: 34, textAlign: 'right' }}>
-                      {isCur && !currents ? '—' : `${Math.round(opacity[k] * 100)}%`}
-                    </span>
+                          display: 'flex', alignItems: 'center', gap: 9, padding: '6px 2px',
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          opacity: disabled ? 0.45 : 1, fontSize: 13, color: T.ink,
+                        }}>
+                        <input type="checkbox" checked={!!layerOn[key]} disabled={disabled}
+                          onChange={() => toggleLayer(key)}
+                          style={{ accentColor: T.brass, width: 15, height: 15 }} />
+                        {label}
+                        {note && (
+                          <span style={{ fontSize: 10.5, color: T.inkMute, marginLeft: 'auto' }}>{note}</span>
+                        )}
+                      </label>
+                    ))}
+
+                    <div style={{ height: 1, background: T.cardEdge, margin: '8px 0' }} />
+                    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1,
+                                  textTransform: 'uppercase', color: T.inkMute, marginBottom: 5 }}>
+                      Catches
+                    </div>
+                    {[['mine', 'Mine'], ['all', 'Everyone'], ['off', 'Off']].map(([k, lab]) => (
+                      <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 9,
+                                              padding: '5px 2px', cursor: 'pointer', fontSize: 13, color: T.ink }}>
+                        <input type="radio" name="kyc-catchview" checked={catchView === k}
+                          onChange={() => setCatchView(k)}
+                          style={{ accentColor: T.brass, width: 15, height: 15 }} />
+                        {lab}
+                      </label>
+                    ))}
+
+                    <div style={{ height: 1, background: T.cardEdge, margin: '8px 0' }} />
+                    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1,
+                                  textTransform: 'uppercase', color: T.inkMute, marginBottom: 5 }}>
+                      Species map
+                    </div>
+                    {PELAGIC_SPECIES.map((sp) => {
+                      const hasData = zoneRows.some(z => z.mode_key === sp && z.cells?.length);
+                      return (
+                        <label key={sp}
+                          style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 2px',
+                                   cursor: hasData ? 'pointer' : 'not-allowed',
+                                   opacity: hasData ? 1 : 0.4, fontSize: 13, color: T.ink }}>
+                          <input type="checkbox" checked={speciesOn.has(sp)} disabled={!hasData}
+                            onChange={() => setSpeciesOn(prev => {
+                              const next = new Set(prev);
+                              if (next.has(sp)) next.delete(sp); else next.add(sp);
+                              return next;
+                            })}
+                            style={{ accentColor: SPECIES_ZONE_COLORS[sp] || T.brass, width: 15, height: 15 }} />
+                          <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto',
+                                         background: SPECIES_ZONE_COLORS[sp] || T.brass }} />
+                          {SPECIES_NAME.get(sp) || sp}
+                        </label>
+                      );
+                    })}
                   </div>
-                );
-              })}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Species map</span>
-                {PELAGIC_SPECIES.map((sp) => {
-                  const on = speciesOn.has(sp);
-                  const hasData = zoneRows.some(z => z.mode_key === sp && z.cells?.length);
-                  return (
-                    <button key={sp}
-                      onClick={() => setSpeciesOn(prev => {
-                        const next = new Set(prev);
-                        if (next.has(sp)) next.delete(sp); else next.add(sp);
-                        return next;
-                      })}
-                      title={hasData ? '' : 'No habitable water in this region this week'}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
-                        fontWeight: 800, color: T.ink, opacity: hasData || !zoneRows.length ? 1 : 0.45,
-                        background: on ? T.parchmentDeep : 'transparent',
-                        border: `1px solid ${on ? (SPECIES_ZONE_COLORS[sp] || T.brass) : T.cardEdge}`,
-                      }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 5, background: SPECIES_ZONE_COLORS[sp] || T.brass, display: 'inline-block' }} />
-                      {SPECIES_NAME.get(sp) || sp}
-                    </button>
-                  );
-                })}
-                <span style={{ fontSize: 11.5, color: T.inkMute, flexBasis: '100%' }}>
-                  Where each species' water is this week — temperature band, season, depth and the
-                  edges, from last night's satellite pass. Deeper colour = that species' best water.
-                  Surface current has its own control above.
-                  {!zoneRows.length && ' No zones for this region yet — Regenerate, or wait for tonight.'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Catches</span>
-                {[['mine', 'Mine'], ['all', 'Everyone'], ['off', 'Off']].map(([k, lab]) => (
-                  <button key={k} onClick={() => setCatchView(k)}
-                    style={{
-                      padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
-                      fontWeight: 800, color: T.ink,
-                      background: catchView === k ? T.parchmentDeep : 'transparent',
-                      border: `1px solid ${catchView === k ? T.brass : T.cardEdge}`,
-                    }}>{lab}</button>
-                ))}
-                {sstRange && (
-                  <span style={{ fontSize: 11.5, color: T.inkMute }}>
-                    Temperature scale {(sstRange.lo * 9 / 5 + 32).toFixed(0)}–
-                    {(sstRange.hi * 9 / 5 + 32).toFixed(0)} °F, set from today's water
-                  </span>
                 )}
               </div>
-            </div>
-            {overlayErr && (
-              <div style={{ fontSize: 12.5, color: T.inkMute, marginBottom: 8 }}>{overlayErr}</div>
-            )}
-            <div ref={mapElRef}
-                 style={{ height: 460, width: '100%', borderRadius: 10, overflow: 'hidden',
-                          background: T.parchmentDeep }} />
+
+              {overlayErr && (
+                <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 1000,
+                              fontSize: 12, color: T.ink, background: 'rgba(12,26,38,0.9)',
+                              padding: '6px 10px', borderRadius: 8 }}>{overlayErr}</div>
+              )}
+              <div ref={mapElRef}
+                   style={{ height: '70vh', minHeight: 420, width: '100%',
+                            background: T.parchmentDeep }} />
           </Card>
 
           <Card>
