@@ -91,6 +91,10 @@ export default function TripPlanningPanel() {
   // answer a different one.
   const [catchView, setCatchView] = useState('mine');
   const [catches, setCatches] = useState([]);
+  // Predictive zones — the Sirius-style blobs for the selected mode.
+  const [showZones, setShowZones] = useState(true);
+  const [zoneRow, setZoneRow] = useState(null); // hotspot_zones row or null
+  const zonesLayerRef = useRef(null);
   const [pbIds, setPbIds] = useState(() => new Set());
   const [anglers, setAnglers] = useState(() => new Map());
   const [sstRange, setSstRange] = useState(null);
@@ -289,6 +293,49 @@ export default function TripPlanningPanel() {
     }
     overlayRef.current = added;
   }, [opacity]);
+
+  // Predictive zones for the selected region+mode — one small row, written
+  // nightly by find-hotspots from habitat priors × edge strength.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setZoneRow(null);
+      if (!regionId) return;
+      const c = client();
+      if (!c) return;
+      const { data } = await c.from('hotspot_zones')
+        .select('*').eq('region_id', regionId).eq('mode_key', mode).maybeSingle();
+      if (alive) setZoneRow(data || null);
+    })();
+    return () => { alive = false; };
+  }, [regionId, mode]);
+
+  // Draw the blobs on their own pane UNDER the catch/spot markers —
+  // an area wash, not pins; pins must stay readable on top of it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!map.getPane('zonespane')) {
+      map.createPane('zonespane');
+      map.getPane('zonespane').style.zIndex = 405;
+      map.getPane('zonespane').style.pointerEvents = 'none';
+    }
+    if (zonesLayerRef.current) { map.removeLayer(zonesLayerRef.current); zonesLayerRef.current = null; }
+    if (!showZones || !zoneRow?.cells?.length) return;
+    const stepM = (zoneRow.step_deg || 0.06) * 111000;
+    const zoneColor = (s) =>
+      s >= 75 ? '#ff5a3d' : s >= 55 ? '#ffd23d' : s >= 40 ? '#8ee35a' : '#2f9e8f';
+    const group = L.layerGroup();
+    for (const [lat, lon, score] of zoneRow.cells) {
+      L.circle([lat, lon], {
+        pane: 'zonespane', radius: stepM * 0.72, stroke: false,
+        fillColor: zoneColor(score),
+        fillOpacity: 0.10 + 0.30 * Math.min(1, score / 100),
+      }).addTo(group);
+    }
+    group.addTo(map);
+    zonesLayerRef.current = group;
+  }, [showZones, zoneRow]);
 
   // Who logged what. Several of these 71 catches are testers entering mock
   // data, and a spot built from invented fish is worse than no spot at all.
@@ -626,6 +673,29 @@ export default function TripPlanningPanel() {
                   </span>
                 </div>
               ))}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Predicted zones</span>
+                <button onClick={() => setShowZones(v => !v)}
+                  style={{
+                    padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
+                    fontWeight: 800, color: T.ink,
+                    background: showZones ? T.parchmentDeep : 'transparent',
+                    border: `1px solid ${showZones ? T.brass : T.cardEdge}`,
+                  }}>{showZones ? 'On' : 'Off'}</button>
+                {showZones && (
+                  zoneRow?.cells?.length
+                    ? <span style={{ fontSize: 11.5, color: T.inkMute }}>
+                        Habitat fit for this trip mode, from last night's satellite pass —
+                        <span style={{ color: '#2f9e8f', fontWeight: 800 }}> fair</span> ·
+                        <span style={{ color: '#8ee35a', fontWeight: 800 }}> good</span> ·
+                        <span style={{ color: '#ffd23d', fontWeight: 800 }}> strong</span> ·
+                        <span style={{ color: '#ff5a3d', fontWeight: 800 }}> prime</span>
+                      </span>
+                    : <span style={{ fontSize: 11.5, color: T.inkMute }}>
+                        No zones computed yet for this mode — run Recompute, or wait for tonight's pass.
+                      </span>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Catches</span>
                 {[['mine', 'Mine'], ['all', 'Everyone'], ['off', 'Off']].map(([k, lab]) => (

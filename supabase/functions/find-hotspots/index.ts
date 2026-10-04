@@ -27,6 +27,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+// ONE copy of the habitat priors and trip modes — the same files the app
+// reads. See [[duplicated-knowledge]]: a second copy here would drift.
+import { habitatScore } from '../../../src/species-habitat.js';
+import { TRIP_MODES } from '../../../src/trip-modes.js';
+
 const ERDDAP = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap';
 // MUR is 0.01° (~1 km). Every other cell is ~2 km, which is finer than any
 // break worth driving to and keeps the grid at a size an edge function can
@@ -48,6 +53,13 @@ const MAX_SPOTS     = 12;     // a captain reads three. Twelve is generous.
 // Community catch influence is gated on this — see PRIVACY above. Below it,
 // a "hotspot" is one angler's spot with a satellite picture behind it.
 const MIN_DISTINCT_ANGLERS = 3;
+
+// Predictive zones (the SiriusXM-style blobs). Coarser than the edge
+// grid — a blob is an area statement, ~6 km cells read fine at region
+// zoom — and capped so a row stays a few KB for the phone's cache.
+const ZONE_STRIDE    = 3;    // every 3rd SST cell
+const ZONE_MIN_SCORE = 25;   // habitat fit below this isn't worth painting
+const ZONE_MAX_CELLS = 450;
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b, null, 2), {
@@ -315,15 +327,57 @@ Deno.serve(async (req: Request) => {
         .sort((a, b) => b.score - a.score)
         .slice(0, MAX_SPOTS);
 
+      // ---- predictive zones, one per trip mode ------------------------
+      // Every ~6 km cell scored by how well the water suits the mode's
+      // species RIGHT NOW: habitat fit (temperature band + season priors
+      // from species-habitat.js) amplified by edge strength. An area
+      // statement, not a pin — this is what paints the Sirius-style blobs.
+      const month = new Date(observed).getUTCMonth() + 1;
+      const zoneRows = TRIP_MODES.map((mode) => {
+        const zcells: [number, number, number][] = [];
+        for (let i = 1; i < sst.lats.length - 1; i += ZONE_STRIDE) {
+          for (let j = 1; j < sst.lons.length - 1; j += ZONE_STRIDE) {
+            const v = sst.v[i][j];
+            if (v == null) continue;
+            const sstF = cToF(v);
+            const edgeStrength = clamp01((sstGrad[i][j] ?? 0) / SST_GRAD_GOOD);
+            let sum = 0, n = 0;
+            for (const sp of mode.species) {
+              const s = habitatScore(sp, { sstF, edgeStrength, month });
+              if (s != null) { sum += s; n++; }
+            }
+            if (!n) continue;
+            const score = Math.round(100 * (sum / n));
+            if (score >= ZONE_MIN_SCORE) {
+              zcells.push([Number(sst.lats[i].toFixed(3)), Number(sst.lons[j].toFixed(3)), score]);
+            }
+          }
+        }
+        zcells.sort((a, b) => b[2] - a[2]);
+        return {
+          region_id: reg.id,
+          mode_key: mode.key,
+          observed_at: observed,
+          step_deg: Number(((sst.lats[1] - sst.lats[0]) * ZONE_STRIDE).toFixed(4)),
+          cells: zcells.slice(0, ZONE_MAX_CELLS),
+        };
+      });
+
       if (body.dry_run) {
         out.push({ region: reg.id, observed, grid: `${sst.lats.length}x${sst.lons.length}`,
-                   candidates: cells.length, groups: groups.length, spots });
+                   candidates: cells.length, groups: groups.length, spots,
+                   zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
         continue;
       }
 
       const { error: upErr } = await db.from('hotspots')
         .upsert(spots, { onConflict: 'region_id,observed_at,lat,lon' });
       if (upErr) throw upErr;
+
+      // Zones replace wholesale — perishable, no history worth keeping.
+      const { error: zErr } = await db.from('hotspot_zones')
+        .upsert(zoneRows, { onConflict: 'region_id,mode_key' });
+      if (zErr) throw zErr;
 
       // Keep a fortnight. These are perishable — a week-old break has
       // moved, and showing it is worse than showing nothing.
@@ -332,7 +386,8 @@ Deno.serve(async (req: Request) => {
         .lt('observed_at', new Date(Date.now() - 14 * 86400000).toISOString());
 
       out.push({ region: reg.id, observed, grid: `${sst.lats.length}x${sst.lons.length}`,
-                 candidates: cells.length, groups: groups.length, written: spots.length });
+                 candidates: cells.length, groups: groups.length, written: spots.length,
+                 zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
     } catch (e) {
       out.push({ region: reg.id, error: String(e) });
     }
