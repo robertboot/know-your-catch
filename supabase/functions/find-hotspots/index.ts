@@ -9,6 +9,17 @@
  * them like the forecast: a few hundred bytes per spot, so the answer is
  * aboard before the signal is gone. Nothing here ever runs on a boat.
  *
+ * PRIVACY, decided before the community layer exists so it cannot be
+ * retrofitted badly: in the app an angler sees only their OWN catches, but
+ * hotspots are computed from EVERYONE'S. Those two only coexist if a
+ * published hotspot can never be read back as one person's number — and
+ * with a sparse log, a cell containing one catch IS that angler's spot.
+ * So community catch data may only influence a published spot once a cell
+ * holds catches from at least MIN_DISTINCT_ANGLERS different people, and
+ * positions are aggregated to the grid, never passed through. The catches
+ * table already carries loc_precision (exact | grid_1km | grid_10km) for
+ * this.
+ *
  * Auth: x-cron-secret.
  * Body: { region?: 'al_gulf', dry_run?: true }
  * Deploy: supabase functions deploy find-hotspots
@@ -34,6 +45,9 @@ const CHL_GRAD_MIN  = 0.12;   // log10(mg/m³) per nautical mile
 const CHL_GRAD_GOOD = 0.60;
 const MIN_SCORE     = 45;     // below this it is not worth a card
 const MAX_SPOTS     = 12;     // a captain reads three. Twelve is generous.
+// Community catch influence is gated on this — see PRIVACY above. Below it,
+// a "hotspot" is one angler's spot with a satellite picture behind it.
+const MIN_DISTINCT_ANGLERS = 3;
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b, null, 2), {
