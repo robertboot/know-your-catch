@@ -39,6 +39,9 @@ else?* Then either
 | Jurisdictions | `src/data.js`, `supabase/functions/_shared/regs-shared.ts` | yes — parity check |
 | Angler visibility | `isAnglerVisible()` in `helpers.js` | yes — check rejects re-inlining |
 | Photo resolution | `PhotoImg` in `components.jsx` | yes — check rejects raw `<img>` |
+| Basemap tile URL | `BASEMAP_URL` in `src/basemap.js` | **no** — was in 3 files when CARTO started demanding a key, so the app's ocean maps, the admin heatmap and Trip Planning all printed "API KEY REQUIRED" across the water at the same moment |
+| Ocean snapshot bounds | `SNAPSHOT_BOUNDS` in `src/ocean-snapshots.js`, and `REGION` in `refresh-ocean-maps` (unavoidable — edge functions cannot import from `src/`) | **no** — an overlay drawn with bounds other than the ones it was rendered over is a map that looks entirely reasonable and is a hundred miles wrong |
+| Fish-ID preprocessing | `imageToRgb()` in `src/identify/preprocess.js` | yes — `scripts/ship.sh` rejects a second definition |
 | SST colour range | `src/screens_ocean.jsx`, `supabase/functions/refresh-ocean-maps` | **no** — add a rule if it drifts |
 | Species categories | `src/data.js` + live Supabase `species` table | **no** — cloud overlay assigns `_admin` on mismatch |
 | Updater grid definition | `adminRegsCoverage()` in `regulations-store.js`, `auto-update-regulations/index.ts` | **no** — both must filter live species by `is_active !== false` and exclude `category === 'bait'`; if they drift the coverage tile reports progress against a grid the cron isn't working |

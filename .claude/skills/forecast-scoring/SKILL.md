@@ -41,3 +41,10 @@ Keep that alignment if you touch either fetch.
 ## Units
 Wind is **knots** app-wide (forecast fetches `wind_speed_unit=kn`). Catch-log
 weather still stores mph internally but displays converted to kt.
+
+## Fishability answers a different question from Trip Planning
+
+Fishability says whether you can GO. [[trip-planning-engine]] says where to
+point the boat once you are going. Keep weather out of the habitat score
+and habitat out of the weather score: a day with one ugly stretch is not
+unfishable water, and calm water over flat mud is not a spot.
