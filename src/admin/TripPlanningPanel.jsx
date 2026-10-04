@@ -375,7 +375,17 @@ export default function TripPlanningPanel() {
     // stretch it — bilinear scaling melts the grid into the smooth
     // organic areas the Sirius map draws. Circles overlapped into
     // polka-dot soup the moment two neighbours were both hot.
+    //
+    // Rows are per REGION; merge each species' rows into ONE canvas
+    // first, or the region-box overlaps double-paint at every seam.
+    const bySpecies = new Map();
     for (const z of rows) {
+      const m = bySpecies.get(z.mode_key) || { mode_key: z.mode_key, step_deg: z.step_deg, cells: [] };
+      m.cells = m.cells.concat(z.cells);
+      bySpecies.set(z.mode_key, m);
+    }
+    for (const z of bySpecies.values()) {
+      z.cells.sort((a, b) => b[2] - a[2]); // best-first across the whole Gulf
       const color = SPECIES_ZONE_COLORS[z.mode_key] || T.brass;
       const [cr, cg, cb] = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
       const step = z.step_deg || 0.06;
