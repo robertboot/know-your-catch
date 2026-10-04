@@ -55,12 +55,14 @@ export default function TripPlanningPanel() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
-  // You cannot judge an edge without seeing the water it is in. Sea surface
-  // temperature is on by default because that is the layer the breaks are
-  // measured from — a spot floating on an empty map is an assertion, not
-  // evidence.
-  const [overlay, setOverlay] = useState('sst');
   const [overlayErr, setOverlayErr] = useState('');
+  // Opacity per layer, not one shared slider: reading a temperature break
+  // against the colour line means fading one UNDER the other, and a single
+  // control can only fade both together.
+  const [opacity, setOpacity] = useState({ sst: 0.72, chl: 0.55 });
+  const [showCatches, setShowCatches] = useState(true);
+  const [catches, setCatches] = useState([]);
+  const [sstRange, setSstRange] = useState(null);
   // A planner without a date is just a map. Default to today because that
   // is the trip you might still make, but the useful case is Thursday on a
   // Sunday evening — which is why the strip runs out to the end of the
@@ -72,7 +74,7 @@ export default function TripPlanningPanel() {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
-  const overlayRef = useRef(null);
+  const overlayRef = useRef([]);
 
   const region = useMemo(
     () => regions.find(r => r.id === regionId) || null,
@@ -222,32 +224,72 @@ export default function TripPlanningPanel() {
     setTimeout(() => map.invalidateSize(), 200);
   }, []);
 
-  // The satellite picture underneath, straight off the snapshot the
-  // refresh-ocean-maps function renders every six hours. Same image the app
-  // shows, same bounds, so what you see here is what a user would see.
+  // The satellite picture underneath, straight off the snapshots the
+  // refresh-ocean-maps function renders every six hours. Same images the
+  // app shows, same bounds, so what you see here is what a user would see.
+  //
+  // Both layers can be on together. That is the point: a temperature break
+  // ON a colour change is the clean-water line, and you can only see the
+  // two line up by looking at them together.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
+    for (const l of overlayRef.current || []) map.removeLayer(l);
+    overlayRef.current = [];
     setOverlayErr('');
-    if (overlay === 'none') return;
-    const url = snapshotUrl(overlay);
-    if (!url) { setOverlayErr('Supabase is not configured in this build.'); return; }
-    const layer = L.imageOverlay(url, SNAPSHOT_BOUNDS, {
-      opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA',
-    });
-    // A missing snapshot removes itself rather than leaving a broken image
-    // stretched across the Gulf.
-    layer.on('error', () => {
-      map.removeLayer(layer);
+
+    const added = [];
+    for (const key of ['chl', 'sst']) {          // sst last → sits on top
+      if (!(opacity[key] > 0)) continue;
+      const url = snapshotUrl(key);
+      if (!url) { setOverlayErr('Supabase is not configured in this build.'); continue; }
+      const layer = L.imageOverlay(url, SNAPSHOT_BOUNDS, {
+        opacity: opacity[key], attribution: 'Ocean data: NOAA CoastWatch / NASA',
+      });
       // Say so. A silently missing overlay looks exactly like water with
       // nothing in it, which is the wrong conclusion to let someone draw.
-      setOverlayErr(`No ${overlay === 'sst' ? 'temperature' : 'chlorophyll'} snapshot yet — `
-        + 'the refresh-ocean-maps job writes it every six hours.');
-    });
-    layer.addTo(map);
-    overlayRef.current = layer;
-  }, [overlay]);
+      layer.on('error', () => {
+        map.removeLayer(layer);
+        setOverlayErr(`No ${key === 'sst' ? 'temperature' : 'chlorophyll'} snapshot yet — `
+          + 'the refresh-ocean-maps job writes it every six hours.');
+      });
+      layer.addTo(map);
+      added.push(layer);
+    }
+    overlayRef.current = added;
+  }, [opacity]);
+
+  // The scale the image was actually drawn with, published beside it. A
+  // legend that recomputes the range is a legend that can disagree with
+  // its own colours.
+  useEffect(() => {
+    let alive = true;
+    const url = snapshotUrl('sst');
+    if (!url) return;
+    fetch(url.replace(/\.png$/, '.json'))
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (alive && j?.lo != null) setSstRange(j); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // Where fish have actually come from. The satellite says where the water
+  // changes; the logbook says where that mattered.
+  useEffect(() => {
+    if (!region || !showCatches) { setCatches([]); return; }
+    let alive = true;
+    (async () => {
+      const c = client();
+      if (!c) return;
+      const { data } = await c.from('catches')
+        .select('*')
+        .gte('lat', region.south).lte('lat', region.north)
+        .gte('lon', region.west).lte('lon', region.east)
+        .limit(500);
+      if (alive) setCatches((data || []).filter(r => r.lat != null && r.lon != null));
+    })();
+    return () => { alive = false; };
+  }, [region, showCatches]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -263,6 +305,18 @@ export default function TripPlanningPanel() {
       L.circleMarker([region.port_lat, region.port_lon], {
         radius: 5, color: '#ffffff', weight: 2, fillColor: T.brass, fillOpacity: 1,
       }).bindTooltip(region.port_name, { direction: 'top' }).addTo(group);
+    }
+
+    // Catches first so a spot marker is never hidden behind one.
+    for (const c of catches) {
+      L.circleMarker([c.lat, c.lon], {
+        radius: 3.5, color: '#ffffff', weight: 1, opacity: 0.7,
+        fillColor: T.brass, fillOpacity: 0.55,
+      }).bindTooltip(
+        `${c.species_id || 'catch'}${c.caught_at || c.date_iso
+          ? ` · ${String(c.caught_at || c.date_iso).slice(0, 10)}` : ''}`,
+        { direction: 'top' },
+      ).addTo(group);
     }
 
     for (const s of spots) {
@@ -286,7 +340,7 @@ export default function TripPlanningPanel() {
     } else if (region) {
       map.fitBounds([[region.south, region.west], [region.north, region.east]], { padding: [20, 20] });
     }
-  }, [spots, region, selected]);
+  }, [spots, region, selected, catches]);
 
   // ---- recompute -----------------------------------------------------
   const recompute = async () => {
@@ -463,17 +517,35 @@ export default function TripPlanningPanel() {
       ) : (
         <>
             <Card style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-              <SectionLabel>Water</SectionLabel>
-              {[['sst', 'Temperature'], ['chl', 'Chlorophyll'], ['none', 'Off']].map(([k, lab]) => (
-                <button key={k} onClick={() => setOverlay(k)}
+            <div style={{ display: 'grid', gap: 7, marginBottom: 10 }}>
+              {[['sst', 'Temperature'], ['chl', 'Chlorophyll']].map(([k, lab]) => (
+                <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: T.ink, minWidth: 92 }}>{lab}</span>
+                  <input type="range" min="0" max="1" step="0.05" value={opacity[k]}
+                    onChange={e => setOpacity(o => ({ ...o, [k]: Number(e.target.value) }))}
+                    style={{ flex: 1, maxWidth: 240, accentColor: T.brass }} />
+                  <span style={{ fontSize: 11.5, color: T.inkMute, minWidth: 34, textAlign: 'right' }}>
+                    {Math.round(opacity[k] * 100)}%
+                  </span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button onClick={() => setShowCatches(v => !v)}
                   style={{
                     padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5,
                     fontWeight: 800, color: T.ink,
-                    background: overlay === k ? T.parchmentDeep : 'transparent',
-                    border: `1px solid ${overlay === k ? T.brass : T.cardEdge}`,
-                  }}>{lab}</button>
-              ))}
+                    background: showCatches ? T.parchmentDeep : 'transparent',
+                    border: `1px solid ${showCatches ? T.brass : T.cardEdge}`,
+                  }}>
+                  Past catches{showCatches && catches.length ? ` (${catches.length})` : ''}
+                </button>
+                {sstRange && (
+                  <span style={{ fontSize: 11.5, color: T.inkMute }}>
+                    Temperature scale {(sstRange.lo * 9 / 5 + 32).toFixed(0)}–
+                    {(sstRange.hi * 9 / 5 + 32).toFixed(0)} °F, set from today's water
+                  </span>
+                )}
+              </div>
             </div>
             {overlayErr && (
               <div style={{ fontSize: 12.5, color: T.inkMute, marginBottom: 8 }}>{overlayErr}</div>

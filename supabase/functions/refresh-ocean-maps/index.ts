@@ -87,8 +87,57 @@ function jsonResponse(body: unknown, status = 200) {
    griddap's .transparentPng renders just the data (no axes or legend,
    so it drops straight onto the map) and DOES honour .colorBar, which
    is the only way to fix the range. */
-function sstGriddapUrl(dataset: string, variable: string) {
-  const [lo, hi] = sstRangeC(new Date().getUTCMonth());
+/* The colour range, measured rather than assumed.
+ *
+ * A fixed month table cannot win. Set it wide and every break disappears
+ * into one smear; set it narrow and the first unusual week saturates the
+ * whole Gulf solid red — which is exactly what happened in October, with
+ * water at 29-30 °C against a table topping out at 29.
+ *
+ * So read a coarse sample of the actual field first and colour between its
+ * 2nd and 98th percentiles. The tails are clipped because a single
+ * cloud-edge pixel at 15 °C would otherwise stretch the scale and flatten
+ * everything real. The span is floored at 3 °C so a genuinely uniform sea
+ * does not get amplified into dramatic-looking noise.
+ */
+async function measuredSstRangeC(dataset: string, variable: string): Promise<[number, number]> {
+  const fallback = sstRangeC(new Date().getUTCMonth());
+  try {
+    // Stride 40 on a 0.01° grid is ~45 km: far too coarse to map, ample
+    // to characterise a distribution.
+    const subset = `${variable}[(last)][(${REGION.south}):40:(${REGION.north})][(${REGION.west}):40:(${REGION.east})]`;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+    let r: Response;
+    try {
+      r = await fetch(`${ERDDAP_BASE}/griddap/${dataset}.json?${subset}`, { signal: ctl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!r.ok) return fallback;
+    const doc = await r.json();
+    const names: string[] = doc.table.columnNames;
+    const iVal = names.indexOf(variable);
+    const vals: number[] = [];
+    for (const row of doc.table.rows) {
+      const v = row[iVal];
+      if (v != null && Number.isFinite(v)) vals.push(v);
+    }
+    if (vals.length < 50) return fallback;
+    vals.sort((a, b) => a - b);
+    const at = (q: number) => vals[Math.min(vals.length - 1, Math.floor(q * vals.length))];
+    let lo = at(0.02), hi = at(0.98);
+    if (hi - lo < 3) {
+      const mid = (hi + lo) / 2;
+      lo = mid - 1.5; hi = mid + 1.5;
+    }
+    return [Math.round(lo * 10) / 10, Math.round(hi * 10) / 10];
+  } catch {
+    return fallback;
+  }
+}
+
+function sstGriddapUrl(dataset: string, variable: string, lo: number, hi: number) {
   const subset = `${variable}[(last)][(${REGION.south}):(${REGION.north})][(${REGION.west}):(${REGION.east})]`;
   // .colorBar = palette|continuous|scale|min|max|nSections
   return `${ERDDAP_BASE}/griddap/${dataset}.transparentPng?${subset}&.colorBar=Rainbow|||${lo}|${hi}|`;
@@ -177,8 +226,10 @@ Deno.serve(async (req: Request) => {
   let published = 0;
 
   for (const layer of LAYERS) {
+    let sstRange: [number, number] | null = null;
+    if (layer.key === 'sst') sstRange = await measuredSstRangeC(layer.dataset, layer.variable);
     const url = layer.key === 'sst'
-      ? sstGriddapUrl(layer.dataset, layer.variable)
+      ? sstGriddapUrl(layer.dataset, layer.variable, sstRange![0], sstRange![1])
       : wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
     const got = await fetchLayer(url);
     if (!got.ok) {
@@ -195,6 +246,16 @@ Deno.serve(async (req: Request) => {
       // re-downloading on every open.
       cacheControl: '3600',
     });
+    if (!error && sstRange) {
+      // The legend must read the range the image was actually drawn with.
+      // Recomputing it anywhere else is how a scale ends up labelled with
+      // numbers the colours do not match.
+      await db.storage.from(BUCKET).upload(
+        `${layer.key}-latest.json`,
+        new Blob([JSON.stringify({ lo: sstRange[0], hi: sstRange[1], unit: 'C', captured_at: capturedAt })]),
+        { contentType: 'application/json', upsert: true, cacheControl: '3600' },
+      ).catch(() => {});
+    }
     if (error) {
       results[layer.key] = { ok: false, error: `upload: ${error.message}`, dataset: layer.dataset };
       continue;
