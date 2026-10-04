@@ -114,7 +114,9 @@ export default function TripPlanningPanel() {
   // even at 20% the satellite wash sat on top of them — raise a slider
   // when you want to read a break against the zones.
   const [opacity, setOpacity] = useState({ sst: 0, chl: 0, cur: 0.75 });
-  const [currents, setCurrents] = useState(null);
+  // Derived, not fetched. There was a second query for this that never ran,
+  // so `currents` stayed null and the slider sat disabled for ever. The
+  // vectors already arrive with the zones.
   // 'mine' | 'all' | 'off'. Defaults to mine: on a map of 71 points the
   // useful question is "where have I been", and everyone else's marks
   // answer a different one.
@@ -122,6 +124,10 @@ export default function TripPlanningPanel() {
   const [catches, setCatches] = useState([]);
   // Species map — one zone row per pelagic species, each its own colour.
   const [zoneRows, setZoneRows] = useState([]);   // hotspot_zones rows, keyed by species
+  const currents = useMemo(
+    () => zoneRows.find(z => z.mode_key === '_currents' && z.cells?.length) || null,
+    [zoneRows],
+  );
   const [speciesOn, setSpeciesOn] = useState(() => new Set(['mahi', 'yellowfin_tuna', 'wahoo', 'blackfin_tuna', 'sailfish']));
   const [showCurrents, setShowCurrents] = useState(false); // off by default — opt in
   const zonesLayerRef = useRef(null);
@@ -494,14 +500,14 @@ export default function TripPlanningPanel() {
     const map = mapRef.current;
     if (!map) return;
     if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; }
-    if (!currents?.cells?.length) return;
+    if (!showCurrents || !currents?.cells?.length) return;
     const layer = createCurrentFlowLayer(currents.cells, { step: currents.step_deg || 0.25 });
     layer.addTo(map);
     layer.setOpacity(opacity.cur);
     flowRef.current = layer;
     return () => { if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currents]);
+  }, [currents, showCurrents]);
 
   useEffect(() => { flowRef.current?.setOpacity(opacity.cur); }, [opacity.cur]);
 
@@ -795,18 +801,34 @@ export default function TripPlanningPanel() {
         <>
             <Card style={{ minWidth: 0 }}>
             <div style={{ display: 'grid', gap: 7, marginBottom: 10 }}>
-              {[['sst', 'Temperature'], ['chl', 'Chlorophyll'], ['cur', 'Current']].map(([k, lab]) => (
-                <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: T.ink, minWidth: 92 }}>{lab}</span>
-                  <input type="range" min="0" max="1" step="0.05" value={opacity[k]}
-                    disabled={k === 'cur' && !currents}
-                    onChange={e => setOpacity(o => ({ ...o, [k]: Number(e.target.value) }))}
-                    style={{ flex: 1, maxWidth: 240, accentColor: T.brass }} />
-                  <span style={{ fontSize: 11.5, color: T.inkMute, minWidth: 34, textAlign: 'right' }}>
-                    {k === 'cur' && !currents ? '—' : `${Math.round(opacity[k] * 100)}%`}
-                  </span>
-                </div>
-              ))}
+              {[['sst', 'Temperature'], ['chl', 'Chlorophyll'], ['cur', 'Current']].map(([k, lab]) => {
+                // Current has an on/off as well as a strength, and the two
+                // belong on one line — they are the same decision.
+                const isCur = k === 'cur';
+                const off = isCur && (!currents || !showCurrents);
+                return (
+                  <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: T.ink, minWidth: 92 }}>{lab}</span>
+                    {isCur && (
+                      <button onClick={() => setShowCurrents(v => !v)} disabled={!currents}
+                        style={{
+                          padding: '3px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 800,
+                          cursor: currents ? 'pointer' : 'not-allowed', color: T.ink,
+                          background: showCurrents ? T.parchmentDeep : 'transparent',
+                          border: `1px solid ${showCurrents ? T.brass : T.cardEdge}`,
+                          opacity: currents ? 1 : 0.5,
+                        }}>{showCurrents ? 'On' : 'Off'}</button>
+                    )}
+                    <input type="range" min="0" max="1" step="0.05" value={opacity[k]}
+                      disabled={off}
+                      onChange={e => setOpacity(o => ({ ...o, [k]: Number(e.target.value) }))}
+                      style={{ flex: 1, maxWidth: 240, accentColor: T.brass, opacity: off ? 0.4 : 1 }} />
+                    <span style={{ fontSize: 11.5, color: T.inkMute, minWidth: 34, textAlign: 'right' }}>
+                      {isCur && !currents ? '—' : `${Math.round(opacity[k] * 100)}%`}
+                    </span>
+                  </div>
+                );
+              })}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>Species map</span>
                 {PELAGIC_SPECIES.map((sp) => {
