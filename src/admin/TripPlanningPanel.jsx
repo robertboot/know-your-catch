@@ -22,6 +22,7 @@ import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast
 import { SNAPSHOT_BOUNDS, snapshotUrl } from '../ocean-snapshots.js';
 import { habitatScore } from '../species-habitat.js';
 import { speciesPhoto } from '../helpers.js';
+import { createCurrentFlowLayer } from '../current-flow.js';
 import { SPECIES, JURISDICTIONS } from '../data.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
@@ -139,6 +140,7 @@ export default function TripPlanningPanel() {
   const mapRef = useRef(null);
   const layerRef = useRef(null);
   const overlayRef = useRef([]);
+  const flowRef = useRef(null);
 
   const region = useMemo(
     () => regions.find(r => r.id === regionId) || null,
@@ -484,6 +486,24 @@ export default function TripPlanningPanel() {
     return () => { alive = false; };
   }, []);
 
+  // Currents, animated. Rebuilt only when the DATA changes; opacity is
+  // pushed into the existing layer so dragging the slider does not reseed
+  // every particle and restart the animation under the cursor.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; }
+    if (!currents?.cells?.length) return;
+    const layer = createCurrentFlowLayer(currents.cells, { step: currents.step_deg || 0.25 });
+    layer.addTo(map);
+    layer.setOpacity(opacity.cur);
+    flowRef.current = layer;
+    return () => { if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currents]);
+
+  useEffect(() => { flowRef.current?.setOpacity(opacity.cur); }, [opacity.cur]);
+
   // The scale the image was actually drawn with, published beside it. A
   // legend that recomputes the range is a legend that can disagree with
   // its own colours.
@@ -774,14 +794,15 @@ export default function TripPlanningPanel() {
         <>
             <Card style={{ minWidth: 0 }}>
             <div style={{ display: 'grid', gap: 7, marginBottom: 10 }}>
-              {[['sst', 'Temperature'], ['chl', 'Chlorophyll']].map(([k, lab]) => (
+              {[['sst', 'Temperature'], ['chl', 'Chlorophyll'], ['cur', 'Current']].map(([k, lab]) => (
                 <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <span style={{ fontSize: 12, fontWeight: 800, color: T.ink, minWidth: 92 }}>{lab}</span>
                   <input type="range" min="0" max="1" step="0.05" value={opacity[k]}
+                    disabled={k === 'cur' && !currents}
                     onChange={e => setOpacity(o => ({ ...o, [k]: Number(e.target.value) }))}
                     style={{ flex: 1, maxWidth: 240, accentColor: T.brass }} />
                   <span style={{ fontSize: 11.5, color: T.inkMute, minWidth: 34, textAlign: 'right' }}>
-                    {Math.round(opacity[k] * 100)}%
+                    {k === 'cur' && !currents ? '—' : `${Math.round(opacity[k] * 100)}%`}
                   </span>
                 </div>
               ))}
