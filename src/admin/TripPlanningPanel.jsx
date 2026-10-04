@@ -22,7 +22,7 @@ import { fishabilityHour, fishabilityGrade, fishabilityColor } from '../forecast
 import { SNAPSHOT_BOUNDS, snapshotUrl } from '../ocean-snapshots.js';
 import { habitatScore } from '../species-habitat.js';
 import { speciesPhoto } from '../helpers.js';
-import { SPECIES } from '../data.js';
+import { SPECIES, JURISDICTIONS } from '../data.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
 
 const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
@@ -157,27 +157,23 @@ export default function TripPlanningPanel() {
     return () => { alive = false; };
   }, []);
 
-  // ---- spots for the chosen region ----------------------------------
+  // ---- spots, ALL regions -------------------------------------------
+  // The map is the whole Gulf now; each region contributes its latest
+  // pass's spots. 72h window keeps a cloudy region's older-but-current
+  // edges without letting a stale week back in.
   const load = useCallback(async () => {
-    if (!regionId) return;
     const c = client();
     if (!c) return;
     setLoading(true); setError('');
-    // Newest satellite pass only. Mixing passes would put a Tuesday break
-    // beside a Friday one on the same map with nothing saying so.
-    const { data: latest } = await c.from('hotspots')
-      .select('observed_at').eq('region_id', regionId)
-      .order('observed_at', { ascending: false }).limit(1);
-    const obs = latest?.[0]?.observed_at || null;
-    setObservedAt(obs);
-    if (!obs) { setSpots([]); setLoading(false); return; }
+    const since = new Date(Date.now() - 72 * 3600000).toISOString();
     const { data, error: err } = await c.from('hotspots')
-      .select('*').eq('region_id', regionId).eq('observed_at', obs)
-      .order('score', { ascending: false });
+      .select('*').gte('observed_at', since)
+      .order('score', { ascending: false }).limit(60);
     setLoading(false);
     if (err) { setError(err.message); return; }
     setSpots(data || []);
-  }, [regionId]);
+    setObservedAt((data || []).reduce((a, s) => (a && a > s.observed_at ? a : s.observed_at), null));
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -185,11 +181,33 @@ export default function TripPlanningPanel() {
   // The edges are OBSERVED and cannot be forecast; the weather can. So the
   // day you pick does not change which breaks exist — it changes whether
   // you can get to them, and how stale the satellite will be by then.
+  // Ribbon grades the user's own FISHING WATERS — the jurisdiction picked
+  // during app setup (read from the app's saved state; admin shares the
+  // origin). Offshore grading point per jurisdiction, ~30-60 nm out —
+  // graded where the boat goes, not at the capitol building.
+  const waters = useMemo(() => {
+    const PTS = {
+      al_state:     { lat: 29.8, lon: -87.9 },
+      ms_state:     { lat: 29.9, lon: -88.6 },
+      la_state:     { lat: 28.6, lon: -90.0 },
+      tx_state:     { lat: 27.8, lon: -96.4 },
+      fl_state:     { lat: 27.5, lon: -83.6 },
+      fl_atlantic:  { lat: 27.8, lon: -79.9 },
+      fed_gulf:     { lat: 27.5, lon: -88.5 },
+      fed_satlantic:{ lat: 28.5, lon: -79.5 },
+    };
+    try {
+      const st = JSON.parse(localStorage.getItem('kyc_app_state_v1') || 'null');
+      const jid = st?.jurisdiction;
+      const jur = JURISDICTIONS.find(j => j.id === jid);
+      if (jur && PTS[jid]) return { ...PTS[jid], name: jur.name };
+    } catch { /* fall through to central Gulf */ }
+    return { lat: 27.5, lon: -88.5, name: 'the central Gulf' };
+  }, []);
+
   useEffect(() => {
-    if (!region) return;
     let alive = true;
-    const lat = (region.south + region.north) / 2;
-    const lon = (region.west + region.east) / 2;
+    const { lat, lon } = waters;
     (async () => {
       setCondErr('');
       try {
@@ -246,7 +264,7 @@ export default function TripPlanningPanel() {
       }
     })();
     return () => { alive = false; };
-  }, [region]);
+  }, []);
 
   const days = useMemo(() => {
     const out = [];
@@ -279,7 +297,7 @@ export default function TripPlanningPanel() {
     L.tileLayer(BASEMAP_LABELS_URL, {
       maxZoom: BASEMAP_MAX_ZOOM, pane: 'shadowPane',
     }).addTo(map);
-    map.setView([29.2, -87.7], 7);
+    map.fitBounds(SNAPSHOT_BOUNDS, { padding: [10, 10] });
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 200);
   }, []);
@@ -326,16 +344,15 @@ export default function TripPlanningPanel() {
     let alive = true;
     (async () => {
       setZoneRows([]);
-      if (!regionId) return;
       const c = client();
       if (!c) return;
+      // ALL regions — the species map covers the whole satellite footprint.
       const { data } = await c.from('hotspot_zones')
-        .select('*').eq('region_id', regionId)
-        .in('mode_key', [...PELAGIC_SPECIES, '_currents']);
+        .select('*').in('mode_key', [...PELAGIC_SPECIES, '_currents']);
       if (alive) setZoneRows(data || []);
     })();
     return () => { alive = false; };
-  }, [regionId]);
+  }, []);
 
   // Draw each toggled-on species in its own colour, on a pane UNDER the
   // catch/spot markers. Opacity ranks WITHIN the species (relative, like
@@ -458,7 +475,8 @@ export default function TripPlanningPanel() {
   // Where fish have actually come from. The satellite says where the water
   // changes; the logbook says where that mattered.
   useEffect(() => {
-    if (!region || catchView === 'off') { setCatches([]); return; }
+    if (catchView === 'off') { setCatches([]); return; }
+    const [[bS, bW], [bN, bE]] = SNAPSHOT_BOUNDS;
     let alive = true;
     (async () => {
       const c = client();
@@ -470,8 +488,8 @@ export default function TripPlanningPanel() {
       const [{ data }, { data: pbRows }] = await Promise.all([
         c.from('catches')
           .select('*')
-          .gte('lat', region.south).lte('lat', region.north)
-          .gte('lon', region.west).lte('lon', region.east)
+          .gte('lat', bS).lte('lat', bN)
+          .gte('lon', bW).lte('lon', bE)
           .limit(500),
         c.from('pbs').select('data, deleted_at').limit(2000),
       ]);
@@ -482,7 +500,7 @@ export default function TripPlanningPanel() {
       setCatches((data || []).filter(r => r.lat != null && r.lon != null));
     })();
     return () => { alive = false; };
-  }, [region, catchView]);
+  }, [catchView]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -491,13 +509,17 @@ export default function TripPlanningPanel() {
     const group = L.layerGroup().addTo(map);
     layerRef.current = group;
 
-    if (region) {
-      L.rectangle([[region.south, region.west], [region.north, region.east]], {
-        color: T.brass, weight: 1, fill: false, dashArray: '4 6', opacity: 0.5,
-      }).addTo(group);
-      L.circleMarker([region.port_lat, region.port_lon], {
-        radius: 5, color: '#ffffff', weight: 2, fillColor: T.brass, fillOpacity: 1,
-      }).bindTooltip(region.port_name, { direction: 'top' }).addTo(group);
+    // Every region's port, lightly — reference points on a whole-Gulf map,
+    // not the subject. The dashed region boxes are gone: nine rectangles
+    // over one map read as a broken grid, not as information.
+    const seenPorts = new Set();
+    for (const r of regions) {
+      const k = `${r.port_lat},${r.port_lon}`;
+      if (seenPorts.has(k)) continue;
+      seenPorts.add(k);
+      L.circleMarker([r.port_lat, r.port_lon], {
+        radius: 4, color: '#ffffff', weight: 1.5, fillColor: T.brass, fillOpacity: 0.9,
+      }).bindTooltip(r.port_name, { direction: 'top' }).addTo(group);
     }
 
     // Catches first so a spot marker is never hidden behind one.
@@ -566,32 +588,28 @@ export default function TripPlanningPanel() {
         .addTo(group);
     }
 
-    if (spots.length) {
-      map.fitBounds(L.latLngBounds(spots.map(s => [s.lat, s.lon]))
-        .extend(region ? [region.port_lat, region.port_lon] : undefined), { padding: [40, 40] });
-    } else if (region) {
-      map.fitBounds([[region.south, region.west], [region.north, region.east]], { padding: [20, 20] });
-    }
-  }, [spots, region, selected, catches, pbIds, catchView, anglers]);
+  }, [spots, regions, selected, catches, pbIds, catchView, anglers]);
 
   // ---- recompute -----------------------------------------------------
   const recompute = async () => {
-    if (!regionId || running) return;
+    if (running) return;
     setRunning(true); setError('');
     try {
       const token = getLastSession()?.access_token;
+      // No region in the body → the function runs every active region.
+      // Nine regions × four satellite grids: minutes, not seconds.
       const r = await fetch(`${SUPABASE_URL}/functions/v1/find-hotspots`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token || SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ region: regionId }),
+        body: JSON.stringify({}),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body?.error || `HTTP ${r.status}`);
-      const mine = (body.regions || []).find(x => x.region === regionId);
-      if (mine?.error) throw new Error(mine.error);
+      const bad = (body.regions || []).filter(x => x.error);
+      if (bad.length) throw new Error(`${bad.length} region(s) failed — first: ${bad[0].region}: ${bad[0].error}`);
       await load();
     } catch (e) {
       // The reply, verbatim. A scraped satellite run fails for reasons no
@@ -613,24 +631,21 @@ export default function TripPlanningPanel() {
     // scrolling inside its own card, and the admin header scrolls off-screen.
     <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1fr)',
                   maxWidth: '100%', minWidth: 0 }}>
-      {/* Waters sits with the page title, not in a card of its own: it is
-          the scope of everything below, not another setting to scroll past. */}
+      {/* One map, the whole Gulf + Florida Atlantic — no waters picker.
+          The species zones cover every region at once. */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
                     marginTop: -4, marginBottom: 2 }}>
-        <select value={regionId} onChange={e => setRegionId(e.target.value)}
-          style={{ padding: '7px 10px', borderRadius: 8, background: T.parchmentDeep,
-                   color: T.ink, border: `1px solid ${T.cardEdge}`, fontSize: 14, fontWeight: 800 }}>
-          {regions.length === 0 && <option value="">No regions configured</option>}
-          {regions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-        </select>
         <div style={{ flex: 1 }} />
-        <GhostButton onClick={recompute} disabled={running || !regionId}>
+        <GhostButton onClick={recompute} disabled={running}>
           {running ? 'Reading satellites…' : 'Regenerate'}
         </GhostButton>
       </div>
 
       <Card style={{ minWidth: 0, overflow: 'hidden' }}>
         <SectionLabel>When are you going?</SectionLabel>
+        <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 4 }}>
+          Graded for your fishing waters — {waters.name}, set when you set up the app.
+        </div>
         {/* The ribbon scrolls. On iPad the tenth day was half off the edge
             with nothing to say it was reachable, so: momentum scrolling,
             snap points, and days that cannot shrink below a readable width. */}
@@ -693,7 +708,7 @@ export default function TripPlanningPanel() {
             <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5 }}>
               Satellite pass {new Date(observedAt).toLocaleString()} ·{' '}
               {spots.length} edge{spots.length === 1 ? '' : 's'} found
-              {region ? ` · distances from ${region.port_name}` : ''}
+              
               {/* Breaks cannot be forecast — they are observed, and they drift
                   with the current. Saying how stale the picture will be on the
                   chosen day is the difference between a position and a hint. */}
