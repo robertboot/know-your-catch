@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0-beta.1",
   "type": "module",
-  "description": "ReelIntel \u2014 identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
+  "description": "ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -50,6 +50,7 @@
     "@capacitor/cli": "^8.4.1",
     "@capacitor/ios": "^8.4.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.63.0",
     "vite": "^5.4.10"
   }
 }

@@ -286,7 +286,8 @@ export default function TripPlanningPanel() {
   return (
     // minmax(0,1fr): without it the day ribbon widens the page instead of
     // scrolling inside its own card, and the admin header scrolls off-screen.
-    <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+    <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1fr)',
+                  maxWidth: '100%', minWidth: 0 }}>
       {/* Waters sits with the page title, not in a card of its own: it is
           the scope of everything below, not another setting to scroll past. */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
@@ -324,13 +325,17 @@ export default function TripPlanningPanel() {
         </div>
       </Card>
 
-      <Card>
+      <Card style={{ minWidth: 0, overflow: 'hidden' }}>
         <SectionLabel>When are you going?</SectionLabel>
         {/* The ribbon scrolls. On iPad the tenth day was half off the edge
             with nothing to say it was reachable, so: momentum scrolling,
             snap points, and days that cannot shrink below a readable width. */}
         <div style={{
           display: 'flex', gap: 6, marginTop: 8, paddingBottom: 6,
+          // width + minWidth:0 together are what actually make this scroll.
+          // overflowX alone does nothing when the element is free to grow —
+          // it just got wider than the page and took the header with it.
+          width: '100%', maxWidth: '100%', minWidth: 0,
           overflowX: 'auto', overflowY: 'hidden',
           WebkitOverflowScrolling: 'touch',
           scrollSnapType: 'x proximity',

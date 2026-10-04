@@ -2418,6 +2418,9 @@ function Chrome({ title, children, onExit, exitLabel = '← Back to app' }) {
     <div style={{
       background: T.bgGradient, minHeight: '100vh', color: T.ink,
       maxWidth: 720, margin: '0 auto', padding: 16, boxSizing: 'border-box',
+      // A panel that overflows must not be able to drag the whole console
+      // sideways — the header scrolled off-screen and the tab bar with it.
+      overflowX: 'hidden',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
         <H1 size={22}>{title}</H1>
