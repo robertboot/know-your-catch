@@ -410,7 +410,7 @@ export default function TripPlanningPanel() {
     const group = L.layerGroup();
     for (const [lat, lon, kt, dir] of row.cells) {
       const size = 13 + Math.min(13, kt * 9);          // faster = bigger arrow
-      const op = Math.min(0.95, 0.6 + kt * 0.3);       // slow water still readable
+      const op = 0.5;                                  // flat 50% — informative, never loud
       // Dark glyph with a light halo — the pale blue read as nothing on
       // the pale GEBCO basemap.
       L.marker([lat, lon], {
