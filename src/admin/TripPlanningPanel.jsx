@@ -71,11 +71,11 @@ const SPECIES_ZONE_COLORS = {
   mahi:          '#2BE07F',
   yellowfin_tuna:'#ffd23d',
   blackfin_tuna: '#c08cff',
-  bigeye_tuna:   '#8ab4ff',
+  bigeye_tuna:   '#7c3aed',
   bluefin_tuna:  '#5ac8f5',
   wahoo:         '#ff5a3d',
   blue_marlin:   '#4f7bff',
-  white_marlin:  '#bfe3ff',
+  white_marlin:  '#0d9488',
   sailfish:      '#ff9a3d',
   swordfish:     '#ff7ab8',
 };
