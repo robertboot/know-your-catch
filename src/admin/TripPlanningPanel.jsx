@@ -409,16 +409,19 @@ export default function TripPlanningPanel() {
     if (!showCurrents || !row?.cells?.length) return;
     const group = L.layerGroup();
     for (const [lat, lon, kt, dir] of row.cells) {
-      const size = 10 + Math.min(14, kt * 8);          // faster = bigger arrow
-      const op = Math.min(0.9, 0.35 + kt * 0.35);
+      const size = 13 + Math.min(13, kt * 9);          // faster = bigger arrow
+      const op = Math.min(0.95, 0.6 + kt * 0.3);       // slow water still readable
+      // Dark glyph with a light halo — the pale blue read as nothing on
+      // the pale GEBCO basemap.
       L.marker([lat, lon], {
         pane: 'currentspane', interactive: false,
         icon: L.divIcon({
           className: '',
           iconSize: [size, size], iconAnchor: [size / 2, size / 2],
           html: `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;`
-              + `transform:rotate(${dir - 90}deg);color:#cfeaff;opacity:${op};`
-              + `font-size:${size}px;line-height:1;text-shadow:0 0 3px rgba(0,0,0,.8)">➤</div>`,
+              + `transform:rotate(${dir - 90}deg);color:#12324f;opacity:${op};`
+              + `font-size:${size}px;line-height:1;font-weight:900;`
+              + `text-shadow:0 0 2px rgba(255,255,255,.9),0 0 5px rgba(255,255,255,.6)">➤</div>`,
         }),
       }).addTo(group);
     }
