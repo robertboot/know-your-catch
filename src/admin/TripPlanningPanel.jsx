@@ -621,7 +621,7 @@ export default function TripPlanningPanel() {
         </select>
         <div style={{ flex: 1 }} />
         <GhostButton onClick={recompute} disabled={running || !regionId}>
-          {running ? 'Reading satellites…' : 'Recompute'}
+          {running ? 'Reading satellites…' : 'Regenerate'}
         </GhostButton>
       </div>
 
@@ -779,7 +779,7 @@ export default function TripPlanningPanel() {
                   Where each species' water is this week — temperature band, season, depth and the
                   edges, from last night's satellite pass. Deeper colour = that species' best water.
                   Arrows are the surface current (loop current and eddies); bigger = faster.
-                  {!zoneRows.length && ' No zones for this region yet — Recompute, or wait for tonight.'}
+                  {!zoneRows.length && ' No zones for this region yet — Regenerate, or wait for tonight.'}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -814,7 +814,7 @@ export default function TripPlanningPanel() {
             {loading && <div style={{ fontSize: 13, color: T.inkMute, marginTop: 8 }}>Loading…</div>}
             {!loading && spots.length === 0 && (
               <div style={{ fontSize: 13.5, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
-                No edges recorded for these waters. Press Recompute to read the latest satellite
+                No edges recorded for these waters. Press Regenerate to read the latest satellite
                 pass — a flat, well-mixed sea genuinely has no breaks worth driving to, so an
                 empty result can also be the right answer.
               </div>
