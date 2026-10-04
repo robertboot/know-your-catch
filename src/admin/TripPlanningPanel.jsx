@@ -86,6 +86,7 @@ export default function TripPlanningPanel() {
   const [opacity, setOpacity] = useState({ sst: 0.72, chl: 0.55 });
   const [showCatches, setShowCatches] = useState(true);
   const [catches, setCatches] = useState([]);
+  const [pbIds, setPbIds] = useState(() => new Set());
   const [sstRange, setSstRange] = useState(null);
   // A planner without a date is just a map. Default to today because that
   // is the trip you might still make, but the useful case is Thursday on a
@@ -305,12 +306,23 @@ export default function TripPlanningPanel() {
     (async () => {
       const c = client();
       if (!c) return;
-      const { data } = await c.from('catches')
-        .select('*')
-        .gte('lat', region.south).lte('lat', region.north)
-        .gte('lon', region.west).lte('lon', region.east)
-        .limit(500);
-      if (alive) setCatches((data || []).filter(r => r.lat != null && r.lon != null));
+      // Personal bests alongside the catches: a pb row carries the id of the
+      // catch that set it, which is the only honest way to know which mark
+      // on the map is somebody's best — heaviest-in-the-table would be our
+      // opinion, not theirs.
+      const [{ data }, { data: pbRows }] = await Promise.all([
+        c.from('catches')
+          .select('*')
+          .gte('lat', region.south).lte('lat', region.north)
+          .gte('lon', region.west).lte('lon', region.east)
+          .limit(500),
+        c.from('pbs').select('data, deleted_at').limit(2000),
+      ]);
+      if (!alive) return;
+      setPbIds(new Set((pbRows || [])
+        .filter(r => !r.deleted_at && r.data?.catchId)
+        .map(r => r.data.catchId)));
+      setCatches((data || []).filter(r => r.lat != null && r.lon != null));
     })();
     return () => { alive = false; };
   }, [region, showCatches]);
@@ -335,21 +347,31 @@ export default function TripPlanningPanel() {
     for (const c of catches) {
       const name = SPECIES_NAME.get(c.species_id) || c.species_id || 'Catch';
       const when = c.caught_at || c.date_iso;
-      const label = `${name}${when ? ` · ${String(when).slice(0, 10)}` : ''}`;
+      const label = `${name}${when ? ` · ${String(when).slice(0, 10)}` : ''}`
+        + (pbIds.has(c.id) ? ' · personal best' : '');
       // The species photo, same source the app uses, so a catch on this map
       // is recognisable at a glance instead of being one more dot among the
       // spots. Falls back to a plain mark where a species has no photo —
       // a broken image icon would read as a fault.
       const photo = speciesPhoto(c.species_id);
+      const isPB = pbIds.has(c.id);
+      // The star sits beside the photo rather than on it: a badge over the
+      // fish hides the one thing the icon exists to show.
+      const star = isPB
+        ? '<span style="position:absolute;left:19px;top:-4px;font-size:13px;'
+          + 'line-height:1;text-shadow:0 1px 3px rgba(0,0,0,.7)">\u2b50</span>'
+        : '';
       const marker = photo?.url
         ? L.marker([c.lat, c.lon], {
             icon: L.divIcon({
               className: '',
               iconSize: [26, 26],
               iconAnchor: [13, 13],
-              html: `<img src="${photo.url}" alt="" style="width:26px;height:26px;`
+              html: `<div style="position:relative;width:26px;height:26px">`
+                  + `<img src="${photo.url}" alt="" style="width:26px;height:26px;`
                   + `border-radius:50%;object-fit:cover;display:block;`
-                  + `border:1.5px solid ${T.brass};box-shadow:0 1px 4px rgba(0,0,0,.5)">`,
+                  + `border:1.5px solid ${isPB ? '#f5c542' : T.brass};`
+                  + `box-shadow:0 1px 4px rgba(0,0,0,.5)">${star}</div>`,
             }),
           })
         : L.circleMarker([c.lat, c.lon], {
@@ -380,7 +402,7 @@ export default function TripPlanningPanel() {
     } else if (region) {
       map.fitBounds([[region.south, region.west], [region.north, region.east]], { padding: [20, 20] });
     }
-  }, [spots, region, selected, catches]);
+  }, [spots, region, selected, catches, pbIds]);
 
   // ---- recompute -----------------------------------------------------
   const recompute = async () => {
