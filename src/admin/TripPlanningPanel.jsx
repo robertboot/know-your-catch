@@ -33,6 +33,34 @@ const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
    out again so a rename lands here too. */
 const SPECIES_NAME = new Map(SPECIES.map(s => [s.id, s.commonName]));
 
+/* Remembered between sessions. Nothing here is precious — a cleared
+   browser just gets the defaults back — so every read and write is
+   wrapped: private windows and blocked site data throw on access rather
+   than returning null, and a map that will not open because of a settings
+   read is a absurd way to lose the page. */
+const PREFS_KEY = 'kyc.admin.trip-planning.v1';
+const PREFS_DEFAULT = {
+  layerOn: { sst: false, chl: false, cur: false },
+  catchView: 'mine',
+  speciesOn: ['wahoo', 'yellowfin_tuna', 'mahi'],
+};
+function readPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
+    if (!raw) return PREFS_DEFAULT;
+    return {
+      layerOn: { ...PREFS_DEFAULT.layerOn, ...(raw.layerOn || {}) },
+      catchView: ['mine', 'all', 'off'].includes(raw.catchView) ? raw.catchView : PREFS_DEFAULT.catchView,
+      speciesOn: Array.isArray(raw.speciesOn) ? raw.speciesOn : PREFS_DEFAULT.speciesOn,
+    };
+  } catch {
+    return PREFS_DEFAULT;
+  }
+}
+function writePrefs(p) {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* not worth a word */ }
+}
+
 /* Which of this mode's fish suit this particular water.
  *
  * Scored on the CLIENT, from the measurements the server already wrote on
@@ -115,10 +143,14 @@ export default function TripPlanningPanel() {
   // when you want to read a break against the zones.
   /* Layers are on or off, not a strength. The sliders invited fiddling
      with a number nobody wanted to choose, and three rows of them pushed
-     the map down to a strip. Each layer has one sensible opacity, picked
-     so the satellite sits UNDER the spots rather than competing with
-     them. */
-  const [layerOn, setLayerOn] = useState({ sst: true, chl: false, cur: false });
+     the map down to a strip.
+
+     Everything starts OFF except your own catches. A map that opens with
+     four layers stacked on it has made four decisions for you; opening
+     clean means the first thing you turn on is the thing you came to
+     look at. The choices are then remembered, because re-making them
+     every session is the actual annoyance. */
+  const [layerOn, setLayerOn] = useState(() => readPrefs().layerOn);
   const [layersOpen, setLayersOpen] = useState(false);
   const opacity = useMemo(() => ({
     // Full strength. Faded satellite layers read as washed-out guesses —
@@ -135,7 +167,7 @@ export default function TripPlanningPanel() {
   // 'mine' | 'all' | 'off'. Defaults to mine: on a map of 71 points the
   // useful question is "where have I been", and everyone else's marks
   // answer a different one.
-  const [catchView, setCatchView] = useState('mine');
+  const [catchView, setCatchView] = useState(() => readPrefs().catchView);
   const [catches, setCatches] = useState([]);
   // Species map — one zone row per pelagic species, each its own colour.
   const [zoneRows, setZoneRows] = useState([]);   // hotspot_zones rows, keyed by species
@@ -143,7 +175,7 @@ export default function TripPlanningPanel() {
     () => zoneRows.find(z => z.mode_key === '_currents' && z.cells?.length) || null,
     [zoneRows],
   );
-  const [speciesOn, setSpeciesOn] = useState(() => new Set(['mahi', 'yellowfin_tuna', 'wahoo', 'blackfin_tuna', 'sailfish']));
+  const [speciesOn, setSpeciesOn] = useState(() => new Set(readPrefs().speciesOn));
   const showCurrents = layerOn.cur;   // one switch, in the layer menu
   const zonesLayerRef = useRef(null);
   const currentsLayerRef = useRef(null);
@@ -704,6 +736,10 @@ export default function TripPlanningPanel() {
     }
   };
 
+  useEffect(() => {
+    writePrefs({ layerOn, catchView, speciesOn: [...speciesOn] });
+  }, [layerOn, catchView, speciesOn]);
+
   const activeMode = TRIP_MODES.find(m => m.key === mode);
   const LAYER_TOGGLES = [
     { key: 'sst', label: 'Sea temperature' },
@@ -899,31 +935,6 @@ export default function TripPlanningPanel() {
                       </label>
                     ))}
 
-                    <div style={{ height: 1, background: T.cardEdge, margin: '8px 0' }} />
-                    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1,
-                                  textTransform: 'uppercase', color: T.inkMute, marginBottom: 5 }}>
-                      Species map
-                    </div>
-                    {PELAGIC_SPECIES.map((sp) => {
-                      const hasData = zoneRows.some(z => z.mode_key === sp && z.cells?.length);
-                      return (
-                        <label key={sp}
-                          style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 2px',
-                                   cursor: hasData ? 'pointer' : 'not-allowed',
-                                   opacity: hasData ? 1 : 0.4, fontSize: 13, color: T.ink }}>
-                          <input type="checkbox" checked={speciesOn.has(sp)} disabled={!hasData}
-                            onChange={() => setSpeciesOn(prev => {
-                              const next = new Set(prev);
-                              if (next.has(sp)) next.delete(sp); else next.add(sp);
-                              return next;
-                            })}
-                            style={{ accentColor: SPECIES_ZONE_COLORS[sp] || T.brass, width: 15, height: 15 }} />
-                          <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto',
-                                         background: SPECIES_ZONE_COLORS[sp] || T.brass }} />
-                          {SPECIES_NAME.get(sp) || sp}
-                        </label>
-                      );
-                    })}
                   </div>
                 )}
               </div>
@@ -933,6 +944,44 @@ export default function TripPlanningPanel() {
                               fontSize: 12, color: T.ink, background: 'rgba(12,26,38,0.9)',
                               padding: '6px 10px', borderRadius: 8 }}>{overlayErr}</div>
               )}
+              {/* Species along the bottom of the map, not buried in the layer
+                  menu. They are the thing you flick between while looking at
+                  the water, so they belong where your eye already is —
+                  and a menu you must open to change them is a menu you
+                  stop changing. */}
+              <div style={{
+                position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 1000,
+                display: 'flex', gap: 6, padding: '10px 12px',
+                overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+                background: 'linear-gradient(to top, rgba(8,20,30,0.92), rgba(8,20,30,0))',
+              }}>
+                {PELAGIC_SPECIES.map((sp) => {
+                  const on = speciesOn.has(sp);
+                  const hasData = zoneRows.some(z => z.mode_key === sp && z.cells?.length);
+                  const col = SPECIES_ZONE_COLORS[sp] || T.brass;
+                  return (
+                    <button key={sp} disabled={!hasData}
+                      onClick={() => setSpeciesOn(prev => {
+                        const next = new Set(prev);
+                        if (next.has(sp)) next.delete(sp); else next.add(sp);
+                        return next;
+                      })}
+                      style={{
+                        flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '6px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 800,
+                        cursor: hasData ? 'pointer' : 'not-allowed',
+                        color: T.ink, opacity: hasData ? 1 : 0.4,
+                        background: on ? 'rgba(12,26,38,0.95)' : 'rgba(12,26,38,0.6)',
+                        border: `1px solid ${on ? col : T.cardEdge}`,
+                        whiteSpace: 'nowrap',
+                      }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: col,
+                                     opacity: on ? 1 : 0.35 }} />
+                      {SPECIES_NAME.get(sp) || sp}
+                    </button>
+                  );
+                })}
+              </div>
               <div ref={mapElRef}
                    style={{ height: '70vh', minHeight: 420, width: '100%',
                             background: T.parchmentDeep }} />
