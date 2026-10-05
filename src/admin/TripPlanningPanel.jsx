@@ -121,8 +121,11 @@ export default function TripPlanningPanel() {
   const [layerOn, setLayerOn] = useState({ sst: true, chl: false, cur: false });
   const [layersOpen, setLayersOpen] = useState(false);
   const opacity = useMemo(() => ({
-    sst: layerOn.sst ? 0.45 : 0,
-    chl: layerOn.chl ? 0.40 : 0,
+    // Full strength. Faded satellite layers read as washed-out guesses —
+    // the colour IS the measurement, and halving it halves the only thing
+    // the layer is there to show. The spots sit above it regardless.
+    sst: layerOn.sst ? 1 : 0,
+    chl: layerOn.chl ? 1 : 0,
     cur: layerOn.cur ? 0.80 : 0,
   }), [layerOn]);
   const toggleLayer = (k) => setLayerOn(o => ({ ...o, [k]: !o[k] }));
@@ -316,7 +319,10 @@ export default function TripPlanningPanel() {
   // ---- map ----------------------------------------------------------
   useEffect(() => {
     if (!mapElRef.current || mapRef.current) return;
-    const map = L.map(mapElRef.current, { zoomControl: true, attributionControl: true });
+    // Zoom on the RIGHT: the Layers button lives top-left and the two
+    // were landing on top of each other.
+    const map = L.map(mapElRef.current, { zoomControl: false, attributionControl: true });
+    L.control.zoom({ position: 'topright' }).addTo(map);
     L.tileLayer(BASEMAP_URL, {
       attribution: BASEMAP_ATTRIBUTION, maxZoom: BASEMAP_MAX_ZOOM,
     }).addTo(map);
