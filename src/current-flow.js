@@ -22,9 +22,20 @@ const toRad = (d) => (d * Math.PI) / 180;
 /* Particles move at a multiple of real speed — at true scale a 1 kt
    current crawls about a pixel a minute and reads as a still image. */
 const TIME_SCALE = 2600;
-const PARTICLE_COUNT = 700;
-const MAX_AGE_FRAMES = 90;
-const TRAIL_FADE = 0.90;   // lower = shorter tails
+const PARTICLE_COUNT = 1100;
+const MAX_AGE_FRAMES = 110;
+const TRAIL_FADE = 0.945;  // higher = longer tails, so the shape of the flow holds
+
+/* Speed bands. Drawn as three paths rather than one, so fast water is
+   visibly fast — a single colour makes a 2 kt eddy edge look exactly like
+   half a knot of drift, which is the one distinction the layer exists to
+   make. Three stroke calls a frame; the cost is in the particle loop, not
+   here. */
+const SPEED_BANDS = [
+  { max: 0.5, color: 'rgba(120, 190, 225, 0.55)', width: 1.0 },
+  { max: 1.2, color: 'rgba(170, 230, 255, 0.85)', width: 1.5 },
+  { max: Infinity, color: 'rgba(235, 252, 255, 1)', width: 2.2 },
+];
 // 30fps, not 60. Flow reads identically at half the frame rate and costs
 // half as much — and this runs beside a Leaflet map with image overlays
 // and several hundred markers, which is where the budget actually goes.
@@ -181,11 +192,10 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
       ctx.fillRect(0, 0, size.x, size.y);
       ctx.globalCompositeOperation = 'source-over';
 
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
       const { s, n, w, e } = this._bounds;
       const pr = this._proj;
       if (!pr) return;
+      const paths = SPEED_BANDS.map(() => new Path2D());
       for (const p of this._particles) {
         const f = sample(p.lat, p.lon);
         if (!f || p.age++ > MAX_AGE_FRAMES) {
@@ -204,11 +214,18 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
         p.lat += dLat; p.lon += dLon;
         const bx = pr.x0 + (p.lon - pr.lon0) * pr.pxPerLon;
         const by = pr.y0 + (p.lat - pr.lat0) * pr.pxPerLat;
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(bx, by);
+        const kt = Math.hypot(u, v);
+        let band = 0;
+        while (band < SPEED_BANDS.length - 1 && kt > SPEED_BANDS[band].max) band++;
+        paths[band].moveTo(ax, ay);
+        paths[band].lineTo(bx, by);
       }
-      ctx.strokeStyle = 'rgba(190, 240, 255, 0.85)';
-      ctx.stroke();
+      ctx.lineCap = 'round';
+      for (let b = 0; b < SPEED_BANDS.length; b++) {
+        ctx.strokeStyle = SPEED_BANDS[b].color;
+        ctx.lineWidth = SPEED_BANDS[b].width;
+        ctx.stroke(paths[b]);
+      }
     },
   });
 

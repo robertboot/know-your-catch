@@ -160,7 +160,14 @@ export default function TripPlanningPanel() {
     chl: layerOn.chl ? 1 : 0,
     cur: layerOn.cur ? 0.80 : 0,
   }), [layerOn]);
-  const toggleLayer = (k) => setLayerOn(o => ({ ...o, [k]: !o[k] }));
+  /* One at a time. Temperature under chlorophyll under current was three
+     pictures of the same water fighting for the same pixels, and at full
+     opacity the top one simply won. Selecting a layer now clears the
+     others; clicking the selected one turns everything off. */
+  const toggleLayer = (k) => setLayerOn(o => (
+    o[k] ? { sst: false, chl: false, cur: false }
+         : { sst: false, chl: false, cur: false, [k]: true }
+  ));
   // Derived, not fetched. There was a second query for this that never ran,
   // so `currents` stayed null and the slider sat disabled for ever. The
   // vectors already arrive with the zones.
@@ -178,7 +185,6 @@ export default function TripPlanningPanel() {
   const [speciesOn, setSpeciesOn] = useState(() => new Set(readPrefs().speciesOn));
   const showCurrents = layerOn.cur;   // one switch, in the layer menu
   const zonesLayerRef = useRef(null);
-  const currentsLayerRef = useRef(null);
   const [pbIds, setPbIds] = useState(() => new Set());
   const [anglers, setAnglers] = useState(() => new Map());
   const [sstRange, setSstRange] = useState(null);
@@ -486,54 +492,9 @@ export default function TripPlanningPanel() {
     zonesLayerRef.current = group;
   }, [zoneRows, speciesOn]);
 
-  // Current arrows — geostrophic (loop current + eddies, from sea-surface
-  // height). Drawn above the zones, below the markers. dir is where the
-  // water flows TOWARD; the glyph '➤' points east at 0 rotation, so
-  // rotate by (dir - 90).
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (!map.getPane('currentspane')) {
-      map.createPane('currentspane');
-      map.getPane('currentspane').style.zIndex = 406;
-      map.getPane('currentspane').style.pointerEvents = 'none';
-    }
-    if (currentsLayerRef.current) { map.removeLayer(currentsLayerRef.current); currentsLayerRef.current = null; }
-    // ALL regions' current rows, deduped at the box overlaps (same 0.25°
-    // grid everywhere, so identical lat,lon = the same measurement).
-    const curRows = zoneRows.filter(z => z.mode_key === '_currents' && z.cells?.length);
-    if (!showCurrents || !curRows.length) return;
-    const seen = new Set();
-    const vectors = [];
-    for (const z of curRows) {
-      for (const cell of z.cells) {
-        const k = `${cell[0]},${cell[1]}`;
-        if (seen.has(k)) continue;
-        seen.add(k);
-        vectors.push(cell);
-      }
-    }
-    const group = L.layerGroup();
-    for (const [lat, lon, kt, dir] of vectors) {
-      const size = 13 + Math.min(13, kt * 9);          // faster = bigger arrow
-      const op = 0.5;                                  // flat 50% — informative, never loud
-      // Dark glyph with a light halo — the pale blue read as nothing on
-      // the pale GEBCO basemap.
-      L.marker([lat, lon], {
-        pane: 'currentspane', interactive: false,
-        icon: L.divIcon({
-          className: '',
-          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
-          html: `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;`
-              + `transform:rotate(${dir - 90}deg);color:#12324f;opacity:${op};`
-              + `font-size:${size}px;line-height:1;font-weight:900;`
-              + `text-shadow:0 0 2px rgba(255,255,255,.9),0 0 5px rgba(255,255,255,.6)">➤</div>`,
-        }),
-      }).addTo(group);
-    }
-    group.addTo(map);
-    currentsLayerRef.current = group;
-  }, [zoneRows, showCurrents]);
+  // The static arrows that used to live here are gone. Two renderings of
+  // one dataset, and the animation says everything the arrows did —
+  // direction, and now speed — without a lattice of glyphs over the water.
 
   // Who logged what. Several of these 71 catches are testers entering mock
   // data, and a spot built from invented fish is worse than no spot at all.
