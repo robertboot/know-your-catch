@@ -973,9 +973,15 @@ export default function TripPlanningPanel() {
             {loading && <div style={{ fontSize: 13, color: T.inkMute, marginTop: 8 }}>Loading…</div>}
             {!loading && spots.length === 0 && (
               <div style={{ fontSize: 13.5, color: T.inkMute, marginTop: 8, lineHeight: 1.5 }}>
-                No edges recorded for these waters. Press Regenerate to read the latest satellite
-                pass — a flat, well-mixed sea genuinely has no breaks worth driving to, so an
-                empty result can also be the right answer.
+                {zoneRows.length
+                  // A pass exists (the species map is drawn from it) — the
+                  // empty list is a finding, not a failure. Telling someone
+                  // to press Regenerate again after a clean run is a nag.
+                  ? 'The latest pass found no break strong enough to drive to — the water is '
+                    + 'well-mixed, without a sharp temperature or colour wall. The species map '
+                    + 'above is still the where-to-go; this list fills when a real edge sets up.'
+                  : 'No satellite pass read yet for these waters — press Regenerate, or wait '
+                    + 'for tonight’s run.'}
               </div>
             )}
             <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
