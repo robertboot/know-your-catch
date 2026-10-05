@@ -66,15 +66,15 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
     const i0 = Math.floor(fi), j0 = Math.floor(fj);
     const ti = fi - i0, tj = fj - j0;
     const c00 = at(i0, j0), c10 = at(i0 + 1, j0), c01 = at(i0, j0 + 1), c11 = at(i0 + 1, j0 + 1);
-    if (!c00 && !c10 && !c01 && !c11) return null;
-    let u = 0, v = 0, w = 0;
-    const add = (c, weight) => { if (c) { u += c[0] * weight; v += c[1] * weight; w += weight; } };
-    add(c00, (1 - ti) * (1 - tj));
-    add(c10, ti * (1 - tj));
-    add(c01, (1 - ti) * tj);
-    add(c11, ti * tj);
-    if (w <= 0) return null;
-    return [u / w, v / w];
+    // ALL four corners or nothing. Renormalising over partial corners let a
+    // particle coast up to a full cell (~15 nm) past the field's edge —
+    // painting confident flow across the beach and over bare shelf.
+    if (!c00 || !c10 || !c01 || !c11) return null;
+    const u = c00[0] * (1 - ti) * (1 - tj) + c10[0] * ti * (1 - tj)
+            + c01[0] * (1 - ti) * tj + c11[0] * ti * tj;
+    const v = c00[1] * (1 - ti) * (1 - tj) + c10[1] * ti * (1 - tj)
+            + c01[1] * (1 - ti) * tj + c11[1] * ti * tj;
+    return [u, v];
   }
 
   const Flow = L.Layer.extend({
