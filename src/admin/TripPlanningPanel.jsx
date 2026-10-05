@@ -383,7 +383,11 @@ export default function TripPlanningPanel() {
       maxZoom: BASEMAP_MAX_ZOOM, pane: 'shadowPane',
     }).addTo(map);
     addBasinLabel(L, map);
-    map.fitBounds(SNAPSHOT_BOUNDS, { padding: [10, 10] });
+    // Default view per Robert: central Gulf front and centre — Louisiana
+    // across to Jacksonville, down past the Yucatán Channel — rather than
+    // the full satellite footprint (which pulled Texas in and pushed the
+    // zoom out a notch too far).
+    map.fitBounds([[21.0, -94.0], [31.8, -79.5]], { padding: [6, 6] });
     map.on('zoomend', () => setZoom(map.getZoom()));
     setZoom(map.getZoom());
     mapRef.current = map;
