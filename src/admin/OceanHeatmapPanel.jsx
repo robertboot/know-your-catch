@@ -26,7 +26,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from '../theme.js';
 import { Card, SectionLabel } from '../components.jsx';
-import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
+import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from '../basemap.js';
 
 const ERDDAP_WMS = 'https://coastwatch.pfeg.noaa.gov/erddap/wms';
 
@@ -121,6 +121,7 @@ export default function OceanHeatmapPanel() {
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450; // above landmask (440)
     map.getPane('coastline').style.pointerEvents = 'none';
+    addBasinLabel(L, map);
     L.tileLayer(BASEMAP_LABELS_URL, {
       maxZoom: BASEMAP_MAX_ZOOM,
       pane: 'coastline',

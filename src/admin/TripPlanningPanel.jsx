@@ -24,7 +24,7 @@ import { habitatScore } from '../species-habitat.js';
 import { speciesPhoto } from '../helpers.js';
 import { createCurrentFlowLayer } from '../current-flow.js';
 import { SPECIES, JURISDICTIONS } from '../data.js';
-import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from '../basemap.js';
+import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from '../basemap.js';
 
 const fmt = (n, d = 0) => (n == null ? '—' : Number(n).toFixed(d));
 
@@ -323,6 +323,7 @@ export default function TripPlanningPanel() {
     L.tileLayer(BASEMAP_LABELS_URL, {
       maxZoom: BASEMAP_MAX_ZOOM, pane: 'shadowPane',
     }).addTo(map);
+    addBasinLabel(L, map);
     map.fitBounds(SNAPSHOT_BOUNDS, { padding: [10, 10] });
     map.on('zoomend', () => setZoom(map.getZoom()));
     setZoom(map.getZoom());

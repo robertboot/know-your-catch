@@ -20,7 +20,7 @@ import { SPECIES } from './data.js';
 import { SUPABASE_URL, client } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
 import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.js';
-import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM } from './basemap.js';
+import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from './basemap.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
@@ -162,6 +162,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450;
     map.getPane('coastline').style.pointerEvents = 'none';
+    addBasinLabel(L, map);
     cachedTileLayer(BASEMAP_LABELS_URL, {
       maxZoom: BASEMAP_MAX_ZOOM, pane: 'coastline',
     }).addTo(map);
