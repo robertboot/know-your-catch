@@ -388,6 +388,7 @@ export default function TripPlanningPanel() {
     // the full satellite footprint (which pulled Texas in and pushed the
     // zoom out a notch too far).
     map.fitBounds([[21.0, -94.0], [31.8, -79.5]], { padding: [6, 6] });
+    map.setZoom(map.getZoom() + 1);   // one notch closer than the fit
     map.on('zoomend', () => setZoom(map.getZoom()));
     setZoom(map.getZoom());
     mapRef.current = map;
