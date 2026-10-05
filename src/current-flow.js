@@ -204,7 +204,21 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
           p.age = 0;
           continue;
         }
-        const [u, v] = f;
+        let [u, v] = f;
+        /* Compress the SPEED range, not the speed itself.
+           The Loop Current core runs 3.4 kt against a Gulf averaging 0.74,
+           so at true scale those particles cross thirty pixels a frame and
+           draw long straight scratches that read as painted on rather than
+           flowing. Stepping by the square root keeps fast water visibly
+           fast — 3.4 kt still moves twice as far as 0.9 — without the
+           streaks outrunning their own tails. Colour and width stay keyed
+           to the TRUE speed below, so the picture still tells you how fast
+           the water actually is. */
+        const trueKt = Math.hypot(u, v);
+        if (trueKt > 0) {
+          const eased = Math.sqrt(trueKt) / trueKt;
+          u *= eased; v *= eased;
+        }
         const dLat = v * KT_TO_DEG_LAT_PER_SEC * TIME_SCALE;
         // A degree of longitude is shorter than a degree of latitude away
         // from the equator; without this, everything drifts east.
@@ -214,7 +228,7 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
         p.lat += dLat; p.lon += dLon;
         const bx = pr.x0 + (p.lon - pr.lon0) * pr.pxPerLon;
         const by = pr.y0 + (p.lat - pr.lat0) * pr.pxPerLat;
-        const kt = Math.hypot(u, v);
+        const kt = trueKt;
         let band = 0;
         while (band < SPEED_BANDS.length - 1 && kt > SPEED_BANDS[band].max) band++;
         paths[band].moveTo(ax, ay);
