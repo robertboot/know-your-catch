@@ -178,10 +178,25 @@ export default function TripPlanningPanel() {
   const [catches, setCatches] = useState([]);
   // Species map — one zone row per pelagic species, each its own colour.
   const [zoneRows, setZoneRows] = useState([]);   // hotspot_zones rows, keyed by species
-  const currents = useMemo(
-    () => zoneRows.find(z => z.mode_key === '_currents' && z.cells?.length) || null,
-    [zoneRows],
-  );
+  // ALL regions' current rows merged, deduped where the boxes overlap
+  // (same 0.25° grid everywhere, so identical lat,lon = same measurement).
+  // find() here once more showed currents over one region and bare water
+  // over the other eleven.
+  const currents = useMemo(() => {
+    const rows = zoneRows.filter(z => z.mode_key === '_currents' && z.cells?.length);
+    if (!rows.length) return null;
+    const seen = new Set();
+    const cells = [];
+    for (const z of rows) {
+      for (const cell of z.cells) {
+        const k = `${cell[0]},${cell[1]}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        cells.push(cell);
+      }
+    }
+    return { cells, step_deg: rows[0].step_deg || 0.25 };
+  }, [zoneRows]);
   const [speciesOn, setSpeciesOn] = useState(() => new Set(readPrefs().speciesOn));
   const showCurrents = layerOn.cur;   // one switch, in the layer menu
   const zonesLayerRef = useRef(null);

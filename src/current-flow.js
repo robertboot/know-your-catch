@@ -32,9 +32,11 @@ const TRAIL_FADE = 0.945;  // higher = longer tails, so the shape of the flow ho
    make. Three stroke calls a frame; the cost is in the particle loop, not
    here. */
 const SPEED_BANDS = [
-  { max: 0.5, color: 'rgba(120, 190, 225, 0.55)', width: 1.0 },
-  { max: 1.2, color: 'rgba(170, 230, 255, 0.85)', width: 1.5 },
-  { max: Infinity, color: 'rgba(235, 252, 255, 1)', width: 2.2 },
+  // Dark-blue lines: the pale blues disappeared against the pale GEBCO
+  // basemap everywhere the water was slow.
+  { max: 0.5, color: 'rgba(23, 74, 125, 0.60)', width: 1.2 },
+  { max: 1.2, color: 'rgba(16, 90, 166, 0.85)', width: 1.7 },
+  { max: Infinity, color: 'rgba(10, 56, 110, 1)', width: 2.4 },
 ];
 // 30fps, not 60. Flow reads identically at half the frame rate and costs
 // half as much — and this runs beside a Leaflet map with image overlays
