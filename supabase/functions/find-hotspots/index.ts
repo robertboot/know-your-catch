@@ -503,7 +503,14 @@ Deno.serve(async (req: Request) => {
               const u = cur.v[i][j], v = curV.v[i][j];
               if (u == null || v == null) continue;
               const kt = Math.hypot(u, v) * MS_TO_KT;
-              if (kt < 0.1) continue; // still water isn't worth an arrow
+              // 0.1 kt was the right floor for ARROWS — a glyph on still
+              // water says nothing. It is the wrong floor for a flow
+              // animation: particles die where there is no cell, so that
+              // threshold punched the entire quiet half of the Gulf out of
+              // the picture and left the Loop Current floating alone in
+              // blank water. Slow water is still water moving, and the
+              // speed bands already say it is slow.
+              if (kt < 0.03) continue;
               let dir = Math.atan2(u, v) * 180 / Math.PI;
               if (dir < 0) dir += 360;
               vec.push([Number(cur.lats[i].toFixed(3)), Number(cur.lons[j].toFixed(3)),
