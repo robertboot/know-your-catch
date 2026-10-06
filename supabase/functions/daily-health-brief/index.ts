@@ -100,10 +100,15 @@ Deno.serve(async (req: Request) => {
 
   // ---- 2. App errors ----------------------------------------------
   try {
+    // 'benign' is recorded but never alarms: stale-chunk imports that the
+    // page already auto-recovered from, and Android WebView bridge errors
+    // from in-app browsers. A brief that opens with "1 thing broken" over
+    // a deploy that healed itself teaches you to ignore the brief.
     const { data, error } = await db.from('error_log')
       .select('fingerprint, message, screen')
       .gte('occurred_at', since24h)
       .is('resolved_at', null)
+      .neq('kind', 'benign')
       .limit(500);
     if (error) throw error;
     const rows = data || [];
