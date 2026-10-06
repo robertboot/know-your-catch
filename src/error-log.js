@@ -53,8 +53,18 @@ function fingerprint(kind, message, stack) {
 
    Android WebView bridge errors. "Java object is gone" means the page was
    backgrounded inside an in-app browser — Facebook's or Instagram's — and
-   the bridge object was collected. This app is iOS; these are web visitors,
-   and there is nothing in our code to change. */
+   the bridge object was collected. The stack says so outright: the frames
+   come from iabjs://navigation_performance_logger_android, which is
+   Facebook's injected script and not ours. This app is iOS; these are web
+   visitors, and there is nothing in our code to change.
+
+   Bare "Script error." A browser reports exactly this, with no file, line
+   or stack, when a script from another origin throws — it withholds the
+   detail deliberately. Our own bundles are same-origin, so this can only
+   be a third-party script or a browser extension, and it is unactionable
+   by construction: there is nothing to read and nothing to fix. Matched
+   exactly rather than by substring, so a real message that happens to
+   contain the phrase still reports. */
 const BENIGN = [
   'failed to fetch dynamically imported module',
   'error loading dynamically imported module',
@@ -66,7 +76,10 @@ const BENIGN = [
   'java exception was raised during method invocation',
 ];
 const isBenign = (msg) => {
-  const m = String(msg || '').toLowerCase();
+  const m = String(msg || '').trim().toLowerCase();
+  // Exact, not a substring: "Script error." carries no information at all,
+  // but a message that merely mentions one may carry plenty.
+  if (m === 'script error.' || m === 'script error') return true;
   return BENIGN.some((p) => m.includes(p));
 };
 
