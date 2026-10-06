@@ -17,6 +17,7 @@
  *   GET https://reelintel.ai/admin/api/health/monitored
  *   GET https://reelintel.ai/admin/api/health/regulations
  *   GET https://reelintel.ai/admin/api/health/queue
+ *   GET https://reelintel.ai/admin/api/health/errors
  *
  * Deploy:
  *   supabase secrets set HEALTH_API_KEY=<key>
@@ -204,6 +205,51 @@ Deno.serve(async (req: Request) => {
         training_photos_pending: pendingPhotos ?? null,
         oldest_training_photo_at: oldestPhoto?.[0]?.uploaded_at ?? null,
         oldest_training_photo_days: daysSince(oldestPhoto?.[0]?.uploaded_at ?? null),
+      };
+    }
+
+    // ---- 4. Unresolved app errors ------------------------------------
+    // Read-only by construction, which is the point: the morning triage
+    // routine needs to SEE the error log, and handing an automated job a
+    // service-role key to read one table would let it write every other
+    // one. 'benign' is excluded here as it is in the daily brief —
+    // stale-chunk imports the page already recovered from, and Android
+    // WebView bridge errors from in-app browsers.
+    if (want('errors')) {
+      const { data: errs, error } = await db.from('error_log')
+        .select('fingerprint, kind, message, stack, screen, platform, app_version, is_guest, occurred_at')
+        .is('resolved_at', null)
+        .neq('kind', 'benign')
+        .gte('occurred_at', new Date(Date.now() - 7 * 86400000).toISOString())
+        .order('occurred_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+
+      // Grouped by fingerprint: the same crash hitting twenty people is
+      // one fault to fix, not twenty to read.
+      const byFp = new Map<string, any>();
+      for (const e of errs || []) {
+        const g = byFp.get(e.fingerprint);
+        if (g) { g.occurrences += 1; if (e.occurred_at > g.last_seen) g.last_seen = e.occurred_at; continue; }
+        byFp.set(e.fingerprint, {
+          fingerprint: e.fingerprint,
+          kind: e.kind,
+          message: e.message,
+          stack: e.stack,
+          screen: e.screen,
+          platform: e.platform,
+          app_version: e.app_version,
+          is_guest: e.is_guest,
+          first_seen: e.occurred_at,
+          last_seen: e.occurred_at,
+          occurrences: 1,
+        });
+      }
+      out.errors = [...byFp.values()].sort((a, b) => b.occurrences - a.occurrences);
+      out.errors_summary = {
+        distinct_faults: byFp.size,
+        total_occurrences: (errs || []).length,
+        window_days: 7,
       };
     }
 

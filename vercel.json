@@ -21,6 +21,10 @@
       "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=queue"
     },
     {
+      "source": "/admin/api/health/errors",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=errors"
+    },
+    {
       "source": "/testers",
       "destination": "/testers.html"
     },
