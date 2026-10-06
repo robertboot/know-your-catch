@@ -3,10 +3,19 @@
    approved a specific rendered draft in the console, and this sends that
    exact html to that edition's audience.
 
-   Called from the admin UI with the caller's own session, not a cron
-   secret. The caller's email must be an admin — the one action in this
-   system that puts mail in front of hundreds of people should be tied to
-   a person, not to a shared token that any job could hold.
+   TWO ways in, and the difference matters.
+
+   From the admin UI, with the caller's own session: that admin names an
+   edition by id and it goes. The caller's email must be on the admin
+   list, because the one action in this system that puts mail in front of
+   hundreds of people should be tied to a person.
+
+   From the scheduler, with the cron secret and NO id: it sweeps editions
+   a named admin has ALREADY approved and posts them. That is a weaker
+   credential, so it gets a narrower job — it cannot name an edition, it
+   cannot send a draft, a blocked or a discarded one, and it cannot
+   re-send one already sent. The human gate is Approve; this is only the
+   postman, and it can only carry what someone already signed.
 
    Deploy:
      supabase functions deploy weekly-report-send
@@ -37,6 +46,14 @@ const json = (b: unknown, s = 200) =>
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/* The scheduler's inner call names its edition in a header rather than
+   the body, so the body shape stays exactly what the admin UI sends and
+   there is no field a browser could set to impersonate the scheduler. */
+function isCronEdition(req: Request, secret: string | undefined): string {
+  if (!secret || req.headers.get('x-cron-secret') !== secret) return '';
+  return req.headers.get('x-cron-edition') || '';
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -46,27 +63,80 @@ Deno.serve(async (req: Request) => {
   const KEY  = Deno.env.get('RESEND_API_KEY');
   if (!URL_ || !SR || !KEY) return json({ error: 'server_misconfigured' }, 500);
 
-  // Identify the caller from their own bearer token.
-  const auth = req.headers.get('Authorization') || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token) return json({ error: 'unauthorized' }, 401);
-
   const admin = createClient(URL_, SR, { auth: { persistSession: false } });
-  const { data: who, error: whoErr } = await admin.auth.getUser(token);
-  const callerEmail = (who?.user?.email || '').toLowerCase();
-  if (whoErr || !callerEmail || !ADMINS.includes(callerEmail)) {
-    return json({ error: 'forbidden' }, 403);
-  }
 
   let body: Record<string, unknown> = {};
-  try { body = await req.json(); } catch { return json({ error: 'bad_payload' }, 400); }
+  try { body = await req.json(); } catch { body = {}; }
   const id = String(body.id || '');
   const testOnly = body.test === true;
-  if (!id) return json({ error: 'missing_id' }, 400);
+
+  // The scheduler's path: cron secret, no id, approved editions only.
+  const CRON_SECRET = Deno.env.get('CRON_SECRET');
+  const isCron = !!CRON_SECRET && req.headers.get('x-cron-secret') === CRON_SECRET;
+
+  if (isCron) {
+    if (id || testOnly) {
+      // A shared token may not name a target or address a test. Those are
+      // a person's decisions.
+      return json({ error: 'cron_may_not_target' }, 403);
+    }
+    const { data: queue, error: qErr } = await admin.from('weekly_emails')
+      .select('id, jurisdiction_id, week_start, approved_by, approved_at')
+      .eq('status', 'approved')
+      .order('week_start', { ascending: true })
+      .limit(20);
+    if (qErr) return json({ error: qErr.message }, 500);
+    if (!queue?.length) return json({ ok: true, sent: 0, reason: 'nothing approved' });
+
+    const results = [];
+    for (const ed of queue) {
+      // Re-enter this same function per edition so there is ONE send path.
+      // A second copy of the delivery loop is a second place for the
+      // recipient bookkeeping to drift.
+      const r = await fetch(req.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-cron-secret': CRON_SECRET,
+          'x-cron-edition': ed.id,
+        },
+        body: JSON.stringify({}),
+      });
+      const detail = await r.json().catch(() => ({}));
+      results.push({ id: ed.id, jurisdiction: ed.jurisdiction_id,
+                     approved_by: ed.approved_by, ok: r.ok, detail });
+    }
+    return json({ ok: true, swept: queue.length, results });
+  }
+
+  // One edition, named by the scheduler's inner call above.
+  const cronEdition = isCronEdition(req, CRON_SECRET);
+  let callerEmail = '';
+  if (cronEdition) {
+    callerEmail = 'scheduler';
+  } else {
+    // Identify the caller from their own bearer token.
+    const auth = req.headers.get('Authorization') || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) return json({ error: 'unauthorized' }, 401);
+    const { data: who, error: whoErr } = await admin.auth.getUser(token);
+    callerEmail = (who?.user?.email || '').toLowerCase();
+    if (whoErr || !callerEmail || !ADMINS.includes(callerEmail)) {
+      return json({ error: 'forbidden' }, 403);
+    }
+  }
+
+  const targetId = cronEdition || id;
+  if (!targetId) return json({ error: 'missing_id' }, 400);
 
   const { data: ed, error: edErr } = await admin.from('weekly_emails')
-    .select('*').eq('id', id).single();
+    .select('*').eq('id', targetId).single();
   if (edErr || !ed) return json({ error: 'not_found' }, 404);
+
+  // The scheduler may only post what a person already signed.
+  if (cronEdition && ed.status !== 'approved') {
+    return json({ error: 'not_approved', status: ed.status }, 409);
+  }
 
   // A test send goes to the admin who asked for it, and changes nothing
   // about the edition's status. This is how you read the real thing in a
@@ -108,7 +178,7 @@ Deno.serve(async (req: Request) => {
     { onConflict: 'email_id,email' });
 
   const { data: pending } = await admin.from('weekly_email_recipients')
-    .select('id, email').eq('email_id', id).is('sent_at', null);
+    .select('id, email').eq('email_id', targetId).is('sent_at', null);
 
   let sent = 0, failed = 0;
   for (const row of (pending || [])) {
@@ -129,11 +199,16 @@ Deno.serve(async (req: Request) => {
   const done = failed === 0;
   await admin.from('weekly_emails').update({
     status: done ? 'sent' : ed.status,
-    approved_by: callerEmail,
+    // Never overwrite the approver with whoever posted it. On the
+    // scheduler's path that would replace a person's name with
+    // "scheduler" and erase the only record of who signed this edition —
+    // which is precisely the record that makes an automated send
+    // defensible.
+    approved_by: ed.approved_by ?? callerEmail,
     approved_at: ed.approved_at ?? new Date().toISOString(),
     sent_at: done ? new Date().toISOString() : null,
     send_error: failed ? `${failed} of ${sent + failed} failed — press send again to retry just those` : null,
-  }).eq('id', id);
+  }).eq('id', targetId);
 
   return json({ ok: done, sent, failed, total: sent + failed });
 });
