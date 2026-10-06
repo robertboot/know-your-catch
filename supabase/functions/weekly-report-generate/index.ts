@@ -386,7 +386,17 @@ async function handle(req: Request): Promise<Response> {
 
   // Human date range for the masthead — "Week of 2026-09-10" is a
   // database value, not something anyone says.
-  const ws = new Date(week + 'T12:00:00Z');
+  //
+  // Measured from the day this was GENERATED, not from week_start.
+  // week_start snaps back to the most recent Thursday because it is the
+  // dedupe key — one edition per waters per week — and on the scheduled
+  // Thursday run the two are the same day. Regenerated on a Tuesday they
+  // are not: the masthead read "October 1-7" above a forecast whose best
+  // window was Monday the 12th, which is a newsletter arguing with
+  // itself. The range has to describe the forecast the email actually
+  // contains.
+  const genDay = new Date(now);
+  const ws = new Date(Date.UTC(genDay.getUTCFullYear(), genDay.getUTCMonth(), genDay.getUTCDate(), 12));
   const we = new Date(ws.getTime() + 6 * 86400000);
   const MONTHS_LONG = ['January','February','March','April','May','June',
     'July','August','September','October','November','December'];
