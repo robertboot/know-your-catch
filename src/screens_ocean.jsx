@@ -122,14 +122,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
-  const landRef = useRef(null);
-  const landGeoRef = useRef(null);
   const [active, setActive] = useState(initialLayer === 'sst' ? 'sst' : 'chl');
   const [status, setStatus] = useState('loading');
   // Non-null when the image on screen came from the device.
   const [overlayAge, setOverlayAge] = useState(null);
   const [dateISO, setDateISO] = useState('');
-  const [landReady, setLandReady] = useState(false); // GeoJSON loaded → (re)draw mask
   // Marker overlays on top of the colour layer. Independent toggles —
   // these ADD to whichever satellite layer is active.
   const [showCatches, setShowCatches] = useState(false);
@@ -150,14 +147,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     cachedTileLayer(BASEMAP_URL, {
       attribution: BASEMAP_ATTRIBUTION, maxZoom: BASEMAP_MAX_ZOOM,
     }).addTo(map);
-    // Land mask above the color overlay so data clips to water only.
-    map.createPane('landmask');
-    map.getPane('landmask').style.zIndex = 440;
-    map.getPane('landmask').style.pointerEvents = 'none';
-    fetch('https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_land.geojson')
-      .then((r) => r.json())
-      .then((geo) => { landGeoRef.current = geo; setLandReady(true); })
-      .catch(() => {});
+    /* No land overlay. A Natural Earth polygon was drawn over the top to
+       clip the satellite composites to water, which meant a third-party
+       GeoJSON fetched from a CDN on every open — a network call on a map
+       that is meant to work offshore — to redraw a coastline the basemap
+       already has. The composites are bounded to the region anyway. */
     map.createPane('coastline');
     map.getPane('coastline').style.zIndex = 450;
     map.getPane('coastline').style.pointerEvents = 'none';
@@ -323,22 +317,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     catchesRef.current = group;
   }, [showCatches, state?.catchLog]);
 
-  /* The land mask, always on. It existed as a toggle because the WMS
-     composites paint over the coastline and someone might want to see
-     underneath — but the basemap already draws the coast, so turning it
-     off only ever produced satellite colour spilling across Alabama. One
-     fewer control, and the map always looks like a map. */
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (landRef.current) { map.removeLayer(landRef.current); landRef.current = null; }
-    if (landGeoRef.current) {
-      landRef.current = L.geoJSON(landGeoRef.current, {
-        pane: 'landmask', interactive: false,
-        style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
-      }).addTo(map);
-    }
-  }, [landReady]);
 
   const cfg = active ? LAYERS[active] : null;
   const chip = (activeState, label, onClick) => (
