@@ -68,7 +68,7 @@ globalThis.Deno = {
 const sb = await import(stub);
 await import(bundle);
 
-async function run(sc, { drop = [] } = {}) {
+async function run(sc, { drop = [], body = {}, regions = 1 } = {}) {
   globalThis.fetch = async (url) => {
     const u = String(url);
     const pick = (name, doc) => (drop.includes(name)
@@ -81,14 +81,21 @@ async function run(sc, { drop = [] } = {}) {
     throw new Error('unexpected url ' + u);
   };
   sb.writes.hotspots = []; sb.writes.hotspot_zones = []; sb.writes.updates = [];
-  sb.seed.hotspot_regions = [{
-    id: 'al_gulf', label: 'Alabama', south: SOUTH, north: NORTH, west: WEST, east: EAST,
+  sb.seed.hotspot_regions = Array.from({ length: regions }, (_, i) => ({
+    id: `r${i}`, label: `Region ${i}`, south: SOUTH, north: NORTH, west: WEST, east: EAST,
     port_name: 'Perdido Pass', port_lat: 30.27, port_lon: -87.55, active: true, last_run_at: null,
-  }];
-  await globalThis.__handler(new Request('http://x/find-hotspots', {
-    method: 'POST', headers: { 'x-cron-secret': 's', 'content-type': 'application/json' }, body: '{}',
   }));
-  return { spots: sb.writes.hotspots, zones: sb.writes.hotspot_zones, note: sb.writes.updates[0]?.patch?.last_error || '' };
+  const res = await globalThis.__handler(new Request('http://x/find-hotspots', {
+    method: 'POST',
+    headers: { 'x-cron-secret': 's', 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+  const reply = await res.json();
+  return {
+    spots: sb.writes.hotspots, zones: sb.writes.hotspot_zones,
+    note: sb.writes.updates[0]?.patch?.last_error || '',
+    ran: sb.writes.updates.length, reply,
+  };
 }
 
 let failed = 0;
@@ -133,6 +140,18 @@ check('losing temperature fails the region', /ERROR/.test(sstDown.note), sstDown
 
 const partial = await run(front(120), { drop: ['chl'] });
 check('it still publishes with colour missing', partial.spots.length > 0, partial.note);
+
+// One region per scheduled call is the whole reason this file exists: the
+// old all-in-one run was killed by the scheduler before its first write.
+const scheduled = await run(front(120), { regions: 5 });
+check('a scheduled call takes exactly one region', scheduled.ran === 1,
+  `${scheduled.ran} of 5, ${scheduled.reply.remaining} reported remaining`);
+check('it reports what is left', scheduled.reply.remaining === 4);
+
+const byHand = await run(front(120), { regions: 5, body: { all: true } });
+check('the Regenerate button keeps going', byHand.ran === 5,
+  `${byHand.ran} of 5, ${byHand.reply.remaining} remaining`);
+check('nothing left to report after a full pass', byHand.reply.remaining === 0);
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

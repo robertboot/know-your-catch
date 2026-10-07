@@ -90,6 +90,10 @@ const MARGINAL_SPOTS = 3;
 // Community catch influence is gated on this — see PRIVACY above. Below it,
 // a "hotspot" is one angler's spot with a satellite picture behind it.
 const MIN_DISTINCT_ANGLERS = 3;
+// How long a hand-pressed run may keep going before it reports back. The
+// edge runtime cuts a request off well short of twelve regions, and a run
+// killed mid-region writes nothing at all.
+const BUDGET_MS = 100_000;
 
 // Predictive zones (the SiriusXM-style blobs), PER SPECIES — "where is
 // the mahi water", not "where is trolling generally good". Coarser than
@@ -309,12 +313,22 @@ Deno.serve(async (req: Request) => {
   const stalestFirst = [...all].sort((a, b) =>
     (a.last_run_at ? Date.parse(a.last_run_at) : 0) -
     (b.last_run_at ? Date.parse(b.last_run_at) : 0));
-  // body.all is for a backfill run by hand, where nothing hangs up on us.
-  const regions = (body.region || body.all) ? stalestFirst : stalestFirst.slice(0, 1);
+  /* body.all is the Regenerate button: a person is watching, nothing hangs
+     up at 60 s, and pressing it twelve times to fill a map is not a
+     workflow. So it keeps going until the budget is spent rather than
+     doing the lot — the edge runtime stops a request well before twelve
+     regions of satellite grids are through, and a run killed mid-region
+     writes nothing, which is the bug this whole file was fixed for.
+     Whatever is left is reported, and the ten-minute cron picks it up. */
+  const regions = body.region ? stalestFirst : body.all ? stalestFirst : stalestFirst.slice(0, 1);
+  const deadline = Date.now() + (body.all ? BUDGET_MS : Infinity);
+  let done = 0;
 
   const out: Record<string, unknown>[] = [];
 
   for (const reg of regions) {
+    if (done && Date.now() > deadline) break;
+    done++;
     let failure: string | null = null;
     let loaded = 'no grids';
     let status = 'ok';
@@ -719,5 +733,5 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return json({ ok: true, remaining: Math.max(0, all.length - regions.length), regions: out });
+  return json({ ok: true, remaining: Math.max(0, all.length - done), regions: out });
 });

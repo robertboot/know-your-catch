@@ -184,6 +184,7 @@ export default function TripPlanningPanel() {
   const [observedAt, setObservedAt] = useState(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [runNote, setRunNote] = useState('');
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [overlayErr, setOverlayErr] = useState('');
@@ -276,20 +277,19 @@ export default function TripPlanningPanel() {
   );
 
   // ---- regions -----------------------------------------------------
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const c = client();
-      if (!c) { setError('Supabase is not configured in this build.'); return; }
-      const { data, error: err } = await c.from('hotspot_regions')
-        .select('*').eq('active', true).order('label');
-      if (!alive) return;
-      if (err) { setError(`${err.message} — has supabase/hotspots-schema.sql been run?`); return; }
-      setRegions(data || []);
-      if (data?.length) setRegionId(prev => prev || data[0].id);
-    })();
-    return () => { alive = false; };
+  // Reusable: the rows carry last_run_at and last_error, so they have to be
+  // re-read after a run or the status block describes the previous one.
+  const loadRegions = useCallback(async () => {
+    const c = client();
+    if (!c) { setError('Supabase is not configured in this build.'); return; }
+    const { data, error: err } = await c.from('hotspot_regions')
+      .select('*').eq('active', true).order('label');
+    if (err) { setError(`${err.message} — has supabase/hotspots-schema.sql been run?`); return; }
+    setRegions(data || []);
+    if (data?.length) setRegionId(prev => prev || data[0].id);
   }, []);
+
+  useEffect(() => { loadRegions(); }, [loadRegions]);
 
   // ---- spots, ALL regions -------------------------------------------
   // The map is the whole Gulf now; each region contributes its latest
@@ -745,21 +745,29 @@ export default function TripPlanningPanel() {
     setRunning(true); setError('');
     try {
       const token = getLastSession()?.access_token;
-      // No region in the body → the function runs every active region.
-      // Nine regions × four satellite grids: minutes, not seconds.
+      // all:true means "keep going until the budget is spent", not "do
+      // every region" — the function stops itself before the edge runtime
+      // does, because a run killed mid-region writes nothing. An empty body
+      // would do a single region, which is the scheduler's job, not this
+      // button's. Whatever is left over, the ten-minute cron collects.
       const r = await fetch(`${SUPABASE_URL}/functions/v1/find-hotspots`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token || SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ all: true }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body?.error || `HTTP ${r.status}`);
       const bad = (body.regions || []).filter(x => x.error);
-      if (bad.length) throw new Error(`${bad.length} region(s) failed — first: ${bad[0].region}: ${bad[0].error}`);
       await load();
+      await loadRegions();
+      if (bad.length) throw new Error(`${bad.length} region(s) failed — first: ${bad[0].region}: ${bad[0].error}`);
+      setRunNote(body.remaining
+        ? `Read ${body.regions?.length || 0} — ${body.remaining} still to go. Press again, or `
+          + 'the scheduler takes one every ten minutes.'
+        : `Read ${body.regions?.length || 0}. All waters up to date.`);
     } catch (e) {
       // The reply, verbatim. A scraped satellite run fails for reasons no
       // generic message covers, and guessing wastes a round trip.
@@ -1034,6 +1042,11 @@ export default function TripPlanningPanel() {
                     + 'above is still the where-to-go; this list fills when a real edge sets up.'
                   : 'No satellite pass read yet for these waters — press Regenerate, or wait '
                     + 'for the next run.'}
+              </div>
+            )}
+            {runNote && (
+              <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 10, lineHeight: 1.45 }}>
+                {runNote}
               </div>
             )}
             <RunStatus regions={regions} />
