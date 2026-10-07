@@ -32,7 +32,17 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { habitatScore } from '../../../src/species-habitat.js';
 import { TRIP_MODES } from '../../../src/trip-modes.js';
 
-const ERDDAP = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap';
+/* ERDDAP hosts, tried in order. coastwatch.pfeg went fully 503 — index
+   page included — while this was being built, which is the difference
+   between ERDDAP shedding load and the host being down. One address meant
+   one outage emptied the whole map with nothing to fall back to.
+   upwell is a separate ERDDAP instance serving the same dataset ids, so a
+   failover needs no second set of names. If it is down too we have lost
+   nothing: the region records why and comes back in half an hour. */
+const ERDDAP_HOSTS = [
+  'https://coastwatch.pfeg.noaa.gov/erddap/griddap',
+  'https://upwell.pfeg.noaa.gov/erddap/griddap',
+];
 // MUR is 0.01° (~1 km). Every other cell is ~2 km, which is finer than any
 // break worth driving to and keeps the grid at a size an edge function can
 // hold in memory.
@@ -44,7 +54,7 @@ const CHL_STRIDE  = 1;
 // and pg_net hangs up on the whole call at 120 s. 25 s per dataset means a
 // stalled optional grid drops out instead of eating the budget: everything
 // but SST is fetched with .catch(() => null).
-const FETCH_TIMEOUT_MS = 20_000;
+const FETCH_TIMEOUT_MS = 15_000;
 
 // What counts as an edge. A break under ~0.4 °F/nm is noise in a 1 km
 // satellite product; 1.5 °F/nm is the kind of wall people run 40 miles for.
@@ -136,28 +146,31 @@ const compass = (deg: number) =>
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function fetchJson(url: string, attempts = 3) {
-  let last: unknown;
-  for (let a = 1; a <= attempts; a++) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const r = await fetch(url, { signal: ctl.signal });
-      if (!r.ok) {
-        const err = new Error(`erddap ${r.status}: ${(await r.text()).slice(0, 200)}`);
-        if (!RETRY_STATUS.has(r.status) || a === attempts) throw err;
+/* `path` is everything after /griddap — the host is chosen here, not by
+   the caller, so no call site can pin itself to one server. */
+async function fetchJson(path: string, attemptsPerHost = 2) {
+  let last: unknown = new Error('no erddap host tried');
+  let fatal: Error | null = null;
+  for (const host of ERDDAP_HOSTS) {
+    for (let a = 1; a <= attemptsPerHost; a++) {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const r = await fetch(`${host}/${path}`, { signal: ctl.signal });
+        if (r.ok) return await r.json();
+        const err = new Error(`${host} ${r.status}: ${(await r.text()).slice(0, 120)}`);
         last = err;
-      } else {
-        return await r.json();
+        // A 400 means the query is wrong, and it will be just as wrong on
+        // the next host — stop rather than walk the whole list to say so.
+        if (!RETRY_STATUS.has(r.status)) { fatal = err; }
+      } catch (e) {
+        last = e;   // timeout or connection failure — try again, then move on
+      } finally {
+        clearTimeout(t);
       }
-    } catch (e) {
-      // An aborted fetch is a timeout, which is worth another try too.
-      if (a === attempts) throw e;
-      last = e;
-    } finally {
-      clearTimeout(t);
+      if (fatal) throw fatal;
+      if (a < attemptsPerHost) await sleep(2000);
     }
-    await sleep(a * 2500);
   }
   throw last;
 }
@@ -313,10 +326,10 @@ Deno.serve(async (req: Request) => {
       const depthBox = `[(${reg.south}):4:(${reg.north})][(${reg.west}):4:(${reg.east})]`;
       const curBox = `[(last)][(${reg.south}):1:(${reg.north})][(${reg.west}):1:(${reg.east})]`;
       const [sstDoc, chlDoc, depthDoc, curDoc] = await Promise.all([
-        fetchJson(`${ERDDAP}/${SST_DATASET}.json?analysed_sst${box(SST_STRIDE)}`),
-        fetchJson(`${ERDDAP}/${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE)}`).catch(() => null),
-        fetchJson(`${ERDDAP}/${DEPTH_DATASET}.json?altitude${depthBox}`).catch(() => null),
-        fetchJson(`${ERDDAP}/${CUR_DATASET}.json?ugos${curBox},vgos${curBox}`).catch(() => null),
+        fetchJson(`${SST_DATASET}.json?analysed_sst${box(SST_STRIDE)}`),
+        fetchJson(`${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE)}`).catch(() => null),
+        fetchJson(`${DEPTH_DATASET}.json?altitude${depthBox}`).catch(() => null),
+        fetchJson(`${CUR_DATASET}.json?ugos${curBox},vgos${curBox}`).catch(() => null),
       ]);
 
       const sst = toGrid(sstDoc, 'analysed_sst');
