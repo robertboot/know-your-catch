@@ -44,7 +44,7 @@ const CHL_STRIDE  = 1;
 // and pg_net hangs up on the whole call at 120 s. 25 s per dataset means a
 // stalled optional grid drops out instead of eating the budget: everything
 // but SST is fetched with .catch(() => null).
-const FETCH_TIMEOUT_MS = 25_000;
+const FETCH_TIMEOUT_MS = 20_000;
 
 // What counts as an edge. A break under ~0.4 °F/nm is noise in a 1 km
 // satellite product; 1.5 °F/nm is the kind of wall people run 40 miles for.
@@ -125,16 +125,41 @@ const compass = (deg: number) =>
   ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW']
     [Math.round(deg / 22.5) % 16];
 
-async function fetchJson(url: string) {
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const r = await fetch(url, { signal: ctl.signal });
-    if (!r.ok) throw new Error(`erddap ${r.status}: ${(await r.text()).slice(0, 200)}`);
-    return await r.json();
-  } finally {
-    clearTimeout(t);
+/* ERDDAP sheds load by answering 503, by its own documented design: when
+   the server's memory use is high it refuses requests rather than falling
+   over. coastwatch.pfeg is a busy public server, so a 503 is an ordinary
+   Tuesday, not an outage — and until this retried, ONE of them on the SST
+   grid (the only fetch that is not optional) threw away the whole region.
+   Three tries with a short backoff. Only the shed/transient statuses are
+   retried: a 400 means our query is wrong and asking again louder will not
+   fix it. */
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchJson(url: string, attempts = 3) {
+  let last: unknown;
+  for (let a = 1; a <= attempts; a++) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      if (!r.ok) {
+        const err = new Error(`erddap ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        if (!RETRY_STATUS.has(r.status) || a === attempts) throw err;
+        last = err;
+      } else {
+        return await r.json();
+      }
+    } catch (e) {
+      // An aborted fetch is a timeout, which is worth another try too.
+      if (a === attempts) throw e;
+      last = e;
+    } finally {
+      clearTimeout(t);
+    }
+    await sleep(a * 2500);
   }
+  throw last;
 }
 
 /* ERDDAP .json comes back as a column table, not a grid. Rebuild the grid
@@ -277,6 +302,7 @@ Deno.serve(async (req: Request) => {
   const out: Record<string, unknown>[] = [];
 
   for (const reg of regions) {
+    let failure: string | null = null;
     try {
       const box = (stride: number) =>
         `[(last)][(${reg.south}):${stride}:(${reg.north})][(${reg.west}):${stride}:(${reg.east})]`;
@@ -596,13 +622,22 @@ Deno.serve(async (req: Request) => {
                  candidates: cells.length, groups: groups.length, written: spots.length,
                  zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
     } catch (e) {
-      out.push({ region: reg.id, error: String(e) });
+      failure = String(e).slice(0, 500);
+      out.push({ region: reg.id, error: failure });
     }
     // Stamped whatever happened. A region that throws every time still has
     // to move to the back of the queue, or it blocks the other eleven.
+    // A FAILED region is stamped 90 minutes in the past, so it comes back
+    // round in about half an hour instead of two hours — long enough for a
+    // shed 503 to clear, short enough not to leave a hole in the map.
+    // last_error is kept so a failing region can be read straight off the
+    // table, instead of being reconstructed from a cron response that
+    // pg_net prunes within hours.
     if (!body.dry_run) {
-      await db.from('hotspot_regions')
-        .update({ last_run_at: new Date().toISOString() }).eq('id', reg.id);
+      await db.from('hotspot_regions').update({
+        last_run_at: new Date(Date.now() - (failure ? 90 * 60000 : 0)).toISOString(),
+        last_error: failure,
+      }).eq('id', reg.id);
     }
   }
 
