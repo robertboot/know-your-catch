@@ -43,6 +43,11 @@ const BUCKET = 'ocean-maps';
 const ERDDAP_HOSTS = [
   'https://coastwatch.pfeg.noaa.gov/erddap',
   'https://upwell.pfeg.noaa.gov/erddap',
+  // A different institution, so it survives a NOAA-wide failure. It carries
+  // jplMURSST41 (the sea-temperature layer); the colour layer is an ERD
+  // dataset it probably does not have, and a host without a dataset answers
+  // 404, which just moves the walk along.
+  'https://erddap.marine.usf.edu/erddap',
 ];
 const ERDDAP_BASE = '{H}';
 const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;

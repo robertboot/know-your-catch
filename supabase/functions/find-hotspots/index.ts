@@ -39,9 +39,19 @@ import { TRIP_MODES } from '../../../src/trip-modes.js';
    upwell is a separate ERDDAP instance serving the same dataset ids, so a
    failover needs no second set of names. If it is down too we have lost
    nothing: the region records why and comes back in half an hour. */
-const ERDDAP_HOSTS = [
-  'https://coastwatch.pfeg.noaa.gov/erddap/griddap',
-  'https://upwell.pfeg.noaa.gov/erddap/griddap',
+/* Each entry is [host, attempts]. The primary gets two tries because its
+   503s are usually load-shedding that clears; the fallbacks get one each,
+   so three hosts still cost no more wall-clock than two did.
+   upwell is a separate machine from coastwatch (different address) but the
+   same NOAA site, so it does not survive a site-wide failure — which is
+   what took the feature down on 2026-10-07. USF is a different
+   institution entirely, in the Gulf, and carries jplMURSST41; whether it
+   carries the ERD-specific colour, depth and current datasets is unknown,
+   and a host that lacks one answers 404, which is handled. */
+const ERDDAP_HOSTS: [string, number][] = [
+  ['https://coastwatch.pfeg.noaa.gov/erddap/griddap', 2],
+  ['https://upwell.pfeg.noaa.gov/erddap/griddap', 1],
+  ['https://erddap.marine.usf.edu/erddap/griddap', 1],
 ];
 // MUR is 0.01° (~1 km). Every other cell is ~2 km, which is finer than any
 // break worth driving to and keeps the grid at a size an edge function can
@@ -159,27 +169,39 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* `path` is everything after /griddap — the host is chosen here, not by
    the caller, so no call site can pin itself to one server. */
-async function fetchJson(path: string, attemptsPerHost = 2) {
+async function fetchJson(path: string) {
   let last: unknown = new Error('no erddap host tried');
-  let fatal: Error | null = null;
-  for (const host of ERDDAP_HOSTS) {
+  for (const [host, attemptsPerHost] of ERDDAP_HOSTS) {
+    let nextHost = false;
     for (let a = 1; a <= attemptsPerHost; a++) {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
       try {
         const r = await fetch(`${host}/${path}`, { signal: ctl.signal });
         if (r.ok) return await r.json();
-        const err = new Error(`${host} ${r.status}: ${(await r.text()).slice(0, 120)}`);
+        const err = Object.assign(
+          new Error(`${host} ${r.status}: ${(await r.text()).slice(0, 120)}`),
+          { stop: !RETRY_STATUS.has(r.status) && r.status !== 404 });
         last = err;
         // A 400 means the query is wrong, and it will be just as wrong on
         // the next host — stop rather than walk the whole list to say so.
-        if (!RETRY_STATUS.has(r.status)) { fatal = err; }
+        if (!RETRY_STATUS.has(r.status)) {
+          // 404 means THIS host does not carry the dataset, which says
+          // nothing about the next one — walk on. Anything else in the 4xx
+          // range is our query being wrong, and it will be just as wrong
+          // everywhere, so stop rather than walk the list to say so. The
+          // two were treated alike while every host was NOAA with the same
+          // catalogue; that stopped being true when USF joined the list.
+          if (r.status === 404) { nextHost = true; break; }
+          throw err;
+        }
       } catch (e) {
+        if (e instanceof Error && (e as Error & { stop?: boolean }).stop) throw e;
         last = e;   // timeout or connection failure — try again, then move on
       } finally {
         clearTimeout(t);
       }
-      if (fatal) throw fatal;
+      if (nextHost) break;
       if (a < attemptsPerHost) await sleep(2000);
     }
   }

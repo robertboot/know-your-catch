@@ -77,6 +77,8 @@ node scripts/smoke-render.mjs || { echo "✗ smoke render FAILED"; exit 1; }
 # scoring that publishes nothing whatever it is fed, which is otherwise
 # indistinguishable from NOAA being down.
 node scripts/hotspots-test/run.mjs || { echo "✗ hotspots scoring FAILED"; exit 1; }
+node scripts/hotspots-test/hosts.mjs >/dev/null || { echo "✗ ERDDAP host walk FAILED"; exit 1; }
+echo "✓ ERDDAP host walk"
 
 echo "▶ Building web/admin bundle…"
 npm run web:build >/tmp/ship-web.log 2>&1 || { echo "✗ web:build FAILED"; tail -20 /tmp/ship-web.log; exit 1; }
