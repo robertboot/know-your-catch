@@ -121,6 +121,58 @@ function scoreColor(s) {
   return '#e07b2f';
 }
 
+/* What the satellite runs actually did.
+ *
+ * An empty map used to say "no satellite pass read yet — press Regenerate",
+ * which is a guess dressed as an explanation: it reads the same whether the
+ * water is flat, the job never fired, or NOAA is handing out 503s. That cost
+ * a night of chasing the wrong thing. find-hotspots records the outcome of
+ * every region on hotspot_regions.last_error, success or failure, so show it
+ * — but only when something is actually wrong. A healthy board says nothing.
+ */
+function RunStatus({ regions }) {
+  if (!regions?.length) return null;
+  const failing = regions.filter(r => r.last_error && !r.last_error.startsWith('ok'));
+  const neverRun = regions.filter(r => !r.last_run_at);
+  if (!failing.length && !neverRun.length) return null;
+
+  const when = (iso) => {
+    if (!iso) return 'never';
+    const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const h = Math.round(mins / 60);
+    return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
+  };
+
+  return (
+    <div style={{
+      marginTop: 12, padding: '10px 12px', borderRadius: 10,
+      border: `1px solid ${T.cardEdge}`, background: T.parchmentDeep,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: T.inkMute,
+                    textTransform: 'uppercase' }}>
+        Satellite runs
+      </div>
+      {failing.map(r => (
+        <div key={r.id} style={{ fontSize: 12.5, color: T.ink, marginTop: 7, lineHeight: 1.45 }}>
+          <strong>{r.label || r.id}</strong>{' '}
+          <span style={{ color: T.inkMute }}>— {when(r.last_run_at)}</span>
+          <div style={{ color: T.inkMute, fontSize: 11.5, marginTop: 2, wordBreak: 'break-word' }}>
+            {r.last_error}
+          </div>
+        </div>
+      ))}
+      {neverRun.length > 0 && (
+        <div style={{ fontSize: 12, color: T.inkMute, marginTop: 7, lineHeight: 1.45 }}>
+          Not read yet: {neverRun.map(r => r.label || r.id).join(', ')}. The job takes one
+          region per run, every ten minutes.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TripPlanningPanel() {
   // Pelagic trolling is THE mode now — the HOW selector is gone. Like the
   // Sirius app, the map answers one question: where is each trolled
@@ -981,9 +1033,10 @@ export default function TripPlanningPanel() {
                     + 'well-mixed, without a sharp temperature or colour wall. The species map '
                     + 'above is still the where-to-go; this list fills when a real edge sets up.'
                   : 'No satellite pass read yet for these waters — press Regenerate, or wait '
-                    + 'for tonight’s run.'}
+                    + 'for the next run.'}
               </div>
             )}
+            <RunStatus regions={regions} />
             <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
               {spots.map((s, i) => (
                 <button key={s.id} onClick={() => setSelected(s.id)}
