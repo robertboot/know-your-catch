@@ -147,6 +147,13 @@ const compass = (deg: number) =>
    Three tries with a short backoff. Only the shed/transient statuses are
    retried: a 400 means our query is wrong and asking again louder will not
    fix it. */
+/* The time a run ACTUALLY happened. It has to travel inside the status
+   text because last_run_at is not that time: a failed region is stamped
+   90 minutes in the past so it comes back round sooner, which makes the
+   column a queue position, not a clock. Reading it as "last ran" would
+   say "an hour ago" about a run a minute old. */
+const stamp = () => new Date().toISOString().slice(11, 16) + 'Z';
+
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -704,13 +711,13 @@ Deno.serve(async (req: Request) => {
         .eq('region_id', reg.id)
         .lt('observed_at', new Date(Date.now() - 14 * 86400000).toISOString());
 
-      status = `ok · ${loaded} · cells=${cells.length} spots=${spaced.length}` +
+      status = `ok · ${stamp()} · ${loaded} · cells=${cells.length} spots=${spaced.length}` +
                `${marginal ? ' (marginal)' : ''} zones=${zoneRows.length}`;
       out.push({ region: reg.id, observed, grid: `${sst.lats.length}x${sst.lons.length}`,
                  candidates: cells.length, groups: groups.length, written: spots.length,
                  zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
     } catch (e) {
-      failure = `ERROR · ${loaded} · ${String(e)}`.slice(0, 500);
+      failure = `ERROR · ${stamp()} · ${loaded} · ${String(e)}`.slice(0, 500);
       out.push({ region: reg.id, error: failure });
     }
     // Stamped whatever happened. A region that throws every time still has

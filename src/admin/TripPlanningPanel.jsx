@@ -136,15 +136,6 @@ function RunStatus({ regions }) {
   const neverRun = regions.filter(r => !r.last_run_at);
   if (!failing.length && !neverRun.length) return null;
 
-  const when = (iso) => {
-    if (!iso) return 'never';
-    const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins} min ago`;
-    const h = Math.round(mins / 60);
-    return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
-  };
-
   return (
     <div style={{
       marginTop: 12, padding: '10px 12px', borderRadius: 10,
@@ -154,10 +145,13 @@ function RunStatus({ regions }) {
                     textTransform: 'uppercase' }}>
         Satellite runs
       </div>
+      {/* No relative time against a failure: last_run_at is stamped 90
+          minutes in the past for a failed region so it comes back round
+          sooner, which makes it a queue position rather than a clock. The
+          real time of the run travels inside the status text instead. */}
       {failing.map(r => (
         <div key={r.id} style={{ fontSize: 12.5, color: T.ink, marginTop: 7, lineHeight: 1.45 }}>
-          <strong>{r.label || r.id}</strong>{' '}
-          <span style={{ color: T.inkMute }}>— {when(r.last_run_at)}</span>
+          <strong>{r.label || r.id}</strong>
           <div style={{ color: T.inkMute, fontSize: 11.5, marginTop: 2, wordBreak: 'break-word' }}>
             {r.last_error}
           </div>
