@@ -742,6 +742,11 @@ function buildBrief({ health, queue, coverage, training }) {
  *
  * What it does remove is the fetch-quest: being told something needs doing
  * and then having to go to another tab and find it is two jobs. */
+/* A malformed source_url must not take the panel down with it. new URL()
+   throws on anything that is not absolute, and an AI-drafted row is
+   exactly where a bare domain turns up. */
+const hostOf = (u) => { try { return new URL(u).hostname; } catch { return u; } };
+
 function RegsDraftReview({ onDone }) {
   const [rows, setRows] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -754,7 +759,11 @@ function RegsDraftReview({ onDone }) {
       if (!c) { setErr('Supabase is not configured in this build.'); return; }
       const cutoff = new Date(Date.now() - 7 * 86400_000).toISOString();
       const { data, error } = await c.from('regulations')
-        .select('id, species_id, jurisdiction_id, season_text, bag_limit, size_limit, source_url, drafted_at, notes')
+        // Column names read from supabase/regulations-schema.sql rather
+        // than guessed: it is min_size_in / max_size_in, not size_limit,
+        // and source_note sits beside source_url.
+        .select('id, species_id, jurisdiction_id, season_text, bag_limit, boat_limit, '
+              + 'min_size_in, max_size_in, source_url, source_note, drafted_at, drafted_by, notes')
         .eq('status', 'draft').lt('drafted_at', cutoff)
         .order('drafted_at', { ascending: true }).limit(25);
       if (!alive) return;
@@ -799,13 +808,17 @@ function RegsDraftReview({ onDone }) {
           <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 4, lineHeight: 1.5 }}>
             {r.season_text || 'no season text'}
             {r.bag_limit != null ? ` · bag ${r.bag_limit}` : ''}
-            {r.size_limit != null ? ` · min ${r.size_limit}"` : ''}
+            {r.boat_limit != null ? ` · boat ${r.boat_limit}` : ''}
+            {r.min_size_in != null ? ` · min ${r.min_size_in}"` : ''}
+            {r.max_size_in != null ? ` · max ${r.max_size_in}"` : ''}
           </div>
           <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5 }}>
             {r.source_url
               ? <a href={r.source_url} target="_blank" rel="noreferrer"
-                   style={{ color: T.brass }}>{new URL(r.source_url).hostname}</a>
-              : <span style={{ color: T.warn }}>no source — cannot be verified as it stands</span>}
+                   style={{ color: T.brass }}>{hostOf(r.source_url)}</a>
+              : <span style={{ color: T.warn }}>
+                  {r.source_note || 'no source — cannot be verified as it stands'}
+                </span>}
             {r.drafted_at ? ` · drafted ${String(r.drafted_at).slice(0, 10)}` : ''}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
