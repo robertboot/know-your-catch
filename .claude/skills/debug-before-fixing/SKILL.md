@@ -69,6 +69,57 @@ usually short-circuits on `navigator.onLine === false`. A slow, alive
 connection is the one that hangs, and it's the one anglers actually have
 on a boat.
 
+## An empty answer is not an empty table
+
+**Nothing came back** and **there is nothing there** look identical and
+mean completely different things. Before reporting absence, prove it is
+absence.
+
+2026-10-07, stated to Rob as fact, repeatedly, for most of a day: "the
+hotspot tables are completely empty." They were not. `hotspot_zones`
+grants select to `authenticated` only, and the reads were anonymous.
+**PostgREST returns `[]` for rows RLS hides — not an error, not a 403.**
+132 rows were sitting there the whole time. The admin console, signed
+in, was drawing them across the whole Gulf; he sent a screenshot of it
+while being told the table was empty.
+
+The cost was not just the wrong answer. A whole night's diagnosis was
+built on it, and he had to argue against a confident claim to get back
+to the truth.
+
+So, whenever a query returns nothing:
+
+- **Check the permissions before reporting the absence.** Who is this
+  query running as, and what is that role allowed to see? For Supabase,
+  read the policy — `to anon` and `to authenticated` are different
+  answers to the same question.
+- **Cross-check against something that disagrees.** A row count of zero
+  next to a UI drawing that data means the read is wrong, not the UI.
+  Take the contradiction seriously the first time.
+- An empty result from one credential proves one thing: that credential
+  sees nothing.
+- The same trap wears other clothes: a filtered query whose filter is
+  wrong, a soft-delete column, a schema search path, a stale replica.
+
+## Say which parts you verified and which you inferred
+
+Rob, after the above: *"it hurts me more when you tell me something that
+ends up being wrong, than you not being completely certain."*
+
+That is the standard. Confidence has to be earned per claim, not
+inherited from the rest of the diagnosis being sound.
+
+- Mark each claim as observed or inferred, and say how it was observed.
+  "`hotspots` returned 0 rows to an anonymous reader" is a fact. "The
+  table is empty" is a conclusion that needs the permissions checked
+  first.
+- "I don't know yet" is a complete and acceptable answer. A wrong
+  certainty costs far more than an admitted gap.
+- When evidence contradicts the running theory, say so immediately and
+  out loud. Do not quietly fold it in.
+- A long chain of correct reasoning does not make its weakest premise
+  true. The premise is the thing to go back and check.
+
 ## Before claiming a fix works
 
 - Say what was verified and how. "Archive succeeded" proves it compiled,

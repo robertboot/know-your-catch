@@ -77,6 +77,19 @@ how trust gets spent.
     curl -s "$PROJECT/rest/v1/hotspot_regions?select=id,last_run_at,last_error" \
       -H "apikey: $PUBLISHABLE" -H "Authorization: Bearer $PUBLISHABLE"
 
+**That key is anonymous, and an empty answer from it proves nothing.**
+PostgREST returns `[]` for rows RLS hides — not an error. `hotspot_zones`
+grants select to `authenticated` only, so this read showed nothing while
+132 rows sat in the table and the signed-in admin console drew them
+across the whole Gulf. A full night of diagnosis was built on "the tables
+are empty", and they never were.
+
+Before reporting that a job has written nothing: **read the table's
+policy.** `to anon` and `to authenticated` are different answers to the
+same query. If the role cannot see the rows, this check cannot tell you
+whether the job ran — only `last_run_at` and `last_error` on a table the
+role CAN read will. See `[[debug-before-fixing]]`.
+
 ## Related
 
 - `[[harness-parity]]` — a scripted patch that silently no-ops is
