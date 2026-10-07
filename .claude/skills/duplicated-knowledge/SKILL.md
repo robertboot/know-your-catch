@@ -89,3 +89,15 @@ Verify it FAILS on the real bug before trusting it. Re-introduce the
 defect, confirm a non-zero exit naming the problem and the fix, then
 restore. A check that has only ever passed proves nothing — that step is
 what confirmed the jurisdiction rule actually worked.
+
+## What is not duplication
+
+Not every second request is a copy. The app and the admin console read
+the same `hotspots` and `hotspot_zones` rows — one fetch, two readers.
+And an ERDDAP **picture** and an ERDDAP **grid** of the same variable are
+different artefacts: you cannot measure a colour-mapped PNG back into
+degrees. See `[[add-ocean-layer]]`.
+
+The real duplication there is that two jobs ask NOAA for sea-surface
+temperature independently, and the grids one of them already pulls could
+render the other's picture. Recorded, not yet done.

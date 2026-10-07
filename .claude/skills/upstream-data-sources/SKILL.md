@@ -93,6 +93,54 @@ Measure what you are about to claim. The test asserts a card can never
 claim more temperature than the synthetic water contains. This matters
 beyond accuracy — Rob has been explicit that the app must not overstate.
 
+## Ask for less before you wait longer
+
+All three ERDDAP hosts timed out, every run. That reads as "the provider
+is down". It was really **we asked for too much**.
+
+The stride was a fixed number of grid cells, so a region's request grew
+with its box. `gulf_deep` is 5° by 7°, which at MUR's 0.01° and stride 2
+is **87,500 points in one JSON document** — slow to assemble and slow to
+send even from a healthy server. Capping the request at 140 points a side
+brought the worst region down to 14,000.
+
+So, before reaching for a longer timeout:
+
+- **Size the request, not the patience.** A region twice as wide needs a
+  coarser stride, not twice the wait. `scripts/hotspots-test/run.mjs`
+  guards this against the real region boxes, so adding a region cannot
+  quietly reintroduce an oversized one.
+- Know what resolution the ANSWER needs. A 0.05° cell is 3 nm — finer
+  than any break worth driving to — and the gradient is per nautical mile
+  whatever the stride. The extra points bought nothing and cost the run.
+- A timeout is not evidence about the server. Distinguish it from a
+  refusal (503), a missing dataset (404) and a dead connection, and
+  report **every host's** outcome, not just the last one:
+
+      every erddap host failed — coastwatch.pfeg=503
+      upwell.pfeg=timeout@20s erddap.marine=404
+
+  Throwing only the final error made three different failures read as one
+  bare `AbortError: The signal has been aborted`, which says nothing.
+
+## An image and a grid are not the same request
+
+`refresh-ocean-maps` pulls a rendered **PNG** for the map; `find-hotspots`
+pulls the **numbers** for the scoring. Both are sea-surface temperature,
+both from ERDDAP, and they are not interchangeable: a colour-mapped
+picture cannot yield "71.8 °F break, 2.1° across it, running 4 nm". You
+cannot measure a picture.
+
+This is worth saying out loud because it looks like waste and is asked
+about. What IS genuine duplication: both jobs ask NOAA for the same
+variable. The grids `find-hotspots` already pulls cover the whole Gulf,
+so the picture could be rendered from them and the second fetch dropped —
+halving what we ask of a server that sheds load. Not yet done; it needs a
+PNG encoder in Deno and the colour bar is currently ERDDAP's.
+
+**What is NOT duplication:** the app and the admin console read the SAME
+rows (`hotspots`, `hotspot_zones`). Nothing is fetched twice for the web.
+
 ## Related
 
 - `[[scheduled-jobs]]`, `[[api-cost-control]]`, `[[trip-planning-engine]]`,

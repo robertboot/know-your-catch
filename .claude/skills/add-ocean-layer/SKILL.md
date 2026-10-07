@@ -32,3 +32,23 @@ Coarse coastal cells bleed color onto land. Fix with a dark GeoJSON land polygon
 on a pane **above** the overlay (`zIndex 440`), coastline labels above that (450).
 Draw it via a `landReady` state flag when the GeoJSON `fetch` resolves — never
 `setShowLand(v => v)` (a same-value setState bails out and the mask never draws).
+
+## Pictures for looking, grids for measuring
+
+Two jobs read ERDDAP and they are not interchangeable:
+
+| | fetches | writes | used for |
+|---|---|---|---|
+| `refresh-ocean-maps` | rendered PNG | storage bucket | the Chlorophyll / Sea temp overlays |
+| `find-hotspots` | numeric grids | `hotspots`, `hotspot_zones` | suggested spots, species zones, currents |
+
+A layer you can only LOOK at belongs in the first. Anything the app has to
+state a number about belongs in the second — a colour-mapped picture
+cannot be measured back into degrees.
+
+The app and the admin console read the same rows. There is no app copy and
+web copy of this data; see `[[duplicated-knowledge]]`.
+
+Both hit the same provider, so both go down together. Host failover,
+retries and request sizing live in `[[upstream-data-sources]]` — change
+them in both functions or neither.
