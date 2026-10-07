@@ -378,9 +378,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
 
       <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
         <div ref={mapElRef} style={{ height: '58vh', minHeight: 380, width: '100%', background: '#06182b' }} />
+        {/* Both banners sit BELOW the zoom control, not beside it. At
+            top-left they slid under Leaflet's +/- buttons and lost their
+            first two words — the ones that say what the banner is. */}
         {status === 'error' && (
           <div style={{
-            position: 'absolute', top: 10, left: 10, zIndex: 500,
+            position: 'absolute', top: 92, left: 10, right: 10, zIndex: 500,
             background: T.closedBg, color: T.closed, border: `1px solid ${T.closed}`,
             padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, maxWidth: 300,
           }}>
@@ -394,9 +397,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
             a three-day-old edge you believe is today's is not. */}
         {overlayAge != null && status === 'ok' && (
           <div style={{
-            position: 'absolute', top: 10, left: 10, zIndex: 500,
+            position: 'absolute', top: 92, left: 10, right: 10, zIndex: 500,
             background: T.warnBg, color: T.warn, border: `1px solid ${T.warn}88`,
-            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, maxWidth: 320,
+            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+            backdropFilter: 'blur(4px)',
           }}>
             Saved image · {describeAge(overlayAge)} — no signal, showing what your phone downloaded.
           </div>
