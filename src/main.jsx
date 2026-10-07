@@ -24,6 +24,10 @@ installErrorReporting();
          /testers         → TestersPage (tester recruiting flyer)
          /admin           → App (which routes to the admin console for
                             allow-listed emails once signed in)
+         /app             → App itself, the angler-facing screens, in a
+                            browser. There was no way to look at the app
+                            without a TestFlight build, which made every
+                            change to it a device round-trip to see.
          /reset-password  → ResetPasswordPage (Supabase parses the
                             recovery access token in the URL fragment
                             via detectSessionInUrl so the page can
@@ -56,6 +60,24 @@ function pickRoot() {
     // the dashboard.
     if (!/^#\/admin(\/|$)/.test(window.location.hash)) window.location.hash = '#/admin';
     return <App />;
+  }
+  /* The app, as an angler sees it. Same bundle, same screens, no admin
+     hash — so /admin still lands on the console and /app never does.
+
+     Held to a phone's width on a desktop monitor. The app lays itself out
+     by screen size, so left to fill a 27-inch display it would render the
+     tablet layout and tell you nothing about the thing almost everyone
+     actually holds. */
+  if (path === '/app') {
+    return (
+      <div style={{ minHeight: '100vh', background: '#06111F',
+                    display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 420, minHeight: '100vh',
+                      boxShadow: '0 0 0 1px rgba(15,94,133,0.35)' }}>
+          <App />
+        </div>
+      </div>
+    );
   }
   if (path === '/testers') {
     return (

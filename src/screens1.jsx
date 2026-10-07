@@ -30,6 +30,7 @@ import {
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
 import { readMarineCache, writeMarineCache, describeAge, fetchWithTimeout } from './marine-cache.js';
+import { client } from './supabase-client.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
 import { savePhoto, photoThumbUrl, photoDisplayUrl, photoAsDataUrl } from './photos-store.js';
@@ -398,6 +399,90 @@ function SeaStateReadout({ waveFt, periodS, tier }) {
       <BandStat label="SEAS" value={waveFt} unit="ft" axisMax={6} bands={WAVE_BANDS} />
       <BandStat label="PERIOD" value={periodS} unit="sec" axisLabel="12 s" axisMax={12} bands={PERIOD_BANDS} />
     </div>
+  );
+}
+
+
+/* TripSpot — the one line that decides most trips.
+ *
+ * The satellite work already runs nightly and the map already caches its
+ * rows; this is the part that means an angler does not have to go looking
+ * for it. One spot, the best one, with the reason in the words the server
+ * wrote and the distance from the port they left from.
+ *
+ * Reads the SAME cache key the Waters map writes, so it is aboard with no
+ * signal and says how old it is — the promise the rest of the app now
+ * makes. It renders nothing at all when there are no spots: a flat,
+ * well-mixed sea genuinely has no breaks worth driving to, and an empty
+ * card inviting a 40-mile run would be worse than silence.
+ */
+function TripSpot({ onOceanMaps, tier = 'phone' }) {
+  const [spot, setSpot] = useState(null);
+  const [ageMs, setAgeMs] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    const best = (rows) => (rows || []).filter(r => r.score != null)
+      .sort((a, b) => b.score - a.score)[0] || null;
+    (async () => {
+      const cached = readMarineCache('hotspots', 0, 0);
+      if (cached && alive) { setSpot(best(cached.data)); setAgeMs(cached.ageMs); }
+      const c = client();
+      if (!c) return;
+      const since = new Date(Date.now() - 72 * 3600000).toISOString();
+      const { data, error } = await c.from('hotspots')
+        .select('score,why,dist_nm,from_port_deg,observed_at')
+        .gte('observed_at', since)
+        .order('score', { ascending: false })
+        .limit(1);
+      if (!alive || error || !data?.length) return;
+      setSpot(data[0]); setAgeMs(null);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (!spot) return null;
+
+  const sz = (p, t, d) => (tier === 'desktop' ? d : tier === 'tablet' ? t : p);
+  const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const compass = (deg) => (deg == null ? '' : COMPASS[Math.round(deg / 22.5) % 16]);
+  const grade = fishabilityGrade(spot.score);
+  const colour = fishabilityColor(spot.score);
+
+  return (
+    <Card style={{ marginTop: 14, padding: 0, borderRadius: 18, border: `1px solid ${T.brass}`, overflow: 'hidden' }}>
+      <button onClick={onOceanMaps}
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
+                 border: 'none', cursor: 'pointer', padding: sz(14, 16, 20), color: T.ink, font: 'inherit' }}>
+        <div style={{ fontSize: sz(11, 12, 13.5), fontWeight: 800, letterSpacing: 1.3,
+                      color: T.brass, textTransform: 'uppercase' }}>
+          Where to go
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: sz(12, 14, 16), marginTop: 11 }}>
+          <div style={{ width: sz(46, 52, 58), height: sz(46, 52, 58), borderRadius: 13, flexShrink: 0,
+                        background: colour, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: sz(18, 20, 23), fontWeight: 900, color: T.oceanDeep }}>
+            {grade}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: sz(17, 19, 22), fontWeight: 800, lineHeight: 1.2 }}>
+              {spot.dist_nm != null ? `${Math.round(spot.dist_nm)} nm ${compass(spot.from_port_deg)}` : 'Offshore edge'}
+            </div>
+            <div style={{ fontSize: sz(12, 13, 14.5), color: T.inkMute, marginTop: 3 }}>
+              {ageMs != null ? `saved ${describeAge(ageMs)}` : 'from last night\u2019s satellite pass'}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: sz(12.5, 13.5, 15), color: T.inkMute, marginTop: 10, lineHeight: 1.5 }}>
+          {spot.why}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12,
+                      color: T.brass, fontSize: sz(12.5, 13.5, 15), fontWeight: 800 }}>
+          See it on the map
+          <ChevronRight size={sz(15, 16, 18)} strokeWidth={2.4} />
+        </div>
+      </button>
+    </Card>
   );
 }
 
@@ -1088,6 +1173,9 @@ export function HomeScreen({
           scrolling makes no sense with the room the iPad canvas offers. */}
       {/* Today's Conditions — live, with the Fishability score gauge */}
       <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
+
+      {/* Where to go — renders nothing when there are no spots. */}
+      <TripSpot onOceanMaps={onOceanMaps} tier={screenSize} />
 
       {/* Regulation Alerts — full-width, single-line active alert; rely on
           VIEW ALL for the rest. */}
