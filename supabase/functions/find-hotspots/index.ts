@@ -444,13 +444,39 @@ Deno.serve(async (req: Request) => {
         groups.push(group);
       }
 
-      // ---- turn each group into one spot ------------------------------
+      // ---- turn each group into spots ---------------------------------
+      /* A group is a whole BREAK, and a break is not a place — the shelf-edge
+         front runs the width of the region. Taking one peak per group meant
+         a hundred-mile wall produced a single pin at its hottest pixel, so
+         MAX_SPOTS and the four-mile spacing rule could never bind: twelve
+         regions, twelve pins, most of them nowhere near anybody's port.
+         Each group now offers up its strongest cells that stand at least
+         MIN_SEPARATION_NM apart, and the spacing pass below still has the
+         last word. A long front becomes several places to start looking,
+         which is what it is. */
+      const peaksOf = (group: Cell[]) => {
+        const picked: Cell[] = [];
+        for (const c of [...group].sort((a, b) => b.score - a.score)) {
+          if (picked.length >= MAX_SPOTS) break;
+          if (picked.every(o => distBearing(o.lat, o.lon, c.lat, c.lon).dist >= MIN_SEPARATION_NM)) {
+            picked.push(c);
+          }
+        }
+        return picked;
+      };
+
       const observed = sst.time || new Date().toISOString();
-      let spots = groups.map(group => {
+      // A few hot pixels are not a wall. Filtered here rather than after the
+      // spots are built, because one group no longer means one spot.
+      let spots = groups.filter(g => g.length >= MIN_CELLS).flatMap(group =>
+        peaksOf(group).map(peak => buildSpot(group, peak)));
+
+      function buildSpot(group: Cell[], peak: Cell) {
         // The peak is the spot. A centroid of a curving break lands in the
         // middle of nowhere, which is a good way to send someone 30 miles
-        // to flat water.
-        const peak = group.reduce((a, b) => (b.score > a.score ? b : a));
+        // to flat water. The span is the whole break's, not this peak's:
+        // "running 40 nm NE" describes the wall, and that is the part worth
+        // knowing when deciding where along it to start.
         const lats = group.map(c => c.lat), lons = group.map(c => c.lon);
         const spanLatNm = (Math.max(...lats) - Math.min(...lats)) * NM_PER_DEG_LAT;
         const spanLonNm = (Math.max(...lons) - Math.min(...lons)) * nmPerDegLon(peak.lat);
@@ -463,9 +489,27 @@ Deno.serve(async (req: Request) => {
           return v == null ? null : cToF(v);
         })();
         const { dist, brg } = distBearing(reg.port_lat, reg.port_lon, peak.lat, peak.lon);
-        // The drop across the break, which is what a captain actually
-        // pictures: gradient times the width the break runs over.
-        const dropF = peak.sg * Math.max(1, Math.min(lengthNm, 4));
+        /* The drop across the break — what a captain actually pictures, and
+           a number the card states out loud, so it has to be the water's
+           and not an extrapolation. This used to be the peak gradient times
+           four miles, which on a front with 3.6 °F in it claimed 7.6: the
+           gradient is a local maximum, and assuming it holds for four miles
+           invents temperature that is not there. Measured instead, as the
+           real spread of the surface temperature around the peak. The window
+           is +/-2 cells, about two and a half miles at this stride. */
+        const dropF = (() => {
+          let lo = Infinity, hi = -Infinity;
+          for (let di = -2; di <= 2; di++) {
+            for (let dj = -2; dj <= 2; dj++) {
+              const v = sst.v[peak.i + di]?.[peak.j + dj];
+              if (v == null) continue;
+              const f = cToF(v);
+              if (f < lo) lo = f;
+              if (f > hi) hi = f;
+            }
+          }
+          return hi > lo ? hi - lo : peak.sg;
+        })();
         const chlV = chl ? sampleAt(chl, chl.v, peak.lat, peak.lon) : null;
 
         // The card has to say WHY, in the order a captain would ask: what
@@ -501,8 +545,7 @@ Deno.serve(async (req: Request) => {
           dist_nm: dist, from_port_deg: brg,
           why,
         };
-      })
-        .filter((_s, idx) => groups[idx].length >= MIN_CELLS);
+      }
 
       // A few hot pixels are noise, not a wall — but keep the rejected
       // ones to hand, because a week with nothing strong still has a
