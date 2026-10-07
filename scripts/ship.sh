@@ -49,6 +49,20 @@ echo "▶ Building iOS bundle (KYC_ADMIN=false)…"
 npm run ios:build >/tmp/ship-ios.log 2>&1 || { echo "✗ ios:build FAILED"; tail -20 /tmp/ship-ios.log; exit 1; }
 echo "✓ ios:build passed"
 
+# ---- No trackers in the app bundle --------------------------------------
+# The Meta Pixel is injected into index.html at build time behind KYC_WEB,
+# so it belongs to the web deploy only. If it ever reaches dist/ it is in
+# the iOS app, which changes what the App Store privacy declaration has to
+# say and drags the app into App Tracking Transparency — a consent prompt
+# for a marketing tag the app has no use for. Verified to catch a leak:
+# running ios:build with KYC_WEB=true forced does put it there.
+if grep -qi "fbevents\|connect.facebook.net" dist/index.html 2>/dev/null; then
+  echo "✗ Meta Pixel found in the iOS bundle (dist/index.html)"
+  echo "  The tracker is web-only. Check KYC_WEB is not set for ios:build."
+  exit 1
+fi
+echo "✓ no trackers in the app bundle"
+
 # ---- Smoke render -------------------------------------------------------
 # esbuild checks syntax, not whether an identifier resolves. A panel that
 # references a variable nobody declared builds perfectly and throws
