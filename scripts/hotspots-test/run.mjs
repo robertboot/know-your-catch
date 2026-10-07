@@ -78,6 +78,7 @@ async function run(sc, { drop = [], body = {}, regions = 1 } = {}) {
     if (u.includes('chla8day')) return pick('chl', erddap(0.04, ['chlorophyll'], sc.chl));
     if (u.includes('etopo180')) return pick('depth', erddap(0.0666, ['altitude'], sc.dep));
     if (u.includes('nesdisSSH1day')) return pick('cur', erddap(0.25, ['ugos', 'vgos'], sc.cur));
+    if (u.includes('open-meteo')) return { ok: true, status: 200, text: async () => '', json: async () => ({}) };
     throw new Error('unexpected url ' + u);
   };
   sb.writes.hotspots = []; sb.writes.hotspot_zones = []; sb.writes.updates = [];
@@ -137,6 +138,11 @@ check('losing every corroborating grid is reported, not silent',
 
 const sstDown = await run(front(120), { drop: ['sst'] });
 check('losing temperature fails the region', /ERROR/.test(sstDown.note), sstDown.note.slice(0, 70));
+// Every host silent is the one failure a retry cannot explain, so the
+// function has to say whether it can reach anything at all.
+check('total host failure triggers the outbound probe',
+  /probe: open-meteo=/.test(sstDown.note),
+  sstDown.note.replace(/^.*probe/, 'probe').slice(0, 120));
 
 const partial = await run(front(120), { drop: ['chl'] });
 check('it still publishes with colour missing', partial.spots.length > 0, partial.note);

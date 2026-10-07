@@ -109,6 +109,49 @@ const BUDGET_MS = 100_000;
    document and timed out on every host. */
 const MAX_GRID_SIDE = 140;
 
+/* Can this runtime reach the outside world at all?
+ *
+ * Three unrelated hosts — two NOAA, one university — all timing out while
+ * a browser gets an instant answer from the same addresses is not three
+ * outages. It is the shape of a runtime that cannot get out. But a
+ * timeout alone cannot tell those apart, so the function asks.
+ *
+ * Open-Meteo is the control: the app already depends on it for the
+ * forecast, so it is known to work from here. If Open-Meteo answers and
+ * every ERDDAP host does not, the problem is reaching ERDDAP. If nothing
+ * answers, it is outbound access, and no amount of retrying or failing
+ * over will ever help.
+ *
+ * Tiny requests and a short window — this runs only after a region has
+ * already failed, and has to fit in what is left of the budget. */
+const PROBE_TIMEOUT_MS = 6_000;
+
+async function probeOutbound(): Promise<string> {
+  const one = async (label: string, url: string) => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
+    const t0 = Date.now();
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      return `${label}=${r.status}/${((Date.now() - t0) / 1000).toFixed(1)}s`;
+    } catch (e) {
+      return `${label}=${(e as Error)?.name === 'AbortError' ? 'timeout' : 'unreachable'}`;
+    } finally {
+      clearTimeout(t);
+    }
+  };
+  const results = await Promise.all([
+    // The control. Not ERDDAP, already proven from this runtime.
+    one('open-meteo', 'https://marine-api.open-meteo.com/v1/marine' +
+      '?latitude=29&longitude=-88&hourly=sea_surface_temperature&forecast_days=1'),
+    // One single point from each host — the smallest thing ERDDAP can serve.
+    ...ERDDAP_HOSTS.map(([h]) => one(
+      new URL(h).hostname.split('.').slice(0, 2).join('.'),
+      `${h}/${SST_DATASET}.json?analysed_sst[(last)][(29.0):1:(29.01)][(-88.0):1:(-87.99)]`)),
+  ]);
+  return results.join(' ');
+}
+
 // Predictive zones (the SiriusXM-style blobs), PER SPECIES — "where is
 // the mahi water", not "where is trolling generally good". Coarser than
 // the edge grid — a blob is an area statement, ~6 km cells read fine at
@@ -783,7 +826,13 @@ Deno.serve(async (req: Request) => {
                  candidates: cells.length, groups: groups.length, written: spots.length,
                  zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
     } catch (e) {
-      failure = `ERROR · ${stamp()} · ${loaded} · ${String(e)}`.slice(0, 500);
+      failure = `ERROR · ${stamp()} · ${loaded} · ${String(e)}`.slice(0, 460);
+      // Every host silent is the one failure a retry cannot explain. Ask
+      // whether this runtime can reach anything at all, and record the
+      // answer beside the failure so nobody has to guess at it twice.
+      if (String(e).includes('every erddap host failed')) {
+        failure += ` · probe: ${await probeOutbound()}`;
+      }
       out.push({ region: reg.id, error: failure });
     }
     // Stamped whatever happened. A region that throws every time still has
@@ -801,7 +850,7 @@ Deno.serve(async (req: Request) => {
         // that published nothing and a run that was never attempted look
         // the same in the tables, and telling them apart used to need a
         // cron response body that pg_net had already pruned.
-        last_error: failure || status,
+        last_error: (failure || status).slice(0, 900),
       }).eq('id', reg.id);
     }
   }
