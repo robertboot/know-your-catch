@@ -378,34 +378,36 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
 
       <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
         <div ref={mapElRef} style={{ height: '58vh', minHeight: 380, width: '100%', background: '#06182b' }} />
-        {/* Both banners sit BELOW the zoom control, not beside it. At
-            top-left they slid under Leaflet's +/- buttons and lost their
-            first two words — the ones that say what the banner is. */}
-        {status === 'error' && (
-          <div style={{
-            position: 'absolute', top: 92, left: 10, right: 10, zIndex: 500,
-            background: T.closedBg, color: T.closed, border: `1px solid ${T.closed}`,
-            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, maxWidth: 300,
-          }}>
-            This layer didn't load — the composite may be cloud-covered for this window, or you have no
-            signal and nothing saved for it yet. Try an earlier date.
-          </div>
-        )}
-
-        {/* Same rule as the forecast: imagery from the device says so, with
-            its age. A three-day-old chlorophyll edge is still worth seeing —
-            a three-day-old edge you believe is today's is not. */}
-        {overlayAge != null && status === 'ok' && (
-          <div style={{
-            position: 'absolute', top: 92, left: 10, right: 10, zIndex: 500,
-            background: T.warnBg, color: T.warn, border: `1px solid ${T.warn}88`,
-            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-            backdropFilter: 'blur(4px)',
-          }}>
-            Saved image · {describeAge(overlayAge)} — no signal, showing what your phone downloaded.
-          </div>
-        )}
       </div>
+
+      {/* Under the map, in the flow — not floating on it. Over imagery
+          these were unreadable whatever the colour: a chlorophyll
+          composite is every colour at once, so there is no text that
+          survives on top of it. Below the map they sit on the app's own
+          background and simply read. */}
+      {status === 'error' && (
+        <div style={{
+          marginTop: 10, background: T.closedBg, color: T.closed,
+          border: `1px solid ${T.closed}`, padding: '10px 13px', borderRadius: 10,
+          fontSize: 12.5, fontWeight: 700, lineHeight: 1.5,
+        }}>
+          This layer didn't load — the composite may be cloud-covered for this window, or you have no
+          signal and nothing saved for it yet. Try an earlier date.
+        </div>
+      )}
+
+      {/* Same rule as the forecast: imagery from the device says so, with
+          its age. A three-day-old chlorophyll edge is still worth seeing —
+          a three-day-old edge you believe is today's is not. */}
+      {overlayAge != null && status === 'ok' && (
+        <div style={{
+          marginTop: 10, background: T.warnBg, color: T.warn,
+          border: `1px solid ${T.warn}88`, padding: '10px 13px', borderRadius: 10,
+          fontSize: 12.5, fontWeight: 700, lineHeight: 1.5,
+        }}>
+          Saved image · {describeAge(overlayAge)} — no signal, showing what your phone downloaded.
+        </div>
+      )}
 
       {/* Legend + blurb */}
       <Card style={{ marginTop: 12, borderRadius: 18 }}>
