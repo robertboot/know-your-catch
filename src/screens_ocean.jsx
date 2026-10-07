@@ -21,6 +21,7 @@ import { SUPABASE_URL, client } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
 import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.js';
 import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from './basemap.js';
+import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
@@ -131,6 +132,9 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   // these ADD to whichever satellite layer is active.
   const [showCatches, setShowCatches] = useState(false);
   const [showSpots, setShowSpots] = useState(true);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [currentCells, setCurrentCells] = useState(null);
+  const flowRef = useRef(null);
   const [spots, setSpots] = useState(null);      // hotspot rows (null = not loaded)
   const [spotsAge, setSpotsAge] = useState(null); // ms, when serving from cache
   const catchesRef = useRef(null);
@@ -269,6 +273,42 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     return () => { alive = false; };
   }, []);
 
+  /* Surface current, the same geostrophic field the admin map animates.
+     Cached like everything else here: the vectors are a few kilobytes and
+     an eddy edge is worth seeing with no signal. Only fetched when the
+     layer is first switched on — most trips never ask for it, and this is
+     a map that has to be careful about what it downloads. */
+  useEffect(() => {
+    if (!showCurrent || currentCells) return;
+    let alive = true;
+    (async () => {
+      const cached = readMarineCache('currents', 0, 0);
+      if (cached && alive) setCurrentCells(cached.data);
+      const c = client();
+      if (!c) return;
+      const { data } = await c.from('hotspot_zones')
+        .select('cells, step_deg')
+        .eq('mode_key', '_currents')
+        .limit(1).maybeSingle();
+      if (!alive || !data?.cells?.length) return;
+      setCurrentCells(data);
+      writeMarineCache('currents', 0, 0, data);
+    })();
+    return () => { alive = false; };
+  }, [showCurrent, currentCells]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; }
+    if (!showCurrent || !currentCells?.cells?.length) return;
+    const layer = createCurrentFlowLayer(currentCells.cells, { step: currentCells.step_deg || 0.25 });
+    layer.addTo(map);
+    layer.setOpacity(0.85);
+    flowRef.current = layer;
+    return () => { if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; } };
+  }, [showCurrent, currentCells]);
+
   // Draw/remove the suggested-spot markers.
   useEffect(() => {
     const map = mapRef.current;
@@ -348,6 +388,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
         <span style={{ width: 1, background: T.cardEdge, margin: '4px 2px' }} />
         {chip(showSpots, 'Suggested spots', () => setShowSpots(v => !v))}
         {chip(showCatches, 'My catches', () => setShowCatches(v => !v))}
+        {chip(showCurrent, 'Current', () => setShowCurrent(v => !v))}
       </div>
 
       {/* Composite date + land overlay */}
