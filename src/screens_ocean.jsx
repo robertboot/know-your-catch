@@ -20,7 +20,7 @@ import { SPECIES } from './data.js';
 import { SUPABASE_URL, client } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
 import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.js';
-import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from './basemap.js';
+import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from './basemap.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
@@ -163,9 +163,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     map.getPane('coastline').style.zIndex = 450;
     map.getPane('coastline').style.pointerEvents = 'none';
     addBasinLabel(L, map);
-    cachedTileLayer(BASEMAP_LABELS_URL, {
-      maxZoom: BASEMAP_MAX_ZOOM, pane: 'coastline',
-    }).addTo(map);
+    /* No label layer on the data maps. Esri's reference tiles print the
+       basin name as pixels, and swapping from the ocean reference to the
+       land one did not drop it — so "Gulf of Mexico" sat next to the
+       "GULF OF AMERICA" we draw ourselves. Two names for one sea, one of
+       them not the one these users use.
+
+       The coastline and our own basin label carry it. Town names are a
+       real loss, and worth taking back if a reference layer turns up that
+       does not name the water. */
     mapRef.current = map;
     map.setView([26, -85], 6);
     setTimeout(() => map.invalidateSize(), 200);
