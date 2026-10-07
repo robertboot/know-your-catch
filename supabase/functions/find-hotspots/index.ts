@@ -171,14 +171,29 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
    the caller, so no call site can pin itself to one server. */
 async function fetchJson(path: string) {
   let last: unknown = new Error('no erddap host tried');
+  /* What EACH host did, not just the last one. The first version threw
+     only the final error, so three hosts failing for three different
+     reasons reported as one bare "AbortError: The signal has been
+     aborted" — which does not say whether a host refused us, does not
+     carry the dataset, or never answered at all. Those need different
+     fixes, and guessing between them is how a night gets spent. */
+  const tried: string[] = [];
+  // Two labels, not one: the third host's first label is "erddap", which
+  // names nothing. coastwatch.pfeg / upwell.pfeg / erddap.marine read right.
+  const shortName = (h: string) => new URL(h).hostname.split('.').slice(0, 2).join('.');
   for (const [host, attemptsPerHost] of ERDDAP_HOSTS) {
     let nextHost = false;
+    let why = 'unknown';
     for (let a = 1; a <= attemptsPerHost; a++) {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
       try {
         const r = await fetch(`${host}/${path}`, { signal: ctl.signal });
-        if (r.ok) return await r.json();
+        if (r.ok) {
+          if (tried.length) console.log(`erddap fell through to ${host}: ${tried.join(' ')}`);
+          return await r.json();
+        }
+        why = String(r.status);
         const err = Object.assign(
           new Error(`${host} ${r.status}: ${(await r.text()).slice(0, 120)}`),
           { stop: !RETRY_STATUS.has(r.status) && r.status !== 404 });
@@ -196,16 +211,24 @@ async function fetchJson(path: string) {
           throw err;
         }
       } catch (e) {
-        if (e instanceof Error && (e as Error & { stop?: boolean }).stop) throw e;
-        last = e;   // timeout or connection failure — try again, then move on
+        if (e instanceof Error && (e as Error & { stop?: boolean }).stop) {
+          tried.push(`${shortName(host)}=${why}`);
+          throw Object.assign(new Error(`${String(e)} [${tried.join(' ')}]`), { stop: true });
+        }
+        // An aborted fetch is our own timeout; anything else is the
+        // connection failing. They look identical in a bare error string
+        // and mean opposite things — one host is slow, the other is gone.
+        why = (e as Error)?.name === 'AbortError' ? `timeout@${FETCH_TIMEOUT_MS / 1000}s` : 'unreachable';
+        last = e;
       } finally {
         clearTimeout(t);
       }
       if (nextHost) break;
       if (a < attemptsPerHost) await sleep(2000);
     }
+    tried.push(`${shortName(host)}=${why}`);
   }
-  throw last;
+  throw new Error(`every erddap host failed — ${tried.join(' ')} — last: ${last}`);
 }
 
 /* ERDDAP .json comes back as a column table, not a grid. Rebuild the grid

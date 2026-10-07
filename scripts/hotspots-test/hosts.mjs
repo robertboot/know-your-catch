@@ -37,7 +37,7 @@ const run = async (handler, label) => {
   calls = [];
   globalThis.fetch = async (url) => { calls.push(url); return handler(url); };
   try { const v = await fetchJson('x.json?q'); return { label, ok: true, v, calls: [...calls] }; }
-  catch (e) { return { label, ok: false, err: String(e).slice(0,90), calls: [...calls] }; }
+  catch (e) { return { label, ok: false, err: String(e), calls: [...calls] }; }
 };
 const resp = (status, bodyText) => ({ ok: status === 200, status,
   text: async () => bodyText || '', json: async () => ({ hit: true }) });
@@ -58,7 +58,7 @@ results.push(await run((u) => { n++; return host(u) === H[0] && n === 1 ? resp(5
 results.push(await run(() => { throw new Error('ECONNRESET'); }, 'network dead'));
 
 for (const r of results) {
-  console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.label.padEnd(26)} tries=${r.calls.length} hosts=[${[...new Set(r.calls.map(host))].join(', ')}]${r.err ? '  ' + r.err : ''}`);
+  console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.label.padEnd(26)} tries=${r.calls.length} hosts=[${[...new Set(r.calls.map(host))].join(', ')}]${r.err ? '  ' + r.err.slice(0, 150) : ''}`);
 }
 
 // Assertions
@@ -86,6 +86,18 @@ a(byLabel['primary flaky, 2nd try ok'].ok &&
   'a flaky primary recovers without leaving the host');
 a(!byLabel['network dead'].ok && hostsOf(byLabel['network dead']).length === 3,
   'a dead network tries every host');
+// The failure has to name every host and what each one did. Reporting only
+// the last error cost a night: three hosts failing three different ways read
+// as one bare 'AbortError'.
+const names = ['coastwatch.pfeg', 'upwell.pfeg', 'erddap.marine'];
+for (const n of names) {
+  a(byLabel['both 503'].err.includes(n + '='),
+    `the failure must say what ${n} did — got: ${byLabel['both 503'].err}`);
+}
+a(/erddap\.marine=404/.test(byLabel['third host lacks dataset'].err),
+  `a missing dataset must read as 404, got: ${byLabel['third host lacks dataset'].err}`);
+a(/timeout@/.test(byLabel['network dead'].err) || /unreachable/.test(byLabel['network dead'].err),
+  `a dead host must say so, got: ${byLabel['network dead'].err}`);
 // Worst case must stay inside the scheduler's ceiling.
 const worst = ERDDAP_HOSTS.reduce((t, h) => t + (Array.isArray(h) ? h[1] : 2), 0);
 a(worst * 15 <= 90, `worst-case wall clock ${worst * 15}s must stay <= 90s`);
