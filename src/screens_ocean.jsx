@@ -282,7 +282,13 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     if (!showCurrent || currentCells) return;
     let alive = true;
     (async () => {
-      const cached = readMarineCache('currents', 0, 0);
+      // Versioned key. Every phone that opened this layer before the
+      // zones became readable has a cached patch of current off Alabama —
+      // one region's worth, written when that was all the app could see —
+      // and a cache entry is good for a week, so those devices would keep
+      // drawing it. Bumping the name retires them all at once; nobody has
+      // to clear anything.
+      const cached = readMarineCache('currents.v2', 0, 0);
       if (cached && alive) setCurrentCells(cached.data);
       const c = client();
       if (!c) return;
@@ -300,7 +306,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       };
       if (!merged.cells.length) return;
       setCurrentCells(merged);
-      writeMarineCache('currents', 0, 0, merged);
+      writeMarineCache('currents.v2', 0, 0, merged);
     })();
     return () => { alive = false; };
   }, [showCurrent, currentCells]);
