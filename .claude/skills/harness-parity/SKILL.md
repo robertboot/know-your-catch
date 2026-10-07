@@ -87,10 +87,30 @@ first paint anyway, and that is the state a reviewer hits.
 Verified to fail on the real bug before being trusted — removing the
 declaration reproduced the exact ReferenceError the console reported.
 
-**When editing a file by script, assert every replacement.** The missing
-state came from a `.replace()` whose pattern no longer matched after
-another session edited the same line; the other replacements in the same
-patch applied, so nothing looked wrong.
+**When editing by script, assert every replacement — in files AND in the
+database.** The missing state came from a `.replace()` whose pattern no
+longer matched after another session edited the same line; the other
+replacements in the same patch applied, so nothing looked wrong.
+
+The same shape bit a live function. A `DO` block was written to patch
+`admin_cron_health()` by regex, raising a NOTICE on success and saying
+nothing on a miss. It missed. The migration reported success, the function
+kept its old body, and for two days the dashboard could not tell a slow
+job from a dead one — it called every pg_net timeout BROKEN, which is the
+exact false alarm the patch existed to stop.
+
+A scripted patch that silently no-ops is indistinguishable from one that
+worked. So **verify the outcome, not the exit code**:
+
+```sql
+select pg_get_functiondef('public.admin_cron_health()'::regprocedure)
+         like '%timed_out%' as patched;
+```
+
+One line, run after the migration, and the failure is visible the same
+minute instead of the same month. Where a regex patch is awkward to
+verify, prefer a full `CREATE OR REPLACE` — longer to paste, impossible
+to half-apply.
 
 ## Related
 
