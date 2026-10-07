@@ -129,7 +129,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   // Non-null when the image on screen came from the device.
   const [overlayAge, setOverlayAge] = useState(null);
   const [dateISO, setDateISO] = useState('');
-  const [showLand, setShowLand] = useState(true);
   const [landReady, setLandReady] = useState(false); // GeoJSON loaded → (re)draw mask
   // Marker overlays on top of the colour layer. Independent toggles —
   // these ADD to whichever satellite layer is active.
@@ -182,9 +181,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
+    // No layer chosen: bare basemap, and no "didn't load" to explain —
+    // nothing was asked for.
+    if (!active) { setStatus('ok'); setOverlayAge(null); return; }
     const cfg = LAYERS[active];
     setStatus('loading');
-    if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
 
     const liveUrl = () => {
       const [[s, w], [n, e]] = REGION_BOUNDS;
@@ -321,20 +323,24 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     catchesRef.current = group;
   }, [showCatches, state?.catchLog]);
 
-  // Add/remove the land mask when toggled (or once GeoJSON arrives).
+  /* The land mask, always on. It existed as a toggle because the WMS
+     composites paint over the coastline and someone might want to see
+     underneath — but the basemap already draws the coast, so turning it
+     off only ever produced satellite colour spilling across Alabama. One
+     fewer control, and the map always looks like a map. */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     if (landRef.current) { map.removeLayer(landRef.current); landRef.current = null; }
-    if (showLand && landGeoRef.current) {
+    if (landGeoRef.current) {
       landRef.current = L.geoJSON(landGeoRef.current, {
         pane: 'landmask', interactive: false,
         style: { fillColor: '#1b2433', fillOpacity: 1, color: '#2b3a4f', weight: 0.6 },
       }).addTo(map);
     }
-  }, [showLand, landReady]);
+  }, [landReady]);
 
-  const cfg = LAYERS[active];
+  const cfg = active ? LAYERS[active] : null;
   const chip = (activeState, label, onClick) => (
     <button onClick={onClick} style={{
       padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer',
@@ -354,7 +360,13 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       {/* Layer toggle + marker overlays. Satellite layers are exclusive;
           Spots and Catches stack on top of whichever is active. */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        {Object.values(LAYERS).map(l => chip(active === l.key, l.label, () => setActive(l.key)))}
+        {/* Tapping the layer you are already on turns it OFF. The
+            suggested spots sit on top of the satellite image, and over a
+            chlorophyll composite a coloured dot is one more colour — the
+            only way to actually look at them is to take the picture away.
+            There was no way to do that: one of the two was always on. */}
+        {Object.values(LAYERS).map(l => chip(active === l.key, l.label,
+          () => setActive(prev => (prev === l.key ? null : l.key))))}
         <span style={{ width: 1, background: T.cardEdge, margin: '4px 2px' }} />
         {chip(showSpots, 'Suggested spots', () => setShowSpots(v => !v))}
         {chip(showCatches, 'My catches', () => setShowCatches(v => !v))}
@@ -365,15 +377,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
         <span style={{ fontSize: 12, color: T.inkMute, fontWeight: 700 }}>Composite</span>
         {chip(dateISO === '', 'Latest', () => setDateISO(''))}
         {[8, 16, 24].map(d => chip(false, `−${d}d`, () => setDateISO(new Date(Date.now() - d * 86400000).toISOString().slice(0, 10))))}
-        <button
-          onClick={() => setShowLand((v) => !v)}
-          style={{
-            marginLeft: 'auto', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 800, cursor: 'pointer',
-            background: showLand ? T.brass : 'transparent',
-            color: showLand ? T.oceanDeep : T.ink,
-            border: `1.5px solid ${showLand ? T.brass : T.cardEdge}`,
-          }}
-        >Land {showLand ? 'on' : 'off'}</button>
       </div>
 
       <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
@@ -412,24 +415,34 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       {/* Legend + blurb */}
       <Card style={{ marginTop: 12, borderRadius: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <SectionLabel style={{ margin: 0 }}>{cfg.label} · {cfg.units}</SectionLabel>
-          {status === 'loading' && <span style={{ fontSize: 12, color: T.inkMute }}>Loading…</span>}
-          {status === 'ok' && (
+          <SectionLabel style={{ margin: 0 }}>
+            {cfg ? `${cfg.label} · ${cfg.units}` : 'No satellite layer'}
+          </SectionLabel>
+          {cfg && status === 'loading' && <span style={{ fontSize: 12, color: T.inkMute }}>Loading…</span>}
+          {cfg && status === 'ok' && (
             <span style={{ fontSize: 12, color: overlayAge != null ? T.warn : T.open, fontWeight: 700 }}>
               {overlayAge != null ? `Saved · ${describeAge(overlayAge)}` : (dateISO ? `Near ${dateISO}` : 'Latest composite')}
             </span>
           )}
         </div>
-        <div style={{
-          height: 14, borderRadius: 4, marginTop: 10,
-          background: active === 'chl'
-            ? 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #9acd32, #d4d400, #7a3d00)'
-            : 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #d4d400, #d47a00, #c62828)',
-        }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-          {cfg.legendStops.map((s, i) => <span key={i} style={{ fontSize: 10, color: T.inkMute }}>{s}</span>)}
+        {/* No scale to show when no layer is drawn — a legend for an image
+            that is not on the map is just furniture. */}
+        {cfg && (
+          <>
+            <div style={{
+              height: 14, borderRadius: 4, marginTop: 10,
+              background: active === 'chl'
+                ? 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #9acd32, #d4d400, #7a3d00)'
+                : 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #d4d400, #d47a00, #c62828)',
+            }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+              {cfg.legendStops.map((s, i) => <span key={i} style={{ fontSize: 10, color: T.inkMute }}>{s}</span>)}
+            </div>
+          </>
+        )}
+        <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginTop: 10 }}>
+          {cfg ? cfg.blurb : 'Satellite layers are off — the map is showing spots and catches on bare water. Tap Chlorophyll or Sea temp to bring an image back.'}
         </div>
-        <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginTop: 10 }}>{cfg.blurb}</div>
         {showSpots && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardEdge}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
