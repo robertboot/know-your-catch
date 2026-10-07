@@ -35,7 +35,7 @@ export function containerMaxWidth(size = screenSize()) {
      1180px and a browser window at 1180px get the same thing; only the
      monitor is held back. iOS is untouched: there, the viewport IS the
      device. */
-  if (__KYC_WEB__ && size !== 'phone') return WIDTH.tabletLandscape;
+  if (__KYC_WEB__ && size !== 'phone') return 1024;
   if (size === 'tablet-landscape') return 'none';
   if (size === 'tablet')           return 'none';
   return WIDTH.phone;

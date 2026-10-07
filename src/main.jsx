@@ -64,21 +64,15 @@ function pickRoot() {
   /* The app, as an angler sees it. Same bundle, same screens, no admin
      hash — so /admin still lands on the console and /app never does.
 
-     Held to a phone's width on a desktop monitor. The app lays itself out
-     by screen size, so left to fill a 27-inch display it would render the
-     tablet layout and tell you nothing about the thing almost everyone
-     actually holds. */
-  if (path === '/app') {
-    return (
-      <div style={{ minHeight: '100vh', background: '#06111F',
-                    display: 'flex', justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 420, minHeight: '100vh',
-                      boxShadow: '0 0 0 1px rgba(15,94,133,0.35)' }}>
-          <App />
-        </div>
-      </div>
-    );
-  }
+     No wrapper. The app chooses its layout from the WINDOW width, not
+     from the box it is given, so forcing it into a 420px column made it
+     pick the tablet layout and then squeeze four columns into a phone's
+     width — clipped words and a header that did not fit. The ceiling
+     belongs in containerMaxWidth(), where the layout engine can see it.
+     To look at the phone layout, narrow the browser window: that is the
+     same signal a phone gives it. */
+  if (path === '/app') return <App />;
+
   if (path === '/testers') {
     return (
       <Suspense fallback={<div style={{ minHeight: '100vh', background: '#0A1B2E' }} />}>
