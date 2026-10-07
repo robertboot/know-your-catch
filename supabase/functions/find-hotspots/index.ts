@@ -40,7 +40,11 @@ const SST_DATASET = 'jplMURSST41';
 const SST_STRIDE  = 2;
 const CHL_DATASET = 'erdMH1chla8day_R2022NRT';
 const CHL_STRIDE  = 1;
-const FETCH_TIMEOUT_MS = 90_000;
+// A single call now does ONE region (see the region-selection block below),
+// and pg_net hangs up on the whole call at 120 s. 25 s per dataset means a
+// stalled optional grid drops out instead of eating the budget: everything
+// but SST is fetched with .catch(() => null).
+const FETCH_TIMEOUT_MS = 25_000;
 
 // What counts as an edge. A break under ~0.4 °F/nm is noise in a 1 km
 // satellite product; 1.5 °F/nm is the kind of wall people run 40 miles for.
@@ -243,11 +247,32 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json(); } catch { /* empty body is fine */ }
 
   const db = createClient(URL_, SR, { auth: { persistSession: false } });
+
+  // ONE REGION PER CALL, stalest first.
+  //
+  // This used to loop every active region in a single invocation. With 12
+  // regions and four satellite grids each, the call ran well past the 60 s
+  // pg_net ceiling the scheduler calls it with — and as cron-timeout-fix.sql
+  // already recorded, pg_net closing the socket cuts the edge function off
+  // mid-run. Both writes sit at the END of a region's block, so the run was
+  // killed before the first one landed: hotspots and hotspot_zones stayed
+  // empty, every night, and Suggested Spots had nothing to draw.
+  //
+  // So a call takes the region whose last run is oldest and returns. The
+  // scheduler fires every ten minutes, so all twelve refresh inside two
+  // hours and no single call can outlive its socket. last_run_at is stamped
+  // on success AND on failure, so one broken region cannot starve the rest.
   let q = db.from('hotspot_regions').select('*').eq('active', true);
   if (body.region) q = q.eq('id', body.region);
-  const { data: regions, error: regErr } = await q;
+  const { data: all, error: regErr } = await q;
   if (regErr) return json({ error: regErr.message }, 500);
-  if (!regions?.length) return json({ error: 'no active regions' }, 404);
+  if (!all?.length) return json({ error: 'no active regions' }, 404);
+
+  const stalestFirst = [...all].sort((a, b) =>
+    (a.last_run_at ? Date.parse(a.last_run_at) : 0) -
+    (b.last_run_at ? Date.parse(b.last_run_at) : 0));
+  // body.all is for a backfill run by hand, where nothing hangs up on us.
+  const regions = (body.region || body.all) ? stalestFirst : stalestFirst.slice(0, 1);
 
   const out: Record<string, unknown>[] = [];
 
@@ -573,7 +598,13 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       out.push({ region: reg.id, error: String(e) });
     }
+    // Stamped whatever happened. A region that throws every time still has
+    // to move to the back of the queue, or it blocks the other eleven.
+    if (!body.dry_run) {
+      await db.from('hotspot_regions')
+        .update({ last_run_at: new Date().toISOString() }).eq('id', reg.id);
+    }
   }
 
-  return json({ ok: true, regions: out });
+  return json({ ok: true, remaining: Math.max(0, all.length - regions.length), regions: out });
 });
