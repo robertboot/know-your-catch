@@ -286,13 +286,21 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       if (cached && alive) setCurrentCells(cached.data);
       const c = client();
       if (!c) return;
+      // EVERY region's row, merged. There is one per region, so taking
+      // the first returned whichever row the database happened to hand
+      // back — in practice Alabama — and drew a patch of flow off Mobile
+      // with the rest of the Gulf blank.
       const { data } = await c.from('hotspot_zones')
         .select('cells, step_deg')
-        .eq('mode_key', '_currents')
-        .limit(1).maybeSingle();
-      if (!alive || !data?.cells?.length) return;
-      setCurrentCells(data);
-      writeMarineCache('currents', 0, 0, data);
+        .eq('mode_key', '_currents');
+      if (!alive || !data?.length) return;
+      const merged = {
+        step_deg: data[0].step_deg || 0.25,
+        cells: data.flatMap(r => r.cells || []),
+      };
+      if (!merged.cells.length) return;
+      setCurrentCells(merged);
+      writeMarineCache('currents', 0, 0, merged);
     })();
     return () => { alive = false; };
   }, [showCurrent, currentCells]);
