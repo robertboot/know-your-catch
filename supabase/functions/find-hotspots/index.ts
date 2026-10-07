@@ -303,6 +303,8 @@ Deno.serve(async (req: Request) => {
 
   for (const reg of regions) {
     let failure: string | null = null;
+    let loaded = 'no grids';
+    let status = 'ok';
     try {
       const box = (stride: number) =>
         `[(last)][(${reg.south}):${stride}:(${reg.north})][(${reg.west}):${stride}:(${reg.east})]`;
@@ -320,6 +322,20 @@ Deno.serve(async (req: Request) => {
       const sst = toGrid(sstDoc, 'analysed_sst');
       const chl = chlDoc ? toGrid(chlDoc, 'chlorophyll') : null;
       const bathy = depthDoc ? toGrid(depthDoc, 'altitude') : null;
+      loaded = `sst${sstDoc ? '+' : '-'} chl${chlDoc ? '+' : '-'} ` +
+               `depth${depthDoc ? '+' : '-'} cur${curDoc ? '+' : '-'}`;
+
+      // A temperature break has to be corroborated by colour, bottom relief
+      // or current before it may be drawn — see CORROBORATION below. All
+      // three of those grids are fetched with .catch(() => null), so when a
+      // shedding ERDDAP drops all three, every cell fails corroboration and
+      // the region publishes nothing. That is the right call on the data and
+      // the wrong thing to do silently: it looks identical to calm water.
+      // Say so, and come back in half an hour.
+      if (!chlDoc && !depthDoc && !curDoc) {
+        throw new Error('no corroborating grid loaded (chl, depth and current all failed) — ' +
+                        'temperature alone cannot publish a spot');
+      }
 
       // SST arrives in °C. Work in °F throughout: it is what the card says,
       // and converting once here means no unit lives in two places.
@@ -618,11 +634,13 @@ Deno.serve(async (req: Request) => {
         .eq('region_id', reg.id)
         .lt('observed_at', new Date(Date.now() - 14 * 86400000).toISOString());
 
+      status = `ok · ${loaded} · cells=${cells.length} spots=${spaced.length}` +
+               `${marginal ? ' (marginal)' : ''} zones=${zoneRows.length}`;
       out.push({ region: reg.id, observed, grid: `${sst.lats.length}x${sst.lons.length}`,
                  candidates: cells.length, groups: groups.length, written: spots.length,
                  zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
     } catch (e) {
-      failure = String(e).slice(0, 500);
+      failure = `ERROR · ${loaded} · ${String(e)}`.slice(0, 500);
       out.push({ region: reg.id, error: failure });
     }
     // Stamped whatever happened. A region that throws every time still has
@@ -636,7 +654,11 @@ Deno.serve(async (req: Request) => {
     if (!body.dry_run) {
       await db.from('hotspot_regions').update({
         last_run_at: new Date(Date.now() - (failure ? 90 * 60000 : 0)).toISOString(),
-        last_error: failure,
+        // Named last_error, but it carries the outcome EITHER way: a run
+        // that published nothing and a run that was never attempted look
+        // the same in the tables, and telling them apart used to need a
+        // cron response body that pg_net had already pruned.
+        last_error: failure || status,
       }).eq('id', reg.id);
     }
   }
