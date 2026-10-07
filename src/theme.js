@@ -28,6 +28,14 @@ export function screenSize(width = typeof window !== 'undefined' ? window.innerW
    blocks inside cards apply their own reading-max-width so long
    paragraphs don't lose scannability at wide widths. */
 export function containerMaxWidth(size = screenSize()) {
+  /* On the WEB the tablet tiers still get a ceiling. The size tiers are
+     written for devices, and a desktop browser reports tablet-landscape —
+     so with no cap the app stretches across a 27-inch monitor, which is a
+     layout no angler will ever see and which reads as broken. An iPad at
+     1180px and a browser window at 1180px get the same thing; only the
+     monitor is held back. iOS is untouched: there, the viewport IS the
+     device. */
+  if (__KYC_WEB__ && size !== 'phone') return WIDTH.tabletLandscape;
   if (size === 'tablet-landscape') return 'none';
   if (size === 'tablet')           return 'none';
   return WIDTH.phone;
