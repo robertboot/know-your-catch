@@ -70,6 +70,9 @@ const MAX_SPOTS     = 8;
 // Two cards four miles apart describing the same wall is one card and a
 // duplicate. Keep the stronger.
 const MIN_SEPARATION_NM = 4;
+// When the whole region produces nothing above MIN_SCORE, show this many
+// of the best anyway rather than an empty map.
+const MARGINAL_SPOTS = 3;
 // Community catch influence is gated on this — see PRIVACY above. Below it,
 // a "hotspot" is one angler's spot with a satellite picture behind it.
 const MIN_DISTINCT_ANGLERS = 3;
@@ -363,7 +366,7 @@ Deno.serve(async (req: Request) => {
 
       // ---- turn each group into one spot ------------------------------
       const observed = sst.time || new Date().toISOString();
-      const spots = groups.map(group => {
+      let spots = groups.map(group => {
         // The peak is the spot. A centroid of a curving break lands in the
         // middle of nowhere, which is a good way to send someone 30 miles
         // to flat water.
@@ -419,17 +422,41 @@ Deno.serve(async (req: Request) => {
           why,
         };
       })
-        // A few hot pixels are noise, not a wall.
-        .filter((s, idx) => s.score >= MIN_SCORE && groups[idx].length >= MIN_CELLS)
+        .filter((_s, idx) => groups[idx].length >= MIN_CELLS);
+
+      // A few hot pixels are noise, not a wall — but keep the rejected
+      // ones to hand, because a week with nothing strong still has a
+      // strongest.
+      const allScored = spots;
+      spots = spots
+        .filter(s => s.score >= MIN_SCORE)
         .sort((a, b) => b.score - a.score)
         .slice(0, MAX_SPOTS * 4);
+
+      /* Nothing cleared the bar? Show the best of a flat week anyway, said
+         plainly.
+         An empty map is not an honest answer — it reads as "broken" or
+         "no data", when the truth is "the sea is flat and here is the most
+         there is". So the strongest few are kept, scored as they really
+         are, with a why that opens by admitting it. The bar is NOT
+         lowered: these carry their real score, so a 44 shows as a 44 and
+         sorts below anything genuine the moment real water turns up. */
+      let kept = spots;
+      let marginal = false;
+      if (!kept.length) {
+        marginal = true;
+        kept = allScored
+          .sort((a, b) => b.score - a.score)
+          .slice(0, MARGINAL_SPOTS)
+          .map(sp => ({ ...sp, why: `Nothing strong this pass \u2014 this is the best of it. ${sp.why}` }));
+      }
 
       // Thin out near-duplicates: two cards four miles apart describing the
       // same wall is one card and a distraction. The list is already sorted
       // by score, so the first one kept in any neighbourhood is the
       // strongest one.
-      const spaced: typeof spots = [];
-      for (const sp of spots) {
+      const spaced: typeof kept = [];
+      for (const sp of kept) {
         const tooClose = spaced.some(
           o => distBearing(o.lat, o.lon, sp.lat, sp.lon).dist < MIN_SEPARATION_NM);
         if (!tooClose) spaced.push(sp);
@@ -480,7 +507,7 @@ Deno.serve(async (req: Request) => {
 
       if (body.dry_run) {
         out.push({ region: reg.id, observed, grid: `${sst.lats.length}x${sst.lons.length}`,
-                   candidates: cells.length, groups: groups.length, spots: spaced,
+                   candidates: cells.length, groups: groups.length, marginal, spots: spaced,
                    zones: zoneRows.map(z => ({ mode: z.mode_key, cells: (z.cells as unknown[]).length })) });
         continue;
       }
