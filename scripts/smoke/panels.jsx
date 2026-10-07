@@ -15,14 +15,17 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import TripPlanningPanel from '../../src/admin/TripPlanningPanel.jsx';
+import HomeDashboard from '../../src/admin/HomeDashboard.jsx';
 
-const PANELS = { TripPlanningPanel };
+const PANELS = { TripPlanningPanel, HomeDashboard };
 
 window.__mount = (name) => {
   const host = document.getElementById('root');
   host.innerHTML = '';
   const Comp = PANELS[name];
   if (!Comp) throw new Error(`unknown panel ${name}`);
-  createRoot(host).render(React.createElement(Comp));
+  // onGoTab is the only prop any panel requires; a no-op is enough to
+  // prove the thing renders, which is all this harness claims.
+  createRoot(host).render(React.createElement(Comp, { onGoTab: () => {} }));
 };
 window.__panels = Object.keys(PANELS);

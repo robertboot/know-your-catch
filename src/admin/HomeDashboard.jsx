@@ -44,6 +44,8 @@ import {
 import { listPendingBundles } from '../training-exports-store.js';
 import { getProductionModel, publishedManifestUrl } from '../model-store.js';
 import { listSuggestions } from '../species-suggestions-store.js';
+import { adminVerifyRegulation } from '../regulations-store.js';
+import { getLastSession } from '../auth.js';
 import { Card, GhostButton, H1, SectionLabel } from '../components.jsx';
 import { relativeTime } from '../helpers.js';
 
@@ -644,7 +646,11 @@ const SEV = {
 
 function buildBrief({ health, queue, coverage, training }) {
   const items = [];
-  const add = (sev, text, tab, detail) => items.push({ sev, text, tab, detail });
+  // `review` names an inline panel: the item is actioned where it is read
+  // rather than sending someone to another tab to hunt for it. Being told
+  // what needs doing and then having to go and find it is two jobs.
+  const add = (sev, text, tab, detail, review) =>
+    items.push({ sev, text, tab, detail, review });
 
   // --- broken ---------------------------------------------------
   // A timed-out call is NOT a failed one. pg_net gives up waiting after
@@ -691,8 +697,10 @@ function buildBrief({ health, queue, coverage, training }) {
     add('action', `${queue.ownerBacklog} of your own uploads are unverified`, 'training:review', null);
   }
   if (queue?.regsDraftsOld > 0) {
-    add('action', `${queue.regsDraftsOld} AI regulation drafts older than 7 days are still unverified`,
-      'regulations', 'Anglers never see a draft — these are invisible in the app until verified.');
+    add('action', `${queue.regsDraftsOld} AI regulation draft${queue.regsDraftsOld === 1 ? '' : 's'} older than 7 days still unverified`,
+      'regulations',
+      'Anglers never see a draft — these stay invisible in the app until someone verifies them.',
+      'regs-drafts');
   }
   if (queue?.regsStale > 0) {
     add('action', `${queue.regsStale} verified regulations are over a year old`, 'regulations', null);
@@ -723,7 +731,97 @@ function buildBrief({ health, queue, coverage, training }) {
   return items;
 }
 
+
+/* Review the stale AI drafts without leaving the brief.
+ *
+ * These are NOT auto-approved and should not be. A draft is regulation
+ * text a model wrote — a wrong bag limit or season date is a legal problem
+ * for the angler who believed it, not an untidy row. So the machine
+ * surfaces it and a person decides, which is the same bargain as the
+ * newsletter.
+ *
+ * What it does remove is the fetch-quest: being told something needs doing
+ * and then having to go to another tab and find it is two jobs. */
+function RegsDraftReview({ onDone }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const c = client();
+      if (!c) { setErr('Supabase is not configured in this build.'); return; }
+      const cutoff = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const { data, error } = await c.from('regulations')
+        .select('id, species_id, jurisdiction_id, season_text, bag_limit, size_limit, source_url, drafted_at, notes')
+        .eq('status', 'draft').lt('drafted_at', cutoff)
+        .order('drafted_at', { ascending: true }).limit(25);
+      if (!alive) return;
+      if (error) { setErr(error.message); return; }
+      setRows(data || []);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const verify = async (r) => {
+    // adminVerifyRegulation refuses without a source, by design: a
+    // verified regulation that cannot say where it came from is just a
+    // draft someone clicked.
+    if (!r.source_url) { setErr('That draft has no source URL — open Regulations to add one before verifying.'); return; }
+    setBusy(r.id); setErr('');
+    const res = await adminVerifyRegulation(r.id, {
+      sourceUrl: r.source_url,
+      sessionEmail: getLastSession()?.user?.email || 'admin',
+    });
+    setBusy(null);
+    if (!res.ok) { setErr(res.error || 'verify failed'); return; }
+    setRows(prev => prev.filter(x => x.id !== r.id));
+    onDone?.();
+  };
+
+  if (err && !rows) return <div style={{ fontSize: 12.5, color: T.closed, marginTop: 8 }}>{err}</div>;
+  if (!rows) return <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 8 }}>Loading drafts…</div>;
+  if (!rows.length) return <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 8 }}>Nothing left to verify.</div>;
+
+  return (
+    <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+      {err && <div style={{ fontSize: 12.5, color: T.closed }}>{err}</div>}
+      {rows.map(r => (
+        <div key={r.id} style={{
+          padding: '10px 12px', borderRadius: 9,
+          background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+        }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: T.ink }}>
+            {SPECIES.find(sp => sp.id === r.species_id)?.commonName || r.species_id}
+            <span style={{ color: T.inkMute, fontWeight: 600 }}> · {r.jurisdiction_id}</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 4, lineHeight: 1.5 }}>
+            {r.season_text || 'no season text'}
+            {r.bag_limit != null ? ` · bag ${r.bag_limit}` : ''}
+            {r.size_limit != null ? ` · min ${r.size_limit}"` : ''}
+          </div>
+          <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5 }}>
+            {r.source_url
+              ? <a href={r.source_url} target="_blank" rel="noreferrer"
+                   style={{ color: T.brass }}>{new URL(r.source_url).hostname}</a>
+              : <span style={{ color: T.warn }}>no source — cannot be verified as it stands</span>}
+            {r.drafted_at ? ` · drafted ${String(r.drafted_at).slice(0, 10)}` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+            <GhostButton onClick={() => verify(r)} disabled={busy === r.id || !r.source_url}
+              style={{ padding: '6px 12px', fontSize: 12.5 }}>
+              {busy === r.id ? 'Verifying…' : 'Verify'}
+            </GhostButton>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DailyBrief({ state, onGoTab }) {
+  const [openReview, setOpenReview] = useState(null);
   const items = useMemo(() => buildBrief({
     health: state.health, queue: state.queue,
     coverage: state.health?.coverage, training: state.pipeline,
@@ -770,10 +868,20 @@ function DailyBrief({ state, onGoTab }) {
                   <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 3, lineHeight: 1.5 }}>{it.detail}</div>
                 )}
               </div>
-              {it.tab && (
+              {it.review ? (
+                <GhostButton onClick={() => setOpenReview(openReview === i ? null : i)}
+                  style={{ padding: '7px 12px', fontSize: 12.5 }}>
+                  {openReview === i ? 'Close' : 'Review'}
+                </GhostButton>
+              ) : it.tab && (
                 <GhostButton onClick={() => onGoTab?.(it.tab)} style={{ padding: '7px 12px', fontSize: 12.5 }}>
                   Open
                 </GhostButton>
+              )}
+              {openReview === i && it.review === 'regs-drafts' && (
+                <div style={{ flexBasis: '100%' }}>
+                  <RegsDraftReview onDone={() => state.reload?.()} />
+                </div>
               )}
             </div>
           );
