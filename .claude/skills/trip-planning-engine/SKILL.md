@@ -147,6 +147,43 @@ at 3 °C so a uniform sea is not amplified into drama. **The range used is
 published beside the image** — a legend that recomputes it is a legend
 that can disagree with its own colours.
 
+## What the nightly run can and cannot do
+
+`find-hotspots` takes ONE region per scheduled call, stalest first, and
+the cron fires every ten minutes — twelve regions refresh inside two
+hours. It used to loop all twelve in one call and was killed by the
+scheduler before its first write, which is why `hotspots` was empty for
+the life of the feature. See `[[scheduled-jobs]]`; do not put that loop
+back.
+
+### A group is a break, not a place
+
+Candidate cells are grouped into connected edges. A group is a whole
+WALL — the shelf-edge front runs the width of a region. Taking one peak
+per group meant a hundred-mile break produced a single pin at its
+hottest pixel, and `MAX_SPOTS` and `MIN_SEPARATION_NM` could never bind.
+Each group now offers its strongest cells that stand `MIN_SEPARATION_NM`
+apart, and the spacing pass still has the last word.
+
+### Numbers on a card are measured, never extrapolated
+
+`sst_drop_f` is the real spread of surface temperature around the peak,
+not the peak gradient times an assumed width. The old form claimed 7.6 °F
+on a front holding 3.6.
+
+### Every run records what it did
+
+`hotspot_regions.last_run_at` and `.last_error` carry the outcome of
+every run, success included, and the admin tab shows the failures. An
+empty map has three completely different causes — never ran, upstream
+down, water genuinely flat — and they are indistinguishable without it.
+
+### Tested without the network
+
+`scripts/hotspots-test/run.mjs` runs the real function against
+fabricated satellite grids. Run it after any change to the scoring,
+grouping or thresholds; `ship.sh` does.
+
 ## Related
 
 - [[forecast-scoring]] — Fishability decides whether you GO; this decides
