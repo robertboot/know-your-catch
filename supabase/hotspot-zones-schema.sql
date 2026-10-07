@@ -22,8 +22,13 @@ create table if not exists public.hotspot_zones (
 
 alter table public.hotspot_zones enable row level security;
 
--- Same policy shape as hotspots: signed-in read, service-role write only —
--- every row is derived data.
+-- Same policy shape as hotspots — and it must actually BE the same. It
+-- said this while granting select to authenticated only, where hotspots
+-- grants it to anon as well. The app then read an empty array (invisible
+-- rows are not an error), kept its stale cache, and showed a week-old
+-- patch of current off Alabama while the signed-in admin console drew the
+-- whole Gulf. See supabase/hotspot-zones-anon-read.sql.
+-- Every row is derived satellite data; writes stay service-role only.
 drop policy if exists hotspot_zones_read on public.hotspot_zones;
 create policy hotspot_zones_read on public.hotspot_zones
-  for select to authenticated using (true);
+  for select to anon, authenticated using (true);
