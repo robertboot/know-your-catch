@@ -34,7 +34,17 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const BUCKET = 'ocean-maps';
-const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
+/* Same failover as find-hotspots, and for the same reason: coastwatch.pfeg
+   went fully 503 and took the satellite layers down with it, with no second
+   address to try. upwell.pfeg is a separate ERDDAP instance serving the same
+   dataset ids. URLs are built with a {H} token where the host goes and the
+   fetchers substitute each host in turn, so a builder cannot pin itself to
+   one server. */
+const ERDDAP_HOSTS = [
+  'https://coastwatch.pfeg.noaa.gov/erddap',
+  'https://upwell.pfeg.noaa.gov/erddap',
+];
+const ERDDAP_BASE = '{H}';
 const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
 
 // Must match REGION_BOUNDS in src/screens_ocean.jsx — [S,W] [N,E].
@@ -108,13 +118,18 @@ async function measuredSstRangeC(dataset: string, variable: string): Promise<[nu
     const subset = `${variable}[(last)][(${REGION.south}):40:(${REGION.north})][(${REGION.west}):40:(${REGION.east})]`;
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
-    let r: Response;
+    let r: Response | null = null;
     try {
-      r = await fetch(`${ERDDAP_BASE}/griddap/${dataset}.json?${subset}`, { signal: ctl.signal });
+      for (const host of ERDDAP_HOSTS) {
+        try {
+          const got = await fetch(`${host}/griddap/${dataset}.json?${subset}`, { signal: ctl.signal });
+          if (got.ok) { r = got; break; }
+        } catch { /* try the next host */ }
+      }
     } finally {
       clearTimeout(timer);
     }
-    if (!r.ok) return fallback;
+    if (!r) return fallback;
     const doc = await r.json();
     const names: string[] = doc.table.columnNames;
     const iVal = names.indexOf(variable);
@@ -155,12 +170,22 @@ function wmsUrl(key: string, dataset: string, variable: string, width: number, h
   return `${ERDDAP_WMS}/${dataset}/request?${params.toString()}`;
 }
 
-async function fetchLayer(url: string): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+async function fetchLayer(template: string): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  let last = { ok: false as const, error: 'no erddap host tried' };
+  for (const host of ERDDAP_HOSTS) {
+    const got = await fetchLayerFrom(template.replace('{H}', host), host);
+    if (got.ok) return got;
+    last = got;
+  }
+  return last;
+}
+
+async function fetchLayerFrom(url: string, host: string): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
   try {
     const r = await fetch(url, { signal: ctl.signal });
-    if (!r.ok) return { ok: false, error: `erddap ${r.status}` };
+    if (!r.ok) return { ok: false, error: `${host} ${r.status}` };
     const ct = r.headers.get('content-type') || '';
     const buf = new Uint8Array(await r.arrayBuffer());
     // ERDDAP reports errors as an XML/text body with a 200, so a
