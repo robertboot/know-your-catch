@@ -100,6 +100,6 @@ a(/timeout@/.test(byLabel['network dead'].err) || /unreachable/.test(byLabel['ne
   `a dead host must say so, got: ${byLabel['network dead'].err}`);
 // Worst case must stay inside the scheduler's ceiling.
 const worst = ERDDAP_HOSTS.reduce((t, h) => t + (Array.isArray(h) ? h[1] : 2), 0);
-a(worst * 15 <= 90, `worst-case wall clock ${worst * 15}s must stay <= 90s`);
-console.log(`\nworst case: ${worst} attempts x 15s = ${worst * 15}s per dataset`);
+a(worst * 20 <= 90, `worst-case wall clock ${worst * 20}s must stay <= 90s`);
+console.log(`\nworst case: ${worst} attempts x 20s = ${worst * 20}s per dataset`);
 console.log('all assertions passed');

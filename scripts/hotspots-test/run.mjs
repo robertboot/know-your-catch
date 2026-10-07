@@ -153,5 +153,31 @@ check('the Regenerate button keeps going', byHand.ran === 5,
   `${byHand.ran} of 5, ${byHand.reply.remaining} remaining`);
 check('nothing left to report after a full pass', byHand.reply.remaining === 0);
 
+/* Request size, against the REAL region boxes.
+   gulf_deep asked for 87,500 points in one JSON document and timed out on
+   every host — which reads as "the provider is down" when it is really "we
+   asked for too much". The cap is the fix; this is the guard on it. */
+const REAL_REGIONS = [
+  ['al_gulf', 28.2, 30.3, -88.8, -86.6], ['fl_panhandle', 28.5, 30.5, -87.5, -84.5],
+  ['fl_west', 24.8, 28.5, -84.5, -81.6], ['la_gulf', 27, 29.8, -92, -88.8],
+  ['tx_lower', 22, 27.5, -98.5, -95.5], ['gulf_sw', 22, 27.5, -95.5, -92],
+  ['gulf_deep', 22, 27, -92, -85], ['gulf_ne', 27, 28.5, -88.8, -84.5],
+  ['fl_keys', 22, 25.5, -85, -79.9], ['se_bahamas', 22, 25.5, -79.9, -77.5],
+  ['fl_atlantic', 25.5, 31.5, -81.6, -77.5], ['tx_upper', 27.5, 29.8, -98.5, -92],
+];
+const fnSrc = await import('node:fs').then(m => m.readFileSync(
+  path.join(root, 'supabase/functions/find-hotspots/index.ts'), 'utf8'));
+const MAX_SIDE = Number(fnSrc.match(/const MAX_GRID_SIDE = (\d+)/)[1]);
+const strideFor = (base, deg, s, n, w, e) => Math.max(base,
+  Math.ceil((n - s) / deg / MAX_SIDE), Math.ceil((e - w) / deg / MAX_SIDE));
+let biggest = 0, biggestId = '';
+for (const [id, s0, n, w, e] of REAL_REGIONS) {
+  const st = strideFor(2, 0.01, s0, n, w, e);
+  const pts = Math.round((n - s0) / (0.01 * st)) * Math.round((e - w) / (0.01 * st));
+  if (pts > biggest) { biggest = pts; biggestId = id; }
+}
+check('no region asks for an oversized grid', biggest <= MAX_SIDE * MAX_SIDE,
+  `worst is ${biggestId} at ${biggest} points, cap ${MAX_SIDE * MAX_SIDE}`);
+
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

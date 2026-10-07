@@ -64,7 +64,7 @@ const CHL_STRIDE  = 1;
 // and pg_net hangs up on the whole call at 120 s. 25 s per dataset means a
 // stalled optional grid drops out instead of eating the budget: everything
 // but SST is fetched with .catch(() => null).
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 20_000;
 
 // What counts as an edge. A break under ~0.4 °F/nm is noise in a 1 km
 // satellite product; 1.5 °F/nm is the kind of wall people run 40 miles for.
@@ -104,6 +104,10 @@ const MIN_DISTINCT_ANGLERS = 3;
 // edge runtime cuts a request off well short of twelve regions, and a run
 // killed mid-region writes nothing at all.
 const BUDGET_MS = 100_000;
+/* No request may be wider than this many points a side. See the stride
+   note in the region loop: an uncapped box put 45,000 points in one JSON
+   document and timed out on every host. */
+const MAX_GRID_SIDE = 140;
 
 // Predictive zones (the SiriusXM-style blobs), PER SPECIES — "where is
 // the mahi water", not "where is trolling generally good". Coarser than
@@ -385,15 +389,32 @@ Deno.serve(async (req: Request) => {
     let loaded = 'no grids';
     let status = 'ok';
     try {
-      const box = (stride: number) =>
-        `[(last)][(${reg.south}):${stride}:(${reg.north})][(${reg.west}):${stride}:(${reg.east})]`;
+      /* Cap how many points a region may ask for.
+         The stride was a fixed number of grid cells, so a region's request
+         grew with its box: fl_keys is 3.5 deg by 5.1 deg, which at MUR's
+         0.01 deg and stride 2 is about 45,000 points in one JSON document.
+         That is slow to assemble and slow to send even from a healthy
+         server, and it was timing out — every host, every run, which reads
+         as "the provider is down" when it is really "we asked for too
+         much". Big regions now take a coarser stride instead of a longer
+         wait. A 0.05 deg cell is still 3 nm, finer than any break worth
+         driving to, and the gradient is per nautical mile either way. */
+      const strideFor = (base: number, degPerCell: number) => {
+        const side = (span: number) => Math.ceil(span / degPerCell / MAX_GRID_SIDE);
+        return Math.max(base, side(reg.north - reg.south), side(reg.east - reg.west));
+      };
+      const box = (base: number, degPerCell = 0.01) => {
+        const stride = strideFor(base, degPerCell);
+        return `[(last)][(${reg.south}):${stride}:(${reg.north})][(${reg.west}):${stride}:(${reg.east})]`;
+      };
       // Bathymetry has no time dimension; stride 4 (~4 km) is plenty for
       // "is this 300 ft or 3000 ft" — the only question the priors ask.
-      const depthBox = `[(${reg.south}):4:(${reg.north})][(${reg.west}):4:(${reg.east})]`;
+      const depthStride = strideFor(4, 1 / 60);
+      const depthBox = `[(${reg.south}):${depthStride}:(${reg.north})][(${reg.west}):${depthStride}:(${reg.east})]`;
       const curBox = `[(last)][(${reg.south}):1:(${reg.north})][(${reg.west}):1:(${reg.east})]`;
       const [sstDoc, chlDoc, depthDoc, curDoc] = await Promise.all([
         fetchJson(`${SST_DATASET}.json?analysed_sst${box(SST_STRIDE)}`),
-        fetchJson(`${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE)}`).catch(() => null),
+        fetchJson(`${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE, 0.0417)}`).catch(() => null),
         fetchJson(`${DEPTH_DATASET}.json?altitude${depthBox}`).catch(() => null),
         fetchJson(`${CUR_DATASET}.json?ugos${curBox},vgos${curBox}`).catch(() => null),
       ]);
