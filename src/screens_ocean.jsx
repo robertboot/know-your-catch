@@ -23,6 +23,24 @@ import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.j
 import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from './basemap.js';
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
+import { TRIP_MODES } from './trip-modes.js';
+import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
+
+/* Which species the zones cover, from the one list the server writes
+   against. Three on by default — the ones most Gulf crews troll for —
+   because every species at once is a colour wash, not a map. */
+const ZONE_SPECIES = TRIP_MODES.find(m => m.key === 'troll_pelagic').species;
+const DEFAULT_SPECIES = ['wahoo', 'yellowfin_tuna', 'mahi'];
+const SPECIES_PREFS_KEY = 'kyc.app.ocean-species.v1';
+
+function readSpeciesPrefs() {
+  try {
+    const raw = localStorage.getItem(SPECIES_PREFS_KEY);
+    const list = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(list)) return new Set(list.filter(id => ZONE_SPECIES.includes(id)));
+  } catch { /* a broken pref is not worth a broken map */ }
+  return new Set(DEFAULT_SPECIES);
+}
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap';
 const ERDDAP_WMS = `${ERDDAP_BASE}/wms`;
@@ -133,6 +151,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   const [showCatches, setShowCatches] = useState(false);
   const [showSpots, setShowSpots] = useState(true);
   const [showCurrent, setShowCurrent] = useState(false);
+  const [showSpecies, setShowSpecies] = useState(false);
+  const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
+  const [zoneRows, setZoneRows] = useState(null);
+  const zonesRef = useRef(null);
   const [currentCells, setCurrentCells] = useState(null);
   const flowRef = useRef(null);
   const [spots, setSpots] = useState(null);      // hotspot rows (null = not loaded)
@@ -311,6 +333,54 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     return () => { alive = false; };
   }, [showCurrent, currentCells]);
 
+  /* Species zones — where the mahi water is, rather than where the edges
+     are. Same table as the currents, one row per region per species, and
+     cached the same way: the whole set is a few tens of kilobytes and is
+     worth having aboard with no signal. Fetched once, when the layer is
+     first switched on. */
+  useEffect(() => {
+    if (!showSpecies || zoneRows) return;
+    let alive = true;
+    (async () => {
+      const cached = readMarineCache('zones.v1', 0, 0);
+      if (cached && alive) setZoneRows(cached.data);
+      const c = client();
+      if (!c) return;
+      const { data } = await c.from('hotspot_zones')
+        .select('mode_key, cells, step_deg')
+        .in('mode_key', ZONE_SPECIES);
+      if (!alive || !data?.length) return;
+      setZoneRows(data);
+      writeMarineCache('zones.v1', 0, 0, data);
+    })();
+    return () => { alive = false; };
+  }, [showSpecies, zoneRows]);
+
+  // Paint them. The painter is shared with the admin tab so the two can
+  // never drift — see src/species-zone-layer.js.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!map.getPane('zonespane')) {
+      map.createPane('zonespane');
+      map.getPane('zonespane').style.zIndex = 405;
+      map.getPane('zonespane').style.pointerEvents = 'none';
+    }
+    if (zonesRef.current) { map.removeLayer(zonesRef.current); zonesRef.current = null; }
+    if (!showSpecies) return;
+    const group = createSpeciesZoneLayer(L, zoneRows, speciesOn, { pane: 'zonespane' });
+    if (!group) return;
+    group.addTo(map);
+    zonesRef.current = group;
+    return () => { if (zonesRef.current) { map.removeLayer(zonesRef.current); zonesRef.current = null; } };
+  }, [showSpecies, zoneRows, speciesOn]);
+
+  // Remember the picks. A crew that trolls for wahoo should not have to
+  // say so every time they open the map.
+  useEffect(() => {
+    try { localStorage.setItem(SPECIES_PREFS_KEY, JSON.stringify([...speciesOn])); } catch { /* never worth a crash */ }
+  }, [speciesOn]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -403,6 +473,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
         {chip(showSpots, 'Suggested spots', () => setShowSpots(v => !v))}
         {chip(showCatches, 'My catches', () => setShowCatches(v => !v))}
         {chip(showCurrent, 'Current', () => setShowCurrent(v => !v))}
+        {chip(showSpecies, 'Species', () => setShowSpecies(v => !v))}
       </div>
 
       {/* Composite date + land overlay */}
@@ -415,6 +486,40 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
         <div ref={mapElRef} style={{ height: '58vh', minHeight: 380, width: '100%', background: '#06182b' }} />
       </div>
+
+      {/* Species pills, under the map and scrollable. Each carries its own
+          colour, which is the only legend the zones get — a separate key
+          would be one more thing to look away at on a moving boat. Shown
+          only while the Species layer is on; a row of pills that control
+          an invisible layer is a puzzle. */}
+      {showSpecies && (
+        <div style={{ display: 'flex', gap: 7, marginTop: 10, overflowX: 'auto', paddingBottom: 4 }}>
+          {ZONE_SPECIES.map((id) => {
+            const on = speciesOn.has(id);
+            const col = SPECIES_ZONE_COLORS[id] || T.brass;
+            const name = SPECIES.find(sp => sp.id === id)?.commonName
+              || id.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+            return (
+              <button key={id} type="button" onClick={() => setSpeciesOn((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                return next;
+              })} style={{
+                flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 7,
+                padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 800, whiteSpace: 'nowrap',
+                background: on ? T.parchmentDeep : 'transparent',
+                border: `1.5px solid ${on ? col : T.cardEdge}`,
+                color: on ? T.ink : T.inkMute, fontFamily: 'inherit',
+              }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: col,
+                               opacity: on ? 1 : 0.45 }} />
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Under the map, in the flow — not floating on it. Over imagery
           these were unreadable whatever the colour: a chlorophyll
