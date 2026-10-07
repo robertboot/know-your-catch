@@ -677,10 +677,26 @@ Deno.serve(async (req: Request) => {
         };
       }
 
-      // A few hot pixels are noise, not a wall — but keep the rejected
-      // ones to hand, because a week with nothing strong still has a
-      // strongest.
-      const allScored = spots;
+      /* A few hot pixels are not a wall, so MIN_CELLS above threw away
+         any group smaller than five — INCLUDING from the marginal pool,
+         which is the one place they were supposed to survive.
+
+         That made the "never show an empty map" promise fail in exactly
+         the week it exists for. 2026-10-07, first good satellite pass
+         after a fifteen-hour NOAA outage: gulf_deep found 7 candidate
+         cells, gulf_sw found 1, scattered rather than lined up. No group
+         reached five, so `spots` was empty, so `allScored` was empty, so
+         the fallback had nothing to fall back to and the map stayed blank
+         — reading as "broken" when the truth was "the sea is flat and
+         here is the most there is".
+
+         The marginal pool is built from the groups MIN_CELLS rejected.
+         The bar for a REAL spot is untouched: these carry their true
+         score and say so in the why. */
+      const marginalPool = groups
+        .filter(g => g.length < MIN_CELLS && g.length >= 1)
+        .map(g => buildSpot(g, g.reduce((a, b) => (b.score > a.score ? b : a))));
+      const allScored = spots.length ? spots : marginalPool;
       spots = spots
         .filter(s => s.score >= MIN_SCORE)
         .sort((a, b) => b.score - a.score)

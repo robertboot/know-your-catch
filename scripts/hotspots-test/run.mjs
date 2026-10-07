@@ -129,7 +129,20 @@ check('species zones publish', sharp.zones.length >= 5, `${sharp.zones.length} r
 check('a current row is published', sharp.zones.some(z => z.mode_key === '_currents'));
 
 const calm = await run(flat);
-check('flat water publishes no spots', calm.spots.length === 0, calm.note);
+check('dead-flat water publishes no spots', calm.spots.length === 0, calm.note);
+
+/* A sea with a FEW scattered hot cells is the common case, and the one
+   the "never show an empty map" promise exists for. MIN_CELLS used to
+   throw those away before the marginal pool was built, so the fallback
+   had nothing to fall back to and the map read as broken. Real case:
+   2026-10-07, gulf_deep found 7 cells, gulf_sw found 1, and both
+   published nothing. */
+const faint = await run(front(26));
+check('a faint break still offers the best of it',
+  faint.spots.length > 0, `${faint.spots.length} spots — ${faint.note}`);
+check('and it says so rather than overselling',
+  faint.spots.every(s => /best of it/i.test(s.why)),
+  faint.spots[0]?.why?.slice(0, 90));
 
 const noCorroboration = await run(front(120), { drop: ['chl', 'depth', 'cur'] });
 check('losing every corroborating grid is reported, not silent',
