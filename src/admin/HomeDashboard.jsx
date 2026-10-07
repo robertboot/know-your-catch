@@ -26,7 +26,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { T } from '../theme.js';
 import { SPECIES, JURISDICTIONS } from '../data.js';
-import { client } from '../supabase-client.js';
+import { client, SUPABASE_URL } from '../supabase-client.js';
 import {
   refreshSpecies, speciesPhotoOverrideAll,
 } from '../species-store.js';
@@ -169,8 +169,41 @@ async function fetchModelInfo() {
   };
 }
 
+/* Is the satellite data actually arriving?
+ *
+ * Every other check here asks whether a job ERRORED. None asked whether
+ * it produced anything, and that is the gap that let the board read
+ * "nothing needs attention" while find-hotspots failed on every region,
+ * every ten minutes, for thirteen hours. It returns HTTP 200 with the
+ * failures listed in its body, so a call-level check sees green. A job
+ * that completes and writes nothing is the failure nobody notices.
+ *
+ * So this asks the only question that matters to someone about to leave
+ * the dock: is what the map is showing me from today?
+ */
+async function fetchOceanData() {
+  const c = client();
+  if (!c) return null;
+  const [regions, zone, img] = await Promise.all([
+    c.from('hotspot_regions').select('id, last_run_at, last_error').eq('active', true)
+      .then(r => r.data || []).catch(() => []),
+    c.from('hotspot_zones').select('observed_at')
+      .order('observed_at', { ascending: false }).limit(1)
+      .then(r => r.data?.[0]?.observed_at || null).catch(() => null),
+    fetch(`${SUPABASE_URL}/storage/v1/object/public/ocean-maps/sst-latest.json`)
+      .then(r => (r.ok ? r.json() : null)).then(m => m?.captured_at || null).catch(() => null),
+  ]);
+  return {
+    regions,
+    failing: regions.filter(r => r.last_error?.startsWith('ERROR')),
+    neverRun: regions.filter(r => !r.last_run_at),
+    zoneObservedAt: zone,
+    imageCapturedAt: img,
+  };
+}
+
 async function fetchHealth(modelInfo) {
-  const [bundles, lastAi, autoRun, cron, coverage, perDay] = await Promise.all([
+  const [bundles, lastAi, autoRun, cron, coverage, perDay, ocean] = await Promise.all([
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
       const c = client();
@@ -213,6 +246,7 @@ async function fetchHealth(modelInfo) {
         return Math.max(1, Math.round(total / 7));
       } catch { return null; }
     })(),
+    fetchOceanData().catch(() => null),
   ]);
 
   const prod = modelInfo?.row || null;
@@ -228,6 +262,7 @@ async function fetchHealth(modelInfo) {
     autoRun,
     cron,
     coverage: coverage?.ok ? { ...coverage, perDay } : null,
+    ocean,
   };
 }
 
@@ -644,13 +679,60 @@ const SEV = {
   watch:    { rank: 2, label: 'WATCH',    color: T.brass },
 };
 
-function buildBrief({ health, queue, coverage, training }) {
+export function buildBrief({ health, queue, coverage, training }) {
   const items = [];
   // `review` names an inline panel: the item is actioned where it is read
   // rather than sending someone to another tab to hunt for it. Being told
   // what needs doing and then having to go and find it is two jobs.
   const add = (sev, text, tab, detail, review) =>
     items.push({ sev, text, tab, detail, review });
+
+  /* --- is the satellite data arriving? ----------------------------
+     First, because it is what the app is for. A call-level check reads
+     green while this is failing: find-hotspots answers HTTP 200 and
+     lists the failures in its body. */
+  const ocean = health?.ocean;
+  if (ocean) {
+    const days = (iso) => (iso ? Math.floor((Date.now() - Date.parse(iso)) / 86400000) : null);
+
+    if (ocean.failing.length) {
+      const all = ocean.failing.length === ocean.regions.length;
+      const reason = String(ocean.failing[0].last_error || '');
+      // A dead upstream and a broken job need different responses, and
+      // the function already says which it hit.
+      const upstream = /every erddap host failed|timeout@|unreachable/.test(reason);
+      add(all ? 'critical' : 'action',
+        all
+          ? `Suggested spots are not being computed — all ${ocean.regions.length} waters failed`
+          : `Suggested spots failing in ${ocean.failing.length} of ${ocean.regions.length} waters`,
+        'planning',
+        upstream
+          ? `NOAA is unreachable: ${reason.slice(0, 200)} — nothing to fix here, it clears when they come back.`
+          : reason.slice(0, 240));
+    }
+    if (ocean.neverRun.length) {
+      add('watch', `${ocean.neverRun.length} waters have never been read`, 'planning',
+        `${ocean.neverRun.map(r => r.id).join(', ')}. Press Regenerate, or wait — one region every ten minutes.`);
+    }
+
+    // Age, not errors. A job can be green and still be serving last week.
+    const zAge = days(ocean.zoneObservedAt);
+    if (!ocean.zoneObservedAt) {
+      add('critical', 'No species maps or currents at all', 'planning',
+        'hotspot_zones is empty. Deploy find-hotspots and press Regenerate.');
+    } else if (zAge >= 2) {
+      add(zAge >= 5 ? 'critical' : 'watch',
+        `Species maps and currents are ${zAge} days old`, 'planning',
+        `Newest pass ${String(ocean.zoneObservedAt).slice(0, 10)}. The app draws these without saying how old they are.`);
+    }
+
+    const iAge = days(ocean.imageCapturedAt);
+    if (iAge != null && iAge >= 1) {
+      add(iAge >= 3 ? 'critical' : 'watch',
+        `Chlorophyll and sea-temp layers are ${iAge} day${iAge === 1 ? '' : 's'} old`, 'planning',
+        'refresh-ocean-maps is not completing. A stale picture looks identical to a fresh one on the map.');
+    }
+  }
 
   // --- broken ---------------------------------------------------
   // A timed-out call is NOT a failed one. pg_net gives up waiting after

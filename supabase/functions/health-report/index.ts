@@ -253,6 +253,102 @@ Deno.serve(async (req: Request) => {
       };
     }
 
+    /* PIPELINES — is the data actually arriving?
+     *
+     * Every other section here asks whether a job ERRORED. None asked
+     * whether it produced anything, and the difference is the whole
+     * point: find-hotspots failed on every region every ten minutes for
+     * thirteen hours while returning HTTP 200 with the failures listed
+     * in its body, and the dashboard said "nothing needs attention".
+     * A call that completes and writes nothing is the failure mode that
+     * matters, because it is the one nobody notices.
+     *
+     * So this section asks the only question an angler would: is what
+     * the app is about to show me actually from today?
+     */
+    if (want('pipelines')) {
+      const issues: Record<string, unknown>[] = [];
+
+      // 1. Regions that recorded a failure on their last run. The
+      //    function writes its own outcome there, success or failure.
+      const { data: regions } = await db.from('hotspot_regions')
+        .select('id, label, active, last_run_at, last_error').eq('active', true);
+      const failing = (regions || []).filter(r => r.last_error?.startsWith('ERROR'));
+      const neverRun = (regions || []).filter(r => !r.last_run_at);
+      if (failing.length) {
+        issues.push({
+          what: 'Suggested spots are not being computed',
+          detail: `${failing.length} of ${(regions || []).length} regions failed their last run. ` +
+                  `${failing[0].id}: ${String(failing[0].last_error).slice(0, 220)}`,
+          do: 'Read the reason above. If every ERDDAP host timed out, NOAA is unreachable and ' +
+              'there is nothing to fix here — it clears on its own. Anything else needs a look.',
+          severity: failing.length === (regions || []).length ? 'broken' : 'degraded',
+        });
+      }
+      if (neverRun.length) {
+        issues.push({
+          what: 'Some waters have never been read',
+          detail: neverRun.map(r => r.id).join(', '),
+          do: 'Press Regenerate on Trip Planning, or wait — the job takes one region every ten minutes.',
+          severity: 'degraded',
+        });
+      }
+
+      // 2. How old is the data the app is drawing? Perishable: a
+      //    week-old break has moved, and drawing it is worse than
+      //    drawing nothing.
+      const { data: zone } = await db.from('hotspot_zones')
+        .select('observed_at').order('observed_at', { ascending: false }).limit(1);
+      const zoneAge = daysSince(zone?.[0]?.observed_at ?? null);
+      if (zone?.[0] && zoneAge != null && zoneAge >= 2) {
+        issues.push({
+          what: `Species maps and currents are ${zoneAge} days old`,
+          detail: `Newest satellite pass is ${String(zone[0].observed_at).slice(0, 10)}. ` +
+                  'The app draws these without saying how old they are.',
+          do: zoneAge >= 5
+            ? 'Nothing has landed in days — check the region errors above before trusting the map.'
+            : 'Watch it. If it keeps climbing, the nightly job is not completing.',
+          severity: zoneAge >= 5 ? 'broken' : 'degraded',
+        });
+      }
+      if (!zone?.length) {
+        issues.push({
+          what: 'No species maps or currents at all',
+          detail: 'hotspot_zones is empty.',
+          do: 'Deploy find-hotspots and press Regenerate on Trip Planning.',
+          severity: 'broken',
+        });
+      }
+
+      // 3. The satellite pictures the Ocean Maps layers draw. Written by
+      //    refresh-ocean-maps into a public bucket; a stale PNG looks
+      //    exactly like a fresh one, which is why this has to be checked
+      //    rather than looked at.
+      try {
+        const r = await fetch(`${URL_}/storage/v1/object/public/ocean-maps/sst-latest.json`);
+        if (r.ok) {
+          const meta = await r.json();
+          const imgAge = daysSince(meta?.captured_at ?? null);
+          if (imgAge != null && imgAge >= 1) {
+            issues.push({
+              what: `Chlorophyll and sea-temp layers are ${imgAge} day${imgAge === 1 ? '' : 's'} old`,
+              detail: `Last written ${String(meta.captured_at).slice(0, 16).replace('T', ' ')}Z. ` +
+                      'A stale picture looks identical to a fresh one on the map.',
+              do: 'refresh-ocean-maps is not completing. Check its errors; it reads the same ' +
+                  'NOAA servers as the spots, so the two usually fail together.',
+              severity: imgAge >= 3 ? 'broken' : 'degraded',
+            });
+          }
+        }
+      } catch { /* a probe that cannot run is not itself a finding */ }
+
+      out.pipelines = issues;
+      out.pipelines_summary = {
+        broken: issues.filter(i => i.severity === 'broken').length,
+        degraded: issues.filter(i => i.severity === 'degraded').length,
+      };
+    }
+
     return json(out);
   } catch (e) {
     console.error('health-report failed', e);

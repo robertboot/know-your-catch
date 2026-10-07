@@ -78,6 +78,11 @@ node scripts/smoke-render.mjs || { echo "✗ smoke render FAILED"; exit 1; }
 # indistinguishable from NOAA being down.
 node scripts/hotspots-test/run.mjs || { echo "✗ hotspots scoring FAILED"; exit 1; }
 node scripts/hotspots-test/hosts.mjs >/dev/null || { echo "✗ ERDDAP host walk FAILED"; exit 1; }
+
+# The daily brief must not call a dead pipeline healthy. It did, for
+# thirteen hours, because it only ever asked whether jobs errored.
+node scripts/brief-test/run.mjs >/dev/null || { echo "✗ daily brief FAILED"; exit 1; }
+echo "✓ daily brief reports a dead pipeline"
 echo "✓ ERDDAP host walk"
 
 echo "▶ Building web/admin bundle…"
