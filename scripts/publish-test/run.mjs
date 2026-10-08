@@ -59,11 +59,13 @@ const storage = (files) => ({
 
 // Serve the ranged head request out of the same fixture.
 globalThis.__files = {};
+// The verification now fetches the whole object the way the app does.
+globalThis.__fetchable = {};
 globalThis.fetch = async (url) => {
   const key = String(url).split('/').pop().split('?')[0];
-  const buf = globalThis.__files[key];
-  if (!buf) return { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
-  return { ok: true, status: 206, arrayBuffer: async () => buf.slice(0, 16) };
+  const buf = globalThis.__fetchable[key];
+  if (!buf) return { ok: false, status: 400, arrayBuffer: async () => new ArrayBuffer(0) };
+  return { ok: true, status: 200, arrayBuffer: async () => buf };
 };
 const json = (o) => new TextEncoder().encode(JSON.stringify(o)).buffer;
 
@@ -81,20 +83,31 @@ check('a file with the wrong tag is refused',
   M.looksLikeTflite(new Uint8Array(5_000_000).buffer) !== null);
 
 globalThis.__files = { 'fish_id_model.tflite': tflite(4096) };
+globalThis.__fetchable = globalThis.__files;
 const okModel = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 4096);
 check('a model that reads back intact verifies', okModel === null, okModel);
 
-globalThis.__files = {};
+globalThis.__files = {}; globalThis.__fetchable = {};
 const missing = await M.verifyPublishedModel({ storage: storage({}) }, 4096);
 check('a model that is not there fails verification', missing !== null, missing);
 
 globalThis.__files = { 'fish_id_model.tflite': tflite(2048) };
+globalThis.__fetchable = globalThis.__files;
 const truncated = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 4096);
 check('a partially uploaded model fails verification', truncated !== null, truncated);
 
 globalThis.__files = { 'fish_id_model.tflite': NOT_FOUND };
+globalThis.__fetchable = globalThis.__files;
 const errorBody = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 9_000_000);
 check('a 404 body sitting at the model path is caught', errorBody !== null, errorBody);
+
+/* The real 2026-10-08 state: the bucket index lists a 6 MB model and
+   every read of it returns NoSuchKey. A check that trusted the index
+   called that published. */
+globalThis.__files = { 'fish_id_model.tflite': tflite(6_000_000) };   // what list() sees
+globalThis.__fetchable = {};                                          // what the app gets
+const ghost = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 6_000_000);
+check('an object the index lists but nobody can download is caught', ghost !== null, ghost);
 
 const manOk = await M.verifyPublishedManifest(
   { storage: storage({ 'current.json': json({ version_name: '12.4', labels: new Array(140).fill('x') }) }) },

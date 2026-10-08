@@ -206,6 +206,22 @@ export async function publishPromotedModel(onStep = () => {}) {
   }
 
   // Overwrite the public copy.
+  /* Remove the old copy before writing the new one.
+   *
+   * upsert overwrites the row in storage.objects but can leave the
+   * backing object behind — which is the state this bucket got into:
+   * list() reported a 6.0 MB fish_id_model.tflite while every read of
+   * it, public or authenticated, returned NoSuchKey. An upsert on top
+   * of that just rewrites the same broken row. Deleting first means the
+   * upload creates a clean one.
+   *
+   * Safe to fail: if there is nothing to remove, there is nothing to
+   * remove. The manifest still points at the previous version until the
+   * new model is verified, so a crash here leaves phones on what they
+   * already have. */
+  onStep('Clearing the old copy…');
+  await c.storage.from(PUBLIC_BUCKET).remove([PUBLIC_MODEL_KEY]).catch(() => {});
+
   onStep(`Uploading ${(modelBytes.byteLength / 1048576).toFixed(1)} MB…`);
   let upModel;
   try {
@@ -316,19 +332,26 @@ async function verifyPublishedModel(c, expectedBytes) {
     return `published ${size} bytes, expected ${expectedBytes}`;
   }
 
+  /* The bucket's index is not the truth — the app's download is.
+   *
+   * list() happily reported a 6.0 MB model that every read returned
+   * NoSuchKey for, and a check that trusted the index called that
+   * published. So fetch it the way the phone does: a plain public GET,
+   * no range header, no credentials. If that does not come back as a
+   * model, it is not published, whatever the bucket says. */
   const { data: urlData } = c.storage.from(PUBLIC_BUCKET).getPublicUrl(PUBLIC_MODEL_KEY);
-  if (urlData?.publicUrl) {
-    try {
-      const r = await fetch(`${urlData.publicUrl}?v=${Date.now()}`, { headers: { Range: 'bytes=0-15' } });
-      if (!r.ok) return `it is not fetchable: HTTP ${r.status}`;
-      const head = new Uint8Array(await r.arrayBuffer());
-      if (head.length >= 8) {
-        const magic = String.fromCharCode(head[4], head[5], head[6], head[7]);
-        if (magic !== 'TFL3') return `what published is not a model (tag ${JSON.stringify(magic)})`;
-      }
-    } catch (e) {
-      return `it is not fetchable: ${e.message}`;
+  if (!urlData?.publicUrl) return 'no public URL for it';
+  try {
+    const r = await fetch(`${urlData.publicUrl}?v=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return `the app cannot download it: HTTP ${r.status}`;
+    const got = await r.arrayBuffer();
+    const shape = looksLikeTflite(got);
+    if (shape) return `the app would download ${shape}`;
+    if (got.byteLength !== expectedBytes) {
+      return `the app would download ${got.byteLength} bytes, expected ${expectedBytes}`;
     }
+  } catch (e) {
+    return `the app cannot download it: ${e.message}`;
   }
   return null;
 }
