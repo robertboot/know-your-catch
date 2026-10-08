@@ -182,3 +182,54 @@ every prior success was secretly the CDN. If a model fails to load:
   first or you will debug anonymous frames for five builds.
 - Admin Test Image panels still use tfjs-tflite; app and admin runtimes
   are different until someone migrates admin.
+
+## Two things that only mean something together
+
+The model and its species list are useless apart: the list is what turns
+an output index into a name. Every model incident so far has been those
+two updated separately, with nothing checking afterwards. None of them
+threw an error. All of them produced confident, systematically WRONG
+species — which is the worst failure this app has, because it looks
+exactly like a working answer.
+
+The same shape, four places, all found on 2026-10-07/08 chasing one
+report of "a gag grouper came back a shark":
+
+| where | how they came apart |
+|---|---|
+| Import | .tflite from one Colab run, labels from another — three files picked by hand |
+| Publish | manifest written, model upload silently didn't land |
+| Phone cache | two files written in sequence; app killed between them |
+| Promote → serve | 12.2 had 135 classes, 12.4 had 140, so a mismatch renames nearly everything |
+
+**Rules, in the order they bite:**
+
+- **An upload that does not error is not an object that exists.** Read it
+  back. Supabase Storage returns a missing object as a small JSON error
+  BODY, not a throw — publishing that is how the bucket served 88 bytes
+  of `{"error":"not_found"}` as `fish_id_model.tflite`.
+- **Write the pointer last.** The manifest is what tells phones a new
+  version exists; it goes up only after the model it names is confirmed
+  downloadable. Then a half-finished publish leaves phones on the version
+  they already have instead of fetching a model whose names they lack.
+- **Make a cached pair self-describing.** The manifest records the size of
+  the model it was written with; a pair that disagrees is refused.
+- **Cross-check the two JSONs at import.** `fish_id_labels.json` and
+  `fish_id_metrics.json` come from the same run, so their class lists must
+  be identical. Different = mixed bundle, refuse.
+- **The class count changes between versions.** 135 → 140. Never assume a
+  label array from one version describes another.
+- **Check it the next morning.** All of the above fail SAFE — the app
+  rejects a bad model and falls back to the bundled copy — so nothing
+  breaks loudly and nobody finds out. The daily brief now checks what a
+  phone can actually download: model present and big enough, published
+  version matching the promoted one, label count matching. Failing safe
+  and failing silently are the same thing without a check.
+
+Guarded by `scripts/publish-test/run.mjs`, `scripts/model-cache-test/run.mjs`
+and `scripts/brief-test/run.mjs`, all in `ship.sh`.
+
+**A corollary on reading the admin:** the accuracy card called the shipped
+model INT8 long after quantization moved to float16. A stale caption on
+the screen used to judge whether a model may be promoted makes a healthy
+model read as a broken one. See `[[harness-parity]]`.
