@@ -175,6 +175,19 @@ export async function publishPromotedModel() {
     .from('model-artifacts').download(prod.model_file_path);
   if (dlErr) return { ok: false, error: `download: ${dlErr.message}` };
 
+  /* Is what came back actually a model?
+   *
+   * A missing object does not throw here — Storage hands back a small
+   * JSON error body, and uploading THAT as fish_id_model.tflite is how
+   * the public bucket ended up serving 88 bytes of
+   * {"error":"not_found"} while this function reported success. */
+  const modelBytes = await modelBlob.arrayBuffer();
+  const shapeProblem = looksLikeTflite(modelBytes);
+  if (shapeProblem) {
+    return { ok: false, error: `the promoted artifact is not a model (${shapeProblem}) — ` +
+      `nothing published. Re-import ${prod.version_name}.` };
+  }
+
   // Overwrite the public copy.
   const upModel = await c.storage.from(PUBLIC_BUCKET)
     .upload(PUBLIC_MODEL_KEY, modelBlob, {
@@ -183,6 +196,21 @@ export async function publishPromotedModel() {
       upsert: true,
     });
   if (upModel.error) return { ok: false, error: `upload model: ${upModel.error.message}` };
+
+  /* Read it back before the manifest goes anywhere near the bucket.
+   *
+   * An upload call that does not error is not the same as an object that
+   * exists. The manifest is what tells every phone a new version is
+   * available, so it must be the LAST thing written and must only be
+   * written once the model it describes is confirmed downloadable. Then
+   * a half-finished publish leaves the old manifest beside the new
+   * model, and phones simply keep using the version they have — instead
+   * of fetching a model whose species list they do not have. */
+  const check = await verifyPublishedModel(c, modelBytes.byteLength);
+  if (check) {
+    return { ok: false, error: `model did not publish (${check}) — manifest left untouched, ` +
+      'so the app keeps serving the previous version rather than a mismatched one.' };
+  }
 
   const manifest = {
     version_name:    prod.version_name,
@@ -218,7 +246,50 @@ export async function publishPromotedModel() {
     });
   if (upMan.error) return { ok: false, error: `upload manifest: ${upMan.error.message}` };
 
-  return { ok: true };
+  // And read the manifest back too, for the same reason.
+  const manCheck = await verifyPublishedManifest(c, prod.version_name, manifest.labels.length);
+  if (manCheck) return { ok: false, error: `manifest did not publish (${manCheck})` };
+
+  return { ok: true, version: prod.version_name, labels: manifest.labels.length,
+           bytes: modelBytes.byteLength };
+}
+
+/* A .tflite starts with a 4-byte length prefix then the ASCII tag TFL3.
+   Returns a reason string when the bytes are not a model, or null. */
+function looksLikeTflite(buf) {
+  if (!buf || buf.byteLength < 1024) {
+    return `${buf ? buf.byteLength : 0} bytes — far too small`;
+  }
+  const v = new Uint8Array(buf);
+  const magic = String.fromCharCode(v[4], v[5], v[6], v[7]);
+  if (magic !== 'TFL3') return `bad flatbuffer tag ${JSON.stringify(magic)}`;
+  return null;
+}
+
+async function verifyPublishedModel(c, expectedBytes) {
+  const { data, error } = await c.storage.from(PUBLIC_BUCKET).download(PUBLIC_MODEL_KEY);
+  if (error) return `cannot read it back: ${error.message}`;
+  const buf = await data.arrayBuffer();
+  const shape = looksLikeTflite(buf);
+  if (shape) return shape;
+  if (buf.byteLength !== expectedBytes) {
+    return `published ${buf.byteLength} bytes, expected ${expectedBytes}`;
+  }
+  return null;
+}
+
+async function verifyPublishedManifest(c, version, labelCount) {
+  const { data, error } = await c.storage.from(PUBLIC_BUCKET).download(PUBLIC_MANIFEST_KEY);
+  if (error) return `cannot read it back: ${error.message}`;
+  let m;
+  try { m = JSON.parse(await data.text()); } catch (e) { return `unreadable: ${e.message}`; }
+  if (m.version_name !== version) {
+    return `published version ${m.version_name}, expected ${version}`;
+  }
+  if (!Array.isArray(m.labels) || m.labels.length !== labelCount) {
+    return `published ${m.labels?.length} labels, expected ${labelCount}`;
+  }
+  return null;
 }
 
 /* Public URLs the mobile app uses. Return the string so callers can

@@ -87,6 +87,10 @@ node scripts/brief-test/run.mjs >/dev/null || { echo "✗ daily brief FAILED"; e
 # pair does not fail — it renames every species.
 node scripts/model-cache-test/run.mjs >/dev/null || { echo "✗ model cache pairing FAILED"; exit 1; }
 echo "✓ model cache pairing"
+
+# Publishing must not report success for something that did not land.
+node scripts/publish-test/run.mjs >/dev/null || { echo "✗ model publish verification FAILED"; exit 1; }
+echo "✓ model publish verification"
 echo "✓ daily brief reports a dead pipeline"
 echo "✓ ERDDAP host walk"
 

@@ -75,6 +75,35 @@ check('a real bug is not excused as a NOAA outage',
   !/NOAA is unreachable/i.test(bug.map(i => i.detail).join(' ')),
   bug[0]?.detail?.slice(0, 60));
 
+/* A publish that half-finished. The app fails safe and falls back to the
+   bundled model, so nothing breaks loudly — which is exactly why the
+   board has to say it. Real case: 12.4 promoted, manifest advertising
+   12.2, and fish_id_model.tflite serving 88 bytes of a 404 body. */
+const badPublish = buildBrief({ health: {
+  promotedVersion: '12.4', promotedLabels: 140,
+  published: { manifest: { version_name: '12.2', labels: new Array(135).fill('x') },
+               head: { ok: true, bytes: 88 } },
+} });
+check('a missing published model is reported', badPublish.length > 0, `${badPublish.length} items`);
+check('and reported as BROKEN', badPublish.some(i => i.sev === 'critical'), badPublish[0]?.sev);
+
+// Right model, wrong species list — the one that renames every fish.
+const wrongLabels = buildBrief({ health: {
+  promotedVersion: '12.4', promotedLabels: 140,
+  published: { manifest: { version_name: '12.4', labels: new Array(135).fill('x') },
+               head: { ok: true, bytes: 9_000_000 } },
+} });
+check('a mismatched species list is reported',
+  wrongLabels.some(i => /species list does not match/i.test(i.text)),
+  wrongLabels[0]?.text);
+
+const goodPublish = buildBrief({ health: {
+  promotedVersion: '12.4', promotedLabels: 140,
+  published: { manifest: { version_name: '12.4', labels: new Array(140).fill('x') },
+               head: { ok: true, bytes: 9_000_000 } },
+} });
+check('a clean publish says nothing', goodPublish.length === 0, texts(goodPublish));
+
 // Healthy must still be quiet, or the board becomes noise and gets ignored.
 const healthy = buildBrief({ health: { ocean: {
   regions: [{ id: 'al_gulf', last_run_at: ago(0.1), last_error: 'ok · 09:00Z · sst+ chl+ depth+ cur+ · cells=300 spots=8 zones=11' }],

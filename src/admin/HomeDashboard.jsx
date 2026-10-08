@@ -202,8 +202,28 @@ async function fetchOceanData() {
   };
 }
 
+/* Is the model the phones download actually there?
+ *
+ * Publishing writes two objects, and until it verified itself, a
+ * half-finished publish left the manifest advertising one version while
+ * the model it names 404'd. The app fails safe — it rejects anything
+ * that small and falls back to the copy inside the bundle — so nothing
+ * breaks loudly and nobody finds out. That is the part worth catching:
+ * every phone quietly stuck on an old model, with the console showing a
+ * newer one as promoted. */
+async function fetchPublishedModel() {
+  const base = `${SUPABASE_URL}/storage/v1/object/public/models-published`;
+  const [manifest, head] = await Promise.all([
+    fetch(`${base}/current.json?cb=${Date.now()}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`${base}/fish_id_model.tflite?cb=${Date.now()}`, { method: 'HEAD' })
+      .then(r => ({ ok: r.ok, bytes: Number(r.headers.get('content-length')) || 0 }))
+      .catch(() => null),
+  ]);
+  return { manifest, head };
+}
+
 async function fetchHealth(modelInfo) {
-  const [bundles, lastAi, autoRun, cron, coverage, perDay, ocean] = await Promise.all([
+  const [bundles, lastAi, autoRun, cron, coverage, perDay, ocean, published] = await Promise.all([
     listPendingBundles().catch(() => ({ ok: false, rows: [] })),
     (async () => {
       const c = client();
@@ -247,6 +267,7 @@ async function fetchHealth(modelInfo) {
       } catch { return null; }
     })(),
     fetchOceanData().catch(() => null),
+    fetchPublishedModel().catch(() => null),
   ]);
 
   const prod = modelInfo?.row || null;
@@ -263,6 +284,9 @@ async function fetchHealth(modelInfo) {
     cron,
     coverage: coverage?.ok ? { ...coverage, perDay } : null,
     ocean,
+    published,
+    promotedVersion: prod?.version_name || null,
+    promotedLabels: Array.isArray(prod?.labels_json?.labels) ? prod.labels_json.labels.length : null,
   };
 }
 
@@ -686,6 +710,36 @@ export function buildBrief({ health, queue, coverage, training }) {
   // what needs doing and then having to go and find it is two jobs.
   const add = (sev, text, tab, detail, review) =>
     items.push({ sev, text, tab, detail, review });
+
+  /* --- did the model the phones download actually publish? --------
+     Publishing writes two objects. A half-finished one leaves the
+     manifest naming a version whose model is not there, and the app
+     fails safe by falling back to the bundled copy — so every phone is
+     quietly stuck on an old model while the console shows a newer one as
+     promoted. Nothing is broken loudly enough to notice. */
+  const livePublish = health?.published;
+  if (livePublish) {
+    const bytes = livePublish.head?.bytes ?? 0;
+    const live = livePublish.manifest?.version_name || null;
+    const liveLabels = Array.isArray(livePublish.manifest?.labels)
+      ? livePublish.manifest.labels.length : null;
+
+    if (!livePublish.head?.ok || bytes < 1024) {
+      add('critical', 'The published Fish ID model is missing', 'models',
+        `fish_id_model.tflite returns ${livePublish.head?.ok ? bytes + ' bytes' : 'an error'}. `
+        + 'Every phone is falling back to the model built into the app. Press Publish again '
+        + 'on the promoted version.');
+    } else if (health.promotedVersion && live && live !== health.promotedVersion) {
+      add('critical', `Phones are getting ${live}, not ${health.promotedVersion}`, 'models',
+        'The promoted model and the published one disagree — the publish did not finish. '
+        + 'Press Publish again.');
+    } else if (health.promotedLabels && liveLabels && liveLabels !== health.promotedLabels) {
+      // The dangerous one: right version, wrong species list.
+      add('critical', `The published species list does not match ${live}`, 'models',
+        `The manifest carries ${liveLabels} species, the promoted model has ${health.promotedLabels}. `
+        + 'Every identification would be read against the wrong names. Press Publish again.');
+    }
+  }
 
   /* --- is the satellite data arriving? ----------------------------
      First, because it is what the app is for. A call-level check reads
