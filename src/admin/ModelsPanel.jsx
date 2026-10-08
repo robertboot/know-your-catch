@@ -595,7 +595,14 @@ function ModelDetail({ id, onBack }) {
         </div>
         {isQuantized && m.float_accuracy != null && (
           <div style={{ fontSize: 12, color: T.inkMute, marginTop: 4 }}>
-            Float model scored {(m.float_accuracy * 100).toFixed(1)}% — the shipped figure above is the INT8 model that runs on the phone.
+            {/* NOT INT8. Full INT8 post-training quantization was catastrophic
+                for this MobileNetV3 — hard-swish activations lose too much
+                precision and the shipped model scored ~23% against ~82% float.
+                quantize_to_tflite() has used float16 since, falling back to
+                plain float32. Calling it INT8 here is a leftover from before
+                that change, on the one screen used to decide whether a model
+                is fit to promote. */}
+            Float model scored {(m.float_accuracy * 100).toFixed(1)}% — the shipped figure above is the float16 model that runs on the phone.
           </div>
         )}
       </Card>
