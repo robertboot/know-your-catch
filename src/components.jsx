@@ -416,7 +416,14 @@ export function Card({ children, style, onClick }) {
   return (
     <div onClick={onClick} style={{
       background: T.card, border: `1px solid ${T.cardEdge}`, borderRadius: 14, padding: 14,
-      boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.04) inset', cursor: onClick ? 'pointer' : 'default', ...style,
+      boxShadow: '0 0 0 1px rgba(25, 212, 242, 0.04) inset', cursor: onClick ? 'pointer' : 'default',
+      // A grid or flex item will not shrink below its own min-content
+      // unless told it may. Without this, one wide row inside a card —
+      // a confusion table, a long species list — pushes the card past the
+      // window, and the sections beyond it sit off the side of the screen
+      // with nothing to scroll. Callers can still override via `style`.
+      minWidth: 0,
+      ...style,
     }}>{children}</div>
   );
 }

@@ -624,7 +624,11 @@ function LookalikeBreakdownCard({ breakdown }) {
       <div style={{ fontSize: 11, color: T.inkMute, marginBottom: 10, lineHeight: 1.5 }}>
         Per-group confusion. A member with accuracy noticeably below its peers is where the classifier is confusing that species with the group's other members. Rule of thumb: if any group's weakest member is &lt; 60%, do NOT promote to production.
       </div>
-      <div style={{ display: 'grid', gap: 10 }}>
+      {/* minmax(0, 1fr), not 1fr. A grid track defaults to min-content,
+          so a row that cannot shrink pushes the whole card wider than the
+          window — and the admin then has sections sitting off the side of
+          the screen with no way to scroll to them. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
         {breakdown.map((g, i) => (
           <LookalikeGroupCard key={i} group={g} />
         ))}
@@ -638,7 +642,7 @@ function LookalikeGroupCard({ group }) {
   const warn = min < 0.6;
   return (
     <div style={{
-      padding: 10, borderRadius: 8,
+      padding: 10, borderRadius: 8, minWidth: 0,
       background: warn ? T.warnBg : T.parchmentDeep,
       border: `1px solid ${warn ? T.warn : T.cardEdge}`,
     }}>
@@ -650,21 +654,27 @@ function LookalikeGroupCard({ group }) {
           const acc = group.accuracy[i];
           const support = group.support[i];
           return (
-            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ fontSize: 11, color: T.inkSoft, width: 160 }}>
+            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              {/* Shrinkable, not fixed: a 160px floor plus a bar plus two
+                  number columns is wider than a narrow window, and the
+                  species name is the part that can give. */}
+              <div style={{
+                fontSize: 11, color: T.inkSoft, flex: '0 1 160px', minWidth: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }} title={SPECIES.find(s => s.id === id)?.commonName || id}>
                 {SPECIES.find(s => s.id === id)?.commonName || id}
               </div>
-              <div style={{ flex: 1, height: 6, background: T.card, borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ flex: '1 1 0', minWidth: 20, height: 6, background: T.card, borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%',
                   width: `${(acc || 0) * 100}%`,
                   background: acc == null ? T.inkMute : acc >= 0.8 ? T.open : acc >= 0.6 ? T.warn : T.closed,
                 }} />
               </div>
-              <div style={{ fontSize: 11, color: T.ink, width: 55, textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: T.ink, flex: '0 0 44px', textAlign: 'right' }}>
                 {acc != null ? `${(acc * 100).toFixed(0)}%` : '—'}
               </div>
-              <div style={{ fontSize: 10, color: T.inkMute, width: 40, textAlign: 'right' }}>
+              <div style={{ fontSize: 10, color: T.inkMute, flex: '0 0 36px', textAlign: 'right' }}>
                 n={support}
               </div>
             </div>
