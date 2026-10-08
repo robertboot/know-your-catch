@@ -1,0 +1,2018 @@
+/* Admin Home Dashboard
+   -------------------------------------------------------------
+   Single-glance status page: what's missing, what needs review,
+   what the app looks like right now. Every tile fetches from an
+   existing store or a direct HEAD count against Supabase — no new
+   backend surface, just aggregation.
+
+   Sections (top → bottom):
+     1. Health strip  — model published, pending Colab bundles,
+                        last successful AI draft.
+     2. Action queue  — every "someone should look at this" number
+                        with a jump-to-tab CTA.
+     3. Species       — coverage gaps (photo, scientific name,
+                        category).
+     4. Regulations   — jurisdiction × status grid + oldest verified.
+     5. Training      — per-species coverage buckets, total pending.
+     6. Categories    — species-per-category with orphan flag.
+     7. Users         — signup + catch counts (gated on admin RLS).
+     8. Recent        — last 10 regs verified, training approvals,
+                        species edits, user suggestions.
+
+   All tiles are best-effort: any single-fetch failure is surfaced
+   in that section's card, the rest of the dashboard still loads.
+   The refresh button re-runs every fetch in parallel. */
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { T } from '../theme.js';
+import { SPECIES, JURISDICTIONS } from '../data.js';
+import { client, SUPABASE_URL } from '../supabase-client.js';
+import {
+  refreshSpecies, speciesPhotoOverrideAll,
+} from '../species-store.js';
+import {
+  getCategories, refreshCategories,
+} from '../categories-store.js';
+import {
+  adminListRegulations, adminCountStalable, regulationAge, getCronHealth,
+  adminRegsCoverage,
+} from '../regulations-store.js';
+import {
+  countsBySpecies, countMyPendingOwnerUploads, classifyCoverage,
+  MIN_TRAIN_THRESHOLD, ADEQUATE_THRESHOLD, TARGET_COVERAGE,
+} from '../training-store.js';
+import { listPendingBundles } from '../training-exports-store.js';
+import { getProductionModel, publishedManifestUrl } from '../model-store.js';
+import { listSuggestions } from '../species-suggestions-store.js';
+import { adminVerifyRegulation } from '../regulations-store.js';
+import { getLastSession } from '../auth.js';
+import { Card, GhostButton, H1, SectionLabel } from '../components.jsx';
+import { relativeTime } from '../helpers.js';
+
+/* ============================================================
+   Data hook — parallel fan-out of every dashboard fetch.
+   Failures land per-section in `state.errors[section]` so a
+   broken tile doesn't take the whole page down.
+   ============================================================ */
+function useDashboardData() {
+  const [state, setState] = useState({
+    loading: true,
+    refreshedAt: null,
+    errors: {},
+    health: null,
+    pipeline: null,
+    queue: null,
+    species: null,
+    regsMatrix: null,
+    training: null,
+    categories: null,
+    users: null,
+    recent: null,
+  });
+
+  const refresh = async () => {
+    setState(s => ({ ...s, loading: true, errors: {} }));
+
+    // Model info (production row + published manifest) is needed by
+    // BOTH the Health strip and the Pipeline panel — fetch it once
+    // here and hand it to both, instead of two cache-busted fetches
+    // of the same manifest per refresh.
+    const modelInfo = await fetchModelInfo().catch(() => null);
+
+    // Fire every fetch in parallel — the dashboard is one-shot on
+    // mount + on the Refresh button, so we optimize for wall-clock.
+    const [
+      healthRes, pipelineRes, queueRes, speciesRes, regsMatrixRes,
+      trainingRes, categoriesRes, usersRes, recentRes,
+    ] = await Promise.allSettled([
+      fetchHealth(modelInfo),
+      fetchPipeline(modelInfo),
+      fetchActionQueue(),
+      fetchSpeciesCoverage(),
+      fetchRegsMatrix(),
+      fetchTrainingCoverage(),
+      fetchCategoriesTable(),
+      fetchUsers(),
+      fetchRecentActivity(),
+    ]);
+
+    const pick = (res) => {
+      if (res.status === 'fulfilled') return { value: res.value, err: null };
+      return { value: null, err: res.reason?.message || String(res.reason) };
+    };
+
+    const health     = pick(healthRes);
+    const pipeline   = pick(pipelineRes);
+    const queue      = pick(queueRes);
+    const species    = pick(speciesRes);
+    const regsMatrix = pick(regsMatrixRes);
+    const training   = pick(trainingRes);
+    const categories = pick(categoriesRes);
+    const users      = pick(usersRes);
+    const recent     = pick(recentRes);
+
+    setState({
+      loading: false,
+      refreshedAt: new Date().toISOString(),
+      errors: {
+        health: health.err, pipeline: pipeline.err, queue: queue.err,
+        species: species.err, regsMatrix: regsMatrix.err,
+        training: training.err, categories: categories.err,
+        users: users.err, recent: recent.err,
+      },
+      health: health.value,
+      pipeline: pipeline.value,
+      queue: queue.value,
+      species: species.value,
+      regsMatrix: regsMatrix.value,
+      training: training.value,
+      categories: categories.value,
+      users: users.value,
+      recent: recent.value,
+    });
+  };
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { state, refresh };
+}
+
+/* ============================================================
+   Individual fetch functions.
+   ============================================================ */
+
+/* Production model row + published manifest, fetched once per
+   refresh and shared by fetchHealth + fetchPipeline. NOTE:
+   getProductionModel() returns the model_versions ROW directly (or
+   null) — an earlier version of this file read `prod?.row`, which is
+   always undefined, so the Health tile permanently showed
+   NOT PUBLISHED even with a live model. */
+async function fetchModelInfo() {
+  const prod = await getProductionModel();
+  let manifest = null;
+  try {
+    const url = publishedManifestUrl();
+    if (url) {
+      // Bust caches so we don't show a stale manifest after a
+      // re-promote in the same session.
+      const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-store' });
+      if (resp.ok) manifest = await resp.json();
+    }
+  } catch { /* best-effort */ }
+  return {
+    row: prod || null,
+    publishedAt: manifest?.published_at || null,
+    manifestVersion: manifest?.version_name || null,
+  };
+}
+
+/* Is the satellite data actually arriving?
+ *
+ * Every other check here asks whether a job ERRORED. None asked whether
+ * it produced anything, and that is the gap that let the board read
+ * "nothing needs attention" while find-hotspots failed on every region,
+ * every ten minutes, for thirteen hours. It returns HTTP 200 with the
+ * failures listed in its body, so a call-level check sees green. A job
+ * that completes and writes nothing is the failure nobody notices.
+ *
+ * So this asks the only question that matters to someone about to leave
+ * the dock: is what the map is showing me from today?
+ */
+async function fetchOceanData() {
+  const c = client();
+  if (!c) return null;
+  const [regions, zone, img] = await Promise.all([
+    c.from('hotspot_regions').select('id, last_run_at, last_error').eq('active', true)
+      .then(r => r.data || []).catch(() => []),
+    c.from('hotspot_zones').select('observed_at')
+      .order('observed_at', { ascending: false }).limit(1)
+      .then(r => r.data?.[0]?.observed_at || null).catch(() => null),
+    fetch(`${SUPABASE_URL}/storage/v1/object/public/ocean-maps/sst-latest.json`)
+      .then(r => (r.ok ? r.json() : null)).then(m => m?.captured_at || null).catch(() => null),
+  ]);
+  return {
+    regions,
+    failing: regions.filter(r => r.last_error?.startsWith('ERROR')),
+    neverRun: regions.filter(r => !r.last_run_at),
+    zoneObservedAt: zone,
+    imageCapturedAt: img,
+  };
+}
+
+/* Is the model the phones download actually there?
+ *
+ * Publishing writes two objects, and until it verified itself, a
+ * half-finished publish left the manifest advertising one version while
+ * the model it names 404'd. The app fails safe — it rejects anything
+ * that small and falls back to the copy inside the bundle — so nothing
+ * breaks loudly and nobody finds out. That is the part worth catching:
+ * every phone quietly stuck on an old model, with the console showing a
+ * newer one as promoted. */
+async function fetchPublishedModel() {
+  const base = `${SUPABASE_URL}/storage/v1/object/public/models-published`;
+  const [manifest, head] = await Promise.all([
+    fetch(`${base}/current.json?cb=${Date.now()}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`${base}/fish_id_model.tflite?cb=${Date.now()}`, { method: 'HEAD' })
+      .then(r => ({ ok: r.ok, bytes: Number(r.headers.get('content-length')) || 0 }))
+      .catch(() => null),
+  ]);
+  return { manifest, head };
+}
+
+async function fetchHealth(modelInfo) {
+  const [bundles, lastAi, autoRun, cron, coverage, perDay, ocean, published] = await Promise.all([
+    listPendingBundles().catch(() => ({ ok: false, rows: [] })),
+    (async () => {
+      const c = client();
+      if (!c) return null;
+      const { data } = await c.from('regulations')
+        .select('drafted_at, species_id, jurisdiction_id')
+        .eq('drafted_by', 'ai')
+        .order('drafted_at', { ascending: false })
+        .limit(1);
+      return data?.[0] || null;
+    })(),
+    // Latest autonomous-updater run. Table may not exist until the
+    // auto-update migration runs — treat any error as "not set up".
+    (async () => {
+      const c = client();
+      if (!c) return null;
+      try {
+        const { data, error } = await c.from('regs_auto_runs')
+          .select('ran_at, checked, published, drafted, unchanged, failed')
+          .order('ran_at', { ascending: false })
+          .limit(1);
+        if (error) return null;
+        return data?.[0] || null;
+      } catch { return null; }
+    })(),
+    getCronHealth().catch(() => null),
+    adminRegsCoverage().catch(() => null),
+    // Observed throughput over the last week, so the coverage estimate
+    // reflects the cadence actually running rather than one written
+    // into the code months ago.
+    (async () => {
+      const c = client();
+      if (!c) return null;
+      try {
+        const since = new Date(Date.now() - 7 * 86400000).toISOString();
+        const { data, error } = await c.from('regs_auto_runs')
+          .select('ran_at, checked').gte('ran_at', since);
+        if (error || !data?.length) return null;
+        const total = data.reduce((a, r) => a + (r.checked || 0), 0);
+        return Math.max(1, Math.round(total / 7));
+      } catch { return null; }
+    })(),
+    fetchOceanData().catch(() => null),
+    fetchPublishedModel().catch(() => null),
+  ]);
+
+  const prod = modelInfo?.row || null;
+  return {
+    model: prod ? {
+      version: prod.version_name || modelInfo?.manifestVersion || null,
+      classCount: prod.labels_json?.labels?.length || 0,
+      publishedAt: modelInfo?.publishedAt || null,
+    } : null,
+    pendingBundles: bundles.ok ? bundles.rows.length : 0,
+    lastAiDraft: lastAi?.drafted_at || null,
+    lastAiDraftSpecies: lastAi?.species_id || null,
+    autoRun,
+    cron,
+    coverage: coverage?.ok ? { ...coverage, perDay } : null,
+    ocean,
+    published,
+    promotedVersion: prod?.version_name || null,
+    promotedLabels: Array.isArray(prod?.labels_json?.labels) ? prod.labels_json.labels.length : null,
+  };
+}
+
+/* Training-data pipeline — how much new verified training data has
+   landed SINCE the last model was published. Answers the confidence
+   question "is my testing actually adding to the next model?" without
+   the admin having to guess. Also breaks down by source so you can
+   see what's coming from admin uploads vs. real user Fish-ID
+   corrections and confirmations. */
+async function fetchPipeline(modelInfo) {
+  const c = client();
+  if (!c) throw new Error('supabase not configured');
+
+  // Reference point: wall-clock time the current model was published.
+  // Priority order:
+  //   1. models-published/current.json's published_at (authoritative —
+  //      that's when the mobile app actually started serving the model)
+  //   2. model_versions row's imported_at (fallback if the manifest
+  //      is missing / older schema)
+  //   3. null (no model yet — count all-time)
+  // modelInfo is fetched ONCE per refresh and shared with fetchHealth.
+  let sinceIso = modelInfo?.publishedAt || modelInfo?.row?.imported_at || null;
+  let modelVersion = modelInfo?.manifestVersion || modelInfo?.row?.version_name || null;
+  let sinceLabel = sinceIso ? `since ${modelVersion || 'last publish'}` : 'all time';
+
+  const now = Date.now();
+  const dayIso   = new Date(now -      86400_000).toISOString();
+  const weekIso  = new Date(now -  7 * 86400_000).toISOString();
+  const monthIso = new Date(now - 30 * 86400_000).toISOString();
+
+  // HEAD counts — verified rows only (that's the pool that ends up
+  // in the next export). Every filter fires in parallel.
+  const cnt = (fn) => fn.then(r => r.count || 0);
+  const baseSince = () => {
+    let q = c.from('training_images')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'verified');
+    if (sinceIso) q = q.gt('uploaded_at', sinceIso);
+    return q;
+  };
+  const baseAll = () => c.from('training_images')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'verified');
+  const baseWindow = (isoFloor) => c.from('training_images')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'verified')
+    .gt('uploaded_at', isoFloor);
+
+  const [
+    total,
+    newSince,
+    day24,
+    week7,
+    month30,
+    ownerSince,
+    confirmSince,
+    correctSince,
+    recentRows,
+  ] = await Promise.all([
+    cnt(baseAll()),
+    cnt(baseSince()),
+    cnt(baseWindow(dayIso)),
+    cnt(baseWindow(weekIso)),
+    cnt(baseWindow(monthIso)),
+    cnt(baseSince().eq('source', 'owner_upload')),
+    cnt(baseSince().eq('source', 'model_confirmation')),
+    cnt(baseSince().eq('source', 'model_correction')),
+    // Recent rows for the leaderboard + freshness line. Capped at
+    // 1000 to keep the payload sane on high-volume projects;
+    // anything over that would need server-side aggregation anyway.
+    (() => {
+      let q = c.from('training_images')
+        .select('species_id, uploaded_at')
+        .eq('status', 'verified')
+        .order('uploaded_at', { ascending: false })
+        .limit(1000);
+      if (sinceIso) q = q.gt('uploaded_at', sinceIso);
+      return q.then(r => r.data || []);
+    })(),
+  ]);
+
+  // Species leaderboard — who contributed the most new rows since publish.
+  const bySpecies = new Map();
+  for (const r of recentRows) {
+    if (!r.species_id) continue;
+    bySpecies.set(r.species_id, (bySpecies.get(r.species_id) || 0) + 1);
+  }
+  const topSpecies = Array.from(bySpecies.entries())
+    .map(([id, count]) => ({
+      speciesId: id,
+      commonName: SPECIES.find(s => s.id === id)?.commonName || id,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  // Latest upload timestamp — proves the pipeline is actually alive
+  // ("last photo added 4 min ago" reads more convincingly than a
+  // static number).
+  const lastUploadedAt = recentRows[0]?.uploaded_at || null;
+
+  return {
+    hasPublishedModel: !!sinceIso,
+    sinceIso,
+    sinceLabel,
+    modelVersion,
+    total,
+    newSincePublish: sinceIso ? newSince : total,
+    last24h:  day24,
+    last7d:   week7,
+    last30d:  month30,
+    bySource: {
+      owner:        ownerSince,
+      confirmation: confirmSince,
+      correction:   correctSince,
+    },
+    topSpecies,
+    lastUploadedAt,
+  };
+}
+
+async function fetchActionQueue() {
+  const c = client();
+  if (!c) throw new Error('supabase not configured');
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
+
+  const [
+    suggestionsPending,
+    trainingPending,
+    trainingRejected,
+    ownerBacklog,
+    regsDraftsOld,
+    announcementsAll,
+  ] = await Promise.all([
+    listSuggestions({ status: 'pending', limit: 500 }).then(r => r.ok ? r.rows.length : 0),
+    c.from('training_images')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .then(r => r.count || 0),
+    c.from('training_images')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'rejected')
+      .then(r => r.count || 0),
+    countMyPendingOwnerUploads().then(r => r.ok ? r.count : 0),
+    c.from('regulations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'draft')
+      .lt('drafted_at', sevenDaysAgo)
+      .then(r => r.count || 0),
+    // announcements table may not exist in all deployments — swallow
+    // an error and treat as 0.
+    c.from('announcements')
+      .select('id, starts_at, ends_at')
+      .then(r => r.data || [])
+      .catch(() => []),
+  ]);
+
+  // Stale verified — sum HEAD counts across all jurisdictions.
+  const staleCounts = await Promise.all(
+    JURISDICTIONS.map(j => adminCountStalable({ jurisdictionId: j.id })
+      .then(r => r.ok ? r.count : 0))
+  );
+  const regsStale = staleCounts.reduce((a, b) => a + b, 0);
+
+  const nowIso = new Date().toISOString();
+  const announcementsActive = announcementsAll.filter(a => {
+    const starts = a.starts_at || null;
+    const ends   = a.ends_at   || null;
+    return (!starts || starts <= nowIso) && (!ends || ends >= nowIso);
+  }).length;
+
+  return {
+    suggestionsPending,
+    trainingPending,
+    trainingRejected,
+    ownerBacklog,
+    regsDraftsOld,
+    regsStale,
+    announcementsActive,
+  };
+}
+
+async function fetchSpeciesCoverage() {
+  await refreshSpecies();
+  const all = SPECIES;
+  const active = all.filter(s => s.active !== false);
+
+  /* Tier-2 fields and alt names were scored here and read 0% across all
+     171 species, which made the board look alarming about something
+     nobody is filling in. They are not part of what the app needs to be
+     correct, so they are not measured — a coverage bar that has read
+     zero since it was added is not a gap, it is a metric nobody wanted. */
+  const missing = { photo: [], scientific: [], category: [] };
+  for (const sp of active) {
+    // Photo: prefer live overrides, then bundled sp.photos.
+    const overrides = speciesPhotoOverrideAll(sp.id) || [];
+    const bundledPhotos = Array.isArray(sp.photos) ? sp.photos : [];
+    if (overrides.length === 0 && bundledPhotos.length === 0) missing.photo.push(sp);
+    if (!sp.scientific)                                       missing.scientific.push(sp);
+    // Empty OR the '_admin' "needs category" bucket both count as needing
+    // a category (new species default to '_admin' until an admin files them).
+    if (!sp.category || sp.category === '_admin')             missing.category.push(sp);
+  }
+
+  return {
+    total: all.length,
+    active: active.length,
+    inactive: all.length - active.length,
+    missing,
+  };
+}
+
+async function fetchRegsMatrix() {
+  // Cheap: 6 parallel per-jurisdiction fetches, then per-jurisdiction
+  // rollup. Total wall-clock is one round-trip.
+  const active = SPECIES.filter(s => s.active !== false);
+  const totalSpecies = active.length;
+
+  const rows = await Promise.all(
+    JURISDICTIONS.map(async (j) => {
+      const r = await adminListRegulations({ jurisdictionId: j.id });
+      if (!r.ok) return { jur: j, error: r.error || 'load failed' };
+      const byStatus = { verified: 0, draft: 0, stale: 0, disputed: 0 };
+      let agingVerified = 0; // verified but > 365 days
+      for (const row of r.rows) {
+        byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+        if (row.status === 'verified') {
+          const age = regulationAge(row);
+          if (age && age.tier === 'stale') agingVerified += 1;
+        }
+      }
+      const withRow = r.rows.length;
+      const none = Math.max(0, totalSpecies - withRow);
+      return { jur: j, counts: { ...byStatus, none }, agingVerified };
+    })
+  );
+
+  return { totalSpecies, jurisdictions: rows };
+}
+
+async function fetchTrainingCoverage() {
+  const r = await countsBySpecies();
+  if (!r.ok) throw new Error(r.error || 'training counts failed');
+
+  const active = SPECIES.filter(s => s.active !== false);
+  const buckets = { excluded: [], thin: [], ok: [], good: [] };
+  let totalVerified = 0, totalPending = 0, totalRejected = 0;
+
+  for (const sp of active) {
+    const c = r.counts[sp.id] || { verified: 0, pending: 0, rejected: 0 };
+    totalVerified += c.verified || 0;
+    totalPending  += c.pending  || 0;
+    totalRejected += c.rejected || 0;
+    const tier = classifyCoverage(c.verified || 0);
+    buckets[tier].push({ sp, verified: c.verified || 0, pending: c.pending || 0, rejected: c.rejected || 0 });
+  }
+
+  // Sort within each bucket by verified ascending so the "closest to
+  // graduating" species float to the top of their bucket.
+  for (const k of Object.keys(buckets)) {
+    buckets[k].sort((a, b) => a.verified - b.verified);
+  }
+
+  return {
+    totals: {
+      verified: totalVerified,
+      pending: totalPending,
+      rejected: totalRejected,
+      speciesCount: active.length,
+    },
+    thresholds: { min: MIN_TRAIN_THRESHOLD, ok: ADEQUATE_THRESHOLD, target: TARGET_COVERAGE },
+    buckets,
+  };
+}
+
+async function fetchCategoriesTable() {
+  await refreshCategories();
+  const cats = getCategories();
+  const active = SPECIES.filter(s => s.active !== false);
+  const bySlot = new Map(cats.map(c => [c.id, { ...c, count: 0 }]));
+  let orphans = 0;
+  for (const sp of active) {
+    if (!sp.category) { orphans += 1; continue; }
+    const slot = bySlot.get(sp.category);
+    if (slot) slot.count += 1;
+    else orphans += 1;
+  }
+  return {
+    rows: Array.from(bySlot.values()).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)),
+    orphans,
+  };
+}
+
+async function fetchUsers() {
+  const c = client();
+  if (!c) throw new Error('supabase not configured');
+
+  const sevenDaysAgo  = new Date(Date.now() -  7 * 86400_000).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
+
+  // Real cloudsync tables (see src/cloudsync.js): catches / pbs /
+  // user_state — each keyed by user_id and RLS-locked to own-row
+  // reads. This dashboard is gated behind the admin_read policies in
+  // supabase/admin-read-anglers-schema.sql; without them these
+  // HEAD counts come back as 0 (or as ONLY the admin's own rows).
+  //
+  // Users total: one user_state row per signed-in user (the mobile
+  //   app creates it on first sync). Better proxy than "distinct
+  //   user_id in catches" because it also counts signed-in users
+  //   who haven't logged a catch yet.
+  // Catches total + recent windows: HEAD counts against the
+  //   date_iso column (the catch event time).
+  const [userTotal, catTotal, cat7, cat30, catPhotoRows] = await Promise.all([
+    c.from('user_state').select('user_id', { count: 'exact', head: true }).then(r => r.count ?? 0),
+    c.from('catches').select('id', { count: 'exact', head: true }).is('deleted_at', null).then(r => r.count ?? 0),
+    c.from('catches').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('date_iso', sevenDaysAgo).then(r => r.count ?? 0),
+    c.from('catches').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('date_iso', thirtyDaysAgo).then(r => r.count ?? 0),
+    // photos is a jsonb array embedded IN the catches row (not a
+    // separate table). PostgREST doesn't expose a JSON-length filter
+    // that plays well with HEAD counts, so we pull the id + photos
+    // columns and count non-empty locally. Cheap: photos column is
+    // ~small array of URL strings per row.
+    c.from('catches')
+      .select('id, photos')
+      .is('deleted_at', null)
+      .limit(5000)
+      .then(r => (r.data || []).filter(row =>
+        Array.isArray(row.photos) && row.photos.length > 0).length),
+  ]);
+
+  // Recent signups — user_state doesn't have a created_at column
+  // (it's a rolling jsonb blob keyed by user_id). "Active in last N
+  // days" is a better proxy anyway: count of distinct users who
+  // logged a catch in that window.
+  const [users7Data, users30Data] = await Promise.all([
+    c.from('catches').select('user_id').is('deleted_at', null).gte('date_iso', sevenDaysAgo),
+    c.from('catches').select('user_id').is('deleted_at', null).gte('date_iso', thirtyDaysAgo),
+  ]);
+  const users7  = new Set((users7Data.data  || []).map(r => r.user_id)).size;
+  const users30 = new Set((users30Data.data || []).map(r => r.user_id)).size;
+
+  // Simple gate heuristic: total is 0 across the board. Almost
+  // certainly RLS is blocking the read (an admin's OWN rows would
+  // still surface if the policies were fine but the tables empty,
+  // and that's covered because we count admin's own rows too).
+  const gated = userTotal === 0 && catTotal === 0;
+
+  return {
+    gated,
+    users:   { total: userTotal, active7: users7,   active30: users30 },
+    catches: { total: catTotal,  last7:   cat7,     last30:   cat30, withPhoto: catPhotoRows },
+  };
+}
+
+async function fetchRecentActivity() {
+  const c = client();
+  if (!c) throw new Error('supabase not configured');
+
+  const [regs, training, species, sugg] = await Promise.all([
+    c.from('regulations')
+      .select('id, species_id, jurisdiction_id, verified_at, verified_by, source_url')
+      .eq('status', 'verified')
+      .order('verified_at', { ascending: false })
+      .limit(10)
+      .then(r => r.data || []),
+    c.from('training_images')
+      .select('id, species_id, status, reviewed_at, reviewed_by, rejection_reason')
+      .not('reviewed_at', 'is', null)
+      .order('reviewed_at', { ascending: false })
+      .limit(10)
+      .then(r => r.data || []),
+    c.from('species')
+      .select('id, common_name, updated_at, updated_by')
+      .not('updated_at', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(10)
+      .then(r => r.data || []),
+    c.from('species_suggestions')
+      .select('id, common_name, status, submitted_at')
+      .order('submitted_at', { ascending: false })
+      .limit(10)
+      .then(r => r.data || []),
+  ]);
+
+  return {
+    verifiedRegs: regs,
+    trainingReviews: training,
+    speciesEdits: species,
+    suggestions: sugg,
+  };
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+
+/* ============================================================
+   Daily brief
+   ============================================================
+   The dashboard below is eight sections of detail. This is the part
+   that answers "what needs doing today" without reading any of it —
+   written for someone (or something) checking every morning.
+
+   Two rules keep it useful. Only items with an action go in: a large
+   standing number that nobody is expected to act on today is context,
+   not a task, and putting it here would train the reader to skim past
+   real ones. And when there is nothing, it says so plainly rather than
+   padding itself — a brief that is never empty is never read. */
+
+const SEV = {
+  critical: { rank: 0, label: 'BROKEN',   color: T.closed },
+  action:   { rank: 1, label: 'TO DO',    color: T.warn },
+  watch:    { rank: 2, label: 'WATCH',    color: T.brass },
+};
+
+export function buildBrief({ health, queue, coverage, training }) {
+  const items = [];
+  // `review` names an inline panel: the item is actioned where it is read
+  // rather than sending someone to another tab to hunt for it. Being told
+  // what needs doing and then having to go and find it is two jobs.
+  const add = (sev, text, tab, detail, review) =>
+    items.push({ sev, text, tab, detail, review });
+
+  /* --- did the model the phones download actually publish? --------
+     Publishing writes two objects. A half-finished one leaves the
+     manifest naming a version whose model is not there, and the app
+     fails safe by falling back to the bundled copy — so every phone is
+     quietly stuck on an old model while the console shows a newer one as
+     promoted. Nothing is broken loudly enough to notice. */
+  const livePublish = health?.published;
+  if (livePublish) {
+    const bytes = livePublish.head?.bytes ?? 0;
+    const live = livePublish.manifest?.version_name || null;
+    const liveLabels = Array.isArray(livePublish.manifest?.labels)
+      ? livePublish.manifest.labels.length : null;
+
+    if (!livePublish.head?.ok || bytes < 1024) {
+      add('critical', 'The published Fish ID model is missing', 'models',
+        `fish_id_model.tflite returns ${livePublish.head?.ok ? bytes + ' bytes' : 'an error'}. `
+        + 'Every phone is falling back to the model built into the app. Press Publish again '
+        + 'on the promoted version.');
+    } else if (health.promotedVersion && live && live !== health.promotedVersion) {
+      add('critical', `Phones are getting ${live}, not ${health.promotedVersion}`, 'models',
+        'The promoted model and the published one disagree — the publish did not finish. '
+        + 'Press Publish again.');
+    } else if (health.promotedLabels && liveLabels && liveLabels !== health.promotedLabels) {
+      // The dangerous one: right version, wrong species list.
+      add('critical', `The published species list does not match ${live}`, 'models',
+        `The manifest carries ${liveLabels} species, the promoted model has ${health.promotedLabels}. `
+        + 'Every identification would be read against the wrong names. Press Publish again.');
+    }
+  }
+
+  /* --- is the satellite data arriving? ----------------------------
+     First, because it is what the app is for. A call-level check reads
+     green while this is failing: find-hotspots answers HTTP 200 and
+     lists the failures in its body. */
+  const ocean = health?.ocean;
+  if (ocean) {
+    const days = (iso) => (iso ? Math.floor((Date.now() - Date.parse(iso)) / 86400000) : null);
+
+    if (ocean.failing.length) {
+      const all = ocean.failing.length === ocean.regions.length;
+      const reason = String(ocean.failing[0].last_error || '');
+      // A dead upstream and a broken job need different responses, and
+      // the function already says which it hit.
+      const upstream = /every erddap host failed|timeout@|unreachable/.test(reason);
+      add(all ? 'critical' : 'action',
+        all
+          ? `Suggested spots are not being computed — all ${ocean.regions.length} waters failed`
+          : `Suggested spots failing in ${ocean.failing.length} of ${ocean.regions.length} waters`,
+        'planning',
+        upstream
+          ? `NOAA is unreachable: ${reason.slice(0, 200)} — nothing to fix here, it clears when they come back.`
+          : reason.slice(0, 240));
+    }
+    if (ocean.neverRun.length) {
+      add('watch', `${ocean.neverRun.length} waters have never been read`, 'planning',
+        `${ocean.neverRun.map(r => r.id).join(', ')}. Press Regenerate, or wait — one region every ten minutes.`);
+    }
+
+    // Age, not errors. A job can be green and still be serving last week.
+    const zAge = days(ocean.zoneObservedAt);
+    if (!ocean.zoneObservedAt) {
+      add('critical', 'No species maps or currents at all', 'planning',
+        'hotspot_zones is empty. Deploy find-hotspots and press Regenerate.');
+    } else if (zAge >= 2) {
+      add(zAge >= 5 ? 'critical' : 'watch',
+        `Species maps and currents are ${zAge} days old`, 'planning',
+        `Newest pass ${String(ocean.zoneObservedAt).slice(0, 10)}. The app draws these without saying how old they are.`);
+    }
+
+    const iAge = days(ocean.imageCapturedAt);
+    if (iAge != null && iAge >= 1) {
+      add(iAge >= 3 ? 'critical' : 'watch',
+        `Chlorophyll and sea-temp layers are ${iAge} day${iAge === 1 ? '' : 's'} old`, 'planning',
+        'refresh-ocean-maps is not completing. A stale picture looks identical to a fresh one on the map.');
+    }
+  }
+
+  // --- broken ---------------------------------------------------
+  // A timed-out call is NOT a failed one. pg_net gives up waiting after
+  // its configured ceiling and writes a row with no status code; the job
+  // still fired and the function still ran. Reporting that as BROKEN sent
+  // us hunting a dead scheduled job that was working the whole time, so
+  // the two are now counted and worded separately.
+  const http = health?.cron?.recentHttp || [];
+  const slowCalls = http.filter(r => r.status_code == null && r.timed_out);
+  const badCalls = http.filter(r => !(r.status_code == null && r.timed_out)
+                                 && (r.status_code == null || r.status_code >= 400));
+  if (badCalls.length) {
+    add('critical',
+      `${badCalls.length} of the last ${http.length} scheduled job calls failed`,
+      null,
+      badCalls[0].error_msg
+        || (badCalls[0].status_code == null
+              ? 'the request never completed — the job fired but nothing answered'
+              : `HTTP ${badCalls[0].status_code}`));
+  }
+  if (slowCalls.length) {
+    add('watch',
+      `${slowCalls.length} of the last ${http.length} scheduled job calls ran past the time limit`,
+      null,
+      'The job fired and the function ran — the database stopped waiting for the reply. '
+      + 'Raise the job\u2019s timeout if it keeps happening.');
+  }
+  const inactive = (health?.cron?.jobs || []).filter(j => !j.active);
+  if (inactive.length) {
+    add('critical', `${inactive.length} scheduled job${inactive.length === 1 ? ' is' : 's are'} disabled`,
+      null, inactive.map(j => j.jobname).join(', '));
+  }
+
+  // --- to do ----------------------------------------------------
+  if (queue?.suggestionsPending > 0) {
+    add('action', `${queue.suggestionsPending} species suggestion${queue.suggestionsPending === 1 ? '' : 's'} waiting on approval`,
+      'species', 'Anglers submitted these from the app.');
+  }
+  if (queue?.trainingPending > 0) {
+    add('action', `${queue.trainingPending} training photo${queue.trainingPending === 1 ? '' : 's'} waiting on review`,
+      'training:review', null);
+  }
+  if (queue?.ownerBacklog > 0) {
+    add('action', `${queue.ownerBacklog} of your own uploads are unverified`, 'training:review', null);
+  }
+  if (queue?.regsDraftsOld > 0) {
+    add('action', `${queue.regsDraftsOld} AI regulation draft${queue.regsDraftsOld === 1 ? '' : 's'} older than 7 days still unverified`,
+      'regulations',
+      'Anglers never see a draft — these stay invisible in the app until someone verifies them.',
+      'regs-drafts');
+  }
+  if (queue?.regsStale > 0) {
+    add('action', `${queue.regsStale} verified regulations are over a year old`, 'regulations', null);
+  }
+
+  // --- watch ----------------------------------------------------
+  const readyRows = training?.newSincePublish ?? null;
+  if (readyRows != null && readyRows >= 500) {
+    add('watch', `${readyRows} new verified photos since the live model was built`,
+      'training:export', 'Enough to be worth a retrain.');
+  }
+  const pub = health?.model?.publishedAt ? new Date(health.model.publishedAt) : null;
+  if (pub) {
+    const days = Math.floor((Date.now() - pub.getTime()) / 86400000);
+    if (days >= 60) {
+      add('watch', `The live Fish ID model is ${days} days old`, 'training:models', null);
+    }
+  }
+  if (coverage && coverage.neverChecked > 0 && coverage.perDay) {
+    const daysLeft = Math.ceil(coverage.neverChecked / coverage.perDay);
+    if (daysLeft > 45) {
+      add('watch', `Regulation coverage will take about ${daysLeft} more days at the current cadence`,
+        null, `${coverage.neverChecked} pairs have never been checked.`);
+    }
+  }
+
+  items.sort((a, b) => SEV[a.sev].rank - SEV[b.sev].rank);
+  return items;
+}
+
+
+/* Review the stale AI drafts without leaving the brief.
+ *
+ * These are NOT auto-approved and should not be. A draft is regulation
+ * text a model wrote — a wrong bag limit or season date is a legal problem
+ * for the angler who believed it, not an untidy row. So the machine
+ * surfaces it and a person decides, which is the same bargain as the
+ * newsletter.
+ *
+ * What it does remove is the fetch-quest: being told something needs doing
+ * and then having to go to another tab and find it is two jobs. */
+/* A malformed source_url must not take the panel down with it. new URL()
+   throws on anything that is not absolute, and an AI-drafted row is
+   exactly where a bare domain turns up. */
+const hostOf = (u) => { try { return new URL(u).hostname; } catch { return u; } };
+
+function RegsDraftReview({ onDone }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const c = client();
+      if (!c) { setErr('Supabase is not configured in this build.'); return; }
+      const cutoff = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const { data, error } = await c.from('regulations')
+        // Column names read from supabase/regulations-schema.sql rather
+        // than guessed: it is min_size_in / max_size_in, not size_limit,
+        // and source_note sits beside source_url.
+        .select('id, species_id, jurisdiction_id, season_text, bag_limit, boat_limit, '
+              + 'min_size_in, max_size_in, source_url, source_note, drafted_at, drafted_by, notes')
+        .eq('status', 'draft').lt('drafted_at', cutoff)
+        .order('drafted_at', { ascending: true }).limit(25);
+      if (!alive) return;
+      if (error) { setErr(error.message); return; }
+      setRows(data || []);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const verify = async (r) => {
+    // adminVerifyRegulation refuses without a source, by design: a
+    // verified regulation that cannot say where it came from is just a
+    // draft someone clicked.
+    if (!r.source_url) { setErr('That draft has no source URL — open Regulations to add one before verifying.'); return; }
+    setBusy(r.id); setErr('');
+    const res = await adminVerifyRegulation(r.id, {
+      sourceUrl: r.source_url,
+      sessionEmail: getLastSession()?.user?.email || 'admin',
+    });
+    setBusy(null);
+    if (!res.ok) { setErr(res.error || 'verify failed'); return; }
+    setRows(prev => prev.filter(x => x.id !== r.id));
+    onDone?.();
+  };
+
+  if (err && !rows) return <div style={{ fontSize: 12.5, color: T.closed, marginTop: 8 }}>{err}</div>;
+  if (!rows) return <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 8 }}>Loading drafts…</div>;
+  if (!rows.length) return <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 8 }}>Nothing left to verify.</div>;
+
+  return (
+    <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+      {err && <div style={{ fontSize: 12.5, color: T.closed }}>{err}</div>}
+      {rows.map(r => (
+        <div key={r.id} style={{
+          padding: '10px 12px', borderRadius: 9,
+          background: T.parchmentDeep, border: `1px solid ${T.cardEdge}`,
+        }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: T.ink }}>
+            {SPECIES.find(sp => sp.id === r.species_id)?.commonName || r.species_id}
+            <span style={{ color: T.inkMute, fontWeight: 600 }}> · {r.jurisdiction_id}</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 4, lineHeight: 1.5 }}>
+            {r.season_text || 'no season text'}
+            {r.bag_limit != null ? ` · bag ${r.bag_limit}` : ''}
+            {r.boat_limit != null ? ` · boat ${r.boat_limit}` : ''}
+            {r.min_size_in != null ? ` · min ${r.min_size_in}"` : ''}
+            {r.max_size_in != null ? ` · max ${r.max_size_in}"` : ''}
+          </div>
+          <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 5 }}>
+            {r.source_url
+              ? <a href={r.source_url} target="_blank" rel="noreferrer"
+                   style={{ color: T.brass }}>{hostOf(r.source_url)}</a>
+              : <span style={{ color: T.warn }}>
+                  {r.source_note || 'no source — cannot be verified as it stands'}
+                </span>}
+            {r.drafted_at ? ` · drafted ${String(r.drafted_at).slice(0, 10)}` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+            <GhostButton onClick={() => verify(r)} disabled={busy === r.id || !r.source_url}
+              style={{ padding: '6px 12px', fontSize: 12.5 }}>
+              {busy === r.id ? 'Verifying…' : 'Verify'}
+            </GhostButton>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DailyBrief({ state, onGoTab }) {
+  const [openReview, setOpenReview] = useState(null);
+  const items = useMemo(() => buildBrief({
+    health: state.health, queue: state.queue,
+    coverage: state.health?.coverage, training: state.pipeline,
+  }), [state.health, state.queue, state.pipeline]);
+
+  const worst = items[0]?.sev;
+  const edge = worst ? SEV[worst].color : T.open;
+
+  return (
+    <Card style={{ borderColor: `${edge}66` }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <SectionLabel style={{ margin: 0 }}>Today</SectionLabel>
+        <span style={{ fontSize: 12, color: T.inkMute }}>
+          {state.loading ? 'checking…'
+            : items.length === 0 ? 'nothing needs attention'
+            : `${items.length} item${items.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
+
+      {!state.loading && items.length === 0 && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, color: T.ink }}>
+          <span style={{ color: T.open, fontSize: 16 }}>✓</span>
+          Everything is running and nothing is waiting on a decision.
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        {items.map((it, i) => {
+          const s = SEV[it.sev];
+          return (
+            <div key={i} style={{
+              display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap',
+              padding: '10px 12px', borderRadius: 10,
+              background: T.oceanDeep, border: `1px solid ${s.color}33`,
+            }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: 1, color: s.color,
+                border: `1px solid ${s.color}55`, padding: '3px 7px', borderRadius: 999,
+                whiteSpace: 'nowrap', marginTop: 1,
+              }}>{s.label}</span>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontSize: 14, color: T.ink, fontWeight: 600, lineHeight: 1.45 }}>{it.text}</div>
+                {it.detail && (
+                  <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 3, lineHeight: 1.5 }}>{it.detail}</div>
+                )}
+              </div>
+              {it.review ? (
+                <GhostButton onClick={() => setOpenReview(openReview === i ? null : i)}
+                  style={{ padding: '7px 12px', fontSize: 12.5 }}>
+                  {openReview === i ? 'Close' : 'Review'}
+                </GhostButton>
+              ) : it.tab && (
+                <GhostButton onClick={() => onGoTab?.(it.tab)} style={{ padding: '7px 12px', fontSize: 12.5 }}>
+                  Open
+                </GhostButton>
+              )}
+              {openReview === i && it.review === 'regs-drafts' && (
+                <div style={{ flexBasis: '100%' }}>
+                  <RegsDraftReview onDone={() => state.reload?.()} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+export default function HomeDashboard({ onGoTab }) {
+  const { state, refresh } = useDashboardData();
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <DashboardHeader
+        loading={state.loading}
+        refreshedAt={state.refreshedAt}
+        onRefresh={refresh}
+      />
+
+      <DailyBrief state={state} onGoTab={onGoTab} />
+
+      <HealthStrip data={state.health} err={state.errors.health} loading={state.loading} />
+
+      <PipelinePanel data={state.pipeline} err={state.errors.pipeline}
+                     loading={state.loading} onGoTab={onGoTab} />
+
+      <ActionQueue data={state.queue} err={state.errors.queue}
+                   loading={state.loading} onGoTab={onGoTab} />
+
+      <SpeciesCoveragePanel data={state.species} err={state.errors.species}
+                            loading={state.loading} onGoTab={onGoTab} />
+
+      <RegulationsMatrixPanel data={state.regsMatrix} err={state.errors.regsMatrix}
+                              loading={state.loading} onGoTab={onGoTab} />
+
+      <TrainingCoveragePanel data={state.training} err={state.errors.training}
+                             loading={state.loading} onGoTab={onGoTab} />
+
+      <CategoriesPanel data={state.categories} err={state.errors.categories}
+                       loading={state.loading} onGoTab={onGoTab} />
+
+      <UsersPanel data={state.users} err={state.errors.users} loading={state.loading} />
+
+      <RecentActivityPanel data={state.recent} err={state.errors.recent} loading={state.loading} />
+    </div>
+  );
+}
+
+function DashboardHeader({ loading, refreshedAt, onRefresh }) {
+  return (
+    <div style={{
+      display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+      padding: '2px 4px',
+    }}>
+      <H1 size={20} style={{ margin: 0 }}>Dashboard</H1>
+      <div style={{ fontSize: 11, color: T.inkMute, flex: 1 }}>
+        {refreshedAt
+          ? `Refreshed ${relativeTime(refreshedAt)}`
+          : 'Loading…'}
+      </div>
+      <GhostButton onClick={onRefresh} disabled={loading} style={{ padding: '8px 14px' }}>
+        {loading ? 'Refreshing…' : 'Refresh'}
+      </GhostButton>
+    </div>
+  );
+}
+
+/* ---------- Section helper ---------- */
+function Section({ title, subtitle, children, right }) {
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <SectionLabel style={{ fontSize: 13, letterSpacing: 1.6, color: T.brass }}>
+          {title}
+        </SectionLabel>
+        {subtitle && (
+          <div style={{ fontSize: 11, color: T.inkMute, flex: 1 }}>{subtitle}</div>
+        )}
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ErrorLine({ err }) {
+  if (!err) return null;
+  return (
+    <div role="alert" style={{
+      padding: '8px 10px', background: T.closedBg, color: T.closed,
+      borderRadius: 8, fontSize: 11, fontWeight: 700,
+    }}>
+      {err}
+    </div>
+  );
+}
+
+function LoadingLine() {
+  return (
+    <div style={{ padding: 12, background: T.parchmentDeep, borderRadius: 8,
+                  color: T.inkMute, fontSize: 12, textAlign: 'center' }}>
+      Loading…
+    </div>
+  );
+}
+
+/* ---------- Training pipeline (since last publish) ---------- */
+function PipelinePanel({ data, err, loading, onGoTab }) {
+  const subtitle = data?.hasPublishedModel
+    ? `New verified training data since ${data.modelVersion || 'the last model'} went live. Every count below rolls into the next Colab export.`
+    : `No model published yet — every verified row below is queued for the first export.`;
+  return (
+    <Section title="Training data pipeline" subtitle={subtitle}>
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <Card style={{ padding: 12, display: 'grid', gap: 12 }}>
+          {/* Headline: new-since-publish + last-uploaded-at proof. */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 8,
+          }}>
+            <BigStat
+              label={data.hasPublishedModel ? 'New since last publish' : 'Verified photos (all time)'}
+              value={data.newSincePublish}
+              tone={data.newSincePublish > 0 ? 'ok' : 'neutral'} />
+            <BigStat
+              label="Last 24 hours"
+              value={data.last24h}
+              tone={data.last24h > 0 ? 'ok' : 'neutral'} />
+            <BigStat
+              label="Last 7 days"
+              value={data.last7d}
+              tone={data.last7d > 0 ? 'ok' : 'neutral'} />
+            <BigStat
+              label="Last 30 days"
+              value={data.last30d}
+              muted />
+            <BigStat
+              label="Verified pool (all time)"
+              value={data.total}
+              muted />
+          </div>
+
+          {/* Provenance — this is the answer to "does user testing
+              contribute to the next model?" spelled out on-screen. */}
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: 1.2, color: T.inkMute,
+                          fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+              Source breakdown{data.hasPublishedModel ? ' — since last publish' : ''}
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+              gap: 8,
+            }}>
+              <SourceTile
+                label="Admin uploads"
+                value={data.bySource.owner}
+                hint="Photos you upload from the Training tab (or Colab import)." />
+              <SourceTile
+                label="User Fish-ID confirmations"
+                value={data.bySource.confirmation}
+                hint="Anglers tapped ✓ on the model's suggestion." />
+              <SourceTile
+                label="User Fish-ID corrections"
+                value={data.bySource.correction}
+                hint="Anglers picked a different species than the model suggested." />
+            </div>
+          </div>
+
+          {/* Species leaderboard — what's growing fastest. */}
+          {data.topSpecies.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: 1.2, color: T.inkMute,
+                            fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+                Top species by new photos{data.hasPublishedModel ? ' since publish' : ''}
+              </div>
+              <div style={{ display: 'grid', gap: 4 }}>
+                {data.topSpecies.map(sp => (
+                  <div key={sp.speciesId} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 8px', background: T.parchmentDeep,
+                    borderRadius: 6, fontSize: 12,
+                  }}>
+                    <span style={{ fontWeight: 700, color: T.ink, flex: 1,
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {sp.commonName}
+                    </span>
+                    <span style={{ color: T.brass, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                      +{sp.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Freshness proof + jump-to-Training CTA. */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            paddingTop: 4, borderTop: `1px solid ${T.cardEdge}`,
+          }}>
+            <div style={{ fontSize: 11, color: T.inkMute, flex: 1 }}>
+              {data.lastUploadedAt
+                ? <>Last photo added <strong style={{ color: T.brass }}>{relativeTime(data.lastUploadedAt)}</strong>. Ready-for-export pool: {data.newSincePublish} rows.</>
+                : (data.hasPublishedModel
+                    ? 'Nothing new since the last publish yet.'
+                    : 'No verified rows yet.')}
+            </div>
+            <GhostButton onClick={() => onGoTab?.('training')}
+                         style={{ padding: '6px 12px', fontSize: 11 }}>
+              Open Training
+            </GhostButton>
+          </div>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+function SourceTile({ label, value, hint }) {
+  return (
+    <div style={{
+      background: T.parchmentDeep, borderRadius: 8, padding: '10px 12px',
+      border: `1px solid ${T.cardEdge}`,
+    }}>
+      <div style={{ fontSize: 10, letterSpacing: 1.2, color: T.inkMute,
+                    fontWeight: 800, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 900,
+                    color: value > 0 ? T.brass : T.inkSoft, marginTop: 2 }}>
+        {value || 0}
+      </div>
+      <div style={{ fontSize: 10, color: T.inkMute, marginTop: 4, lineHeight: 1.35 }}>
+        {hint}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Health strip ---------- */
+function HealthStrip({ data, err, loading }) {
+  return (
+    <Section title="Health"
+             subtitle="Model, AI pipeline, and pending bundle status.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 8,
+        }}>
+          <Tile
+            label="Model published"
+            value={data.model ? data.model.version || '—' : 'NOT PUBLISHED'}
+            tone={data.model ? 'ok' : 'warn'}
+            hint={data.model
+              ? `${data.model.classCount} classes${data.model.publishedAt
+                  ? ' · ' + relativeTime(data.model.publishedAt) : ''}`
+              : 'Import a Colab bundle and promote it'}
+          />
+          <Tile
+            label="Pending Colab bundles"
+            value={data.pendingBundles || 0}
+            tone={data.pendingBundles > 0 ? 'warn' : 'ok'}
+            hint={data.pendingBundles > 0 ? 'Import from Training → Models' : 'Nothing waiting'}
+          />
+          <Tile
+            label="Last AI regulation draft"
+            value={data.lastAiDraft ? relativeTime(data.lastAiDraft) : '—'}
+            tone={data.lastAiDraft ? 'neutral' : 'warn'}
+            hint={data.lastAiDraftSpecies ? `${data.lastAiDraftSpecies}` : 'No AI drafts recorded'}
+          />
+          <Tile
+            label="Regs auto-updater"
+            value={data.autoRun ? relativeTime(data.autoRun.ran_at) : 'NOT RUNNING'}
+            tone={data.autoRun
+              ? (data.autoRun.failed > 0 ? 'warn' : 'ok')
+              : 'warn'}
+            hint={data.autoRun
+              ? `Checked ${data.autoRun.checked} · published ${data.autoRun.published} · drafted ${data.autoRun.drafted}${data.autoRun.failed ? ` · ${data.autoRun.failed} failed` : ''}`
+              : 'Run regulations-auto-update-schema.sql + deploy auto-update-regulations'}
+          />
+          <CronTile cron={data.cron} />
+          <RegsCoverageTile cov={data.coverage} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/* First-pass coverage of the auto-updater grid — and the trigger for
+   changing the cron cadence.
+
+   While pairs are unchecked, hourly runs are doing first-pass work and
+   the schedule earns its cost. At 100% every further run is a re-check:
+   left hourly it re-researches all ~1300 pairs every ~11 days, forever,
+   with web-search results billed as input tokens each time. That is the
+   single largest line on the Anthropic bill, so this tile goes 'ok' —
+   meaning "time to act" — precisely when coverage completes. */
+function RegsCoverageTile({ cov }) {
+  if (!cov) {
+    return (
+      <Tile label="Regs coverage" value="—" tone="neutral"
+            hint="Could not read the pair grid" />
+    );
+  }
+  const { checked, totalPairs, neverChecked, speciesCount, jurisdictionCount } = cov;
+  const pct = totalPairs ? Math.round((checked / totalPairs) * 100) : 0;
+  const done = neverChecked === 0;
+  /* This used to say "~Nd at 120/day", which was the old hourly batch-5
+     cadence. The cron now runs batch 8 twice daily — about 16 a day — so
+     the tile was quoting a finish date roughly seven times too
+     optimistic. Rather than hardcode a second number that will go stale
+     the same way, the rate comes from the updater's own recent runs and
+     the estimate is simply omitted when there is nothing to measure. */
+  const perDay = cov.perDay ?? null;
+  const daysLeft = done || !perDay ? null : Math.ceil(neverChecked / perDay);
+
+  return (
+    <Tile
+      label="Regs coverage"
+      value={`${pct}%`}
+      tone={done ? 'ok' : 'neutral'}
+      hint={done
+        ? `First pass COMPLETE — switch cron to seasonal (${speciesCount}×${jurisdictionCount})`
+        : `${checked}/${totalPairs} pairs · ${neverChecked} never checked${
+            daysLeft ? ` · ~${daysLeft}d at ${perDay}/day` : ''}`}
+    />
+  );
+}
+
+/* Cron health. Reads BOTH cron.job_run_details and net._http_response,
+   because they disagree in the case that actually matters: net.http_post
+   is async, so a job reports "succeeded" the moment the request is
+   queued regardless of what the HTTP call then does. Two jobs sat broken
+   for weeks looking healthy by the first measure alone — this tile is
+   keyed off the second. */
+function CronTile({ cron }) {
+  if (!cron) {
+    return (
+      <Tile label="Scheduled jobs" value="UNKNOWN" tone="warn"
+            hint="Run supabase/cron-health-rpc.sql to enable this check" />
+    );
+  }
+  if (cron.error) {
+    return <Tile label="Scheduled jobs" value="ERROR" tone="warn" hint={cron.error} />;
+  }
+
+  const jobs = cron.jobs || [];
+  const http = cron.recentHttp || [];
+  const inactive = jobs.filter(j => !j.active).length;
+  // Three outcomes, not two: answered, answered badly, and not waited for.
+  // pg_net writes a row with no status code when it stops waiting, and
+  // counting those as failures made a working job look dead.
+  const slow = http.filter(r => r.status_code == null && r.timed_out);
+  const bad = http.filter(r => !(r.status_code == null && r.timed_out)
+                            && (r.status_code == null || r.status_code >= 400));
+  const lastCall = http[0];
+
+  const tone = bad.length > 0 || jobs.length === 0 || inactive > 0 ? 'warn' : 'ok';
+  const value = jobs.length === 0
+    ? 'NONE SCHEDULED'
+    : bad.length > 0
+      ? `${bad.length} OF LAST ${http.length} CALLS FAILED`
+      : slow.length > 0
+        ? `${jobs.length} OK · ${slow.length} SLOW`
+        : `${jobs.length} OK`;
+
+  const hint = jobs.length === 0
+    ? 'No pg_cron jobs found'
+    : bad.length > 0
+      /* "HTTP null" told nobody anything. A call with no status code is a
+         different failure from a 500 and deserves different words. */
+      ? `Last failure: ${bad[0].error_msg
+          || (bad[0].status_code == null
+                ? 'request never completed (queued, no response)'
+                : `HTTP ${bad[0].status_code}`)}${
+          bad[0].created ? ` · ${relativeTime(bad[0].created)}` : ''}`
+      : slow.length > 0
+        ? `Ran past the time limit — the function still ran${
+            slow[0].created ? ` · ${relativeTime(slow[0].created)}` : ''}`
+        : lastCall
+          ? `Last call HTTP ${lastCall.status_code} · ${relativeTime(lastCall.created)}`
+          : 'Scheduled, no calls recorded yet';
+
+  return <Tile label="Scheduled jobs" value={value} tone={tone} hint={hint} />;
+}
+
+/* ---------- Action queue ---------- */
+function ActionQueue({ data, err, loading, onGoTab }) {
+  return (
+    <Section title="Action queue"
+             subtitle="Everything with a decision waiting on you, ordered by urgency.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 8,
+        }}>
+          <ActionTile label="Species suggestions"
+                      count={data.suggestionsPending}
+                      hint="Users submitted new species awaiting approval"
+                      ctaLabel="Review"
+                      urgent
+                      onClick={() => onGoTab?.('species')} />
+          <ActionTile label="Training review backlog"
+                      count={data.trainingPending}
+                      hint="Photos submitted but not yet approved/rejected"
+                      ctaLabel="Review"
+                      urgent={data.trainingPending > 0}
+                      onClick={() => onGoTab?.('training:review')} />
+          <ActionTile label="My owner-upload backlog"
+                      count={data.ownerBacklog}
+                      hint="Uploads pending under your admin email"
+                      ctaLabel="Verify mine"
+                      urgent={data.ownerBacklog > 0}
+                      onClick={() => onGoTab?.('training:review')} />
+          <ActionTile label="Regs drafts > 7d"
+                      count={data.regsDraftsOld}
+                      hint="AI drafts that haven't been verified"
+                      ctaLabel="Verify"
+                      urgent={data.regsDraftsOld > 0}
+                      onClick={() => onGoTab?.('regulations')} />
+          <ActionTile label="Regs verified > 1yr"
+                      count={data.regsStale}
+                      hint="Annual refresh candidates across all jurisdictions"
+                      ctaLabel="Refresh"
+                      urgent={data.regsStale > 0}
+                      onClick={() => onGoTab?.('regulations')} />
+          <ActionTile label="Active announcements"
+                      count={data.announcementsActive}
+                      hint="Currently visible in the app right now"
+                      ctaLabel="Manage"
+                      onClick={() => onGoTab?.('notifications')} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/* ---------- Species coverage ---------- */
+function SpeciesCoveragePanel({ data, err, loading, onGoTab }) {
+  return (
+    <Section title="Species coverage"
+             subtitle="Gaps in the species table. Fill these before launch.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <Card style={{ padding: 12, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <BigStat label="Active species" value={data.active} />
+            <BigStat label="Inactive" value={data.inactive} muted />
+            <BigStat label="Total" value={data.total} muted />
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <CoverageBar label="Has photo"
+                         missing={data.missing.photo.length}
+                         total={data.active}
+                         onClick={() => onGoTab?.('species')}
+                         examples={data.missing.photo.slice(0, 6).map(s => s.commonName)} />
+            <CoverageBar label="Has scientific name"
+                         missing={data.missing.scientific.length}
+                         total={data.active}
+                         onClick={() => onGoTab?.('species')}
+                         examples={data.missing.scientific.slice(0, 6).map(s => s.commonName)} />
+            <CoverageBar label="Has category"
+                         missing={data.missing.category.length}
+                         total={data.active}
+                         onClick={() => onGoTab?.('species')}
+                         examples={data.missing.category.slice(0, 6).map(s => s.commonName)} />
+          </div>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+/* ---------- Regulations matrix ---------- */
+function RegulationsMatrixPanel({ data, err, loading, onGoTab }) {
+  return (
+    <Section title="Regulations"
+             subtitle="Jurisdiction × status. Verified is the only thing anglers see.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{
+              width: '100%', borderCollapse: 'collapse',
+              fontSize: 12, color: T.ink, minWidth: 640,
+            }}>
+              <thead>
+                <tr style={{ background: T.parchmentDeep }}>
+                  <Th>Jurisdiction</Th>
+                  <Th align="right">Verified</Th>
+                  <Th align="right">Draft</Th>
+                  <Th align="right">Stale</Th>
+                  <Th align="right">Disputed</Th>
+                  <Th align="right">No row</Th>
+                  <Th align="right">Aging verified &gt; 1yr</Th>
+                  <Th align="right"></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.jurisdictions.map(j => (
+                  <tr key={j.jur.id} style={{ borderTop: `1px solid ${T.cardEdge}` }}>
+                    <Td>
+                      <div style={{ fontWeight: 700 }}>{j.jur.name}</div>
+                      <div style={{ fontSize: 10, color: T.inkMute }}>{j.jur.agency}</div>
+                    </Td>
+                    {j.error
+                      ? <Td colSpan={7} style={{ color: T.closed }}>load failed: {j.error}</Td>
+                      : (<>
+                          <Td align="right" tone="ok">{j.counts.verified}</Td>
+                          <Td align="right" tone="warn">{j.counts.draft}</Td>
+                          <Td align="right" tone="closed">{j.counts.stale}</Td>
+                          <Td align="right" tone="closed">{j.counts.disputed}</Td>
+                          <Td align="right" muted>{j.counts.none}</Td>
+                          <Td align="right" tone="warn">{j.agingVerified}</Td>
+                          <Td align="right">
+                            <GhostButton
+                              onClick={() => onGoTab?.('regulations')}
+                              style={{ padding: '4px 8px', fontSize: 10 }}>
+                              Open
+                            </GhostButton>
+                          </Td>
+                        </>)}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: T.parchmentDeep, borderTop: `2px solid ${T.brass}` }}>
+                  <Td style={{ fontWeight: 800 }}>Total species (active)</Td>
+                  <Td colSpan={7} style={{ color: T.inkMute }}>
+                    {data.totalSpecies} — target is verified in every jurisdiction that
+                    regulates the species.
+                  </Td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+/* ---------- Training coverage ---------- */
+function TrainingCoveragePanel({ data, err, loading, onGoTab }) {
+  return (
+    <Section title="Training coverage"
+             subtitle={`Per-species verified counts vs thresholds. ` +
+                       `Thin < ${data?.thresholds?.min || 30}, ` +
+                       `OK ≥ ${data?.thresholds?.min || 30}, ` +
+                       `Good ≥ ${data?.thresholds?.ok || 75}, ` +
+                       `Target ${data?.thresholds?.target || 200}.`}>
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <Card style={{ padding: 12, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <BigStat label="Verified photos" value={data.totals.verified} />
+            <BigStat label="Pending" value={data.totals.pending} tone={data.totals.pending > 0 ? 'warn' : 'ok'} />
+            <BigStat label="Rejected" value={data.totals.rejected} muted />
+            <BigStat label="Species tracked" value={data.totals.speciesCount} muted />
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 8,
+          }}>
+            <BucketCard title="Excluded" tone="closed"
+                        rows={data.buckets.excluded}
+                        hint="No verified photos" />
+            <BucketCard title="Thin" tone="warn"
+                        rows={data.buckets.thin}
+                        hint={`< ${data.thresholds.min} verified — model will skip`} />
+            <BucketCard title="OK" tone="neutral"
+                        rows={data.buckets.ok}
+                        hint={`${data.thresholds.min}–${data.thresholds.ok - 1} verified`} />
+            <BucketCard title="Good" tone="ok"
+                        rows={data.buckets.good}
+                        hint={`≥ ${data.thresholds.ok} verified`} />
+          </div>
+          <div>
+            <GhostButton onClick={() => onGoTab?.('training')}
+                         style={{ padding: '8px 12px', fontSize: 12 }}>
+              Open Training tab
+            </GhostButton>
+          </div>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+function BucketCard({ title, tone, rows, hint }) {
+  const toneColor = tone === 'ok' ? T.open : tone === 'warn' ? T.brass
+                   : tone === 'closed' ? T.closed : T.inkSoft;
+  return (
+    <div style={{
+      background: T.parchmentDeep, borderRadius: 8, padding: 10,
+      border: `1px solid ${T.cardEdge}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: toneColor,
+                      textTransform: 'uppercase' }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 900, color: T.ink, marginLeft: 'auto' }}>
+          {rows.length}
+        </div>
+      </div>
+      <div style={{ fontSize: 10, color: T.inkMute, marginTop: 2 }}>{hint}</div>
+      {rows.length > 0 && (
+        <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none',
+                     fontSize: 11, color: T.inkSoft,
+                     maxHeight: 140, overflowY: 'auto' }}>
+          {rows.slice(0, 12).map(r => (
+            <li key={r.sp.id} style={{
+              display: 'flex', justifyContent: 'space-between',
+              padding: '2px 0', gap: 6,
+            }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.sp.commonName}
+              </span>
+              <span style={{ color: T.inkMute, flexShrink: 0 }}>{r.verified}</span>
+            </li>
+          ))}
+          {rows.length > 12 && (
+            <li style={{ color: T.inkMute, fontStyle: 'italic', padding: '2px 0' }}>
+              +{rows.length - 12} more…
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Categories ---------- */
+function CategoriesPanel({ data, err, loading, onGoTab }) {
+  return (
+    <Section title="Categories"
+             subtitle="Species assignments per category. Zero-count = empty tile in the mobile app.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <Card style={{ padding: 12, display: 'grid', gap: 10 }}>
+          {data.orphans > 0 && (
+            <div style={{
+              padding: '8px 10px', background: T.warnBg, color: T.warn,
+              borderRadius: 8, fontSize: 12, fontWeight: 700,
+            }}>
+              {data.orphans} active species have no category or point to a missing category.
+            </div>
+          )}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 8,
+          }}>
+            {data.rows.map(c => (
+              <div key={c.id} style={{
+                background: T.parchmentDeep, borderRadius: 8, padding: '8px 10px',
+                border: `1px solid ${c.is_active === false ? T.closed : T.cardEdge}`,
+                opacity: c.is_active === false ? 0.6 : 1,
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.ink }}>
+                  {c.label || c.id}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: c.count > 0 ? T.brass : T.closed,
+                              marginTop: 2 }}>
+                  {c.count}
+                </div>
+                {c.is_active === false && (
+                  <div style={{ fontSize: 9, color: T.closed, letterSpacing: 1, fontWeight: 800 }}>
+                    HIDDEN
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div>
+            <GhostButton onClick={() => onGoTab?.('categories')}
+                         style={{ padding: '8px 12px', fontSize: 12 }}>
+              Open Categories tab
+            </GhostButton>
+          </div>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+/* ---------- Users ---------- */
+function UsersPanel({ data, err, loading }) {
+  return (
+    <Section title="Users"
+             subtitle="Signups + catch logs. Gated on the admin-read RLS migration.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && data.gated && (
+        <Card style={{ padding: 12 }}>
+          <div style={{ fontSize: 12, color: T.warn, fontWeight: 700 }}>
+            Zero rows returned — the admin RLS bypass on <code>catches</code> / <code>pbs</code> /
+            <code> user_state</code> isn't in place yet.
+          </div>
+          <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 6 }}>
+            Run <code>supabase/admin-read-anglers-schema.sql</code> in the Supabase SQL editor,
+            then hit Refresh above.
+          </div>
+        </Card>
+      )}
+      {data && !data.gated && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: 8,
+        }}>
+          <Tile label="Users total"              value={data.users.total}    tone="ok" />
+          <Tile label="Active users · last 7 days"  value={data.users.active7}  tone={data.users.active7 > 0 ? 'ok' : 'neutral'}
+                hint="Distinct anglers who logged a catch" />
+          <Tile label="Active users · last 30 days" value={data.users.active30} tone={data.users.active30 > 0 ? 'ok' : 'neutral'} />
+          <Tile label="Catches total"             value={data.catches.total}  tone="ok" />
+          <Tile label="Catches · last 7 days"     value={data.catches.last7}  tone={data.catches.last7 > 0 ? 'ok' : 'neutral'} />
+          <Tile label="Catches · last 30 days"    value={data.catches.last30} tone={data.catches.last30 > 0 ? 'ok' : 'neutral'} />
+          <Tile label="Catches with photo"        value={data.catches.withPhoto}
+                hint={data.catches.total > 0
+                  ? `${Math.round(100 * data.catches.withPhoto / data.catches.total)}% photo rate`
+                  : 'no catches yet'}
+                tone="neutral" />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/* ---------- Recent activity ---------- */
+function RecentActivityPanel({ data, err, loading, onGoTab }) {
+  return (
+    <Section title="Recent activity"
+             subtitle="Latest edits + reviews across every domain.">
+      {err && <ErrorLine err={err} />}
+      {loading && !data && <LoadingLine />}
+      {data && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 8,
+        }}>
+          <FeedCard title="Regulations verified"
+                    empty="No verified regulations yet."
+                    onOpen={() => onGoTab?.('regulations')}
+                    rows={data.verifiedRegs.map(r => ({
+                      key: r.id,
+                      primary: r.species_id,
+                      secondary: `${r.jurisdiction_id} · by ${r.verified_by || 'unknown'}`,
+                      time: r.verified_at,
+                    }))} />
+          <FeedCard title="Training reviews"
+                    empty="No training photos reviewed yet."
+                    onOpen={() => onGoTab?.('training')}
+                    rows={data.trainingReviews.map(r => ({
+                      key: r.id,
+                      primary: r.species_id,
+                      secondary: `${r.status}${r.rejection_reason ? ' · ' + r.rejection_reason : ''}`,
+                      time: r.reviewed_at,
+                    }))} />
+          <FeedCard title="Species edits"
+                    empty="No species edits yet."
+                    onOpen={() => onGoTab?.('species')}
+                    rows={data.speciesEdits.map(r => ({
+                      key: r.id,
+                      primary: r.common_name || r.id,
+                      secondary: r.updated_by || 'unknown',
+                      time: r.updated_at,
+                    }))} />
+          <FeedCard title="Species suggestions"
+                    empty="No user suggestions yet."
+                    onOpen={() => onGoTab?.('species')}
+                    rows={data.suggestions.map(r => ({
+                      key: r.id,
+                      primary: r.common_name || r.id,
+                      secondary: r.status,
+                      time: r.submitted_at,
+                    }))} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function FeedCard({ title, rows, empty, onOpen }) {
+  return (
+    <Card style={{ padding: 10, display: 'grid', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>{title}</div>
+        <div style={{ flex: 1 }} />
+        {onOpen && (
+          <button onClick={onOpen} style={{
+            background: 'transparent', border: 'none', color: T.brass,
+            cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 700,
+          }}>Open</button>
+        )}
+      </div>
+      {rows.length === 0 && (
+        <div style={{ fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>{empty}</div>
+      )}
+      {rows.length > 0 && (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+          {rows.map(r => (
+            <li key={r.key} style={{ display: 'grid', gap: 2, padding: '4px 0',
+                                     borderTop: `1px solid ${T.cardEdge}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.ink,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.primary}
+              </div>
+              <div style={{ fontSize: 10, color: T.inkMute,
+                            display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.secondary}
+                </span>
+                <span style={{ flexShrink: 0 }}>{relativeTime(r.time)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/* ============================================================
+   Small shared UI atoms
+   ============================================================ */
+
+function Tile({ label, value, hint, tone = 'neutral' }) {
+  const toneColor =
+    tone === 'ok'      ? T.open   :
+    tone === 'warn'    ? T.brass  :
+    tone === 'closed'  ? T.closed :
+                         T.ink;
+  const toneBg =
+    tone === 'ok'      ? T.openBg   :
+    tone === 'warn'    ? T.warnBg   :
+    tone === 'closed'  ? T.closedBg :
+                         T.parchmentDeep;
+  return (
+    <Card style={{ padding: 12, background: toneBg }}>
+      <div style={{ fontSize: 10, letterSpacing: 1.4, color: T.inkMute,
+                    fontWeight: 800, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 900, color: toneColor, marginTop: 2 }}>
+        {value == null ? '—' : value}
+      </div>
+      {hint && (
+        <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 4 }}>{hint}</div>
+      )}
+    </Card>
+  );
+}
+
+function ActionTile({ label, count, hint, ctaLabel, onClick, urgent }) {
+  const zero = !count || count === 0;
+  const tone = zero ? T.open : urgent ? T.brass : T.ink;
+  const bg   = zero ? T.openBg : urgent ? T.warnBg : T.parchmentDeep;
+  return (
+    <Card style={{ padding: 12, background: bg, display: 'grid', gap: 6 }}>
+      <div style={{ fontSize: 10, letterSpacing: 1.2, color: T.inkMute,
+                    fontWeight: 800, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 26, fontWeight: 900, color: tone }}>{count}</div>
+        {zero && <div style={{ fontSize: 11, color: T.open, fontWeight: 700 }}>CLEAR</div>}
+      </div>
+      <div style={{ fontSize: 11, color: T.inkSoft, minHeight: 30 }}>{hint}</div>
+      <GhostButton onClick={onClick} disabled={zero}
+                   style={{ padding: '6px 10px', fontSize: 11,
+                            opacity: zero ? 0.5 : 1 }}>
+        {ctaLabel}
+      </GhostButton>
+    </Card>
+  );
+}
+
+function BigStat({ label, value, muted, tone }) {
+  const color = tone === 'ok'   ? T.open
+              : tone === 'warn' ? T.brass
+              : tone === 'closed' ? T.closed
+              : muted ? T.inkMute : T.ink;
+  return (
+    <div>
+      <div style={{ fontSize: 10, letterSpacing: 1.2, color: T.inkMute,
+                    fontWeight: 800, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 900, color, marginTop: 2 }}>
+        {value ?? 0}
+      </div>
+    </div>
+  );
+}
+
+function CoverageBar({ label, missing, total, examples, onClick }) {
+  const pct = total > 0 ? Math.round(100 * (total - missing) / total) : 0;
+  const complete = missing === 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: 'transparent', border: 'none', textAlign: 'left',
+        padding: '6px 4px', cursor: onClick ? 'pointer' : 'default',
+        display: 'grid', gap: 4,
+      }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12 }}>
+        <span style={{ fontWeight: 700, color: T.ink }}>{label}</span>
+        <span style={{ marginLeft: 'auto', fontWeight: 800,
+                       color: complete ? T.open : T.brass }}>
+          {pct}%
+        </span>
+        <span style={{ color: T.inkMute, fontSize: 11 }}>
+          {complete ? 'complete' : `${missing} missing`}
+        </span>
+      </div>
+      <div style={{ position: 'relative', height: 6, background: T.parchmentDeep,
+                    borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0,
+          width: `${pct}%`,
+          background: complete ? T.open : T.brass,
+        }} />
+      </div>
+      {!complete && examples.length > 0 && (
+        <div style={{ fontSize: 10, color: T.inkMute }}>
+          e.g. {examples.join(', ')}{missing > examples.length ? '…' : ''}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function Th({ children, align = 'left' }) {
+  return (
+    <th style={{
+      textAlign: align, padding: '10px 10px',
+      fontSize: 10, letterSpacing: 1.2, color: T.inkMute,
+      fontWeight: 800, textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, align = 'left', tone, muted, colSpan, style }) {
+  const color =
+    tone === 'ok'      ? T.open  :
+    tone === 'warn'    ? T.brass :
+    tone === 'closed'  ? T.closed :
+    muted              ? T.inkMute :
+                         T.ink;
+  return (
+    <td colSpan={colSpan} style={{
+      padding: '10px 10px', fontSize: 12,
+      textAlign: align, color, fontWeight: 700,
+      verticalAlign: 'top',
+      ...style,
+    }}>
+      {children}
+    </td>
+  );
+}
+

@@ -1,0 +1,59 @@
+name: Can we reach NOAA?
+
+# A canary, and a vantage point.
+#
+# On 2026-10-07 every ERDDAP host timed out from the Supabase edge
+# runtime while Open-Meteo answered in 0.6 s from the same function —
+# so outbound worked and NOAA specifically did not. What that could not
+# settle is whether NOAA was down for everybody or refusing those
+# particular servers, because every vantage point we had disagreed.
+#
+# A GitHub runner is a third one, on a different network. It is also the
+# network we would move the satellite fetch to if NOAA turns out to be
+# refusing Supabase, so this answers the question and proves the fix
+# path in the same run.
+#
+# Read-only. Touches nothing.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe each host
+        run: |
+          set -u
+          # One single point — the smallest thing ERDDAP can serve.
+          Q='jplMURSST41.json?analysed_sst%5B(last)%5D%5B(29.0):1:(29.01)%5D%5B(-88.0):1:(-87.99)%5D'
+          fail=0
+          for host in \
+            https://coastwatch.pfeg.noaa.gov/erddap/griddap \
+            https://upwell.pfeg.noaa.gov/erddap/griddap \
+            https://erddap.marine.usf.edu/erddap/griddap ; do
+            printf '%-50s ' "$host"
+            code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 45 "$host/$Q" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "OK $(wc -c < /tmp/out.json) bytes"
+            else
+              echo "FAILED http=$code"
+              fail=$((fail+1))
+            fi
+          done
+          echo
+          # The control, so a total failure is distinguishable from the
+          # runner having no outbound at all.
+          printf '%-50s ' 'open-meteo (control)'
+          curl -s -o /dev/null -w 'http=%{http_code} in %{time_total}s\n' --max-time 30 \
+            'https://marine-api.open-meteo.com/v1/marine?latitude=29&longitude=-88&hourly=sea_surface_temperature&forecast_days=1'
+          echo
+          if [ "$fail" -eq 3 ]; then
+            echo "Every ERDDAP host failed from GitHub too — NOAA is down for everyone."
+          elif [ "$fail" -gt 0 ]; then
+            echo "$fail of 3 failed from GitHub."
+          else
+            echo "All three reachable from GitHub. If Supabase still times out, NOAA is refusing Supabase, not down."
+          fi

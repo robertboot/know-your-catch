@@ -1,0 +1,16 @@
+{
+  "name": "ReelIntel",
+  "short_name": "ReelIntel",
+  "description": "ReelIntel — identify your catch, check the rules, log it, find better spots. Built for the Gulf of America.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#031B33",
+  "theme_color": "#031B33",
+  "icons": [
+    { "src": "brand/reelintel-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "brand/reelintel-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "brand/reelintel-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
