@@ -395,7 +395,43 @@ function UploadArtifactsPanel({ onDone }) {
     onDone();
   };
 
-  const ready = !!tfliteFile && !!labels && !!metrics && !parseError;
+  /* Do the two JSONs describe the SAME run?
+   *
+   * Nothing between Colab and the phone ever checked that the labels
+   * belong to the model being uploaded. The .tflite, the labels and the
+   * metrics are three files picked by hand, and the labels array is what
+   * turns an output index into a species name — so a bundle mixed from
+   * two runs produces confident, systematically WRONG names with no
+   * error anywhere. A gag grouper read as a shark is what that looks
+   * like from the dock.
+   *
+   * fish_id_labels.json and fish_id_metrics.json are written side by side
+   * by the same run, so their class lists must be identical. If they are
+   * not, the bundle is mixed and must not be imported. This cannot prove
+   * the .tflite belongs to them, but it catches the mistake that is
+   * actually easy to make. */
+  const bundleMismatch = (() => {
+    const a = labels?.labels;
+    const b = metrics?.confusion_labels;
+    if (!Array.isArray(a) || !Array.isArray(b)) return null;
+    if (a.length !== b.length) {
+      return `Mixed bundle: fish_id_labels.json has ${a.length} species, `
+           + `fish_id_metrics.json has ${b.length}. They are written by the `
+           + 'same run and must match. Re-download the artifacts from one '
+           + 'Colab run — importing these pairs a model with the wrong '
+           + 'species names.';
+    }
+    const firstDiff = a.findIndex((n, i) => n !== b[i]);
+    if (firstDiff >= 0) {
+      return `Mixed bundle: the two JSONs disagree at position ${firstDiff} — `
+           + `labels says "${a[firstDiff]}", metrics says "${b[firstDiff]}". `
+           + 'These are written by the same run and must match exactly. '
+           + 'Re-download the artifacts from one Colab run.';
+    }
+    return null;
+  })();
+
+  const ready = !!tfliteFile && !!labels && !!metrics && !parseError && !bundleMismatch;
 
   return (
     <>
@@ -435,6 +471,11 @@ function UploadArtifactsPanel({ onDone }) {
           <FileState label="fish_id_metrics.json" f={metrics} ok={!!metrics}  summary={metrics && `overall ${(metrics.overall_accuracy * 100).toFixed(1)}% · ${metrics.confusion_labels?.length || 0} labels`} />
         </div>
         {parseError && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: T.closed }}>{parseError}</div>}
+        {bundleMismatch && (
+          <div role="alert" style={{ marginTop: 8, fontSize: 12, color: T.closed, lineHeight: 1.5 }}>
+            {bundleMismatch}
+          </div>
+        )}
       </Card>
 
       <Card>
