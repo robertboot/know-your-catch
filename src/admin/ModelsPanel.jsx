@@ -161,12 +161,27 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
     refresh();
   };
 
+  /* A publish moves megabytes. Without a step label it is impossible to
+     tell "working" from "dead", and on a tablet on cellular it looked
+     dead — pressed twice, nothing visible either time. */
+  const [publishStep, setPublishStep] = useState('');
   const republish = async () => {
+    if (publishStep) return;                  // already running; don't stack uploads
     setError('');
-    const r = await publishPromotedModel();
-    if (!r.ok) { setError(r.error || 'republish failed'); return; }
-    setPublishWarning('');
-    alert('Model republished to public bucket. Mobile app will pick it up on next launch or Check for updates.');
+    setPublishStep('Starting…');
+    try {
+      const r = await publishPromotedModel(setPublishStep);
+      if (!r.ok) { setError(r.error || 'republish failed'); return; }
+      setPublishWarning('');
+      alert(`Published ${r.version} — ${r.labels} species, `
+        + `${(r.bytes / 1048576).toFixed(1)} MB, verified in the bucket. `
+        + 'The app picks it up on next launch or Check for updates.');
+    } catch (e) {
+      // A throw here used to leave the button silent for ever.
+      setError(`republish failed: ${e?.message || e}`);
+    } finally {
+      setPublishStep('');
+    }
   };
 
   const del = async (id, path) => {
@@ -305,9 +320,10 @@ function ModelsList({ onUpload, onOpen, onOpenTestTool }) {
                     </GhostButton>
                   )}
                   {r.is_production && (
-                    <GhostButton onClick={() => republish()} style={{ padding: '6px 10px', fontSize: 11, color: T.brass, borderColor: T.brass }}
+                    <GhostButton onClick={() => republish()} disabled={!!publishStep}
+                      style={{ padding: '6px 10px', fontSize: 11, color: T.brass, borderColor: T.brass }}
                       title="Copy this model to the public bucket so the mobile app can fetch it.">
-                      Republish
+                      {publishStep || 'Republish'}
                     </GhostButton>
                   )}
                   <GhostButton onClick={() => del(r.id, r.model_file_path)} style={{ padding: '6px 10px', fontSize: 11, color: T.closed, borderColor: T.closed }}>

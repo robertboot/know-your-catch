@@ -38,14 +38,33 @@ const tflite = (size) => {
 const NOT_FOUND = new TextEncoder()
   .encode('{"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}').buffer;
 
+/* The model read-back no longer downloads the file — it asks the bucket
+   for the stored size and fetches 16 bytes to see the TFL3 tag. The stub
+   has to offer the same three calls. */
 const storage = (files) => ({
   from: () => ({
     download: async (key) => (files[key]
       ? { data: { arrayBuffer: async () => files[key],
                   text: async () => new TextDecoder().decode(files[key]) }, error: null }
       : { data: null, error: { message: 'Object not found' } }),
+    list: async (_prefix, { search } = {}) => ({
+      data: files[search]
+        ? [{ name: search, metadata: { size: files[search].byteLength } }]
+        : [],
+      error: null,
+    }),
+    getPublicUrl: (key) => ({ data: { publicUrl: `https://stub.invalid/${key}` } }),
   }),
 });
+
+// Serve the ranged head request out of the same fixture.
+globalThis.__files = {};
+globalThis.fetch = async (url) => {
+  const key = String(url).split('/').pop().split('?')[0];
+  const buf = globalThis.__files[key];
+  if (!buf) return { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
+  return { ok: true, status: 206, arrayBuffer: async () => buf.slice(0, 16) };
+};
 const json = (o) => new TextEncoder().encode(JSON.stringify(o)).buffer;
 
 let failed = 0;
@@ -61,14 +80,21 @@ check('and the reason says how small it was', /88 bytes/.test(nf || ''), nf);
 check('a file with the wrong tag is refused',
   M.looksLikeTflite(new Uint8Array(5_000_000).buffer) !== null);
 
-const okModel = await M.verifyPublishedModel({ storage: storage({ 'fish_id_model.tflite': tflite(4096) }) }, 4096);
+globalThis.__files = { 'fish_id_model.tflite': tflite(4096) };
+const okModel = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 4096);
 check('a model that reads back intact verifies', okModel === null, okModel);
 
+globalThis.__files = {};
 const missing = await M.verifyPublishedModel({ storage: storage({}) }, 4096);
 check('a model that is not there fails verification', missing !== null, missing);
 
-const truncated = await M.verifyPublishedModel({ storage: storage({ 'fish_id_model.tflite': tflite(2048) }) }, 4096);
+globalThis.__files = { 'fish_id_model.tflite': tflite(2048) };
+const truncated = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 4096);
 check('a partially uploaded model fails verification', truncated !== null, truncated);
+
+globalThis.__files = { 'fish_id_model.tflite': NOT_FOUND };
+const errorBody = await M.verifyPublishedModel({ storage: storage(globalThis.__files) }, 9_000_000);
+check('a 404 body sitting at the model path is caught', errorBody !== null, errorBody);
 
 const manOk = await M.verifyPublishedManifest(
   { storage: storage({ 'current.json': json({ version_name: '12.4', labels: new Array(140).fill('x') }) }) },

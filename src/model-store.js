@@ -164,15 +164,32 @@ const PUBLIC_MANIFEST_KEY = 'current.json';
    manifest is small (~2KB) so the version-check round trip is cheap
    even on cellular. Only the tflite bytes get re-downloaded when the
    version_name actually changes. */
-export async function publishPromotedModel() {
+/* A publish moves megabytes over whatever signal the admin is on. Every
+   step gets a ceiling so a stall becomes a message rather than a button
+   that sits there doing nothing — which is exactly how this looked from
+   an iPad on cellular. */
+const STEP_TIMEOUT_MS = 90_000;
+function withTimeout(promise, label, ms = STEP_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(
+      () => rej(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms)),
+  ]);
+}
+
+export async function publishPromotedModel(onStep = () => {}) {
   const c = client();
   if (!c) return { ok: false, error: 'not-configured' };
   const prod = await getProductionModel();
   if (!prod) return { ok: false, error: 'no promoted model' };
 
   // Pull the .tflite bytes from the private admin bucket.
-  const { data: modelBlob, error: dlErr } = await c.storage
-    .from('model-artifacts').download(prod.model_file_path);
+  onStep('Fetching the model…');
+  let modelBlob, dlErr;
+  try {
+    ({ data: modelBlob, error: dlErr } = await withTimeout(
+      c.storage.from('model-artifacts').download(prod.model_file_path), 'fetching the model'));
+  } catch (e) { return { ok: false, error: e.message }; }
   if (dlErr) return { ok: false, error: `download: ${dlErr.message}` };
 
   /* Is what came back actually a model?
@@ -189,12 +206,16 @@ export async function publishPromotedModel() {
   }
 
   // Overwrite the public copy.
-  const upModel = await c.storage.from(PUBLIC_BUCKET)
-    .upload(PUBLIC_MODEL_KEY, modelBlob, {
-      contentType: 'application/octet-stream',
-      cacheControl: 'no-cache',
-      upsert: true,
-    });
+  onStep(`Uploading ${(modelBytes.byteLength / 1048576).toFixed(1)} MB…`);
+  let upModel;
+  try {
+    upModel = await withTimeout(c.storage.from(PUBLIC_BUCKET)
+      .upload(PUBLIC_MODEL_KEY, modelBlob, {
+        contentType: 'application/octet-stream',
+        cacheControl: 'no-cache',
+        upsert: true,
+      }), 'uploading the model');
+  } catch (e) { return { ok: false, error: e.message }; }
   if (upModel.error) return { ok: false, error: `upload model: ${upModel.error.message}` };
 
   /* Read it back before the manifest goes anywhere near the bucket.
@@ -206,7 +227,10 @@ export async function publishPromotedModel() {
    * a half-finished publish leaves the old manifest beside the new
    * model, and phones simply keep using the version they have — instead
    * of fetching a model whose species list they do not have. */
-  const check = await verifyPublishedModel(c, modelBytes.byteLength);
+  onStep('Checking it landed…');
+  let check;
+  try { check = await withTimeout(verifyPublishedModel(c, modelBytes.byteLength), 'checking the model', 30_000); }
+  catch (e) { return { ok: false, error: e.message }; }
   if (check) {
     return { ok: false, error: `model did not publish (${check}) — manifest left untouched, ` +
       'so the app keeps serving the previous version rather than a mismatched one.' };
@@ -238,12 +262,16 @@ export async function publishPromotedModel() {
   const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], {
     type: 'application/json',
   });
-  const upMan = await c.storage.from(PUBLIC_BUCKET)
-    .upload(PUBLIC_MANIFEST_KEY, manifestBlob, {
-      contentType: 'application/json',
-      cacheControl: 'no-cache',
-      upsert: true,
-    });
+  onStep('Writing the species list…');
+  let upMan;
+  try {
+    upMan = await withTimeout(c.storage.from(PUBLIC_BUCKET)
+      .upload(PUBLIC_MANIFEST_KEY, manifestBlob, {
+        contentType: 'application/json',
+        cacheControl: 'no-cache',
+        upsert: true,
+      }), 'writing the species list');
+  } catch (e) { return { ok: false, error: e.message }; }
   if (upMan.error) return { ok: false, error: `upload manifest: ${upMan.error.message}` };
 
   // And read the manifest back too, for the same reason.
@@ -266,14 +294,41 @@ function looksLikeTflite(buf) {
   return null;
 }
 
+/* Read back WITHOUT downloading the model again.
+ *
+ * The first version of this verified by downloading the published copy
+ * in full. On a phone that turned one publish into ~27 MB of traffic —
+ * download the artifact, upload it, download it again — with no timeout
+ * and no progress, so the button simply sat there looking dead.
+ *
+ * list() returns the stored size from metadata, and a 16-byte ranged
+ * request is enough to see the TFL3 tag. Together they answer the only
+ * question that matters — is a whole, real model sitting at that path —
+ * for a few hundred bytes. */
 async function verifyPublishedModel(c, expectedBytes) {
-  const { data, error } = await c.storage.from(PUBLIC_BUCKET).download(PUBLIC_MODEL_KEY);
-  if (error) return `cannot read it back: ${error.message}`;
-  const buf = await data.arrayBuffer();
-  const shape = looksLikeTflite(buf);
-  if (shape) return shape;
-  if (buf.byteLength !== expectedBytes) {
-    return `published ${buf.byteLength} bytes, expected ${expectedBytes}`;
+  const { data: entries, error } = await c.storage.from(PUBLIC_BUCKET)
+    .list('', { search: PUBLIC_MODEL_KEY, limit: 100 });
+  if (error) return `cannot list the bucket: ${error.message}`;
+  const entry = (entries || []).find(e => e.name === PUBLIC_MODEL_KEY);
+  if (!entry) return 'it is not in the bucket';
+  const size = entry.metadata?.size;
+  if (Number.isFinite(size) && size !== expectedBytes) {
+    return `published ${size} bytes, expected ${expectedBytes}`;
+  }
+
+  const { data: urlData } = c.storage.from(PUBLIC_BUCKET).getPublicUrl(PUBLIC_MODEL_KEY);
+  if (urlData?.publicUrl) {
+    try {
+      const r = await fetch(`${urlData.publicUrl}?v=${Date.now()}`, { headers: { Range: 'bytes=0-15' } });
+      if (!r.ok) return `it is not fetchable: HTTP ${r.status}`;
+      const head = new Uint8Array(await r.arrayBuffer());
+      if (head.length >= 8) {
+        const magic = String.fromCharCode(head[4], head[5], head[6], head[7]);
+        if (magic !== 'TFL3') return `what published is not a model (tag ${JSON.stringify(magic)})`;
+      }
+    } catch (e) {
+      return `it is not fetchable: ${e.message}`;
+    }
   }
   return null;
 }
