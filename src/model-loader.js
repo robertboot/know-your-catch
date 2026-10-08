@@ -133,23 +133,51 @@ async function readCachedModelBytes() {
 }
 
 /* Write model bytes + manifest to disk. Idempotent. */
+/* The model and the manifest are TWO files, and they are only meaningful
+ * together: the manifest's `labels` array is what turns an output index
+ * into a species name. Writing them one after the other leaves a window —
+ * an app killed, backgrounded or out of space between the two calls ends
+ * up with the NEW model bytes and the OLD species list.
+ *
+ * That does not fail. It produces confident, systematically wrong names,
+ * because every index is read against the wrong list. A gag grouper
+ * returning a shark is what it looks like from the dock, and it clears
+ * itself the next time both files land together — which is exactly how
+ * it was reported: wrong in the morning, right on a re-run, with the
+ * admin console correct throughout because it reads the pair straight
+ * from the database and never touches this cache.
+ *
+ * So the manifest carries the size of the model it was written with, and
+ * readCachedManifest refuses a pair that does not match. Size is not a
+ * checksum, but two different models have different class counts and so
+ * different sizes; the realistic torn write is caught.
+ */
 async function writeCache(modelBytes, manifest) {
   const base64 = _bufferToBase64(modelBytes);
+  const paired = { ...manifest, cached_model_bytes: modelBytes.byteLength };
   if (NATIVE) {
+    // Model first, manifest second: a torn write then leaves a manifest
+    // whose recorded size disagrees with the model on disk, which the
+    // reader rejects. The other order would leave a manifest that matches
+    // nothing on disk at all.
     await Filesystem.writeFile({
       path: CACHED_MODEL, data: base64, directory: Directory.Data, recursive: true,
     });
     await Filesystem.writeFile({
-      path: CACHED_MANIFEST, data: JSON.stringify(manifest), directory: Directory.Data,
+      path: CACHED_MANIFEST, data: JSON.stringify(paired), directory: Directory.Data,
       encoding: 'utf8', recursive: true,
     });
   } else {
     try {
       localStorage.setItem(LS_MODEL_KEY, base64);
-      localStorage.setItem(LS_MANIFEST_KEY, JSON.stringify(manifest));
+      localStorage.setItem(LS_MANIFEST_KEY, JSON.stringify(paired));
     } catch {
-      // localStorage quota — web fallback is best-effort. Live model
-      // still works, we just won't have it cached across reloads.
+      // Quota. The model may well have been stored and the manifest not,
+      // which is the torn pair this whole function exists to prevent —
+      // so drop both rather than leave half of one behind. The live model
+      // still works; we simply have no cache across reloads.
+      try { localStorage.removeItem(LS_MODEL_KEY); } catch { /* nothing left to do */ }
+      try { localStorage.removeItem(LS_MANIFEST_KEY); } catch { /* nothing left to do */ }
     }
   }
 }
@@ -196,6 +224,28 @@ function validModelPair(bytes, manifest) {
     return 'manifest/labels invalid';
   }
   if (!Number.isFinite(manifest.input_size)) return 'manifest missing input_size';
+  /* Do these two actually belong together?
+   *
+   * The cache is two files written one after the other, so an app killed
+   * or out of space between the writes leaves the NEW model beside the
+   * OLD species list. Nothing then fails — the model loads, runs, and
+   * every output index is read against the wrong names, which is how a
+   * gag grouper comes back a shark.
+   *
+   * writeCache stamps the manifest with the size of the model it was
+   * written with. A pair that disagrees is a torn write: refuse it, and
+   * the ladder below falls back to the bundled model, which is always
+   * self-consistent.
+   *
+   * Only checked when the stamp is present, so a manifest cached by an
+   * older build still loads rather than being thrown away on upgrade.
+   * Size is not a checksum — but two models with different species lists
+   * have different sizes, and that is the pair this is guarding against. */
+  if (Number.isFinite(manifest.cached_model_bytes)
+      && manifest.cached_model_bytes !== bytes.byteLength) {
+    return `torn cache: manifest describes a ${manifest.cached_model_bytes}-byte `
+         + `model, cached model is ${bytes.byteLength} bytes`;
+  }
   return null;
 }
 

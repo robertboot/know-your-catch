@@ -82,6 +82,11 @@ node scripts/hotspots-test/hosts.mjs >/dev/null || { echo "✗ ERDDAP host walk 
 # The daily brief must not call a dead pipeline healthy. It did, for
 # thirteen hours, because it only ever asked whether jobs errored.
 node scripts/brief-test/run.mjs >/dev/null || { echo "✗ daily brief FAILED"; exit 1; }
+
+# The cached model and its species list must belong together. A torn
+# pair does not fail — it renames every species.
+node scripts/model-cache-test/run.mjs >/dev/null || { echo "✗ model cache pairing FAILED"; exit 1; }
+echo "✓ model cache pairing"
 echo "✓ daily brief reports a dead pipeline"
 echo "✓ ERDDAP host walk"
 
