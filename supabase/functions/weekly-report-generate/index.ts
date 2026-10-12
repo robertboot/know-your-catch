@@ -615,10 +615,11 @@ const SITE = 'https://www.reelintel.ai';
    it explicitly, and a catch goes in here only if that line was kept. */
 const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = {
   image: 'pb-spotlight.jpg',
-  alt: 'Craig with a 48 inch wahoo caught in Alabama state waters',
-  headline: 'Craig\u2019s first wahoo \u2014 and a new PB',
-  body: '48 inches, Alabama state waters, September 26. First wahoo of his life and '
-      + 'straight into the record book. Congratulations Craig, and thank you for sending it in.',
+  alt: 'Andy with a 22 inch triggerfish caught in Alabama state waters',
+  headline: 'Andy\u2019s 22-inch triggerfish \u2014 a new PB',
+  body: '22 inches on a high-low rig with squid, Alabama state waters, September 26. '
+      + 'A proper gray triggerfish and a new personal best. Congratulations Andy, and '
+      + 'thank you for sending it in.',
 };
 
 const PB_MAILTO = "mailto:harper@reelintel.ai?subject=My%20personal%20best&body=Hi%20Harper%2C%0A%0AHere%27s%20my%20personal%20best%20%E2%80%94%20photo%20attached.%0A%0ASpecies%3A%0ALength%20/%20weight%3A%0AGeneral%20area%20%28no%20exact%20numbers%20needed%29%3A%0ADate%20caught%3A%0A%0AShirt%20size%3A%0AMailing%20address%3A%0A%0A%0A---%20Permission%20---%0AKeep%20the%20line%20below%20if%20you%27re%20happy%20for%20us%20to%20run%20this%20catch%20in%20the%0Aweekly%20newsletter.%20Delete%20it%20if%20you%27d%20rather%20we%20didn%27t%20%E2%80%94%20either%20way%20the%0Ashirt%20is%20yours.%0A%0AI%20give%20ReelIntel%20permission%20to%20feature%20this%20catch%2C%20my%20first%20name%20and%20this%0Aphoto%20in%20the%20ReelIntel%20weekly%20email.%20My%20exact%20location%20will%20not%20be%20shared.%0A%0AThanks%2C%0A";
