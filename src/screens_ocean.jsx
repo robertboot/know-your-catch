@@ -11,7 +11,7 @@
    image is overlaid (Leaflet's tiled WMS asks for Web-Mercator
    tiles, which this ERDDAP rejects). All data is public domain.
    ============================================================ */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from './theme.js';
@@ -24,6 +24,8 @@ import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } fro
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 import { TRIP_MODES } from './trip-modes.js';
+import { DAYS_CACHE, homeWater } from './home-water.js';
+import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
 
 /* Which species the zones cover, from the one list the server writes
@@ -154,6 +156,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   const [showSpecies, setShowSpecies] = useState(false);
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
   const [zoneRows, setZoneRows] = useState(null);
+  const [outlook, setOutlook] = useState(null);   // ten-day, from the Home fetch
+  const [dayPick, setDayPick] = useState(0);      // index into outlook
   const zonesRef = useRef(null);
   const [currentCells, setCurrentCells] = useState(null);
   const flowRef = useRef(null);
@@ -333,6 +337,31 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     return () => { alive = false; };
   }, [showCurrent, currentCells]);
 
+  /* How old the drawn spots will be on the selected day. Null when there
+     is nothing to say — same day, or no spots. */
+  const spotAgeNote = useMemo(() => {
+    if (!spots?.length || !outlook?.length) return null;
+    const observed = spots.reduce((a, sp) => (a && a > sp.observed_at ? a : sp.observed_at), null);
+    if (!observed) return null;
+    const day = outlook[Math.min(dayPick, outlook.length - 1)]?.date;
+    if (!day) return null;
+    const days = Math.round((Date.parse(day + 'T12:00:00') - Date.parse(observed)) / 86400000);
+    if (days < 1) return null;
+    return `${days === 1 ? 'A day' : days + ' days'} old by then — breaks drift with the current, `
+         + 'so treat these as where to start looking, not a waypoint to park on.';
+  }, [spots, outlook, dayPick]);
+
+  /* The ten-day outlook, for the day strip.
+     Read from the cache only — Home writes it on every open, and this
+     screen is read on the way out of the pass where there is no signal.
+     If it is not there the strip simply does not render, the same way the
+     Home card renders nothing rather than an empty box. */
+  useEffect(() => {
+    const w = homeWater(state);
+    const hit = readMarineCache(DAYS_CACHE, w.lat, w.lon);
+    if (hit?.data?.length) setOutlook(hit.data);
+  }, [state]);
+
   /* Species zones — where the mahi water is, rather than where the edges
      are. Same table as the currents, one row per region per species, and
      cached the same way: the whole set is a few tens of kilobytes and is
@@ -483,6 +512,46 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
         {[8, 16, 24].map(d => chip(false, `−${d}d`, () => setDateISO(new Date(Date.now() - d * 86400000).toISOString().slice(0, 10))))}
       </div>
 
+      {/* WHEN to go. The spots answer where; without this the map is a
+          picture of right now and the angler still has to guess the day.
+          Grades come from the same fishabilityHour the Home card and the
+          Forecast screen use — one scoring model, so the three screens
+          cannot disagree about the same week. Picking a day only changes
+          what this strip reports: the spots are an OBSERVATION of a
+          satellite pass, not a forecast, and pretending they move with
+          the day would be inventing data. */}
+      {outlook?.length > 1 && (
+        <div style={{ display: 'flex', gap: 7, marginBottom: 10, overflowX: 'auto', paddingBottom: 4 }}>
+          {outlook.slice(0, 7).map((d, i) => {
+            const score = fishabilityHour({
+              wind: d.windMax, gust: d.windMax != null ? d.windMax * 1.3 : null,
+              waveFt: d.waveFtMax, periodS: d.periodMaxS, code: d.code,
+            });
+            const on = i === dayPick;
+            const dt = new Date(d.date + 'T12:00:00');
+            return (
+              <button key={d.date} type="button" onClick={() => setDayPick(i)} style={{
+                flex: '0 0 auto', width: 58, textAlign: 'center', padding: '7px 0 8px',
+                borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
+                background: on ? T.parchmentDeep : 'transparent',
+                border: `1.5px solid ${on ? T.brass : T.cardEdge}`,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>
+                  {i === 0 ? 'Today' : dt.toLocaleDateString(undefined, { weekday: 'short' })}
+                </div>
+                <div style={{ fontSize: 10, color: T.inkMute, marginTop: 1 }}>
+                  {dt.getMonth() + 1}/{dt.getDate()}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, marginTop: 4,
+                              color: score == null ? T.inkMute : fishabilityColor(score) }}>
+                  {score == null ? '—' : fishabilityGrade(score)}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
         <div ref={mapElRef} style={{ height: '58vh', minHeight: 380, width: '100%', background: '#06182b' }} />
       </div>
@@ -597,6 +666,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
                 : spots.length === 0
                   ? 'No strong edges found in the last satellite pass — flat, even water across the region.'
                   : `Computed nightly from the same NOAA grids above — the steepest temperature and color edges, scored and explained. Tap a dot for the why.${spotsAge != null ? ` Saved · ${describeAge(spotsAge)}.` : ''}`}
+                {/* How old will these be on the day you go?
+                    A break is an OBSERVATION of one satellite pass, not a
+                    forecast — it drifts with the current, and by Thursday a
+                    Sunday pass has moved miles. The map cannot say where it
+                    went, so it must at least say how stale it is rather than
+                    draw a four-day-old line as if it were this morning's. */}
+                {spotAgeNote && (
+                  <div style={{ marginTop: 6, color: T.warn, fontWeight: 700 }}>{spotAgeNote}</div>
+                )}
             </div>
           </div>
         )}

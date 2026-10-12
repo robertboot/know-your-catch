@@ -17,8 +17,19 @@ import { createRoot } from 'react-dom/client';
 import TripPlanningPanel from '../../src/admin/TripPlanningPanel.jsx';
 import HomeDashboard from '../../src/admin/HomeDashboard.jsx';
 import ModelsPanel from '../../src/admin/ModelsPanel.jsx';
+import { OceanMapsScreen } from '../../src/screens_ocean.jsx';
 
-const PANELS = { TripPlanningPanel, HomeDashboard, ModelsPanel };
+/* OceanMapsScreen is an APP screen, not an admin panel, and it was going
+   to TestFlight unmounted by anything. It is also the screen most likely
+   to break this way: it reads a cache, builds a Leaflet map and now
+   grades a ten-day strip, and a variable out of scope in any of that
+   throws on first paint rather than at build time. */
+const PANELS = {
+  TripPlanningPanel, HomeDashboard, ModelsPanel,
+  OceanMapsScreen: () => React.createElement(OceanMapsScreen, {
+    isTablet: false, initialLayer: 'chl', state: { fishingSpots: [], catchLog: [] },
+  }),
+};
 
 /* The models DETAIL view is the widest page in the admin — a per-species
    table and a 135x135 confusion matrix — and it only renders once a model

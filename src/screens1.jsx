@@ -30,6 +30,7 @@ import {
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
 import { readMarineCache, writeMarineCache, describeAge, fetchWithTimeout } from './marine-cache.js';
+import { DAYS_CACHE } from './home-water.js';
 import { client } from './supabase-client.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
@@ -539,8 +540,10 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         // Forecast screen grades — so Home and Forecast can never disagree
         // by a letter while Home's "Why?" link lands on the Forecast card.
         // The `current` nowcast block still drives the instantaneous
-        // display readings (big temp, sky icon, chips). forecast_days=2 so
-        // the current hour exists even late in the day.
+        // display readings (big temp, sky icon, chips). Ten days, not two:
+        // Ocean Maps' day strip answers WHEN to go and has to work with no
+        // signal, so the outlook has to be on the device before the boat
+        // leaves. Home only renders today from it; the rest is cached.
         // cell_selection=sea: Open-Meteo otherwise answers from the grid
         // cell the coordinates land in, and a saved spot named for a town
         // sits on land. A sheltered land cell reported 7 kt one Friday
@@ -550,11 +553,16 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,weather_code`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
-          + `&daily=temperature_2m_max,temperature_2m_min&forecast_days=2`
+          // weather_code and wind are what the day strip grades each day on;
+          // the marine fetch below carries the seas. Same fields the
+          // Forecast screen asks for, so both score the same week.
+          + `&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max,wind_direction_10m_dominant&forecast_days=10`
           + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`;
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
           + `&current=wave_height,wave_period,sea_surface_temperature`
-          + `&hourly=wave_height,wave_period,sea_surface_temperature&forecast_days=2&timezone=auto&cell_selection=sea`;
+          // daily maxima for the ten-day strip; hourly only needs today.
+          + `&daily=wave_height_max,wave_period_max`
+          + `&hourly=wave_height,wave_period,sea_surface_temperature&forecast_days=10&timezone=auto&cell_selection=sea`;
         const [r, mr] = await Promise.all([
           fetchWithTimeout(url), fetchWithTimeout(marineUrl).catch(() => null),
         ]);
@@ -563,8 +571,12 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
         const cur = j.current || {};
         let waveFt = null, periodS = null, sstF = null;
         let marineByMs = null;
+        // Declared out here: the ten-day cache write below needs the daily
+        // maxima, and `mj` lives and dies inside this try.
+        let marineDaily = null;
         try {
           const mj = mr && mr.ok ? await mr.json() : null;
+          marineDaily = mj?.daily || null;
           const mc = mj?.current;
           if (mc) {
             if (mc.wave_height != null) waveFt = mc.wave_height * 3.28084;
@@ -655,6 +667,21 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           gustKt: cur.wind_gusts_10m, waveFt, periodS, sstF, code: cur.weather_code, score,
           tMax: j.daily?.temperature_2m_max?.[0], tMin: j.daily?.temperature_2m_min?.[0],
         });
+        /* The ten-day outlook, for Ocean Maps' day strip.
+           Written here because Home is the screen every angler opens, and
+           the strip has to be on the device before the boat leaves the
+           pass. Compact on purpose — four numbers a day, not the whole
+           feed — because this sits in localStorage beside everything else. */
+        const md = marineDaily || {};
+        const outlook = (j.daily?.time || []).map((iso, i) => ({
+          date: iso,
+          windMax: j.daily.wind_speed_10m_max?.[i] ?? null,
+          code: j.daily.weather_code?.[i] ?? null,
+          waveFtMax: md.wave_height_max?.[i] != null ? md.wave_height_max[i] * 3.28084 : null,
+          periodMaxS: md.wave_period_max?.[i] ?? null,
+        }));
+        if (outlook.length) writeMarineCache(DAYS_CACHE, lat, lon, outlook);
+
         setCachedAt(null);
         setStatus('ok');
       } catch {

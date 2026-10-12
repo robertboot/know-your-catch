@@ -11,7 +11,15 @@ const esbuild = (await import('esbuild')).default;
 await esbuild.build({
   entryPoints: ['scripts/smoke/panels.jsx'],
   bundle: true, outfile: join(out, 'bundle.js'), logLevel: 'error',
-  loader: { '.js': 'jsx' }, define: { 'import.meta.env': '{}' },
+  // screens_ocean.jsx imports leaflet's CSS, which references marker PNGs.
+  // The harness only needs the component to MOUNT, so the images resolve
+  // to data URLs rather than failing the bundle.
+  loader: { '.js': 'jsx', '.png': 'dataurl', '.css': 'css' },
+  define: { 'import.meta.env': '{}' },
+  // The app's screens rely on Vite's automatic JSX runtime and never
+  // import React; esbuild's default transform emits React.createElement
+  // and they throw on first paint. Match the real build.
+  jsx: 'automatic',
   plugins: [{
     // The detail view fetches its own row, and its widest parts — the
     // per-species table and the confusion matrix — only exist once one is
