@@ -292,7 +292,38 @@ export default function WeeklyEmailTab() {
                     </span>
                   )}
                 </div>
+                {/* WHY it is blocked, without opening it.
+                    "Blocked" on its own sends you into each draft to find out
+                    which record is holding it up, and with several waters
+                    blocked that is several round trips to learn something the
+                    row already knows. */}
+                {blockers.length > 0 && (
+                  <div style={{ fontSize: 11.5, color: T.closed, marginTop: 4, lineHeight: 1.5 }}>
+                    Held by {blockers.slice(0, 3).map(b =>
+                      `${b.species_id}${b.days != null ? ` (${b.days}d)` : ` (${b.reason})`}`).join(', ')}
+                    {blockers.length > 3 ? ` and ${blockers.length - 3} more` : ''}
+                  </div>
+                )}
               </div>
+              {/* One press to send the edition without the records that are
+                  holding it. The alternative on a Thursday morning is clearing
+                  them one at a time, and the reader is told what was left out
+                  either way. */}
+              {blockers.length > 0 && (
+                <GhostButton
+                  disabled={busy === 'generate'}
+                  style={{ color: T.warn, borderColor: T.warn }}
+                  onClick={() => {
+                    if (!window.confirm(
+                      `Leave out ${blockers.length} unverified regulation`
+                      + `${blockers.length === 1 ? '' : 's'} and regenerate?\n\n`
+                      + blockers.map(b => `· ${b.species_id} (${b.days != null ? b.days + ' days old' : b.reason})`).join('\n')
+                      + '\n\nThe email will say what was left out.')) return;
+                    generate(r.jurisdiction_id,
+                      blockers.map(b => `${b.species_id}|${b.jurisdiction_id}`));
+                  }}
+                >Leave all out &amp; regenerate</GhostButton>
+              )}
               <GhostButton onClick={() => setOpenId(open ? null : r.id)}>
                 {open ? 'Hide' : 'Review'}
               </GhostButton>
