@@ -54,6 +54,15 @@ import { SpeciesPickerModal } from './admin/pickers.jsx';
       No auto-dismiss, no "continue without signing in" — session
       presence IS the gate to the app. The angler must complete the
       magic-link roundtrip to progress. */
+/* Every reading in both conditions cards comes from the nearest SEA grid
+   cell (cell_selection=sea), not the town the spot is named after. That is
+   deliberate — a morning graded A- on shore readings while it was blowing
+   15 offshore — but unsaid it looks like an error: an angler who checks us
+   against a land forecast sees us a few degrees cooler and a knot or two
+   breezier and concludes we are wrong. One copy of the wording, because
+   two cards show it. See [[duplicated-knowledge]]. */
+const CONDITIONS_TITLE = 'CONDITIONS ON THE WATER';
+
 export function SplashScreen({
   onContinue,
   showLogin = false,
@@ -683,7 +692,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
     <Card style={{ marginTop: 14, padding: sz(16, 20, 26), borderRadius: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <span style={{ fontSize: sz(12, 13.5, 16), color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>TODAY'S CONDITIONS</span>
+          <span style={{ fontSize: sz(12, 13.5, 16), color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>{CONDITIONS_TITLE}</span>
           {data?.placeName && (
             <div style={{ fontSize: sz(12, 14, 16), color: T.brassDeep || T.brass, fontWeight: 700, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               <Star size={sz(12, 14, 16)} color="#FFC857" fill="#FFC857" /> {data.placeName}
@@ -3827,7 +3836,17 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                   border: `1px solid ${T.cardEdge}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>TODAY'S CONDITIONS</span>
+                    {/* "On the water", not just "today".
+                        Every reading in this card comes from the nearest SEA
+                        grid cell (cell_selection=sea), not the town — which is
+                        the whole point, after a morning that graded A- on shore
+                        readings while it was blowing 15 offshore. The cost of
+                        not saying so is that an angler who checks us against a
+                        land forecast sees us a few degrees cooler and a knot or
+                        two breezier and concludes we are wrong. We are
+                        answering a different, more useful question, and the
+                        label is what makes that legible. */}
+                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>{CONDITIONS_TITLE}</span>
                     <span style={{ flexShrink: 0, fontSize: isTablet ? 13 : 11, fontWeight: 900, letterSpacing: 0.6, color: T.oceanDeep, background: sColor, borderRadius: 999, padding: '4px 12px' }}>
                       {score != null ? `${fishabilityGrade(score)} · ${fishabilityLabel(score)}` : '—'}
                     </span>
