@@ -184,6 +184,9 @@ export default function WeeklyEmailTab() {
 
         <div style={{ display: 'grid', gap: 6 }}>
           {WATERS.map(w => {
+            // The records holding this water's draft, if it is blocked.
+            const blockedOf = (rr) => (rr?.status === 'blocked' && Array.isArray(rr.block_reasons))
+              ? rr.block_reasons : [];
             const n = counts ? counts[w.id] : null;
             const row = rows.find(r => r.jurisdiction_id === w.id && r.week_start === week);
             const st = row ? (STATUS[row.status] || STATUS.draft) : null;
@@ -221,9 +224,29 @@ export default function WeeklyEmailTab() {
                 <div style={{ fontSize: 12, fontWeight: 800, color: state.color, minWidth: 128 }}>
                   {state.label}
                 </div>
+                {/* Regenerating a BLOCKED edition with no exclusions cannot
+                    clear it — the same unverified record blocks it again, and
+                    the reply reads "blocked: 1, excluded: 0" for the second
+                    time. There were two Regenerate affordances and only the
+                    one further down the page could ever unblock anything.
+                    This button now does the thing the state calls for, and
+                    says which. */}
                 {!none && !sent && (
-                  <GhostButton disabled={busy === 'generate'} onClick={() => generate(w.id)}>
-                    {row ? 'Regenerate' : 'Generate'}
+                  <GhostButton
+                    disabled={busy === 'generate'}
+                    style={blockedOf(row).length ? { color: T.warn, borderColor: T.warn } : undefined}
+                    onClick={() => {
+                      const bl = blockedOf(row);
+                      if (!bl.length) { generate(w.id); return; }
+                      if (!window.confirm(
+                        `${w.label} is held by ${bl.length} unverified regulation`
+                        + `${bl.length === 1 ? '' : 's'}. Leave ${bl.length === 1 ? 'it' : 'them'} out and regenerate?\n\n`
+                        + bl.map(b => `· ${b.species_id} (${b.days != null ? b.days + ' days old' : b.reason})`).join('\n')
+                        + '\n\nThe email will say what was left out.')) return;
+                      generate(w.id, bl.map(b => `${b.species_id}|${b.jurisdiction_id}`));
+                    }}
+                  >
+                    {blockedOf(row).length ? 'Leave out & regenerate' : row ? 'Regenerate' : 'Generate'}
                   </GhostButton>
                 )}
                 {sent && (
