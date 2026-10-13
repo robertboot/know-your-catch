@@ -225,3 +225,23 @@ export async function deleteAccount() {
   c.auth.getSession().then(({ data }) => notify(data.session || null));
   c.auth.onAuthStateChange((_evt, sess) => notify(sess || null));
 })();
+
+/* Who is allowed in.
+ *
+ * Pulled out of App.jsx because it decides whether a stranger sees a
+ * logbook, and an inline boolean nobody can test is the wrong home for
+ * that. Pure on purpose — the caller passes what it knows.
+ *
+ * The app and the web answer differently, deliberately:
+ *   - Guest access exists for App Store guideline 5.1.1(v), which
+ *     requires non-account content to be reachable without forced
+ *     registration. That rule is about the App Store, not reelintel.ai.
+ *   - A durable local credential admits a phone whose token expired
+ *     twenty miles offshore, which is the one place the app most has to
+ *     work. A browser is not that.
+ * So on the web: a live session, or nothing.
+ */
+export function isAdmitted({ isWeb, session, localCredential, guestAccess }) {
+  if (isWeb) return !!session;
+  return !!session || !!localCredential || !!guestAccess;
+}

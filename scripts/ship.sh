@@ -88,6 +88,11 @@ node scripts/brief-test/run.mjs >/dev/null || { echo "✗ daily brief FAILED"; e
 node scripts/where-to-go-test/run.mjs >/dev/null || { echo "✗ where-to-go geography FAILED"; exit 1; }
 echo "✓ where-to-go stays near the angler"
 
+# Who gets in. The website requires an account; the app must keep its
+# guest route for App Store guideline 5.1.1(v). A privacy boundary.
+node scripts/auth-gate-test/run.mjs >/dev/null || { echo "✗ auth gate FAILED"; exit 1; }
+echo "✓ auth gate: web needs an account, app keeps guest"
+
 # The cached model and its species list must belong together. A torn
 # pair does not fail — it renames every species.
 node scripts/model-cache-test/run.mjs >/dev/null || { echo "✗ model cache pairing FAILED"; exit 1; }

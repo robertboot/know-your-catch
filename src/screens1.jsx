@@ -110,7 +110,9 @@ export function SplashScreen({
             fontSize: 12, color: T.inkMute, textAlign: 'center', lineHeight: 1.5,
             marginTop: 10, padding: '0 12px',
           }}>
-            Sign in syncs your catches, PBs, and photos across your iPhone and iPad.
+            {onBrowse
+              ? 'Sign in syncs your catches, PBs, and photos across your iPhone and iPad.'
+              : 'Your catches, PBs and photos follow you between the app and this browser.'}
           </div>
           {onBrowse && (
             <button
@@ -124,8 +126,14 @@ export function SplashScreen({
               Continue without an account
             </button>
           )}
+          {/* Only promise the free browse where it is actually on offer.
+              The web requires an account, and this line sat outside the
+              button's condition — so it would have told a visitor no
+              sign-in was needed on the one build that demands one. */}
           <div style={{ fontSize: 11.5, color: T.inkMute, textAlign: 'center', lineHeight: 1.5, padding: '0 12px' }}>
-            Browse species, regulations, and the forecast free — no sign-in needed.
+            {onBrowse
+              ? 'Browse species, regulations, and the forecast free — no sign-in needed.'
+              : 'Free to create. Takes a moment, and your logbook is yours on every device.'}
           </div>
         </div>
       ) : (

@@ -23,7 +23,7 @@ import { refreshCategories, subscribe as subscribeCategories } from './categorie
 import { fetchRegulations, subscribe as subscribeRegulations } from './regulations-store.js';
 import {
   subscribe as subscribeAuth, signInWithPassword, signUp, resetPassword,
-  hasLocalCredential, hasGuestAccess, markGuestAccess,
+  hasLocalCredential, hasGuestAccess, markGuestAccess, isAdmitted,
 } from './auth.js';
 import {
   pullAll as cloudPullAll,
@@ -624,7 +624,19 @@ export default function App() {
   // HOOK ORDER: must stay ABOVE the splash early-return below — build 203
   // shipped it after the return and every launch threw React #310.
 
-  const admitted = !!session || hasLocalCredential() || hasGuestAccess();
+  /* The web requires a real account; the app does not.
+     Guest access exists for App Store guideline 5.1.1(v) — non-account
+     content has to be reachable without forced registration — and that
+     rule is about the App Store, not reelintel.ai. hasLocalCredential()
+     is the offline-durability half, for a phone twenty miles out with an
+     expired token; a browser is not that. So on the web, a session or
+     nothing. */
+  const admitted = isAdmitted({
+    isWeb: __KYC_WEB__,
+    session,
+    localCredential: hasLocalCredential(),
+    guestAccess: hasGuestAccess(),
+  });
   if (showSplash || !loaded || !admitted) {
     const showLogin = loaded && !admitted;
     return (
@@ -634,7 +646,10 @@ export default function App() {
           onContinue={() => loaded && admitted && setShowSplash(false)}
           onSignIn={() => { setSplashInitialMode('signin'); setSplashSignInOpen(true); }}
           onCreateAccount={() => { setSplashInitialMode('signup'); setSplashSignInOpen(true); }}
-          onBrowse={() => { markGuestAccess(); setShowSplash(false); }}
+          // No guest route on the web — the button is absent rather than
+          // present and refusing, so nobody is offered a door that is
+          // locked.
+          onBrowse={__KYC_WEB__ ? null : () => { markGuestAccess(); setShowSplash(false); }}
         />
         {splashSignInOpen && (
           <SignInModal
