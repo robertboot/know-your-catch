@@ -531,15 +531,24 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
               interactive: false,
               icon: L.divIcon({
                 className: '',
-                // 68px, not 34. At half this a snapper and an amberjack are
-                // the same orange smudge, which is a decoration rather than
-                // an identification — the point is to read the species off
-                // the map without tapping.
-                html: `<img src="${photo.url}" alt="" style="`
-                    + `width:68px;height:68px;border-radius:50%;object-fit:cover;`
-                    + `transform:translate(-50%,-80px);display:block;`
+                /* Big enough to identify, and NOT cropped.
+                   object-fit: cover filled the circle by cutting the nose
+                   and tail off the fish — which removes exactly the parts
+                   that tell a snapper from an amberjack, so the thumbnail
+                   looked deliberate and said nothing. contain fits the
+                   whole fish; the disc behind it keeps the marker reading
+                   as a marker rather than a floating cut-out, and 88px
+                   leaves the fish as large as it was at 68 cropped. */
+                html: `<div style="`
+                    + `width:88px;height:88px;border-radius:50%;`
+                    + `transform:translate(-50%,-98px);`
+                    + `background:rgba(6,33,47,0.92);`
                     + `border:${isPB ? '3px solid #FFC857' : '2px solid rgba(255,255,255,0.85)'};`
-                    + `box-shadow:0 3px 10px rgba(0,0,0,0.55)">`,
+                    + `box-shadow:0 3px 10px rgba(0,0,0,0.55);`
+                    + `display:flex;align-items:center;justify-content:center;overflow:hidden">`
+                    + `<img src="${photo.url}" alt="" style="`
+                    + `width:100%;height:100%;object-fit:contain;display:block">`
+                    + `</div>`,
                 iconSize: [0, 0],
               }),
             }).addTo(group);
