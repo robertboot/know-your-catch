@@ -1175,6 +1175,7 @@ export default function App() {
         onNew={() => push({ name: 'catch_entry' })}
         onView={(id) => push({ name: 'catch_detail', id })}
         onViewPB={(speciesId) => push({ name: 'pb_detail', speciesId })}
+        onPatterns={() => push({ name: 'patterns' })}
       />;
       break;
     case 'catch_entry':
@@ -1256,11 +1257,11 @@ export default function App() {
     isHome ? 'home' :
     ['regulations', 'regulation'].includes(screen.name) ? 'regulations' :
     ['catch_log', 'catch_entry', 'catch_detail', 'pbs', 'pb_detail', 'pb_entry'].includes(screen.name) ? 'logbook' :
+    screen.name === 'quiz' ? 'quiz' :
     screen.name === 'settings' ? '' :
     'species';
 
   const speciesActive = ['species_list', 'species', 'categories', 'category', 'search'].includes(screen.name);
-  const identifyActive = ['identify', 'photo_crop', 'photo_analyzing', 'photo_result'].includes(screen.name);
 
   const chrome = chromeHeights(size);
   const type = typeScale(size);
@@ -1560,7 +1561,10 @@ export default function App() {
         <TabBtn size={size} label="Logbook"     active={activeTab === 'logbook'}                        onClick={() => reset([{ name: 'catch_log' }])}    icon={<BookOpen />} />
         <CenterCaptureBtn size={size} onClick={() => startCaptureFlow('camera')} />
         <TabBtn size={size} label="Regulations" active={activeTab === 'regulations'}                    onClick={() => reset([{ name: 'regulations' }])}  icon={<ClipboardList />} />
-        <TabBtn size={size} label="Fish ID"     active={identifyActive}                                onClick={() => reset([{ name: 'identify' }])}     icon={<Fish />} />
+        {/* Fish Quiz, not Fish ID — identify is the centre button now, and
+            two routes to the same screen taught anglers the camera was for
+            something else. */}
+        <TabBtn size={size} label="Fish Quiz"   active={activeTab === 'quiz'}                          onClick={() => reset([{ name: 'quiz' }])}         icon={<Fish />} />
       </div>
 
       {showIntro && (
@@ -1822,6 +1826,16 @@ function CenterCaptureBtn({ onClick, size = 'phone' }) {
           <Camera size={icon} strokeWidth={2.2} />
         </button>
       </div>
+      {/* Labelled like its neighbours. The raised circle is where Fish ID
+          actually lives — the camera IS the identify flow — and an
+          unlabelled button next to four labelled ones reads as "some
+          other thing", which is why Fish ID also had a tab of its own. */}
+      <span style={{
+        marginTop: size === 'phone' ? 26 : 30,
+        fontSize: size === 'phone' ? 11 : size === 'tablet' ? 13 : 14,
+        fontWeight: 600, color: TAB_INACTIVE, whiteSpace: 'nowrap',
+        letterSpacing: 0.2,
+      }}>Fish ID</span>
     </div>
   );
 }

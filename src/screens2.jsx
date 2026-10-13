@@ -4,8 +4,7 @@ import {
   Wrench, Ruler, Star, Share2, Image as ImageIcon, BookOpen, CheckCircle2, X, Brain,
   SlidersHorizontal, Sparkles, ShieldCheck, ShieldAlert, ShieldQuestion,
   MapPin as MapPinIcon, Calendar as CalendarIcon, Fish as FishIcon,
-  CalendarClock, CalendarX2,
-} from 'lucide-react';
+  CalendarClock, CalendarX2, TrendingUp } from 'lucide-react';
 import { T } from './theme.js';
 import { saveModelFeedback } from './training-store.js';
 import {
@@ -2321,7 +2320,7 @@ function timeOfDay(sunAlt, dateIso) {
   return h < 12 ? 'dawn' : 'dusk';
 }
 
-export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
+export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB, onPatterns }) {
   const [view, setView] = useState('list'); // 'list' | 'map'
   // One-time coach mark pointing at the MAP button (first Logbook visit).
   const mapBtnRef = useRef(null);
@@ -2500,6 +2499,20 @@ export function CatchLogScreen({ state, signedIn, onNew, onView, onViewPB }) {
               )}
             </button>
           </div>
+
+          {/* The whole logbook, read back as patterns. It sits here rather
+              than behind a tile because this is the screen an angler is on
+              when they wonder what their own data says. */}
+          {onPatterns && (
+            <button onClick={onPatterns} className="kyc-press" style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 8, marginBottom: 10, padding: '11px 0', borderRadius: 10, cursor: 'pointer',
+              background: T.parchmentDeep, border: `1.5px solid ${T.brass}`,
+              color: T.brass, fontSize: 14.5, fontWeight: 800, letterSpacing: 0.3,
+            }}>
+              <TrendingUp size={16} /> Your Fishing Data
+            </button>
+          )}
 
           {/* One-time coach mark — floats over the UI anchored to the
               MAP button rather than sitting inline, where it read as

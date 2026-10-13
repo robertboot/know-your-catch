@@ -840,25 +840,6 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
             <cta.Ic size={sz(18, 21, 25)} /> {cta.t}
           </button>
 
-          {/* Satellite ocean map shortcuts */}
-          {onOceanMaps && (
-            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-              <button onClick={() => onOceanMaps('chl')} className="kyc-press" style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
-              }}>
-                <Waves size={16} color="#4fd07a" /> Chlorophyll map
-              </button>
-              <button onClick={() => onOceanMaps('sst')} className="kyc-press" style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
-              }}>
-                <Thermometer size={16} color="#ff9a3d" /> Sea temp map
-              </button>
-            </div>
-          )}
         </>
       )}
     </Card>
@@ -1136,6 +1117,17 @@ export function HomeScreen({
         />
       </div>
 
+      {/* Conditions + Regulation Alerts.
+          Phone: horizontal scroll row so each card keeps a comfortable
+          width and the user swipes between them.
+          Tablet: split the row 50/50 across the full container width —
+          scrolling makes no sense with the room the iPad canvas offers. */}
+      {/* Today's Conditions — live, with the Fishability score gauge */}
+      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
+
+      {/* Where to go — renders nothing when there are no spots. */}
+      <TripSpot onOceanMaps={onOceanMaps} tier={screenSize} state={state} />
+
       {/* Recent Catches — horizontally-scrolling preview strip. Tap a
           tile to jump straight into the catch's detail view. Hidden
           when the angler hasn't logged anything yet — no point in an
@@ -1219,16 +1211,6 @@ export function HomeScreen({
         </>
       )}
 
-      {/* Conditions + Regulation Alerts.
-          Phone: horizontal scroll row so each card keeps a comfortable
-          width and the user swipes between them.
-          Tablet: split the row 50/50 across the full container width —
-          scrolling makes no sense with the room the iPad canvas offers. */}
-      {/* Today's Conditions — live, with the Fishability score gauge */}
-      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
-
-      {/* Where to go — renders nothing when there are no spots. */}
-      <TripSpot onOceanMaps={onOceanMaps} tier={screenSize} state={state} />
 
       {/* Regulation Alerts — full-width, single-line active alert; rely on
           VIEW ALL for the rest. */}
@@ -3957,25 +3939,6 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                       </span>
                     )}
                   </div>
-                  {/* Satellite ocean map shortcuts */}
-                  {onOceanMaps && (
-                    <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-                      <button onClick={() => onOceanMaps('chl')} className="kyc-press" style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                        background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                        padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
-                      }}>
-                        <Waves size={16} color="#4fd07a" /> Chlorophyll map
-                      </button>
-                      <button onClick={() => onOceanMaps('sst')} className="kyc-press" style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                        background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 12, cursor: 'pointer',
-                        padding: sz(10, 12, 15) + 'px 0', color: T.ink, fontSize: sz(12, 14, 16.5), fontWeight: 800,
-                      }}>
-                        <Thermometer size={16} color="#ff9a3d" /> Sea temp map
-                      </button>
-                    </div>
-                  )}
                   {/* Fishability legend toggle + panel */}
                   <button className="kyc-press" onClick={() => setShowLegend(v => !v)} style={{
                     marginTop: 14, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
