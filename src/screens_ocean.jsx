@@ -167,7 +167,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   // these ADD to whichever satellite layer is active.
   const [showCatches, setShowCatches] = useState(false);
   const [showSpots, setShowSpots] = useState(true);
-  const [showCurrent, setShowCurrent] = useState(true);
+  /* Off by default. The flow streaks cover the whole basin, so the first
+     thing the angler sees is a screen of current with four pins somewhere
+     in it — the spots are what the page is for, and they read best on
+     bare water. One tap in the layers panel brings it back. */
+  const [showCurrent, setShowCurrent] = useState(false);
   const [showSpecies, setShowSpecies] = useState(false);
   /* Embedded, the controls float on the map instead of stacking above it.
      Stacked, they pushed the map most of a screen down the page — the

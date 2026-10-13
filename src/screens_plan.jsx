@@ -259,23 +259,6 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
               water is sometimes the only thing you want on screen. */}
           <PagerButton label={openPanel ? 'Hide details' : 'Show details'}
                        onClick={() => setOpenPanel(o => !o)}>{openPanel ? '⌄' : '⌃'}</PagerButton>
-          {/* One at a time, with an arrow.
-              Four cards side by side left each one too narrow for the
-              numbers it carries and gave the angler four things to read
-              at once — chaotic, and none of it legible. A pager gives the
-              full width to the one being considered. */}
-          {shown.length > 1 && openPanel && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
-              <PagerButton label="Previous area"
-                           onClick={() => setPick((p) => (p - 1 + shown.length) % shown.length)}>‹</PagerButton>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.inkMute,
-                             fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'center' }}>
-                {pick + 1} / {shown.length}
-              </span>
-              <PagerButton label="Next area"
-                           onClick={() => setPick((p) => (p + 1) % shown.length)}>›</PagerButton>
-            </div>
-          )}
         </div>
         {openPanel && (
           <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
@@ -316,22 +299,43 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
                 <div style={{ fontSize: sz(17, 19, 21), fontWeight: 800, color: T.ink, lineHeight: 1.2 }}>
                   {Math.round(s._run.dist)} nm {compassPoint(s._run.brg)}
                 </div>
-                <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 2 }}>
-                  <span style={{ color: SPOT_COLORS[s.kind] || T.brass, fontWeight: 800 }}>
-                    {SPOT_LABELS[s.kind] || s.kind}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3,
+                              flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12.5, color: T.inkMute }}>
+                    <span style={{ color: SPOT_COLORS[s.kind] || T.brass, fontWeight: 800 }}>
+                      {SPOT_LABELS[s.kind] || s.kind}
+                    </span>
+                    {' · '}of {home.label}
+                    {spotsAge != null ? ` · saved ${describeAge(spotsAge)}` : ''}
                   </span>
-                  {' · '}of {home.label}
-                  {spotsAge != null ? ` · saved ${describeAge(spotsAge)}` : ''}
+                  {/* What the score MEANS, not a letter borrowed from the
+                      safety scale. A 20 here is a faint fishing sign; an F
+                      on the day strip is a sea you should not be out in. */}
+                  <span style={{
+                    fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                    color: tone, border: `1px solid ${tone}55`, borderRadius: 999,
+                    padding: '3px 8px', whiteSpace: 'nowrap', textTransform: 'uppercase',
+                  }}>{st.label}</span>
                 </div>
               </div>
-              {/* What the score MEANS, not a letter borrowed from the
-                  safety scale. A 20 here is a faint fishing sign; an F on
-                  the day strip is a sea you should not be out in. */}
-              <span style={{
-                flex: '0 0 auto', fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
-                color: tone, border: `1px solid ${tone}55`, borderRadius: 999,
-                padding: '4px 9px', whiteSpace: 'nowrap', textTransform: 'uppercase',
-              }}>{st.label}</span>
+              {/* One at a time, paged from inside the card.
+                  Four cards side by side left each too narrow for the
+                  numbers it carries and gave the angler four things to
+                  read at once. The arrows belong on the card they turn,
+                  not in the section heading above it, where they read as
+                  controls for the whole page. */}
+              {shown.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flex: '0 0 auto' }}>
+                  <PagerButton label="Previous area"
+                               onClick={() => setPick((p) => (p - 1 + shown.length) % shown.length)}>‹</PagerButton>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: T.inkMute,
+                                 fontVariantNumeric: 'tabular-nums', minWidth: 42, textAlign: 'center' }}>
+                    {pick + 1} / {shown.length}
+                  </span>
+                  <PagerButton label="Next area"
+                               onClick={() => setPick((p) => (p + 1) % shown.length)}>›</PagerButton>
+                </div>
+              )}
             </div>
 
             {/* A sentence, not the instrument read-out. The server's `why`
