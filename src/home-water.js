@@ -126,3 +126,31 @@ export function spotStanding(score) {
   if (score >= 40) return { label: 'Worth a look', tone: 'fair' };
   return { label: 'Best of a quiet pass', tone: 'mute' };
 }
+
+/* How old the spots are, said in a way that parses.
+ *
+ * The first version read "A day old by then. Breaks drift with the
+ * current" under a WHERE TO GO heading, with Today selected — which names
+ * nothing as old and says "by then" about now. Two faults: the subject was
+ * missing, and "by then" only makes sense about a future day.
+ *
+ * `observedIso` is the satellite pass, `dayIso` the day being planned for,
+ * `isToday` whether that day is today. Returns null when there is nothing
+ * worth saying.
+ */
+export function spotAgeNote(observedIso, dayIso, isToday) {
+  if (!observedIso || !dayIso) return null;
+  const drift = 'Breaks drift with the current, so treat one as where to start looking '
+              + 'rather than a mark to park on.';
+  const days = Math.round((Date.parse(dayIso + 'T12:00:00') - Date.parse(observedIso)) / 86400000);
+  if (isToday) {
+    // Naming the pass is more use than naming its age: the angler knows
+    // what last night means and does not have to subtract anything.
+    return days <= 1
+      ? `These are from last night's satellite pass. ${drift}`
+      : `These are from a satellite pass ${days} days ago. ${drift}`;
+  }
+  if (days < 1) return null;
+  return `These spots will be ${days === 1 ? 'a day' : days + ' days'} old by the day you have `
+       + `picked. ${drift}`;
+}

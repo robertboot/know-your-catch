@@ -15,12 +15,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
 import { client } from './supabase-client.js';
+import { OceanMapsScreen } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
 import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
-         groupByBreak, spotStanding } from './home-water.js';
+         groupByBreak, spotStanding, spotAgeNote } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
-export function PlanTripScreen({ state, onOceanMaps, tier = 'phone' }) {
+export function PlanTripScreen({ state, tier = 'phone' }) {
   const [spots, setSpots] = useState(null);
   const [spotsAge, setSpotsAge] = useState(null);
   const [outlook, setOutlook] = useState(null);
@@ -66,11 +67,7 @@ export function PlanTripScreen({ state, onOceanMaps, tier = 'phone' }) {
     if (!spots?.length || !outlook?.length) return null;
     const observed = spots.reduce((a, s) => (a && a > s.observed_at ? a : s.observed_at), null);
     const day = outlook[Math.min(dayPick, outlook.length - 1)]?.date;
-    if (!observed || !day) return null;
-    const days = Math.round((Date.parse(day + 'T12:00:00') - Date.parse(observed)) / 86400000);
-    if (days < 1) return null;
-    return `${days === 1 ? 'A day' : days + ' days'} old by then. Breaks drift with the current — `
-         + 'start looking here rather than parking on it.';
+    return spotAgeNote(observed, day, dayPick === 0);
   }, [spots, outlook, dayPick]);
 
   const gradeOf = (d) => fishabilityHour({
@@ -189,15 +186,16 @@ export function PlanTripScreen({ state, onOceanMaps, tier = 'phone' }) {
         ))}
       </div>
 
-      {onOceanMaps && (
-        <button onClick={() => onOceanMaps()} className="kyc-press" style={{
-          width: '100%', marginTop: 16, padding: '13px 0', borderRadius: 12, cursor: 'pointer',
-          background: T.parchmentDeep, border: `1.5px solid ${T.brass}`,
-          color: T.brass, fontSize: 15, fontWeight: 800, letterSpacing: 0.3,
-        }}>
-          See these on the map ›
-        </button>
-      )}
+      {/* The map, open. It is the answer on this page, not a destination
+          off it — a button that only reveals something already loaded is a
+          tap that does nothing. Embedded drops the map screen's own title
+          and padding so it reads as part of this page. */}
+      <div style={{ marginTop: 18 }}>
+        <SectionLabel>On the map</SectionLabel>
+        <div style={{ marginTop: 8 }}>
+          <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state} embedded />
+        </div>
+      </div>
     </div>
   );
 }

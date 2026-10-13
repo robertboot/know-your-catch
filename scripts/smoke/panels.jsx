@@ -31,7 +31,7 @@ const PANELS = {
     isTablet: false, initialLayer: 'chl', state: { fishingSpots: [], catchLog: [] },
   }),
   PlanTripScreen: () => React.createElement(PlanTripScreen, {
-    state: { fishingSpots: [], catchLog: [] }, onOceanMaps: () => {}, tier: 'phone',
+    state: { fishingSpots: [], catchLog: [] }, tier: 'phone',
   }),
 };
 

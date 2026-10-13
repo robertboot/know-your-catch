@@ -24,7 +24,7 @@ import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } fro
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 import { TRIP_MODES } from './trip-modes.js';
-import { DAYS_CACHE, homeWater } from './home-water.js';
+import { DAYS_CACHE, homeWater, spotAgeNote } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
 
@@ -139,7 +139,11 @@ const SPOT_LABELS = {
   convergence: 'Convergence',
 };
 
-export function OceanMapsScreen({ isTablet, initialLayer, state }) {
+/* `embedded` drops the screen's own title and outer padding so the map can
+   sit inside another page — Plan Your Trip shows it open below the spots
+   rather than behind a button, since the map IS the answer there and a tap
+   to reach it is a tap to do nothing with. */
+export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = false }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -353,16 +357,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
 
   /* How old the drawn spots will be on the selected day. Null when there
      is nothing to say — same day, or no spots. */
-  const spotAgeNote = useMemo(() => {
+  const ageNote = useMemo(() => {
     if (!spots?.length || !outlook?.length) return null;
     const observed = spots.reduce((a, sp) => (a && a > sp.observed_at ? a : sp.observed_at), null);
-    if (!observed) return null;
     const day = outlook[Math.min(dayPick, outlook.length - 1)]?.date;
-    if (!day) return null;
-    const days = Math.round((Date.parse(day + 'T12:00:00') - Date.parse(observed)) / 86400000);
-    if (days < 1) return null;
-    return `${days === 1 ? 'A day' : days + ' days'} old by then — breaks drift with the current, `
-         + 'so treat these as where to start looking, not a waypoint to park on.';
+    return spotAgeNote(observed, day, dayPick === 0);
   }, [spots, outlook, dayPick]);
 
   /* The ten-day outlook, for the day strip.
@@ -594,11 +593,18 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   );
 
   return (
-    <div style={{ padding: isTablet ? '22px 22px' : '16px 16px', maxWidth: '100%', overflowX: 'hidden' }}>
-      <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Ocean Maps</H1>
-      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, marginBottom: 12 }}>
-        Find the color and the temp breaks — free NOAA/NASA satellite layers for the Gulf & Florida Atlantic.
-      </div>
+    <div style={{
+      padding: embedded ? 0 : (isTablet ? '22px 22px' : '16px 16px'),
+      maxWidth: '100%', overflowX: 'hidden',
+    }}>
+      {!embedded && (
+        <>
+          <H1 size={isTablet ? 30 : 22} style={{ marginBottom: 4 }}>Ocean Maps</H1>
+          <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkMute, marginBottom: 12 }}>
+            Find the color and the temp breaks — free NOAA/NASA satellite layers for the Gulf &amp; Florida Atlantic.
+          </div>
+        </>
+      )}
 
       {/* Layer toggle + marker overlays. Satellite layers are exclusive;
           Spots and Catches stack on top of whichever is active. */}
@@ -814,8 +820,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
                     Sunday pass has moved miles. The map cannot say where it
                     went, so it must at least say how stale it is rather than
                     draw a four-day-old line as if it were this morning's. */}
-                {spotAgeNote && (
-                  <div style={{ marginTop: 6, color: T.warn, fontWeight: 700 }}>{spotAgeNote}</div>
+                {ageNote && (
+                  <div style={{ marginTop: 6, color: T.warn, fontWeight: 700 }}>{ageNote}</div>
                 )}
             </div>
           </div>

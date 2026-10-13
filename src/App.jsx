@@ -907,11 +907,7 @@ export default function App() {
     case 'plan':
       body = (
         <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: T.inkMute }}>Loading…</div>}>
-          <PlanTripScreen
-            state={state}
-            tier={size}
-            onOceanMaps={(layer) => push({ name: 'oceanmaps', layer })}
-          />
+          <PlanTripScreen state={state} tier={size} />
         </Suspense>
       );
       break;
