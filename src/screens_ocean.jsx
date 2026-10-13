@@ -838,12 +838,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   );
 
   /* Floating chrome: an opaque pill that survives any imagery under it. */
-  const floatBox = { position: 'absolute', zIndex: 500 };
+  /* Above Leaflet's own controls, which sit at z-index 1000 — the zoom
+     buttons were drawing through the open layers panel. */
+  const floatBox = { position: 'absolute', zIndex: 1100 };
   /* Leaflet's zoom buttons own the top-left corner, so nothing of ours
      goes there. In full screen the container insets for the notch and the
      home indicator, which moves Leaflet's own controls with it. */
   const topEdge = 12;
-  const bottomEdge = full ? 20 : 24;
+  // Leaflet prints its attribution along the bottom edge; our controls sit
+  // above it rather than through it.
+  const bottomEdge = full ? 34 : 24;
   const pillStyle = (on) => ({
     padding: '10px 15px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
     fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
@@ -1034,11 +1038,14 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           were taking. */}
       <div style={full ? {
         position: 'fixed', inset: 0, zIndex: 4000, background: '#06182b',
-        /* The map itself stops below the notch and above the home
-           indicator. Insetting only our own controls left Leaflet's zoom
-           buttons under the clock. */
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        /* The map stops below the status bar and above the home
+           indicator. env() alone is not enough: in the Capacitor webview
+           it resolved to 0, so the layers button landed under the clock
+           and could not be tapped to close the panel it had opened. max()
+           keeps a real floor whatever env() reports, and costs nothing
+           where env() is larger. */
+        paddingTop: 'max(env(safe-area-inset-top, 0px), 46px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)',
         boxSizing: 'border-box',
       } : {
         position: 'relative', borderRadius: embedded ? 0 : 16, overflow: 'hidden',
@@ -1079,6 +1086,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                 borderRadius: 16, padding: 13,
                 maxHeight: '60%', overflowY: 'auto',
               }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ ...panelLabel, margin: 0, flex: 1 }}>Layers</span>
+                  <button type="button" aria-label="Close layers"
+                          onClick={() => setPanel(null)}
+                          style={{
+                            width: 30, height: 30, borderRadius: '50%', cursor: 'pointer',
+                            border: `1px solid ${T.cardEdge}`, background: 'transparent',
+                            color: T.ink, fontSize: 15, fontFamily: 'inherit', lineHeight: 1,
+                          }}>✕</button>
+                </div>
                 <div style={panelLabel}>Satellite layers</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {Object.values(LAYERS).map(l => viewChip(active === l.key, l.label, () => {
