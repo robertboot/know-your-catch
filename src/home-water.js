@@ -29,3 +29,36 @@ export function homeWater(state, jurisdiction) {
  * the water, not on 0,0, because an angler with two home ports has two
  * different weeks. */
 export const DAYS_CACHE = 'days.v1';
+
+/* Pick the best spot the angler can actually reach, and measure the run
+ * from THEIR water.
+ *
+ * Pulled out of the Home card so it can be tested. The card shipped
+ * taking the highest-scoring break in a table covering the whole Gulf and
+ * the Florida Atlantic, and printing dist_nm from the row — which is
+ * measured from whichever harbour the spot's REGION is keyed to. An
+ * angler in Orange Beach was told "72 nm NNE", 385 nm away, from a port
+ * they have never left. Every number on the card was correct; none of
+ * them was about the reader.
+ */
+const NM_PER_DEG = 60;
+
+export function runFrom(aLat, aLon, bLat, bLon) {
+  const dLat = (bLat - aLat) * NM_PER_DEG;
+  const dLon = (bLon - aLon) * NM_PER_DEG * Math.cos((aLat + bLat) / 2 * Math.PI / 180);
+  return { dist: Math.hypot(dLat, dLon), brg: (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360 };
+}
+
+/* A long offshore day. Beyond this the honest answer is "nothing near
+   you", and the card renders nothing rather than something irrelevant. */
+export const MAX_RUN_NM = 150;
+
+export function pickReachableSpot(rows, home, maxNm = MAX_RUN_NM) {
+  if (!home || !Number.isFinite(home.lat) || !Number.isFinite(home.lon)) return null;
+  const near = (rows || [])
+    .filter(r => r && r.score != null && Number.isFinite(r.lat) && Number.isFinite(r.lon))
+    .map(r => ({ ...r, _run: runFrom(home.lat, home.lon, r.lat, r.lon) }))
+    .filter(r => r._run.dist <= maxNm);
+  near.sort((a, b) => b.score - a.score);
+  return near[0] || null;
+}

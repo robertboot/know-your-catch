@@ -83,6 +83,11 @@ node scripts/hotspots-test/hosts.mjs >/dev/null || { echo "✗ ERDDAP host walk 
 # thirteen hours, because it only ever asked whether jobs errored.
 node scripts/brief-test/run.mjs >/dev/null || { echo "✗ daily brief FAILED"; exit 1; }
 
+# "Where to go" has to mean where YOU can go. The card shipped sending
+# Orange Beach to Cape Canaveral, with every number on it correct.
+node scripts/where-to-go-test/run.mjs >/dev/null || { echo "✗ where-to-go geography FAILED"; exit 1; }
+echo "✓ where-to-go stays near the angler"
+
 # The cached model and its species list must belong together. A torn
 # pair does not fail — it renames every species.
 node scripts/model-cache-test/run.mjs >/dev/null || { echo "✗ model cache pairing FAILED"; exit 1; }

@@ -184,6 +184,43 @@ down, water genuinely flat — and they are indistinguishable without it.
 fabricated satellite grids. Run it after any change to the scoring,
 grouping or thresholds; `ship.sh` does.
 
+## An answer has to be about the reader
+
+The Home card shipped taking the highest-scoring break in a table that
+covers the whole Gulf AND the Florida Atlantic, and printing the run from
+whichever harbour the spot's REGION is keyed to. An angler starred to
+Orange Beach was told "72 nm NNE", a spot 385 nm east, measured from Port
+Canaveral — a port they have never left.
+
+**Every number on that card was correct.** The score was right, the
+temperature break was real, the distance was an accurate distance. The
+grade looked plausible, the sentence read well, and nothing in the app
+could tell it was nonsense. It was only visible to someone who knows
+where Cape Canaveral is relative to Orange Beach.
+
+So, for anything that answers "where" or "when":
+
+- **Filter by the reader before ranking.** `order by score desc limit 1`
+  over a multi-region table is a bug wearing a query's clothes. Spots are
+  ranked within `MAX_RUN_NM` of the angler's home water first.
+- **Measure from the reader.** `hotspots.dist_nm` is from the region's
+  port, not from the angler. Any distance shown to a person must be
+  computed from where that person is.
+- **Nothing in range renders nothing.** The nearest far thing is not a
+  useful answer, and the card already preferred silence to an empty box.
+- One copy of both the home-water resolution and the pick, in
+  `src/home-water.js`, so Home, Forecast and Ocean Maps cannot disagree
+  about which water they are describing.
+
+Guarded by `scripts/where-to-go-test/run.mjs` in `ship.sh`, with real
+coordinates — Orange Beach, Cape Canaveral, the Louisiana shelf — so a
+regression reads as a place rather than a number.
+
+**The general rule, which cost a shipped card:** a feature can be
+numerically correct in every part and still answer the wrong question.
+Scoring was tested; geography was never checked. When a feature's job is
+to be *relevant*, relevance is the thing to assert, not the arithmetic.
+
 ## Related
 
 - [[forecast-scoring]] — Fishability decides whether you GO; this decides
