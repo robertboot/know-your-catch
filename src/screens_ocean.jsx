@@ -25,7 +25,7 @@ import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } fro
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 import { TRIP_MODES } from './trip-modes.js';
-import { DAYS_CACHE, homeWater, spotAgeNote } from './home-water.js';
+import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
 
@@ -148,7 +148,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
-  const [active, setActive] = useState(initialLayer === 'sst' ? 'sst' : 'chl');
+  /* No satellite view by default, current on.
+     A composite is a wall of colour that hides everything drawn on it, so
+     opening on one meant the spots, catches and current were all invisible
+     until the angler worked out that the picture had to come off first.
+     Bare water with the current running shows what the map is FOR.
+     initialLayer still wins when a caller asks for a specific view — the
+     Chlorophyll and Sea temp shortcuts rely on that. */
+  const [active, setActive] = useState(
+    initialLayer === 'sst' || initialLayer === 'chl' ? initialLayer : null);
   const [status, setStatus] = useState('loading');
   // Non-null when the image on screen came from the device.
   const [overlayAge, setOverlayAge] = useState(null);
@@ -157,7 +165,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   // these ADD to whichever satellite layer is active.
   const [showCatches, setShowCatches] = useState(false);
   const [showSpots, setShowSpots] = useState(true);
-  const [showCurrent, setShowCurrent] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(true);
   const [showSpecies, setShowSpecies] = useState(false);
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
   const [zoneRows, setZoneRows] = useState(null);
@@ -442,19 +450,52 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     if (!map) return;
     if (spotsRef.current) { map.removeLayer(spotsRef.current); spotsRef.current = null; }
     if (!showSpots || !spots?.length) return;
+    /* ONE area per break, not a dot per peak.
+       The server publishes several points along a connected break so a
+       long wall is not reduced to a single pin. Drawn as three dots that
+       reads as three separate marks a few miles apart, which is both
+       wrong — it is one feature — and misleadingly precise: a break is a
+       zone of water to work, not a waypoint to sit on. So the points are
+       grouped back into their break and drawn as the area they describe,
+       sized by the break's own length. */
     const group = L.layerGroup();
-    spots.forEach((h) => {
+    groupByBreak(spots).forEach((h) => {
       const color = SPOT_COLORS[h.kind] || T.brass;
-      // Glow + core, same pattern as the patterns-map hot spots.
-      L.circleMarker([h.lat, h.lon], { radius: 14, stroke: false, fillColor: color, fillOpacity: 0.18 }).addTo(group);
-      const core = L.circleMarker([h.lat, h.lon], {
-        radius: 6, stroke: true, color: '#06212f', weight: 1, opacity: 0.6,
-        fillColor: color, fillOpacity: 0.9,
+      // The break's own span, in metres, floored so a short one is still
+      // an area rather than a dot.
+      const radiusM = Math.max(3000, (Number(h.length_nm) || 4) * 1852 / 2);
+
+      L.circle([h.lat, h.lon], {
+        radius: radiusM, stroke: true, color, weight: 2, opacity: 0.9,
+        dashArray: '6 5', fillColor: color, fillOpacity: 0.12,
       }).addTo(group);
+      const core = L.circleMarker([h.lat, h.lon], {
+        radius: 5, stroke: true, color: '#06212f', weight: 1, opacity: 0.6,
+        fillColor: color, fillOpacity: 0.95,
+      }).addTo(group);
+
+      /* The key, ON the area rather than under the map.
+         A legend at the bottom asks the angler to look away, hold three
+         colours in their head and look back. Naming the thing where it is
+         drawn means it cannot be missed, which is the whole point of
+         saying it. */
+      L.marker([h.lat, h.lon], {
+        interactive: false,
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="transform:translate(${Math.round(radiusM / 1852 * 2) + 10}px,-10px);`
+              + `white-space:nowrap;font-size:12px;font-weight:800;color:${color};`
+              + `text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 3px rgba(0,0,0,0.9)">`
+              + `${SPOT_LABELS[h.kind] || h.kind}`
+              + `<span style="font-weight:600;color:#fff;opacity:0.85">`
+              + `${h.length_nm >= 2 ? ` · runs ${Math.round(h.length_nm)} nm` : ''}</span></div>`,
+          iconSize: [0, 0],
+        }),
+      }).addTo(group);
+
       const bits = [
-        `<div style="font-weight:800;margin-bottom:4px">${SPOT_LABELS[h.kind] || h.kind} · score ${Math.round(h.score)}</div>`,
+        `<div style="font-weight:800;margin-bottom:4px">${SPOT_LABELS[h.kind] || h.kind}</div>`,
         `<div style="margin-bottom:4px">${h.why || ''}</div>`,
-        h.dist_nm != null ? `<div style="opacity:.75">${Math.round(h.dist_nm)} nm at ${Math.round(h.from_port_deg || 0)}° from port</div>` : '',
       ].join('');
       core.bindPopup(`<div style="font-size:12px;max-width:230px">${bits}</div>`);
     });
@@ -824,15 +865,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         </div>
         {showSpots && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.cardEdge}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              {Object.entries(SPOT_LABELS).map(([k, lbl]) => (
-                <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.inkSoft, fontWeight: 700 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 5, background: SPOT_COLORS[k], display: 'inline-block' }} />
-                  {lbl}
-                </span>
-              ))}
-            </div>
-            <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 8 }}>
+            {/* The colour key that used to sit here is gone. Each area is
+                now named on the map beside itself, so a legend only asked
+                the angler to look away, memorise three colours and look
+                back — and the one thing a key must not be is missable. */}
+            <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5 }}>
               {spots === null
                 ? 'Suggested spots load when you have signal and are saved for offshore.'
                 : spots.length === 0
