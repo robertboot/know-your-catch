@@ -531,11 +531,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
               interactive: false,
               icon: L.divIcon({
                 className: '',
+                // 68px, not 34. At half this a snapper and an amberjack are
+                // the same orange smudge, which is a decoration rather than
+                // an identification — the point is to read the species off
+                // the map without tapping.
                 html: `<img src="${photo.url}" alt="" style="`
-                    + `width:34px;height:34px;border-radius:50%;object-fit:cover;`
-                    + `transform:translate(-50%,-44px);display:block;`
-                    + `border:2px solid ${isPB ? '#FFC857' : 'rgba(255,255,255,0.85)'};`
-                    + `box-shadow:0 2px 6px rgba(0,0,0,0.5)">`,
+                    + `width:68px;height:68px;border-radius:50%;object-fit:cover;`
+                    + `transform:translate(-50%,-80px);display:block;`
+                    + `border:${isPB ? '3px solid #FFC857' : '2px solid rgba(255,255,255,0.85)'};`
+                    + `box-shadow:0 3px 10px rgba(0,0,0,0.55)">`,
                 iconSize: [0, 0],
               }),
             }).addTo(group);
