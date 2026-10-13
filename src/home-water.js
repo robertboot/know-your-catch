@@ -201,3 +201,23 @@ export function spotStats(s) {
    in one neutral colour rather than three colours that have to be learned. */
 export const SPOT_RANK_COLORS = { lead: '#A855F7', other: '#F59E0B' };
 export const spotRankColor = (i) => (i === 0 ? SPOT_RANK_COLORS.lead : SPOT_RANK_COLORS.other);
+
+/* Coordinates the way a chartplotter wants them.
+ *
+ * Decimal degrees are what the database stores and what nothing on a boat
+ * asks for: every Garmin, Simrad and Lowrance head unit, and the VHF
+ * distress screen, take degrees and decimal MINUTES. Printing 30.2058 and
+ * letting the angler convert it at the helm is how a mark gets entered
+ * wrong. Longitude is padded to three digits for the same reason it is on
+ * a chart — 087 cannot be misread as 87 degrees of something else.
+ */
+export function formatLatLon(lat, lon) {
+  if (lat == null || lon == null) return null;
+  const dm = (v, pad) => {
+    const a = Math.abs(v);
+    const d = Math.floor(a);
+    const m = (a - d) * 60;
+    return `${String(d).padStart(pad, '0')}°${m.toFixed(3).padStart(6, '0')}'`;
+  };
+  return `${dm(lat, 2)}${lat >= 0 ? 'N' : 'S'} ${dm(lon, 3)}${lon >= 0 ? 'E' : 'W'}`;
+}

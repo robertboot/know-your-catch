@@ -19,7 +19,7 @@ import { OceanMapsScreen, SPOT_COLORS, SPOT_LABELS } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
 import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
          groupByBreak, spotStanding, spotAgeNote, breakKey,
-         plainWhy, spotStats, spotRankColor } from './home-water.js';
+         plainWhy, spotStats, spotRankColor, formatLatLon } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
 export function PlanTripScreen({ state, tier = 'phone' }) {
@@ -129,6 +129,25 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
       )}
 
       <SectionLabel>Where to go</SectionLabel>
+      {/* The map, open. It is the answer on this page, not a destination
+          off it — a button that only reveals something already loaded is a
+          tap that does nothing. Embedded drops the map screen's own title
+          and padding so it reads as part of this page. */}
+      <div style={{ marginTop: 2 }}>
+        {/* Why the shapes look the way they do, said once. The areas are
+            drawn from the break's own length and heading, so they read
+            with every satellite layer switched off — the imagery is a
+            separate switch, not what makes the spots visible. */}
+        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
+          All {shown.length} areas are shown together, numbered to match the list.
+          Sea temp and chlorophyll are separate switches on the map.
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
+                           embedded focusBreak={focus} spotNumbers={numbers} />
+        </div>
+      </div>
+
 
       {spots == null && (
         <Card style={{ marginTop: 8 }}>
@@ -153,7 +172,17 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+      {/* Side by side, below the map, swiped through.
+          Stacked above it, four cards pushed the map off the screen and
+          the angler read the list without ever seeing where any of it
+          was. Below and in a row, the map stays in view and the cards are
+          thumbed through against it — which is the comparison the page
+          exists to support. */}
+      <div style={{
+        display: 'flex', gap: 10, marginTop: 10, overflowX: 'auto',
+        scrollSnapType: 'x mandatory', paddingBottom: 6,
+        WebkitOverflowScrolling: 'touch',
+      }}>
         {shown.map((s, i) => {
           const key = breakKey(s);
           const colour = spotRankColor(i);
@@ -169,6 +198,8 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
           <Card key={s.id || i} onClick={() => setFocus(on ? null : key)}
                 style={{
                   padding: sz(13, 16, 18), borderRadius: 16, cursor: 'pointer',
+                  flex: '0 0 auto', width: sz(272, 310, 330),
+                  scrollSnapAlign: 'start',
                   borderLeft: `5px solid ${colour}`,
                   outline: on ? `2px solid ${colour}` : 'none',
                 }}>
@@ -222,30 +253,30 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
                 ))}
               </div>
             )}
+            {/* The mark itself, in the units a plotter takes.
+                A card that says "22 nm SSW" and nothing else cannot be
+                boated to — the angler has to find the area on the map,
+                guess a middle and read it off by eye. */}
+            {formatLatLon(s.lat, s.lon) && (
+              <div style={{ marginTop: 10, paddingTop: 9, borderTop: `1px solid ${T.cardEdge}` }}>
+                <div style={{ fontSize: 10, letterSpacing: 0.5, color: T.inkMute,
+                              textTransform: 'uppercase', fontWeight: 800 }}>
+                  Steer for
+                </div>
+                <div style={{ fontSize: sz(13.5, 15, 16), fontWeight: 800, color: T.ink,
+                              marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                  {formatLatLon(s.lat, s.lon)}
+                </div>
+                <div style={{ fontSize: 11, color: T.inkMute, marginTop: 3, lineHeight: 1.45 }}>
+                  Middle of the area — start there and work the edge.
+                </div>
+              </div>
+            )}
           </Card>
           );
         })}
       </div>
 
-      {/* The map, open. It is the answer on this page, not a destination
-          off it — a button that only reveals something already loaded is a
-          tap that does nothing. Embedded drops the map screen's own title
-          and padding so it reads as part of this page. */}
-      <div style={{ marginTop: 18 }}>
-        <SectionLabel>On the map</SectionLabel>
-        {/* Why the shapes look the way they do, said once. The areas are
-            drawn from the break's own length and heading, so they read
-            with every satellite layer switched off — the imagery is a
-            separate switch, not what makes the spots visible. */}
-        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
-          All {shown.length} areas are shown together, numbered to match the list.
-          Sea temp and chlorophyll are separate switches on the map.
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
-                           embedded focusBreak={focus} spotNumbers={numbers} />
-        </div>
-      </div>
     </div>
   );
 }
