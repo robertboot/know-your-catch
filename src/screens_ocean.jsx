@@ -146,7 +146,7 @@ export const SPOT_LABELS = {
    to reach it is a tap to do nothing with. */
 export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = false,
                                  focusBreak = null, spotNumbers = null,
-                                 highlightBreak = null }) {
+                                 highlightBreak = null, onPickSpot = null }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -169,6 +169,13 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   const [showSpots, setShowSpots] = useState(true);
   const [showCurrent, setShowCurrent] = useState(true);
   const [showSpecies, setShowSpecies] = useState(false);
+  /* Embedded, the controls float on the map instead of stacking above it.
+     Stacked, they pushed the map most of a screen down the page — the
+     angler scrolled past four rows of switches to reach the thing the
+     switches are for. Only one panel is open at a time, and only when
+     asked for. */
+  const [panel, setPanel] = useState(null);   // 'layers' | 'when' | null
+  const [full, setFull] = useState(false);
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
   const [zoneRows, setZoneRows] = useState(null);
 
@@ -229,6 +236,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     setTimeout(() => map.invalidateSize(), 200);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
+
+  /* Leaflet sizes itself once; a container that changes shape under it
+     leaves the tiles half drawn until something nudges it. */
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    const t = setTimeout(() => m.invalidateSize(), 120);
+    return () => clearTimeout(t);
+  }, [full]);
 
   // Swap the WMS overlay when the active layer / date changes.
   useEffect(() => {
@@ -627,7 +643,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           + `${SPOT_LABELS[h.kind] || h.kind}</div>`,
         `<div style="margin-bottom:4px">${h.why || ''}</div>`,
       ].join('');
-      core.bindPopup(`<div style="font-size:12px;max-width:230px">${bits}</div>`);
+      /* Tapping a numbered pin opens its card below the map rather than a
+         popup on it. A popup covers the water it is describing, and the
+         card it duplicates is already on screen with the stats and the
+         coordinates in it. */
+      if (rank && onPickSpot) core.on('click', () => onPickSpot(bk));
+      else core.bindPopup(`<div style="font-size:12px;max-width:230px">${bits}</div>`);
     });
     group.addTo(map);
     spotsRef.current = group;
@@ -657,7 +678,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         map.fitBounds(b, { padding: [40, 40], maxZoom: 9 });
       }
     }
-  }, [showSpots, spots, focusBreak, spotNumbers, highlightBreak]);
+  }, [showSpots, spots, focusBreak, spotNumbers, highlightBreak, onPickSpot]);
 
   /* Which catches hold a species record.
      The log is the source: the biggest one of each species that carries a
@@ -812,6 +833,21 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     </button>
   );
 
+  /* Floating chrome: an opaque pill that survives any imagery under it. */
+  const floatBox = { position: 'absolute', zIndex: 500 };
+  const pillStyle = (on) => ({
+    padding: '10px 15px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
+    fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
+    background: on ? T.brass : 'rgba(6,20,36,0.92)',
+    color: on ? T.oceanDeep : T.ink,
+    border: `1.5px solid ${on ? T.brass : 'rgba(255,255,255,0.18)'}`,
+    boxShadow: '0 2px 10px rgba(0,0,0,.4)',
+  });
+  const panelLabel = {
+    fontSize: 10.5, fontWeight: 800, letterSpacing: 1.1, color: T.inkMute,
+    textTransform: 'uppercase', marginBottom: 7,
+  };
+
   const overlayChip = (on, label, onClick) => (
     <button onClick={onClick} aria-pressed={on} style={{
       display: 'inline-flex', alignItems: 'center', gap: 7, flex: '0 0 auto',
@@ -844,6 +880,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         </>
       )}
 
+      {/* Stacked above the map — the standalone Ocean Maps screen, which
+          is all map and has the room for them. Plan Your Trip floats the
+          same controls instead; see below. */}
+      {!embedded && (<>
       {/* Layer toggle + marker overlays. Satellite layers are exclusive;
           Spots and Catches stack on top of whichever is active. */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -974,8 +1014,130 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         </div>
       )}
 
-      <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
-        <div ref={mapElRef} style={{ height: '58vh', minHeight: 380, width: '100%', background: '#06182b' }} />
+      </>)}
+
+      {/* The map, with its controls ON it.
+          Floating chrome was ruled out once because text over a
+          chlorophyll composite is unreadable at any colour — true of bare
+          text, not of a solid pill. Each control here carries its own
+          opaque background, so it reads over imagery the way the zoom
+          buttons always have, and the map gets the height the switches
+          were taking. */}
+      <div style={full ? {
+        position: 'fixed', inset: 0, zIndex: 4000, background: '#06182b',
+      } : {
+        position: 'relative', borderRadius: embedded ? 0 : 16, overflow: 'hidden',
+        border: embedded ? 'none' : `1px solid ${T.cardEdge}`,
+      }}>
+        <div ref={mapElRef} style={{
+          height: full ? '100%' : (embedded ? '62vh' : '58vh'),
+          minHeight: full ? 0 : 380, width: '100%', background: '#06182b',
+        }} />
+
+        {embedded && (
+          <>
+            {/* Satellite view, top left — one at a time, and tapping the
+                one that is on takes the picture away. */}
+            <div style={{ ...floatBox, top: 12, left: 12, display: 'flex', gap: 8 }}>
+              {Object.values(LAYERS).map(l => (
+                <button key={l.key} type="button" onClick={() => {
+                  setActive(prev => (prev === l.key ? null : l.key));
+                  if (active !== l.key) clearOverlays();
+                }} style={pillStyle(active === l.key)}>{l.label}</button>
+              ))}
+            </div>
+
+            {/* Everything else behind one button, because four rows of
+                switches do not belong in front of the water. */}
+            <button type="button" aria-label="Layers"
+                    onClick={() => setPanel(p => (p === 'layers' ? null : 'layers'))}
+                    style={{ ...floatBox, top: 12, right: 12, ...pillStyle(panel === 'layers'),
+                             width: 46, height: 46, borderRadius: 14, fontSize: 19,
+                             display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              ☰
+            </button>
+
+            {panel === 'layers' && (
+              <div style={{
+                ...floatBox, top: 66, right: 12, left: 12, maxWidth: 340, marginLeft: 'auto',
+                background: 'rgba(6,20,36,0.96)', border: `1px solid ${T.cardEdge}`,
+                borderRadius: 16, padding: 13,
+                maxHeight: '60%', overflowY: 'auto',
+              }}>
+                <div style={panelLabel}>Show on the water</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {overlayChip(showSpots, 'Suggested spots', () => toggleOverlay(setShowSpots))}
+                  {overlayChip(showCatches, 'My catches', () => toggleOverlay(setShowCatches))}
+                  {overlayChip(showCurrent, 'Current', () => toggleOverlay(setShowCurrent))}
+                  {overlayChip(showSpecies, 'Species', () => toggleOverlay(setShowSpecies))}
+                </div>
+                {showSpecies && (
+                  <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+                    {ZONE_SPECIES.map((id) => {
+                      const on = speciesOn.has(id);
+                      const col = SPECIES_ZONE_COLORS[id] || T.brass;
+                      const name = SPECIES.find(sp => sp.id === id)?.commonName
+                        || id.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+                      return (
+                        <button key={id} type="button" onClick={() => setSpeciesOn((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(id)) next.delete(id); else next.add(id);
+                          return next;
+                        })} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          padding: '6px 11px', borderRadius: 999, cursor: 'pointer',
+                          fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
+                          background: on ? T.parchmentDeep : 'transparent',
+                          border: `1.5px solid ${on ? col : T.cardEdge}`,
+                          color: on ? T.ink : T.inkMute, fontFamily: 'inherit',
+                        }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: col,
+                                         opacity: on ? 1 : 0.45 }} />
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {active && (
+                  <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 10, lineHeight: 1.45 }}>
+                    Nothing can be drawn over a satellite image and still be read — turn the
+                    view off to put these back on the water.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Which composite, bottom left — the same four choices, out
+                of the way until asked for. */}
+            <div style={{ ...floatBox, bottom: 24, left: 12 }}>
+              <button type="button" onClick={() => setPanel(p => (p === 'when' ? null : 'when'))}
+                      style={pillStyle(panel === 'when')}>
+                {dateISO ? `Imagery ${dateISO}` : 'Latest imagery'} ▾
+              </button>
+              {panel === 'when' && (
+                <div style={{
+                  display: 'flex', gap: 7, marginTop: 8, flexWrap: 'wrap', maxWidth: 230,
+                }}>
+                  {chip(dateISO === '', 'Latest', () => setDateISO(''))}
+                  {[8, 16, 24].map(d => chip(
+                    dateISO === new Date(Date.now() - d * 86400000).toISOString().slice(0, 10),
+                    `−${d}d`,
+                    () => setDateISO(new Date(Date.now() - d * 86400000).toISOString().slice(0, 10))))}
+                </div>
+              )}
+            </div>
+
+            {/* More water, one tap away and one tap back. */}
+            <button type="button" aria-label={full ? 'Exit full screen' : 'Full screen'}
+                    onClick={() => setFull(f => !f)}
+                    style={{ ...floatBox, bottom: 24, right: 12, ...pillStyle(false),
+                             width: 44, height: 44, borderRadius: 13, fontSize: 17,
+                             display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {full ? '✕' : '⛶'}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Under the map, in the flow — not floating on it. Over imagery
