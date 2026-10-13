@@ -62,6 +62,7 @@ import {
 // Leaflet) only matters on the Patterns tab. Splitting it keeps ~all of it
 // out of the cold-start bundle.
 const PatternsScreen = lazy(() => import('./screens_patterns.jsx').then(m => ({ default: m.PatternsScreen })));
+const PlanTripScreen = lazy(() => import('./screens_plan.jsx').then(m => ({ default: m.PlanTripScreen })));
 import NotificationsDrawer, { useAnnouncementInbox } from './notifications-inbox.jsx';
 import { isAdminEmail } from './admin-emails.js';
 
@@ -875,6 +876,7 @@ export default function App() {
     onPatterns:   () => push({ name: 'patterns' }),
     onForecast:   () => push({ name: 'forecast' }),
     onOceanMaps:  (layer) => push({ name: 'oceanmaps', layer }),
+    onPlanTrip:   () => push({ name: 'plan' }),
     onSpecies:    (id) => push({ name: 'species', id }),
     onSpeciesList:() => push({ name: 'species_list' }),
     onPBs:        () => push({ name: 'pbs' }),
@@ -902,6 +904,18 @@ export default function App() {
         onSpecies={(id) => push({ name: 'species', id })}
       />;
       break;
+    case 'plan':
+      body = (
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: T.inkMute }}>Loading…</div>}>
+          <PlanTripScreen
+            state={state}
+            tier={size}
+            onOceanMaps={(layer) => push({ name: 'oceanmaps', layer })}
+          />
+        </Suspense>
+      );
+      break;
+
     case 'patterns':
       body = (
         <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: T.inkMute }}>Loading patterns…</div>}>

@@ -53,12 +53,27 @@ export function runFrom(aLat, aLon, bLat, bLon) {
    you", and the card renders nothing rather than something irrelevant. */
 export const MAX_RUN_NM = 150;
 
-export function pickReachableSpot(rows, home, maxNm = MAX_RUN_NM) {
-  if (!home || !Number.isFinite(home.lat) || !Number.isFinite(home.lon)) return null;
-  const near = (rows || [])
+/* Every spot within reach, best first, each carrying the run from the
+   angler's own water. The Home card takes the first of these; the Plan
+   Your Trip page shows the list. */
+export function reachableSpots(rows, home, maxNm = MAX_RUN_NM) {
+  if (!home || !Number.isFinite(home.lat) || !Number.isFinite(home.lon)) return [];
+  return (rows || [])
     .filter(r => r && r.score != null && Number.isFinite(r.lat) && Number.isFinite(r.lon))
     .map(r => ({ ...r, _run: runFrom(home.lat, home.lon, r.lat, r.lon) }))
-    .filter(r => r._run.dist <= maxNm);
-  near.sort((a, b) => b.score - a.score);
-  return near[0] || null;
+    .filter(r => r._run.dist <= maxNm)
+    .sort((a, b) => b.score - a.score);
 }
+
+export function pickReachableSpot(rows, home, maxNm = MAX_RUN_NM) {
+  if (!home || !Number.isFinite(home.lat) || !Number.isFinite(home.lon)) return null;
+  return reachableSpots(rows, home, maxNm)[0] || null;
+}
+
+/* Compass point for a bearing. Here because the Home card, the trip page
+   and the spot sheet all name a direction, and three copies of a lookup
+   table is how two of them end up off by one sector. */
+const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
+                 'S','SSW','SW','WSW','W','WNW','NW','NNW'];
+export const compassPoint = (deg) =>
+  (deg == null || !Number.isFinite(deg)) ? '' : COMPASS[Math.round(deg / 22.5) % 16];

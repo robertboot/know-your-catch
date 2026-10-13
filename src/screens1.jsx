@@ -721,7 +721,7 @@ export function HomeScreen({
   state, jurisdiction, stale, screenSize, onChangeJurisdiction,
   onIdentify, onRegulations, onReport, onSpecies, onSpeciesList, onPBs,
   onCompare, onRegulationAlerts, onQuiz, onLogMenu, onPatterns,
-  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast, onOceanMaps,
+  onCapture, onSelectFromLibrary, onViewCatch, onViewCatches, onForecast, onOceanMaps, onPlanTrip,
   finishSetupVisible, onFinishSetup, onDismissFinishSetup,
 }) {
   const isTablet = screenSize === 'tablet' || screenSize === 'tablet-landscape';
@@ -832,9 +832,9 @@ export function HomeScreen({
           The artwork carries its own words, so the alt text has to say
           them: a reader with images off, or a screen reader, otherwise
           gets a button that announces nothing. */}
-      {onOceanMaps && (
+      {(onPlanTrip || onOceanMaps) && (
         <button
-          onClick={() => onOceanMaps()}
+          onClick={onPlanTrip || (() => onOceanMaps())}
           className="kyc-press"
           aria-label="Plan your next trip — find promising water and see your past catches"
           style={{
@@ -875,21 +875,20 @@ export function HomeScreen({
         position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
         border: `1px solid ${T.cardEdge}`,
         background: '#031B33',
-        minHeight: isTablet ? (isLandscape ? 520 : 460) : undefined,
+        minHeight: isTablet ? (isLandscape ? 300 : 270) : undefined,
       }}>
         {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
             the tuna feels alive. Overscan hides the edges as it moves.
 
-            The artwork is the tuna from the new Log your catch banner,
-            cropped to the fish. The left of that composition is a dark
-            panel carrying the headline and two buttons — which this card
-            already renders as REAL controls, so using the whole banner
-            would paint a second, untappable copy of them underneath. */}
+            The original tuna, re-laid-out to the newer banner: a short
+            wide card, dark panel left, fish right. The buttons stay REAL
+            controls rather than being baked into artwork — a painted
+            button is untappable and invisible to a screen reader. */}
         <div aria-hidden className="kyc-kenburns" style={{
           position: 'absolute', inset: '-10%', pointerEvents: 'none',
         }}>
           <img
-            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna-v2.png`)}
+            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
             alt=""
             aria-hidden
             style={{
@@ -914,28 +913,20 @@ export function HomeScreen({
           padding: isTablet ? '36px 32px 32px' : '20px 18px 18px',
           maxWidth: isTablet ? 500 : 320,
         }}>
-          <div style={{
-            fontSize: isTablet ? 19 : 13, fontWeight: 800, color: T.brass,
-            letterSpacing: 1.4,
-          }}>BUILD YOUR</div>
           {/* Two-line headline so the copy never overflows the fish
               art at narrow widths. Line-height ~0.95 keeps them
               feeling like one thought. */}
           <div style={{
-            fontSize: isTablet ? (isLandscape ? 76 : 68) : 34, fontWeight: 900, color: T.ink,
-            letterSpacing: 0.5, lineHeight: 0.95,
-            marginTop: isTablet ? 10 : 4,
+            fontSize: isTablet ? (isLandscape ? 54 : 48) : 30, fontWeight: 900, color: T.ink,
+            letterSpacing: 0.3, lineHeight: 1.05,
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
-          }}>
-            <span style={{ display: 'block' }}>Log your</span>
-            <span style={{ display: 'block' }}>catch</span>
-          </div>
+          }}>Log your catch</div>
           <div style={{
             fontSize: isTablet ? 21 : 13.5, color: T.ink, lineHeight: 1.45,
             marginTop: isTablet ? 20 : 10,
             maxWidth: isTablet ? 480 : 260,
           }}>
-            Snap your catch. We'll log the species, location, and conditions — and build your fishing map.
+            Save the species, location and conditions.<br />Build your personal fishing map.
           </div>
           {/* Two-button row: primary Take Photo (camera-direct) + secondary
               Select Photo (library only). Both feed the same shared post-

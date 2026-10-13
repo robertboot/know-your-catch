@@ -18,6 +18,7 @@ import TripPlanningPanel from '../../src/admin/TripPlanningPanel.jsx';
 import HomeDashboard from '../../src/admin/HomeDashboard.jsx';
 import ModelsPanel from '../../src/admin/ModelsPanel.jsx';
 import { OceanMapsScreen } from '../../src/screens_ocean.jsx';
+import { PlanTripScreen } from '../../src/screens_plan.jsx';
 
 /* OceanMapsScreen is an APP screen, not an admin panel, and it was going
    to TestFlight unmounted by anything. It is also the screen most likely
@@ -28,6 +29,9 @@ const PANELS = {
   TripPlanningPanel, HomeDashboard, ModelsPanel,
   OceanMapsScreen: () => React.createElement(OceanMapsScreen, {
     isTablet: false, initialLayer: 'chl', state: { fishingSpots: [], catchLog: [] },
+  }),
+  PlanTripScreen: () => React.createElement(PlanTripScreen, {
+    state: { fishingSpots: [], catchLog: [] }, onOceanMaps: () => {}, tier: 'phone',
   }),
 };
 
