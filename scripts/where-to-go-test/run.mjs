@@ -21,7 +21,7 @@ await esbuild.build({
   entryPoints: [path.resolve(here, '../../src/home-water.js')],
   bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'error',
 });
-const { pickReachableSpot, runFrom, homeWater, MAX_RUN_NM } = await import(out);
+const { pickReachableSpot, runFrom, homeWater, MAX_RUN_NM, reachableSpots, groupByBreak, spotStanding } = await import(out);
 
 const ORANGE_BEACH = { lat: 30.27, lon: -87.55 };
 const SPOTS = [
@@ -68,6 +68,39 @@ check('rows missing coordinates are skipped, not crashed on',
 check('the starred spot decides the home water',
   homeWater({ fishingSpots: [{ starred: true, lat: 30.27, lon: -87.55, name: 'Orange Beach' }],
               catchLog: [{ lat: 25, lon: -80 }] }).label === 'Orange Beach');
+
+/* One break, listed three times.
+   These are the real rows Orange Beach was shown: the same 16 nm
+   Louisiana break at 124, 129 and 133 nm, which the list rendered as
+   three places to choose between. Peaks from one group carry that
+   group's own span and bearing, which is what identifies them. */
+const ONE_BREAK = [
+  { id: 'a', region_id: 'la_gulf', score: 20, lat: 28.77, lon: -89.18, length_nm: 16.2, bearing_deg: 71.4 },
+  { id: 'b', region_id: 'la_gulf', score: 8,  lat: 28.71, lon: -89.36, length_nm: 16.2, bearing_deg: 71.4 },
+  { id: 'c', region_id: 'la_gulf', score: 7,  lat: 28.74, lon: -89.27, length_nm: 16.2, bearing_deg: 71.4 },
+  // A genuinely different break in the same region.
+  { id: 'd', region_id: 'la_gulf', score: 55, lat: 29.10, lon: -88.60, length_nm: 7.5, bearing_deg: 12.0 },
+];
+const grouped = groupByBreak(reachableSpots(ONE_BREAK, ORANGE_BEACH));
+check('one break becomes one card', grouped.length === 2, `${grouped.length} cards from 4 spots`);
+check('the strongest point represents its break',
+  grouped.find(g => g.length_nm === 16.2)?.score === 20);
+check('and it counts the points along it',
+  grouped.find(g => g.length_nm === 16.2)?._points === 3);
+check('a different break is kept separate',
+  grouped.some(g => g.length_nm === 7.5));
+check('the nearest run on the break is the one shown',
+  Math.round(grouped.find(g => g.length_nm === 16.2)._run.dist) <= 125,
+  `${Math.round(grouped.find(g => g.length_nm === 16.2)._run.dist)} nm`);
+
+/* The score means something different from the sea-state grade. A 20 is a
+   faint fishing sign; an F on the day strip is a sea to stay out of. */
+check('a marginal spot is not branded a failure',
+  !/^F$/.test(spotStanding(20).label) && spotStanding(20).label === 'Best of a quiet pass',
+  spotStanding(20).label);
+check('a real break reads as one', spotStanding(78).label === 'Strong break');
+check('the middle band is distinct', spotStanding(50).label === 'Worth a look');
+check('an unscored spot says so', spotStanding(null).label === 'Unscored');
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

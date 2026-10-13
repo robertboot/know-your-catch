@@ -16,7 +16,8 @@ import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
 import { client } from './supabase-client.js';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
-import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM } from './home-water.js';
+import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
+         groupByBreak, spotStanding } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
 export function PlanTripScreen({ state, onOceanMaps, tier = 'phone' }) {
@@ -40,19 +41,19 @@ export function PlanTripScreen({ state, onOceanMaps, tier = 'phone' }) {
     (async () => {
       const cached = readMarineCache('hotspots', 0, 0);
       if (cached && alive) {
-        setSpots(reachableSpots(cached.data, home));
+        setSpots(groupByBreak(reachableSpots(cached.data, home)));
         setSpotsAge(cached.ageMs);
       }
       const c = client();
       if (!c) return;
       const since = new Date(Date.now() - 72 * 3600000).toISOString();
       const { data, error } = await c.from('hotspots')
-        .select('id,score,why,kind,lat,lon,sst_f,depth_ft,current_kt,length_nm,observed_at')
+        .select('id,region_id,score,why,kind,lat,lon,sst_f,depth_ft,current_kt,length_nm,bearing_deg,observed_at')
         .gte('observed_at', since)
         .order('score', { ascending: false })
         .limit(60);
       if (!alive || error || !data) return;
-      setSpots(reachableSpots(data, home));
+      setSpots(groupByBreak(reachableSpots(data, home)));
       setSpotsAge(null);
       writeMarineCache('hotspots', 0, 0, data);
     })();
@@ -147,28 +148,42 @@ export function PlanTripScreen({ state, onOceanMaps, tier = 'phone' }) {
         {(spots || []).slice(0, 8).map((s, i) => (
           <Card key={s.id || i} style={{ padding: sz(13, 16, 18), borderRadius: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                flex: '0 0 auto', width: 46, height: 46, borderRadius: 12,
-                background: fishabilityColor(s.score), color: T.oceanDeep,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 19, fontWeight: 900,
-              }}>{fishabilityGrade(s.score)}</div>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: sz(17, 19, 21), fontWeight: 800, color: T.ink, lineHeight: 1.2 }}>
                   {Math.round(s._run.dist)} nm {compassPoint(s._run.brg)}
                 </div>
                 <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 2 }}>
                   of {home.label}
+                  {s.length_nm >= 2 ? ` · the break runs ${Math.round(s.length_nm)} nm` : ''}
                   {spotsAge != null ? ` · saved ${describeAge(spotsAge)}` : ''}
                 </div>
               </div>
+              {/* What the score MEANS, not a letter borrowed from the
+                  safety scale. A 20 here is a faint fishing sign; an F on
+                  the day strip is a sea you should not be out in. Rendering
+                  both as a red F told the angler the only water worth
+                  running to was dangerous. */}
+              {(() => {
+                const st = spotStanding(s.score);
+                const tone = st.tone === 'good' ? T.open : st.tone === 'fair' ? T.brass : T.inkMute;
+                return (
+                  <span style={{
+                    flex: '0 0 auto', fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                    color: tone, border: `1px solid ${tone}55`, borderRadius: 999,
+                    padding: '4px 9px', whiteSpace: 'nowrap', textTransform: 'uppercase',
+                  }}>{st.label}</span>
+                );
+              })()}
             </div>
             {/* The server's `why` ends with the run from that REGION's port.
                 The heading above already gives the run from the angler's own
                 water, and two distances to one spot reads as a contradiction
                 — see the Home card, which had exactly that bug. */}
             <div style={{ fontSize: sz(13, 14.5, 16), color: T.inkSoft, lineHeight: 1.55, marginTop: 10 }}>
-              {String(s.why || '').replace(/\s*\d+(\.\d+)?\s*nm\s+[NSEW]{1,3}\s+of\s+[^.]+\.\s*$/, '')}
+              {String(s.why || '')
+                .replace(/\s*\d+(\.\d+)?\s*nm\s+[NSEW]{1,3}\s+of\s+[^.]+\.\s*$/, '')
+                // The badge already says this is the best of a quiet pass.
+                .replace(/^Nothing strong this pass\s*—\s*this is the best of it\.\s*/, '')}
             </div>
           </Card>
         ))}

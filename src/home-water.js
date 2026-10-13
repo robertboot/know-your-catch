@@ -77,3 +77,52 @@ const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
                  'S','SSW','SW','WSW','W','WNW','NW','NNW'];
 export const compassPoint = (deg) =>
   (deg == null || !Number.isFinite(deg)) ? '' : COMPASS[Math.round(deg / 22.5) % 16];
+
+/* Collapse the several points the server publishes along ONE break into
+ * one entry.
+ *
+ * find-hotspots offers up to MAX_SPOTS peaks per connected group so a
+ * hundred-mile wall is not reduced to a single pin on the map. On a map
+ * that is right. In a LIST it reads as three places to choose between
+ * when it is one place three times — Orange Beach was shown the same
+ * 16 nm Louisiana break at 124, 129 and 133 nm.
+ *
+ * The grouping signal is exact rather than a distance guess: every peak
+ * from one group is built with that group's own span and bearing, so
+ * spots sharing region, length and bearing came from the same break.
+ */
+export function groupByBreak(spots) {
+  const byBreak = new Map();
+  for (const s of spots || []) {
+    const key = [s.region_id, Number(s.length_nm || 0).toFixed(1),
+                 Number(s.bearing_deg || 0).toFixed(1)].join('|');
+    const seen = byBreak.get(key);
+    if (!seen) { byBreak.set(key, { ...s, _points: 1 }); continue; }
+    seen._points += 1;
+    // Keep the strongest point as the one to steer at, and the nearest
+    // run, since any point on the break is a legitimate place to start.
+    if (s.score > seen.score) {
+      const points = seen._points;
+      byBreak.set(key, { ...s, _points: points, _run: (s._run?.dist ?? Infinity) < (seen._run?.dist ?? Infinity) ? s._run : seen._run });
+    } else if ((s._run?.dist ?? Infinity) < (seen._run?.dist ?? Infinity)) {
+      seen._run = s._run;
+    }
+  }
+  return [...byBreak.values()].sort((a, b) => b.score - a.score);
+}
+
+/* What a spot's score MEANS, in words.
+ *
+ * These used to be rendered through fishabilityGrade, so a 20-score break
+ * showed the same red F as a day with a dangerous sea — while the card's
+ * own text said "this is the best of it". One scale cannot carry both
+ * "the water is unsafe" and "the fishing sign is faint"; the first is a
+ * warning and the second is a ranking. MIN_SCORE in find-hotspots is 65,
+ * which is the bar for a break worth driving to.
+ */
+export function spotStanding(score) {
+  if (score == null) return { label: 'Unscored', tone: 'mute' };
+  if (score >= 65) return { label: 'Strong break', tone: 'good' };
+  if (score >= 40) return { label: 'Worth a look', tone: 'fair' };
+  return { label: 'Best of a quiet pass', tone: 'mute' };
+}
