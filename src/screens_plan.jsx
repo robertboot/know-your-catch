@@ -246,30 +246,27 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
         </Card>
       )}
 
-      {/* The header for this section, under the map it belongs to.
-          Above the map it read as a heading for the map itself, which has
-          its own name, and the explanation of the numbering sat where the
-          numbers had not appeared yet. */}
+      {/* No heading over the card.
+          "WHERE TO GO" and two lines explaining the numbering pushed the
+          first spot most of a screen below the map it belongs to — a
+          heading, a paragraph and a collapse button, to introduce a card
+          that says all of it itself. The handle collapses the panel, the
+          way the mockup's sheet does. */}
       {shown.length > 0 && (
-      <div style={{ marginTop: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <SectionLabel style={{ flex: 1, margin: 0 }}>Where to go</SectionLabel>
-          {/* Collapse it for more map. The panel is tall by the time it
-              carries the stats and a set of coordinates, and on a boat the
-              water is sometimes the only thing you want on screen. */}
-          <PagerButton label={openPanel ? 'Hide details' : 'Show details'}
-                       onClick={() => setOpenPanel(o => !o)}>{openPanel ? '⌄' : '⌃'}</PagerButton>
-        </div>
-        {openPanel && (
-          <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
-            All {shown.length} areas are on the map above, numbered to match — tap one to
-            open its card here.
-          </div>
-        )}
-      </div>
+        <button type="button" aria-label={openPanel ? 'Hide details' : 'Show details'}
+                onClick={() => setOpenPanel(o => !o)}
+                style={{
+                  display: 'block', width: '100%', padding: '9px 0 5px', cursor: 'pointer',
+                  background: 'transparent', border: 'none',
+                }}>
+          <span style={{
+            display: 'block', width: 44, height: 5, borderRadius: 999,
+            margin: '0 auto', background: T.cardEdge,
+          }} />
+        </button>
       )}
 
-      <div style={{ marginTop: 10 }}>
+      <div style={{ marginTop: 4 }}>
         {(openPanel ? [shown[Math.min(pick, shown.length - 1)]] : []).filter(Boolean).map((s) => {
           const i = Math.min(pick, shown.length - 1);
           const key = breakKey(s);
@@ -382,6 +379,12 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
           </Card>
           );
         })}
+
+        {!openPanel && (
+          <div style={{ fontSize: 12.5, color: T.inkMute, textAlign: 'center', paddingBottom: 6 }}>
+            {shown.length} suggested areas — tap the handle to show them.
+          </div>
+        )}
 
         {/* Under the card it qualifies, not above the section. At the top
             it was the first thing read about water the angler had not been
