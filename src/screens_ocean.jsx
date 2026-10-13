@@ -1007,7 +1007,13 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         </div>
       )}
 
-      {/* Legend + blurb */}
+      {/* Nothing to legend when nothing is drawn.
+         With both layers off this card said "No satellite layer" and then
+         spent a screen explaining where the image went, where the spots
+         came from and who owns the data — a block of text as tall as the
+         map, about an image that is not on it. The scale, the blurb and
+         the attribution all describe a layer, so they appear with one. */}
+      {cfg && (
       <Card style={{ marginTop: 12, borderRadius: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <SectionLabel style={{ margin: 0 }}>
@@ -1068,6 +1074,17 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           Data: NOAA CoastWatch / NASA Ocean Color (public domain). 8-day composites — cloud gaps fill in over time.
         </div>
       </Card>
+      )}
+
+      {/* The one thing still worth saying with the layers off: that the
+          map has no spots to draw, which otherwise looks like a bug. */}
+      {!cfg && showSpots && !embedded && (spots === null || spots.length === 0) && (
+        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 10 }}>
+          {spots === null
+            ? 'Suggested spots load when you have signal and are saved for offshore.'
+            : 'No strong edges found in the last satellite pass — flat, even water across the region.'}
+        </div>
+      )}
     </div>
   );
 }
