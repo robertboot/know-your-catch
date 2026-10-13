@@ -156,6 +156,20 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
   const [showSpecies, setShowSpecies] = useState(false);
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
   const [zoneRows, setZoneRows] = useState(null);
+
+  /* The exclusivity rule, in one place so the chips cannot drift from it.
+     clearOverlays runs when a composite is chosen; toggleOverlay takes the
+     composite away when an overlay goes ON — but not when one goes off, so
+     clearing the last overlay leaves you on bare water rather than
+     surprising you with a satellite image. */
+  const clearOverlays = () => {
+    setShowSpots(false); setShowCatches(false);
+    setShowCurrent(false); setShowSpecies(false);
+  };
+  const toggleOverlay = (setter) => setter(prev => {
+    if (!prev) setActive(null);
+    return !prev;
+  });
   const [outlook, setOutlook] = useState(null);   // ten-day, from the Home fetch
   const [dayPick, setDayPick] = useState(0);      // index into outlook
   const zonesRef = useRef(null);
@@ -472,6 +486,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
 
 
   const cfg = active ? LAYERS[active] : null;
+  /* Two groups that cannot coexist, so they are drawn as two different
+     KINDS of control — the shape teaches the rule before anyone taps.
+     A satellite view is pick-one-or-none, so it is a segmented control
+     with a radio dot. The overlays are pick-any, so they are checkboxes.
+     Users already know those two shapes; a row of identical pills that
+     silently switch each other off teaches nothing and feels broken. */
   const chip = (activeState, label, onClick) => (
     <button onClick={onClick} style={{
       padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer',
@@ -479,6 +499,41 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       color: activeState ? T.oceanDeep : T.ink,
       border: `1.5px solid ${activeState ? T.brass : T.cardEdge}`,
     }}>{label}</button>
+  );
+
+  const viewChip = (on, label, onClick) => (
+    <button onClick={onClick} aria-pressed={on} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7, flex: '0 0 auto',
+      padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer',
+      background: on ? T.brass : 'transparent', color: on ? T.oceanDeep : T.ink,
+      border: `1.5px solid ${on ? T.brass : T.cardEdge}`, fontFamily: 'inherit',
+    }}>
+      <span aria-hidden style={{
+        width: 11, height: 11, borderRadius: '50%', flexShrink: 0,
+        border: `2px solid ${on ? T.oceanDeep : T.inkMute}`,
+        background: on ? T.oceanDeep : 'transparent',
+        boxShadow: on ? `inset 0 0 0 2px ${T.brass}` : 'none',
+      }} />
+      {label}
+    </button>
+  );
+
+  const overlayChip = (on, label, onClick) => (
+    <button onClick={onClick} aria-pressed={on} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7, flex: '0 0 auto',
+      padding: '8px 14px', borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: 'pointer',
+      background: on ? T.parchmentDeep : 'transparent', color: on ? T.ink : T.inkSoft,
+      border: `1.5px solid ${on ? T.brass : T.cardEdge}`, fontFamily: 'inherit',
+    }}>
+      <span aria-hidden style={{
+        width: 13, height: 13, borderRadius: 3, flexShrink: 0,
+        border: `2px solid ${on ? T.brass : T.inkMute}`,
+        background: on ? T.brass : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: T.oceanDeep, fontSize: 10, fontWeight: 900, lineHeight: 1,
+      }}>{on ? '✓' : ''}</span>
+      {label}
+    </button>
   );
 
   return (
@@ -491,18 +546,48 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
       {/* Layer toggle + marker overlays. Satellite layers are exclusive;
           Spots and Catches stack on top of whichever is active. */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        {/* Tapping the layer you are already on turns it OFF. The
-            suggested spots sit on top of the satellite image, and over a
-            chlorophyll composite a coloured dot is one more colour — the
-            only way to actually look at them is to take the picture away.
-            There was no way to do that: one of the two was always on. */}
-        {Object.values(LAYERS).map(l => chip(active === l.key, l.label,
-          () => setActive(prev => (prev === l.key ? null : l.key))))}
-        <span style={{ width: 1, background: T.cardEdge, margin: '4px 2px' }} />
-        {chip(showSpots, 'Suggested spots', () => setShowSpots(v => !v))}
-        {chip(showCatches, 'My catches', () => setShowCatches(v => !v))}
-        {chip(showCurrent, 'Current', () => setShowCurrent(v => !v))}
-        {chip(showSpecies, 'Species', () => setShowSpecies(v => !v))}
+        {/* A satellite composite and anything drawn on top are mutually
+            exclusive, in both directions.
+            Chlorophyll and sea temp are solid colour edge to edge, so a
+            dot, a blob or a current streak over one is just one more
+            colour — unreadable, and worse, readable-looking. So picking a
+            composite clears the overlays, and switching any overlay on
+            takes the picture away. Tapping the composite you are already
+            on also turns it off, which is how you get to bare water.
+            The four overlays are free to combine with each other. */}
+        <div style={{ width: '100%' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.1,
+                        color: T.inkMute, textTransform: 'uppercase', marginBottom: 6 }}>
+            Satellite view · one at a time
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {Object.values(LAYERS).map(l => viewChip(active === l.key, l.label, () => {
+              setActive(prev => (prev === l.key ? null : l.key));
+              if (active !== l.key) clearOverlays();
+            }))}
+          </div>
+
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.1,
+                        color: T.inkMute, textTransform: 'uppercase', margin: '12px 0 6px' }}>
+            Show on the water · any
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {overlayChip(showSpots, 'Suggested spots', () => toggleOverlay(setShowSpots))}
+            {overlayChip(showCatches, 'My catches', () => toggleOverlay(setShowCatches))}
+            {overlayChip(showCurrent, 'Current', () => toggleOverlay(setShowCurrent))}
+            {overlayChip(showSpecies, 'Species', () => toggleOverlay(setShowSpecies))}
+          </div>
+
+          {/* Say what just happened. A control that silently switches
+              another one off reads as a bug; one line turns it into a
+              rule the angler can predict. */}
+          {active && (
+            <div style={{ fontSize: 11.5, color: T.inkMute, marginTop: 8, lineHeight: 1.45 }}>
+              Nothing can be drawn over a satellite image and still be read — turn the view off
+              to put spots, catches, current or species back on the water.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Composite date + land overlay */}
