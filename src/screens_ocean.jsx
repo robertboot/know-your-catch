@@ -459,6 +459,18 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
        zone of water to work, not a waypoint to sit on. So the points are
        grouped back into their break and drawn as the area they describe,
        sized by the break's own length. */
+    /* Spots sit ABOVE the current.
+       The flow layer appends its canvas to the overlay pane, where the
+       spot circles are drawn too — and being appended later it covered
+       them, so the one thing the map is recommending was underneath the
+       decoration. Their own pane at 450 puts them over the current and
+       the zones, and still under markers and popups. */
+    if (!map.getPane('spotspane')) {
+      map.createPane('spotspane');
+      map.getPane('spotspane').style.zIndex = 450;
+      map.getPane('spotspane').style.pointerEvents = 'auto';
+    }
+
     const group = L.layerGroup();
     let focusTarget = null;
     groupByBreak(spots).forEach((h) => {
@@ -470,6 +482,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       const radiusM = Math.max(3000, (Number(h.length_nm) || 4) * 1852 / 2);
 
       const ring = L.circle([h.lat, h.lon], {
+        pane: 'spotspane',
         radius: radiusM, stroke: true, color,
         weight: isFocus ? 4 : 2, opacity: isFocus ? 1 : 0.75,
         dashArray: isFocus ? null : '6 5',
@@ -477,6 +490,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       }).addTo(group);
       if (isFocus) focusTarget = ring;
       const core = L.circleMarker([h.lat, h.lon], {
+        pane: 'spotspane',
         radius: 5, stroke: true, color: '#06212f', weight: 1, opacity: 0.6,
         fillColor: color, fillOpacity: 0.95,
       }).addTo(group);
