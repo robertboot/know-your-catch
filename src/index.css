@@ -88,3 +88,18 @@ input[type=number] { -moz-appearance: textfield; }
   image-rendering: auto;
   -ms-interpolation-mode: bicubic;
 }
+
+/* Catch marker tooltips — the species name on hover.
+   Leaflet's default is a white box with a pointer, which on a dark chart
+   reads as a popup that has opened rather than a label. */
+.kyc-catch-tip {
+  background: rgba(6, 22, 37, 0.94);
+  border: 1px solid rgba(25, 212, 242, 0.35);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.kyc-catch-tip::before { border-top-color: rgba(6, 22, 37, 0.94); }

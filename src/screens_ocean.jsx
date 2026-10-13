@@ -635,7 +635,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           const photo = speciesPhoto(c.speciesId);
           if (photo?.url) {
             L.marker([c.lat, c.lon], {
-              interactive: false,
+              // Interactive so it can carry a tooltip — the disc is the
+              // thing the eye lands on, so it should be the thing that
+              // answers when you point at it.
+              interactive: true,
               icon: L.divIcon({
                 className: '',
                 /* Big enough to identify, and NOT cropped.
@@ -646,19 +649,32 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                    whole fish; the disc behind it keeps the marker reading
                    as a marker rather than a floating cut-out, and 88px
                    leaves the fish as large as it was at 68 cropped. */
+                // No disc behind the fish. The navy circle was there to
+                // make the marker read as a marker, but it also stamped a
+                // hard blue coin over the water and hid whatever layer was
+                // underneath. The drop shadow does the separating instead,
+                // so the fish sits ON the chart rather than in a hole cut
+                // out of it.
                 html: `<div style="`
-                    + `width:88px;height:88px;border-radius:50%;`
+                    + `width:88px;height:88px;`
                     + `transform:translate(-50%,-98px);`
-                    + `background:rgba(6,33,47,0.92);`
-                    + `border:${isPB ? '3px solid #FFC857' : '2px solid rgba(255,255,255,0.85)'};`
-                    + `box-shadow:0 3px 10px rgba(0,0,0,0.55);`
-                    + `display:flex;align-items:center;justify-content:center;overflow:hidden">`
+                    + `display:flex;align-items:center;justify-content:center">`
                     + `<img src="${photo.url}" alt="" style="`
-                    + `width:100%;height:100%;object-fit:contain;display:block">`
+                    + `width:100%;height:100%;object-fit:contain;display:block;`
+                    + `filter:drop-shadow(0 2px 3px rgba(0,0,0,0.85))`
+                    + `${isPB ? ' drop-shadow(0 0 4px #FFC857) drop-shadow(0 0 2px #FFC857)' : ''}">`
                     + `</div>`,
                 iconSize: [0, 0],
               }),
-            }).addTo(group);
+            })
+              // Name on hover, so the map stays a picture until you ask it
+              // a question. Labels drawn permanently were what made this
+              // unreadable in the first place.
+              .bindTooltip(`${isPB ? '★ ' : ''}${name}`, {
+                direction: 'top', offset: [0, -92], opacity: 0.95,
+                className: 'kyc-catch-tip',
+              })
+              .addTo(group);
           }
         }
       });
