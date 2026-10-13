@@ -879,7 +879,7 @@ export function HomeScreen({
         // The artwork's own deep water samples at #0b2c44; this is a shade
         // deeper by choice, and the gradient blends the difference across
         // most of the card's width, so there is no edge to see.
-        background: '#11263b',
+        background: '#000614',
         minHeight: isTablet ? (isLandscape ? 300 : 270) : undefined,
       }}>
         {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
@@ -907,7 +907,7 @@ export function HomeScreen({
           pointerEvents: 'none',
         }}>
           <img
-            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
+            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna-feathered.png`)}
             alt=""
             aria-hidden
             style={{
@@ -926,11 +926,15 @@ export function HomeScreen({
             }}
           />
         </div>
+        {/* Softer now the artwork feathers its own left edge. The old stops
+            were sized to hide a hard photo edge; stacked on a feathered one
+            they darkened the fish's head as well as the panel behind the
+            text. Pulled back to just what keeps the headline legible. */}
         <div aria-hidden style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
           background: isTablet
-            ? 'linear-gradient(90deg, #11263b 0%, rgba(17, 38, 59, 0.92) 28%, rgba(17, 38, 59, 0.50) 45%, rgba(17, 38, 59, 0) 65%)'
-            : 'linear-gradient(90deg, #11263b 0%, rgba(17, 38, 59, 0.94) 22%, rgba(17, 38, 59, 0.55) 38%, rgba(17, 38, 59, 0) 58%)',
+            ? 'linear-gradient(90deg, #000614 0%, rgba(0, 6, 20, 0.80) 22%, rgba(0, 6, 20, 0.30) 38%, rgba(0, 6, 20, 0) 52%)'
+            : 'linear-gradient(90deg, #000614 0%, rgba(0, 6, 20, 0.85) 18%, rgba(0, 6, 20, 0.35) 32%, rgba(0, 6, 20, 0) 48%)',
           pointerEvents: 'none',
         }} />
 
