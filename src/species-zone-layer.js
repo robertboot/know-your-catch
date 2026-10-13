@@ -60,26 +60,56 @@ export function createSpeciesZoneLayer(L, rows, speciesOn, { pane } = {}) {
     const H = Math.round((latMax - latMin) / step) + 1;
     if (W < 1 || H < 1 || W * H > 400000) continue;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    const img = ctx.createImageData(W, H);
+    /* One pixel per grid cell, then grown and softened.
+     *
+     * Painting a cell as a pixel and letting Leaflet stretch the result
+     * gave hard squares: the browser's upscaling is nearest-neighbour at
+     * these ratios, so every ~4 km cell became a visible tile and the
+     * layer read as a spreadsheet laid over the sea. Fish do not live in
+     * squares and the data was never that precise — the grid is an
+     * artefact of the satellite product, not a boundary in the water.
+     *
+     * So the cell grid is drawn small, scaled up here with smoothing on,
+     * and blurred by about a cell's width. What comes out is a soft blob
+     * whose shape still follows the data but whose edges no longer claim
+     * a precision the model does not have.
+     */
+    const src = document.createElement('canvas');
+    src.width = W; src.height = H;
+    const sctx = src.getContext('2d');
+    const img = sctx.createImageData(W, H);
     const n = z.cells.length;
     z.cells.forEach(([lat, lon], idx) => {
       const x = Math.round((lon - lonMin) / step);
       const y = Math.round((latMax - lat) / step);   // canvas y grows downward
       if (x < 0 || x >= W || y < 0 || y >= H) return;
-      // Strongest fifth solid, next quarter softer, the rest a wash.
-      const a = idx < n * 0.15 ? 150 : idx < n * 0.40 ? 105 : 60;
+      // Strongest fifth solid, next quarter softer, the rest a wash. The
+      // bands are wider than before because the blur pulls them together;
+      // without the lift the whole layer washed out to nothing.
+      const a = idx < n * 0.15 ? 210 : idx < n * 0.40 ? 150 : 85;
       const p = (y * W + x) * 4;
       img.data[p] = cr; img.data[p + 1] = cg; img.data[p + 2] = cb;
       img.data[p + 3] = Math.max(img.data[p + 3], a);
     });
-    ctx.putImageData(img, 0, 0);
-    L.imageOverlay(canvas.toDataURL(), [
+    sctx.putImageData(img, 0, 0);
+
+    // Enough to hide the grid, capped so a region-wide layer stays cheap.
+    const SCALE = Math.max(2, Math.min(8, Math.round(900 / Math.max(W, H))));
+    const out = document.createElement('canvas');
+    out.width = W * SCALE; out.height = H * SCALE;
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    // A blur of roughly one cell: smaller and the squares survive, larger
+    // and neighbouring species bleed into one another.
+    if ('filter' in octx) octx.filter = `blur(${(SCALE * 0.9).toFixed(1)}px)`;
+    octx.drawImage(src, 0, 0, out.width, out.height);
+    if ('filter' in octx) octx.filter = 'none';
+
+    L.imageOverlay(out.toDataURL(), [
       [latMin - step / 2, lonMin - step / 2],
       [latMax + step / 2, lonMax + step / 2],
-    ], { pane, opacity: 1, interactive: false }).addTo(group);
+    ], { pane, opacity: 1, interactive: false, className: 'kyc-zone-raster' }).addTo(group);
     drew++;
   }
   return drew ? group : null;

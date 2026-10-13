@@ -640,6 +640,39 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
             {overlayChip(showCurrent, 'Current', () => toggleOverlay(setShowCurrent))}
             {overlayChip(showSpecies, 'Species', () => toggleOverlay(setShowSpecies))}
           </div>
+            {/* Which species, directly under the switch that turns them on.
+                These were below the map, which put the control a scroll away
+                from the thing it controls. Each pill carries its own colour,
+                which is the only legend the zones get — a separate key is one
+                more thing to look away at on a moving boat. */}
+        {showSpecies && (
+          <div style={{ display: 'flex', gap: 7, marginTop: 10, overflowX: 'auto', paddingBottom: 4 }}>
+            {ZONE_SPECIES.map((id) => {
+              const on = speciesOn.has(id);
+              const col = SPECIES_ZONE_COLORS[id] || T.brass;
+              const name = SPECIES.find(sp => sp.id === id)?.commonName
+                || id.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+              return (
+                <button key={id} type="button" onClick={() => setSpeciesOn((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id); else next.add(id);
+                  return next;
+                })} style={{
+                  flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: 800, whiteSpace: 'nowrap',
+                  background: on ? T.parchmentDeep : 'transparent',
+                  border: `1.5px solid ${on ? col : T.cardEdge}`,
+                  color: on ? T.ink : T.inkMute, fontFamily: 'inherit',
+                }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: col,
+                                 opacity: on ? 1 : 0.45 }} />
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
           {/* Say what just happened. A control that silently switches
               another one off reads as a bug; one line turns it into a
@@ -703,40 +736,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.cardEdge}` }}>
         <div ref={mapElRef} style={{ height: '58vh', minHeight: 380, width: '100%', background: '#06182b' }} />
       </div>
-
-      {/* Species pills, under the map and scrollable. Each carries its own
-          colour, which is the only legend the zones get — a separate key
-          would be one more thing to look away at on a moving boat. Shown
-          only while the Species layer is on; a row of pills that control
-          an invisible layer is a puzzle. */}
-      {showSpecies && (
-        <div style={{ display: 'flex', gap: 7, marginTop: 10, overflowX: 'auto', paddingBottom: 4 }}>
-          {ZONE_SPECIES.map((id) => {
-            const on = speciesOn.has(id);
-            const col = SPECIES_ZONE_COLORS[id] || T.brass;
-            const name = SPECIES.find(sp => sp.id === id)?.commonName
-              || id.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
-            return (
-              <button key={id} type="button" onClick={() => setSpeciesOn((prev) => {
-                const next = new Set(prev);
-                if (next.has(id)) next.delete(id); else next.add(id);
-                return next;
-              })} style={{
-                flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
-                fontSize: 12.5, fontWeight: 800, whiteSpace: 'nowrap',
-                background: on ? T.parchmentDeep : 'transparent',
-                border: `1.5px solid ${on ? col : T.cardEdge}`,
-                color: on ? T.ink : T.inkMute, fontFamily: 'inherit',
-              }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: col,
-                               opacity: on ? 1 : 0.45 }} />
-                {name}
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* Under the map, in the flow — not floating on it. Over imagery
           these were unreadable whatever the colour: a chlorophyll
