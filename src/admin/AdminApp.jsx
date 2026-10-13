@@ -85,8 +85,13 @@ const BRAND_ASSETS = [
   {
     key: 'hero_tuna',
     label: 'Home hero image',
-    desc: 'Background photo behind the home-screen title card.',
-    fallback: `${import.meta.env.BASE_URL}brand/hero-tuna.png`,
+    desc: 'Behind the "Log your catch" card on Home. Shown only when nothing is uploaded here.',
+    /* Must be the file the home screen actually renders — screens1.jsx
+       falls back to hero-tuna-feathered.png. This row said hero-tuna.png,
+       so the Branding tab previewed the OLD artwork as the default and
+       anyone checking "is the new hero live" was told no by a screen that
+       was reading a different file than the app. */
+    fallback: `${import.meta.env.BASE_URL}brand/hero-tuna-feathered.png`,
   },
 ];
 
