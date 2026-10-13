@@ -498,10 +498,21 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         // One cell is ~2 km at the published stride; overlap them slightly
         // so the union is continuous rather than a string of beads.
         const cellM = 2600;
+        /* Two passes: a wide, faint halo under a tighter, solid core.
+           The union of discs has no outline of its own to stroke, so the
+           glow is what gives the shape an edge — without it a flat wash
+           disappears into a chlorophyll composite or a busy seafloor. */
+        shape.forEach(([lat, lon]) => {
+          L.circle([lat, lon], {
+            pane: 'spotspane', radius: cellM * 1.8, stroke: false,
+            fillColor: color, fillOpacity: isFocus ? 0.20 : 0.13,
+            interactive: false,
+          }).addTo(blob);
+        });
         shape.forEach(([lat, lon]) => {
           L.circle([lat, lon], {
             pane: 'spotspane', radius: cellM, stroke: false,
-            fillColor: color, fillOpacity: isFocus ? 0.30 : 0.18,
+            fillColor: color, fillOpacity: isFocus ? 0.55 : 0.42,
             interactive: false,
           }).addTo(blob);
         });
@@ -511,16 +522,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         ring = L.circle([h.lat, h.lon], {
           pane: 'spotspane',
           radius: radiusM, stroke: true, color,
-          weight: isFocus ? 4 : 2, opacity: isFocus ? 1 : 0.75,
-          dashArray: isFocus ? null : '6 5',
-          fillColor: color, fillOpacity: isFocus ? 0.26 : 0.1,
+          weight: isFocus ? 4 : 3, opacity: 1,
+          fillColor: color, fillOpacity: isFocus ? 0.40 : 0.30,
         }).addTo(group);
       }
       if (isFocus) focusTarget = ring;
       const core = L.circleMarker([h.lat, h.lon], {
         pane: 'spotspane',
-        radius: 5, stroke: true, color: '#06212f', weight: 1, opacity: 0.6,
-        fillColor: color, fillOpacity: 0.95,
+        radius: isFocus ? 8 : 6,
+        stroke: true, color: '#ffffff', weight: 2, opacity: 0.9,
+        fillColor: color, fillOpacity: 1,
       }).addTo(group);
 
       /* The key, ON the area rather than under the map.
@@ -528,34 +539,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          colours in their head and look back. Naming the thing where it is
          drawn means it cannot be missed, which is the whole point of
          saying it. */
-      /* Below the circle, centred, on two lines.
-         Beside it the label ran off the right of the map whenever the area
-         sat near that edge — and a label you have to pan to read is a label
-         nobody reads. Under it the text is as wide as it is tall, so it
-         stays on screen, and the kind sits above the span rather than
-         trailing off it. */
-      /* Anchored to the circle's SOUTHERN EDGE, not its centre with a
-         pixel offset — the circle's radius in pixels changes with every
-         zoom, so a fixed offset would sit inside the area zoomed out and
-         far below it zoomed in. A degree of latitude is ~111.32 km. */
-      L.marker([h.lat - radiusM / 111320, h.lon], {
-        interactive: false,
-        pane: 'spotspane',
-        icon: L.divIcon({
-          className: '',
-          html: `<div style="transform:translate(-50%,8px);text-align:center;`
-              + `font-size:12px;line-height:1.3;`
-              + `text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 3px rgba(0,0,0,0.9)">`
-              + `<div style="font-weight:800;color:${color};white-space:nowrap">`
-              + `${SPOT_LABELS[h.kind] || h.kind}</div>`
-              + (h.length_nm >= 2
-                  ? `<div style="font-weight:600;color:#fff;opacity:0.85;white-space:nowrap">`
-                    + `runs ${Math.round(h.length_nm)} nm</div>`
-                  : '')
-              + `</div>`,
-          iconSize: [0, 0],
-        }),
-      }).addTo(group);
+      /* No text on the map.
+         The card above it names the break and says how far it runs, and
+         tapping that card focuses this shape — so a label here repeated
+         what was already said and, sitting over the water, was the first
+         thing to collide with a neighbour or run off the edge. The shape
+         carries the meaning; the list carries the words. */
 
       const bits = [
         `<div style="font-weight:800;margin-bottom:4px">${SPOT_LABELS[h.kind] || h.kind}</div>`,
