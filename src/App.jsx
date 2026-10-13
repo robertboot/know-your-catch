@@ -1288,6 +1288,11 @@ export default function App() {
       // content-region padding scales with tablet.
       '--kyc-header-height': `${chrome.header}px`,
       '--kyc-footer-height': `${chrome.footer}px`,
+      /* The capture button is seated in a socket that rises above the tab
+         bar, so the bar is taller than its own height says. Padding the
+         content by the bar alone left the last line of every screen under
+         that circle — on Plan Your Trip, under the camera. */
+      '--kyc-footer-overhang': `${size === 'phone' ? 36 : 40}px`,
     }}>
       {/* Top app bar — fixed to the viewport with safe-area padding so
           the header can't scroll into the iOS status bar area. Centered
@@ -1521,7 +1526,8 @@ export default function App() {
         data-scroll-root
         style={{
           paddingTop: 'calc(var(--kyc-header-height) + env(safe-area-inset-top))',
-          paddingBottom: 'calc(var(--kyc-footer-height) + env(safe-area-inset-bottom))',
+          paddingBottom: 'calc(var(--kyc-footer-height) + var(--kyc-footer-overhang)'
+                       + ' + env(safe-area-inset-bottom) + 12px)',
           minHeight: '100vh',
         }}>
         {body}

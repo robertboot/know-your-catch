@@ -3,6 +3,8 @@ html, body, #root { height: 100%; }
 :root {
   --kyc-header-height: 72px;
   --kyc-footer-height: 64px;
+  /* How far the raised capture button sticks up out of the tab bar. */
+  --kyc-footer-overhang: 36px;
 }
 body {
   margin: 0;
