@@ -30,7 +30,7 @@ import {
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
 import { readMarineCache, writeMarineCache, describeAge, fetchWithTimeout } from './marine-cache.js';
-import { DAYS_CACHE } from './home-water.js';
+import { DAYS_CACHE, homeWater } from './home-water.js';
 import { client } from './supabase-client.js';
 import { getCategories, subscribe as subscribeCategories } from './categories-store.js';
 import { getLocation, getPhoto } from './native.js';
@@ -426,14 +426,41 @@ function SeaStateReadout({ waveFt, periodS, tier }) {
  * well-mixed sea genuinely has no breaks worth driving to, and an empty
  * card inviting a 40-mile run would be worse than silence.
  */
-function TripSpot({ onOceanMaps, tier = 'phone' }) {
+/* How far is worth telling someone about.
+   The spots table covers the whole Gulf and the Florida Atlantic, and the
+   best-scoring break in all of it is routinely several hundred miles from
+   the angler reading the card — Orange Beach was being sent to Port
+   Canaveral, 450 nm away. A long offshore day is well under this; beyond
+   it the answer is "nothing near you", which is a useful thing to say and
+   the card already renders nothing rather than something irrelevant. */
+const MAX_RUN_NM = 150;
+
+const NM_PER_DEG = 60;
+function runNm(aLat, aLon, bLat, bLon) {
+  const dLat = (bLat - aLat) * NM_PER_DEG;
+  const dLon = (bLon - aLon) * NM_PER_DEG * Math.cos((aLat + bLat) / 2 * Math.PI / 180);
+  return { dist: Math.hypot(dLat, dLon), brg: (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360 };
+}
+
+function TripSpot({ onOceanMaps, tier = 'phone', state }) {
   const [spot, setSpot] = useState(null);
   const [ageMs, setAgeMs] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    const best = (rows) => (rows || []).filter(r => r.score != null)
-      .sort((a, b) => b.score - a.score)[0] || null;
+    const home = homeWater(state);
+    /* Best spot WITHIN REACH, not best spot anywhere. And the distance is
+       measured from the angler's own water: dist_nm on the row is from
+       that region's port, so the card was printing a run from a harbour
+       the reader has never been to. */
+    const best = (rows) => {
+      const near = (rows || [])
+        .filter(r => r.score != null && r.lat != null && r.lon != null)
+        .map(r => ({ ...r, _run: runNm(home.lat, home.lon, r.lat, r.lon) }))
+        .filter(r => r._run.dist <= MAX_RUN_NM);
+      near.sort((a, b) => b.score - a.score);
+      return near[0] || null;
+    };
     (async () => {
       const cached = readMarineCache('hotspots', 0, 0);
       if (cached && alive) { setSpot(best(cached.data)); setAgeMs(cached.ageMs); }
@@ -441,15 +468,16 @@ function TripSpot({ onOceanMaps, tier = 'phone' }) {
       if (!c) return;
       const since = new Date(Date.now() - 72 * 3600000).toISOString();
       const { data, error } = await c.from('hotspots')
-        .select('score,why,dist_nm,from_port_deg,observed_at')
+        .select('score,why,lat,lon,dist_nm,from_port_deg,observed_at')
         .gte('observed_at', since)
         .order('score', { ascending: false })
-        .limit(1);
+        .limit(60);
       if (!alive || error || !data?.length) return;
-      setSpot(data[0]); setAgeMs(null);
+      const pick = best(data);
+      if (pick) { setSpot(pick); setAgeMs(null); }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [state]);
 
   if (!spot) return null;
 
@@ -476,7 +504,11 @@ function TripSpot({ onOceanMaps, tier = 'phone' }) {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: sz(17, 19, 22), fontWeight: 800, lineHeight: 1.2 }}>
-              {spot.dist_nm != null ? `${Math.round(spot.dist_nm)} nm ${compass(spot.from_port_deg)}` : 'Offshore edge'}
+              {/* From the ANGLER's water, not the region's port. The row's
+                  dist_nm is measured from whichever harbour that region is
+                  keyed to, which for a reader in Orange Beach was a run
+                  from Port Canaveral. */}
+              {spot._run ? `${Math.round(spot._run.dist)} nm ${compass(spot._run.brg)}` : 'Offshore edge'}
             </div>
             <div style={{ fontSize: sz(12, 13, 14.5), color: T.inkMute, marginTop: 3 }}>
               {ageMs != null ? `saved ${describeAge(ageMs)}` : 'from last night\u2019s satellite pass'}
@@ -1211,7 +1243,7 @@ export function HomeScreen({
       <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
 
       {/* Where to go — renders nothing when there are no spots. */}
-      <TripSpot onOceanMaps={onOceanMaps} tier={screenSize} />
+      <TripSpot onOceanMaps={onOceanMaps} tier={screenSize} state={state} />
 
       {/* Regulation Alerts — full-width, single-line active alert; rely on
           VIEW ALL for the rest. */}
