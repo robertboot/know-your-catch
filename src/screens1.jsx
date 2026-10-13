@@ -824,6 +824,46 @@ export function HomeScreen({
 
       <AnnouncementBanner />
 
+      {/* Trip planning, where the four shortcut tiles used to be.
+          One destination instead of four, and the one thing on Home that
+          is not about today — the rest of the screen answers "should I go
+          now", this answers "where next".
+
+          The artwork carries its own words, so the alt text has to say
+          them: a reader with images off, or a screen reader, otherwise
+          gets a button that announces nothing. */}
+      {onOceanMaps && (
+        <button
+          onClick={() => onOceanMaps()}
+          className="kyc-press"
+          aria-label="Plan your next trip — find promising water and see your past catches"
+          style={{
+            display: 'block', width: '100%', marginTop: 14, padding: 0,
+            border: `1px solid ${T.cardEdge}`, borderRadius: 18, overflow: 'hidden',
+            background: T.card, cursor: 'pointer',
+          }}
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}marketing/trip-planning-banner.jpg`}
+            alt="Plan your next trip. Find promising water. See your past catches."
+            style={{ display: 'block', width: '100%', height: 'auto' }}
+          />
+        </button>
+      )}
+
+      {/* Conditions + Regulation Alerts.
+          Phone: horizontal scroll row so each card keeps a comfortable
+          width and the user swipes between them.
+          Tablet: split the row 50/50 across the full container width —
+          scrolling makes no sense with the room the iPad canvas offers. */}
+      {/* Today's Conditions — live, with the Fishability score gauge */}
+      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
+
+      {/* Where to go has moved off Home — it belongs on Plan Your Trip,
+          which the banner above opens. The TripSpot component is kept
+          because that page is the next thing to be built and will mount
+          it; if that stalls, this is dead code and should go. */}
+
       {/* Hero — Identify Your Catch.
           Content drives height; the image fills the resulting card via
           object-fit cover, with a left-side gradient keeping the
@@ -838,12 +878,18 @@ export function HomeScreen({
         minHeight: isTablet ? (isLandscape ? 520 : 460) : undefined,
       }}>
         {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
-            the tuna feels alive. Overscan hides the edges as it moves. */}
+            the tuna feels alive. Overscan hides the edges as it moves.
+
+            The artwork is the tuna from the new Log your catch banner,
+            cropped to the fish. The left of that composition is a dark
+            panel carrying the headline and two buttons — which this card
+            already renders as REAL controls, so using the whole banner
+            would paint a second, untappable copy of them underneath. */}
         <div aria-hidden className="kyc-kenburns" style={{
           position: 'absolute', inset: '-10%', pointerEvents: 'none',
         }}>
           <img
-            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
+            src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna-v2.png`)}
             alt=""
             aria-hidden
             style={{
@@ -931,46 +977,6 @@ export function HomeScreen({
           </div>
         </div>
       </div>
-
-      {/* Trip planning, where the four shortcut tiles used to be.
-          One destination instead of four, and the one thing on Home that
-          is not about today — the rest of the screen answers "should I go
-          now", this answers "where next".
-
-          The artwork carries its own words, so the alt text has to say
-          them: a reader with images off, or a screen reader, otherwise
-          gets a button that announces nothing. */}
-      {onOceanMaps && (
-        <button
-          onClick={() => onOceanMaps()}
-          className="kyc-press"
-          aria-label="Plan your next trip — find promising water and see your past catches"
-          style={{
-            display: 'block', width: '100%', marginTop: 14, padding: 0,
-            border: `1px solid ${T.cardEdge}`, borderRadius: 18, overflow: 'hidden',
-            background: T.card, cursor: 'pointer',
-          }}
-        >
-          <img
-            src={`${import.meta.env.BASE_URL}marketing/trip-planning-banner.jpg`}
-            alt="Plan your next trip. Find promising water. See your past catches."
-            style={{ display: 'block', width: '100%', height: 'auto' }}
-          />
-        </button>
-      )}
-
-      {/* Conditions + Regulation Alerts.
-          Phone: horizontal scroll row so each card keeps a comfortable
-          width and the user swipes between them.
-          Tablet: split the row 50/50 across the full container width —
-          scrolling makes no sense with the room the iPad canvas offers. */}
-      {/* Today's Conditions — live, with the Fishability score gauge */}
-      <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
-
-      {/* Where to go has moved off Home — it belongs on Plan Your Trip,
-          which the banner above opens. The TripSpot component is kept
-          because that page is the next thing to be built and will mount
-          it; if that stalls, this is dead code and should go. */}
 
       {/* Recent Catches — horizontally-scrolling preview strip. Tap a
           tile to jump straight into the catch's detail view. Hidden
