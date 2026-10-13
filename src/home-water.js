@@ -131,7 +131,12 @@ export function spotStanding(score) {
   if (score == null) return { label: 'Unscored', tone: 'mute' };
   if (score >= 65) return { label: 'Strong break', tone: 'good' };
   if (score >= 40) return { label: 'Worth a look', tone: 'fair' };
-  return { label: 'Best of a quiet pass', tone: 'mute' };
+  /* Not "best of a quiet pass". That meant the satellite PASS found
+     nothing strong, and an angler out of Perdido Pass reads the word as
+     the inlet — so the badge described the wrong thing entirely, and took
+     three sentences to explain. "Faint" says what the signal is; "best
+     today" says why it is on the list at all. */
+  return { label: 'Faint · best today', tone: 'mute' };
 }
 
 /* How old the spots are, said in a way that parses.

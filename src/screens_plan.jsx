@@ -202,8 +202,10 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
             <div style={{ fontSize: sz(13, 14.5, 16), color: T.inkSoft, lineHeight: 1.55, marginTop: 10 }}>
               {String(s.why || '')
                 .replace(/\s*\d+(\.\d+)?\s*nm\s+[NSEW]{1,3}\s+of\s+[^.]+\.\s*$/, '')
-                // The badge already says this is the best of a quiet pass.
-                .replace(/^Nothing strong this pass\s*—\s*this is the best of it\.\s*/, '')}
+                // The badge already says the signal is faint. Matches both
+                // the old wording and the new one, so rows written before
+                // the function is redeployed still read cleanly.
+                .replace(/^Nothing strong (in this satellite |this )pass\s*—\s*this is the best of it\.\s*/, '')}
             </div>
           </Card>
           );

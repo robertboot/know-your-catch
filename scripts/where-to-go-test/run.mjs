@@ -96,8 +96,13 @@ check('the nearest run on the break is the one shown',
 /* The score means something different from the sea-state grade. A 20 is a
    faint fishing sign; an F on the day strip is a sea to stay out of. */
 check('a marginal spot is not branded a failure',
-  !/^F$/.test(spotStanding(20).label) && spotStanding(20).label === 'Best of a quiet pass',
+  !/^F$/.test(spotStanding(20).label) && spotStanding(20).label === 'Faint · best today',
   spotStanding(20).label);
+// "pass" means the satellite pass, and an angler out of Perdido Pass
+// reads it as the inlet. It must not appear in a badge.
+check('no badge says "pass"',
+  ![20, 50, 78, null].some(v => /\bpass\b/i.test(spotStanding(v).label)),
+  [20, 50, 78].map(v => spotStanding(v).label).join(' / '));
 check('a real break reads as one', spotStanding(78).label === 'Strong break');
 check('the middle band is distinct', spotStanding(50).label === 'Worth a look');
 check('an unscored spot says so', spotStanding(null).label === 'Unscored');

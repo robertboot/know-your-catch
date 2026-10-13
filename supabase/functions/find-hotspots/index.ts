@@ -737,7 +737,9 @@ Deno.serve(async (req: Request) => {
         kept = allScored
           .sort((a, b) => b.score - a.score)
           .slice(0, MARGINAL_SPOTS)
-          .map(sp => ({ ...sp, why: `Nothing strong this pass \u2014 this is the best of it. ${sp.why}` }));
+          // "this pass" meant the SATELLITE pass, and an angler out of
+          // Perdido Pass reads it as the inlet. Name the satellite.
+          .map(sp => ({ ...sp, why: `Nothing strong in this satellite pass \u2014 this is the best of it. ${sp.why}` }));
       }
 
       // Thin out near-duplicates: two cards four miles apart describing the
