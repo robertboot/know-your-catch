@@ -145,7 +145,8 @@ export const SPOT_LABELS = {
    rather than behind a button, since the map IS the answer there and a tap
    to reach it is a tap to do nothing with. */
 export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = false,
-                                 focusBreak = null, spotNumbers = null }) {
+                                 focusBreak = null, spotNumbers = null,
+                                 highlightBreak = null }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -482,8 +483,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          kind colours stay for the standalone map, which has no list. */
       const rank = spotNumbers ? spotNumbers[breakKey(h)] : null;
       const color = rank ? rank.color : (SPOT_COLORS[h.kind] || T.brass);
-      // The one the angler tapped in the list above the map.
-      const isFocus = focusBreak != null && breakKey(h) === focusBreak;
+      /* Emphasised, and separately, moved to.
+         The card below the map shows one area at a time, and that one is
+         drawn heavier so the pager and the map agree about which is being
+         considered — without moving the view, which would hide the other
+         three the page just said were up there. Tapping the card is what
+         zooms. */
+      const bk = breakKey(h);
+      const isFocus = (focusBreak != null && bk === focusBreak)
+                   || (highlightBreak != null && bk === highlightBreak);
       // The break's own span, in metres, floored so a short one is still
       // an area rather than a dot.
       const radiusM = Math.max(3000, (Number(h.length_nm) || 4) * 1852 / 2);
@@ -567,7 +575,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         ribbon.addTo(group);
         ring = ribbon;
       }
-      if (isFocus) focusTarget = ring;
+      // Only a TAP moves the map. The pager's highlight must not, or
+      // paging through four areas would zoom the map four times and the
+      // comparison this page exists for would never be on screen.
+      if (focusBreak != null && bk === focusBreak) focusTarget = ring;
       allAreas.push(ring);
       /* The pin in the middle of the area carries the number, so the
          angler can go from "1" in the list straight to the water without
@@ -581,12 +592,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                was underneath the decoration. */
             icon: L.divIcon({
               className: '',
-              iconSize: [28, 28], iconAnchor: [14, 14],
-              html: `<div style="width:28px;height:28px;border-radius:50%;`
+              iconSize: isFocus ? [34, 34] : [28, 28],
+              iconAnchor: isFocus ? [17, 17] : [14, 14],
+              html: `<div style="width:${isFocus ? 34 : 28}px;`
+                  + `height:${isFocus ? 34 : 28}px;border-radius:50%;`
                   + `background:${color};border:3px solid #fff;`
                   + `box-shadow:0 2px 7px rgba(0,0,0,.5);`
                   + `display:flex;align-items:center;justify-content:center;`
-                  + `font:900 15px/1 system-ui,sans-serif;color:#0b1220">${rank.n}</div>`,
+                  + `font:900 ${isFocus ? 18 : 15}px/1 system-ui,sans-serif;`
+                  + `color:#0b1220">${rank.n}</div>`,
             }),
           }).addTo(group)
         : L.circleMarker([h.lat, h.lon], {
@@ -643,7 +657,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         map.fitBounds(b, { padding: [40, 40], maxZoom: 9 });
       }
     }
-  }, [showSpots, spots, focusBreak, spotNumbers]);
+  }, [showSpots, spots, focusBreak, spotNumbers, highlightBreak]);
 
   /* Which catches hold a species record.
      The log is the source: the biggest one of each species that carries a

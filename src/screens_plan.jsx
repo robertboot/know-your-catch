@@ -22,12 +22,28 @@ import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
          plainWhy, spotStats, spotRankColor, formatLatLon } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
+/* A round arrow, sized for a thumb on a moving boat. */
+function PagerButton({ onClick, label, children }) {
+  return (
+    <button type="button" aria-label={label}
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            style={{
+              width: 34, height: 34, borderRadius: '50%', cursor: 'pointer',
+              border: `1.5px solid ${T.cardEdge}`, background: T.parchmentDeep,
+              color: T.ink, fontSize: 19, fontWeight: 900, lineHeight: 1,
+              fontFamily: 'inherit', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+            }}>{children}</button>
+  );
+}
+
 export function PlanTripScreen({ state, tier = 'phone' }) {
   const [spots, setSpots] = useState(null);
   const [spotsAge, setSpotsAge] = useState(null);
   const [outlook, setOutlook] = useState(null);
   const [dayPick, setDayPick] = useState(0);
-  const [focus, setFocus] = useState(null);   // which break the map should show
+  const [focus, setFocus] = useState(null);   // which break the map should zoom to
+  const [pick, setPick] = useState(0);       // which break the card is showing
 
   const home = useMemo(() => homeWater(state), [state]);
   const sz = (p, t, d) => (tier === 'desktop' ? d : tier === 'tablet' ? t : p);
@@ -82,6 +98,8 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
     return out;
   }, [shown]);
 
+  useEffect(() => { setPick(0); }, [shown.length]);
+
   const gradeOf = (d) => fishabilityHour({
     wind: d.windMax, gust: d.windMax != null ? d.windMax * 1.3 : null,
     waveFt: d.waveFtMax, periodS: d.periodMaxS, code: d.code,
@@ -128,24 +146,14 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
         </>
       )}
 
-      <SectionLabel>Where to go</SectionLabel>
       {/* The map, open. It is the answer on this page, not a destination
           off it — a button that only reveals something already loaded is a
           tap that does nothing. Embedded drops the map screen's own title
           and padding so it reads as part of this page. */}
       <div style={{ marginTop: 2 }}>
-        {/* Why the shapes look the way they do, said once. The areas are
-            drawn from the break's own length and heading, so they read
-            with every satellite layer switched off — the imagery is a
-            separate switch, not what makes the spots visible. */}
-        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
-          All {shown.length} areas are shown together, numbered to match the list.
-          Sea temp and chlorophyll are separate switches on the map.
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
-                           embedded focusBreak={focus} spotNumbers={numbers} />
-        </div>
+        <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
+                         embedded focusBreak={focus} spotNumbers={numbers}
+                         highlightBreak={shown[pick] ? breakKey(shown[pick]) : null} />
       </div>
 
 
@@ -172,18 +180,42 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
         </div>
       )}
 
-      {/* Side by side, below the map, swiped through.
-          Stacked above it, four cards pushed the map off the screen and
-          the angler read the list without ever seeing where any of it
-          was. Below and in a row, the map stays in view and the cards are
-          thumbed through against it — which is the comparison the page
-          exists to support. */}
-      <div style={{
-        display: 'flex', gap: 10, marginTop: 10, overflowX: 'auto',
-        scrollSnapType: 'x mandatory', paddingBottom: 6,
-        WebkitOverflowScrolling: 'touch',
-      }}>
-        {shown.map((s, i) => {
+      {/* The header for this section, under the map it belongs to.
+          Above the map it read as a heading for the map itself, which has
+          its own name, and the explanation of the numbering sat where the
+          numbers had not appeared yet. */}
+      {shown.length > 0 && (
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <SectionLabel style={{ flex: 1, margin: 0 }}>Where to go</SectionLabel>
+          {/* One at a time, with an arrow.
+              Four cards side by side left each one too narrow for the
+              numbers it carries and gave the angler four things to read
+              at once — chaotic, and none of it legible. A pager gives the
+              full width to the one being considered. */}
+          {shown.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
+              <PagerButton label="Previous area"
+                           onClick={() => setPick((p) => (p - 1 + shown.length) % shown.length)}>‹</PagerButton>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.inkMute,
+                             fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'center' }}>
+                {pick + 1} / {shown.length}
+              </span>
+              <PagerButton label="Next area"
+                           onClick={() => setPick((p) => (p + 1) % shown.length)}>›</PagerButton>
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
+          All {shown.length} areas are on the map above, numbered to match.
+          Sea temp and chlorophyll are separate switches on the map.
+        </div>
+      </div>
+      )}
+
+      <div style={{ marginTop: 10 }}>
+        {[shown[Math.min(pick, shown.length - 1)]].filter(Boolean).map((s) => {
+          const i = Math.min(pick, shown.length - 1);
           const key = breakKey(s);
           const colour = spotRankColor(i);
           const on = focus === key;
@@ -197,9 +229,7 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
              where a card is pointing. */
           <Card key={s.id || i} onClick={() => setFocus(on ? null : key)}
                 style={{
-                  padding: sz(13, 16, 18), borderRadius: 16, cursor: 'pointer',
-                  flex: '0 0 auto', width: sz(272, 310, 330),
-                  scrollSnapAlign: 'start',
+                  padding: sz(14, 17, 19), borderRadius: 16, cursor: 'pointer',
                   borderLeft: `5px solid ${colour}`,
                   outline: on ? `2px solid ${colour}` : 'none',
                 }}>
