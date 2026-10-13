@@ -844,10 +844,17 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   /* Leaflet's zoom buttons own the top-left corner, so nothing of ours
      goes there. In full screen the container insets for the notch and the
      home indicator, which moves Leaflet's own controls with it. */
-  const topEdge = 12;
-  // Leaflet prints its attribution along the bottom edge; our controls sit
-  // above it rather than through it.
-  const bottomEdge = full ? 34 : 24;
+  /* An absolutely positioned child is placed against the PADDING box, so
+     the container's safe-area padding moved the map and left every
+     floating control where it was — the layers button stayed in the
+     status bar. The offsets carry the inset themselves. Leaflet prints
+     its attribution along the bottom edge, so the bottom row clears that
+     too. */
+  const SAFE_TOP = 'max(env(safe-area-inset-top, 0px), 46px)';
+  const SAFE_BOT = 'max(env(safe-area-inset-bottom, 0px), 24px)';
+  const topEdge = full ? `calc(${SAFE_TOP} + 10px)` : 12;
+  const bottomEdge = full ? `calc(${SAFE_BOT} + 20px)` : 24;
+  const below = (edge, px) => (typeof edge === 'number' ? edge + px : `calc(${edge} + ${px}px)`);
   const pillStyle = (on) => ({
     padding: '10px 15px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
     fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
@@ -1044,8 +1051,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
            and could not be tapped to close the panel it had opened. max()
            keeps a real floor whatever env() reports, and costs nothing
            where env() is larger. */
-        paddingTop: 'max(env(safe-area-inset-top, 0px), 46px)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)',
+        paddingTop: SAFE_TOP,
+        paddingBottom: SAFE_BOT,
         boxSizing: 'border-box',
       } : {
         position: 'relative', borderRadius: embedded ? 0 : 16, overflow: 'hidden',
@@ -1080,7 +1087,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
             {panel === 'layers' && (
               <div style={{
-                ...floatBox, top: topEdge + 54, right: 12, left: 12,
+                ...floatBox, top: below(topEdge, 54), right: 12, left: 12,
                 maxWidth: 340, marginLeft: 'auto',
                 background: 'rgba(6,20,36,0.96)', border: `1px solid ${T.cardEdge}`,
                 borderRadius: 16, padding: 13,
