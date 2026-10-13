@@ -884,13 +884,15 @@ export function HomeScreen({
             wide card, dark panel left, fish right. The buttons stay REAL
             controls rather than being baked into artwork — a painted
             button is untappable and invisible to a screen reader. */}
-        {/* Overscan trimmed to 3%. At 10% the artwork's right edge sat a
-            tenth of the card's width BEYOND the border, so anchoring the
-            fish right still left it floating short of the edge. The Ken
-            Burns drift tops out at 2% translate on a 1.09 scale, so 3%
-            is enough headroom and keeps the fish against the border. */}
-        <div aria-hidden className="kyc-kenburns" style={{
-          position: 'absolute', inset: '-3%', pointerEvents: 'none',
+        {/* No overscan, and no Ken Burns drift on this card.
+            Both existed to move a COVER image around behind a tall hero.
+            With contain the image already sits inside the box, so an inset
+            only magnifies it — and the drift's 1.09 scale would crop back
+            exactly the shrink this card is after, clipping the fins at the
+            ends of the loop. The gyroscope tilt stays: it translates a few
+            pixels and never resizes. */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
         }}>
           <img
             src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
@@ -898,13 +900,14 @@ export function HomeScreen({
             aria-hidden
             style={{
               width: '100%', height: '100%',
-              // cover + right: the artwork fills the card and is anchored to
-              // the right edge, so the fish runs to the border instead of
-              // floating in the middle with the card's background showing
-              // around it. contain was right for the old tall hero, where
-              // nothing could be cropped; this banner is short and wide and
-              // the tail is the part that may go.
-              objectFit: 'cover', objectPosition: 'right center',
+              // contain, anchored bottom-right.
+              //
+              // cover filled the card but scaled a 1.78:1 image to a much
+              // wider box, which magnified the tuna until its head ran off
+              // the top. contain sizes the whole fish to fit, so it shrinks
+              // rather than crops, and bottom-right drops it clear of the
+              // headline and keeps it against the edge the layout wants.
+              objectFit: 'contain', objectPosition: 'right bottom',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
