@@ -807,7 +807,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           what this strip reports: the spots are an OBSERVATION of a
           satellite pass, not a forecast, and pretending they move with
           the day would be inventing data. */}
-      {outlook?.length > 1 && (
+      {/* Not when embedded. Plan Your Trip already asks WHEN at the top of
+          the page, and a second identical strip directly above the map
+          invites the angler to wonder which one is in charge. */}
+      {!embedded && outlook?.length > 1 && (
         <div style={{ display: 'flex', gap: 7, marginBottom: 10, overflowX: 'auto', paddingBottom: 4 }}>
           {outlook.slice(0, 7).map((d, i) => {
             const score = fishabilityHour({
@@ -921,7 +924,9 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                     Sunday pass has moved miles. The map cannot say where it
                     went, so it must at least say how stale it is rather than
                     draw a four-day-old line as if it were this morning's. */}
-                {ageNote && (
+                {/* Also the plan page's job when embedded — it prints the
+                    same sentence above the spot cards. */}
+                {!embedded && ageNote && (
                   <div style={{ marginTop: 6, color: T.warn, fontWeight: 700 }}>{ageNote}</div>
                 )}
             </div>
