@@ -879,7 +879,7 @@ export function HomeScreen({
         // The artwork's own deep water samples at #0b2c44; this is a shade
         // deeper by choice, and the gradient blends the difference across
         // most of the card's width, so there is no edge to see.
-        background: '#11273b',
+        background: '#132235',
         minHeight: isTablet ? (isLandscape ? 300 : 270) : undefined,
       }}>
         {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
@@ -929,8 +929,8 @@ export function HomeScreen({
         <div aria-hidden style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
           background: isTablet
-            ? 'linear-gradient(90deg, #11273b 0%, rgba(17, 39, 59, 0.92) 28%, rgba(17, 39, 59, 0.50) 45%, rgba(17, 39, 59, 0) 65%)'
-            : 'linear-gradient(90deg, #11273b 0%, rgba(17, 39, 59, 0.94) 22%, rgba(17, 39, 59, 0.55) 38%, rgba(17, 39, 59, 0) 58%)',
+            ? 'linear-gradient(90deg, #132235 0%, rgba(19, 34, 53, 0.92) 28%, rgba(19, 34, 53, 0.50) 45%, rgba(19, 34, 53, 0) 65%)'
+            : 'linear-gradient(90deg, #132235 0%, rgba(19, 34, 53, 0.94) 22%, rgba(19, 34, 53, 0.55) 38%, rgba(19, 34, 53, 0) 58%)',
           pointerEvents: 'none',
         }} />
 
