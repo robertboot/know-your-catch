@@ -315,7 +315,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       if (!c) return;
       const since = new Date(Date.now() - 72 * 3600000).toISOString();
       const { data, error } = await c.from('hotspots')
-        .select('kind,lat,lon,score,sst_f,sst_drop_f,chl_mg_m3,length_nm,dist_nm,from_port_deg,why,observed_at')
+        .select('id,region_id,kind,lat,lon,score,sst_f,sst_drop_f,chl_mg_m3,length_nm,bearing_deg,cells,dist_nm,from_port_deg,why,observed_at')
         .gte('observed_at', since)
         .order('score', { ascending: false })
         .limit(60);
@@ -481,13 +481,41 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       // an area rather than a dot.
       const radiusM = Math.max(3000, (Number(h.length_nm) || 4) * 1852 / 2);
 
-      const ring = L.circle([h.lat, h.lon], {
-        pane: 'spotspane',
-        radius: radiusM, stroke: true, color,
-        weight: isFocus ? 4 : 2, opacity: isFocus ? 1 : 0.75,
-        dashArray: isFocus ? null : '6 5',
-        fillColor: color, fillOpacity: isFocus ? 0.26 : 0.1,
-      }).addTo(group);
+      /* The break's own shape where the server sent one.
+         A break is a ribbon of water that bends, forks and thins; a disc
+         both looks wrong and claims the wrong water. Each cell is drawn as
+         a soft-edged disc about one cell wide and they merge into the
+         organic outline the data actually describes — the same trick the
+         species zones use, which is what makes those read as water rather
+         than tiles. The circle stays as the fallback for rows published
+         before the shape existed. */
+      let ring;
+      const shape = Array.isArray(h.cells) && h.cells.length >= 3 ? h.cells : null;
+      if (shape) {
+        // featureGroup, not layerGroup: only the former can report its
+        // bounds, and focusing a card has to move the map to the shape.
+        const blob = L.featureGroup();
+        // One cell is ~2 km at the published stride; overlap them slightly
+        // so the union is continuous rather than a string of beads.
+        const cellM = 2600;
+        shape.forEach(([lat, lon]) => {
+          L.circle([lat, lon], {
+            pane: 'spotspane', radius: cellM, stroke: false,
+            fillColor: color, fillOpacity: isFocus ? 0.30 : 0.18,
+            interactive: false,
+          }).addTo(blob);
+        });
+        blob.addTo(group);
+        ring = blob;
+      } else {
+        ring = L.circle([h.lat, h.lon], {
+          pane: 'spotspane',
+          radius: radiusM, stroke: true, color,
+          weight: isFocus ? 4 : 2, opacity: isFocus ? 1 : 0.75,
+          dashArray: isFocus ? null : '6 5',
+          fillColor: color, fillOpacity: isFocus ? 0.26 : 0.1,
+        }).addTo(group);
+      }
       if (isFocus) focusTarget = ring;
       const core = L.circleMarker([h.lat, h.lon], {
         pane: 'spotspane',
@@ -540,7 +568,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     // Bring the tapped one into view, so the card and the area are
     // obviously the same thing rather than two things that happen to
     // share a colour.
-    if (focusTarget) map.fitBounds(focusTarget.getBounds(), { padding: [40, 40], maxZoom: 9 });
+    if (focusTarget) {
+      // A layerGroup of circles has no bounds of its own; build them from
+      // what it contains.
+      const b = typeof focusTarget.getBounds === 'function'
+        ? focusTarget.getBounds()
+        : null;
+      if (b && b.isValid && b.isValid()) {
+        map.fitBounds(b, { padding: [40, 40], maxZoom: 9 });
+      }
+    }
   }, [showSpots, spots, focusBreak]);
 
   /* Which catches hold a species record.

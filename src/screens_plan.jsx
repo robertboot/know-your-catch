@@ -50,7 +50,7 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
       if (!c) return;
       const since = new Date(Date.now() - 72 * 3600000).toISOString();
       const { data, error } = await c.from('hotspots')
-        .select('id,region_id,score,why,kind,lat,lon,sst_f,depth_ft,current_kt,length_nm,bearing_deg,observed_at')
+        .select('id,region_id,score,why,kind,lat,lon,sst_f,depth_ft,current_kt,length_nm,bearing_deg,cells,observed_at')
         .gte('observed_at', since)
         .order('score', { ascending: false })
         .limit(60);

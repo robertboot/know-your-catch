@@ -108,6 +108,13 @@ const BUDGET_MS = 100_000;
    note in the region loop: an uncapped box put 45,000 points in one JSON
    document and timed out on every host. */
 const MAX_GRID_SIDE = 140;
+/* How many cells of a break's shape to publish with each spot.
+   The map draws the break's real outline from these; a circle was all the
+   old data supported and a break is a ribbon, not a disc. Capped because
+   a long shelf-edge front can run to thousands of cells and the phone
+   caches every row. 240 at this stride is a couple of hundred miles of
+   edge, which is more than any one trip. */
+const SHAPE_MAX_CELLS = 240;
 
 /* Can this runtime reach the outside world at all?
  *
@@ -595,6 +602,18 @@ Deno.serve(async (req: Request) => {
         return picked;
       };
 
+      /* The shape of a break, as the cells that form it.
+         Thinned evenly rather than truncated: taking the first N would
+         publish one end of a long front and drop the other. */
+      const shapeOf = (group: Cell[]) => {
+        const stride = Math.max(1, Math.ceil(group.length / SHAPE_MAX_CELLS));
+        const out: [number, number][] = [];
+        for (let i = 0; i < group.length; i += stride) {
+          out.push([Number(group[i].lat.toFixed(3)), Number(group[i].lon.toFixed(3))]);
+        }
+        return out;
+      };
+
       const observed = sst.time || new Date().toISOString();
       // A few hot pixels are not a wall. Filtered here rather than after the
       // spots are built, because one group no longer means one spot.
@@ -672,6 +691,7 @@ Deno.serve(async (req: Request) => {
           chl_mg_m3: chlV, chl_grad: peak.cg,
           depth_ft: peak.depthFt, slope_ft_nm: peak.slope, current_kt: peak.curKt,
           length_nm: lengthNm, bearing_deg: bearing,
+          cells: shapeOf(group),
           dist_nm: dist, from_port_deg: brg,
           why,
         };
