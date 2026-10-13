@@ -17,6 +17,7 @@ import 'leaflet/dist/leaflet.css';
 import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
 import { SPECIES } from './data.js';
+import { speciesPhoto } from './helpers.js';
 import { SUPABASE_URL, client } from './supabase-client.js';
 import { imageUrl, cacheAge } from './tile-cache.js';
 import { describeAge, readMarineCache, writeMarineCache } from './marine-cache.js';
@@ -516,18 +517,29 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         m.bindPopup(`<div style="font-size:12px"><b>${name}</b>${isPB ? ' · PB' : ''}`
           + `${when ? `<br/>${when}` : ''}</div>`);
 
+        /* The species PICTURE, not its name.
+           Names turned a shelf full of catches into overlapping text —
+           twenty labels fighting for the same water, and the map became
+           something to read rather than something to look at. A thumbnail
+           says the same thing at a glance, takes one position instead of a
+           whole line, and does not collide with its neighbour. The name is
+           still a tap away in the popup. */
         if (named) {
-          L.marker([c.lat, c.lon], {
-            interactive: false,
-            icon: L.divIcon({
-              className: '',
-              html: `<div style="transform:translate(14px,-9px);white-space:nowrap;`
-                  + `font-size:11px;font-weight:700;color:#fff;`
-                  + `text-shadow:0 1px 3px rgba(0,0,0,0.95),0 0 2px rgba(0,0,0,0.9)">`
-                  + `${isPB ? '<span style="color:#FFC857">★ </span>' : ''}${name}</div>`,
-              iconSize: [0, 0],
-            }),
-          }).addTo(group);
+          const photo = speciesPhoto(c.speciesId);
+          if (photo?.url) {
+            L.marker([c.lat, c.lon], {
+              interactive: false,
+              icon: L.divIcon({
+                className: '',
+                html: `<img src="${photo.url}" alt="" style="`
+                    + `width:34px;height:34px;border-radius:50%;object-fit:cover;`
+                    + `transform:translate(-50%,-44px);display:block;`
+                    + `border:2px solid ${isPB ? '#FFC857' : 'rgba(255,255,255,0.85)'};`
+                    + `box-shadow:0 2px 6px rgba(0,0,0,0.5)">`,
+                iconSize: [0, 0],
+              }),
+            }).addTo(group);
+          }
         }
       });
     };
