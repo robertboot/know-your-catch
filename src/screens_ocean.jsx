@@ -1044,9 +1044,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         position: 'relative', borderRadius: embedded ? 0 : 16, overflow: 'hidden',
         border: embedded ? 'none' : `1px solid ${T.cardEdge}`,
       }}>
+        {/* Shorter than it was, because full screen now exists.
+            At 62vh the map filled the phone and the first spot card began
+            below the fold — the angler had to scroll to find out there was
+            anything under it. Two thirds of that leaves the top of the card
+            visible, and the full-screen button is right there for when the
+            water is the only thing wanted. */}
         <div ref={mapElRef} style={{
-          height: full ? '100%' : (embedded ? '62vh' : '58vh'),
-          minHeight: full ? 0 : 380, width: '100%', background: '#06182b',
+          height: full ? '100%' : (embedded ? '42vh' : '58vh'),
+          minHeight: full ? 0 : (embedded ? 300 : 380),
+          width: '100%', background: '#06182b',
         }} />
 
         {embedded && (
