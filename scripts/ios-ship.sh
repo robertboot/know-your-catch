@@ -89,8 +89,33 @@ cd "$ROOT"
 rm -rf "$ARCHIVE" "$EXPORT_DIR"
 mkdir -p build
 
+# xcodebuild prints every compile, strip and codesign command it runs —
+# thousands of lines, in which the one line that matters is invisible. The
+# full log goes to a file; the terminal gets progress, and on a failure the
+# errors plus the tail of the log, which is what anyone actually reads.
+LOG_DIR="$ROOT/build"
+ARCHIVE_LOG="$LOG_DIR/archive.log"
+EXPORT_LOG="$LOG_DIR/export.log"
+mkdir -p "$LOG_DIR"
+
+run_quiet() {   # run_quiet <log> <what> <command...>
+  local log="$1" what="$2"; shift 2
+  if "$@" -quiet >"$log" 2>&1; then
+    return 0
+  fi
+  echo >&2
+  echo "ERROR: $what failed. Lines from the log that mention an error:" >&2
+  grep -E 'error:|fatal|\*\* .* FAILED' "$log" | tail -20 >&2 || true
+  echo >&2
+  echo "Last 25 lines of $log:" >&2
+  tail -25 "$log" >&2
+  echo >&2
+  echo "Full log: $log" >&2
+  exit 1
+}
+
 echo "→ Archiving (this takes 2-4 min)"
-xcodebuild \
+run_quiet "$ARCHIVE_LOG" "Archive" xcodebuild \
   "${XCODE_TARGET[@]}" \
   -scheme "$SCHEME" \
   -configuration Release \
@@ -100,9 +125,10 @@ xcodebuild \
   DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
   CODE_SIGN_STYLE=Automatic \
   archive
+echo "  archived"
 
 echo "→ Uploading to App Store Connect"
-xcodebuild \
+run_quiet "$EXPORT_LOG" "Upload" xcodebuild \
   -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportPath "$EXPORT_DIR" \
