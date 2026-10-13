@@ -18,7 +18,8 @@ import { client } from './supabase-client.js';
 import { OceanMapsScreen, SPOT_COLORS, SPOT_LABELS } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
 import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
-         groupByBreak, spotStanding, spotAgeNote, breakKey } from './home-water.js';
+         groupByBreak, spotStanding, spotAgeNote, breakKey,
+         plainWhy, spotStats, spotRankColor } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
 export function PlanTripScreen({ state, tier = 'phone' }) {
@@ -70,6 +71,16 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
     const day = outlook[Math.min(dayPick, outlook.length - 1)]?.date;
     return spotAgeNote(observed, day, dayPick === 0);
   }, [spots, outlook, dayPick]);
+
+  /* One list, numbered once. The map is given the same numbers and the
+     same colours, so "2" on the card and "2" on the water are the same
+     break rather than two things that look similar. */
+  const shown = useMemo(() => (spots || []).slice(0, 6), [spots]);
+  const numbers = useMemo(() => {
+    const out = {};
+    shown.forEach((s, i) => { out[breakKey(s)] = { n: i + 1, color: spotRankColor(i) }; });
+    return out;
+  }, [shown]);
 
   const gradeOf = (d) => fishabilityHour({
     wind: d.windMax, gust: d.windMax != null ? d.windMax * 1.3 : null,
@@ -143,70 +154,74 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
       )}
 
       <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-        {(spots || []).slice(0, 8).map((s, i) => {
+        {shown.map((s, i) => {
           const key = breakKey(s);
-          const colour = SPOT_COLORS[s.kind] || T.brass;
+          const colour = spotRankColor(i);
           const on = focus === key;
+          const stats = spotStats(s);
+          const st = spotStanding(s.score);
+          const tone = st.tone === 'good' ? T.open : st.tone === 'fair' ? T.brass : T.inkMute;
           return (
-          /* Same colour and same name as the area drawn on the map, and
-             tapping it moves the map there. Without the link the card and
-             the ring are two things that happen to describe one place, and
-             the angler has to work out they are the same. */
+          /* Numbered, and the number is on the map too. Tapping still
+             zooms to one, but the map already shows every area on this
+             list — the tap is for a closer look, not the only way to see
+             where a card is pointing. */
           <Card key={s.id || i} onClick={() => setFocus(on ? null : key)}
                 style={{
                   padding: sz(13, 16, 18), borderRadius: 16, cursor: 'pointer',
                   borderLeft: `5px solid ${colour}`,
                   outline: on ? `2px solid ${colour}` : 'none',
                 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <span style={{
+                flex: '0 0 auto', width: 26, height: 26, borderRadius: '50%',
+                background: colour, color: '#0b1220', fontWeight: 900, fontSize: 14,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{i + 1}</span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: sz(17, 19, 21), fontWeight: 800, color: T.ink, lineHeight: 1.2 }}>
                   {Math.round(s._run.dist)} nm {compassPoint(s._run.brg)}
                 </div>
                 <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 2 }}>
-                  {/* The map calls it this; so does the card. */}
-                  <span style={{ color: colour, fontWeight: 800 }}>
+                  <span style={{ color: SPOT_COLORS[s.kind] || T.brass, fontWeight: 800 }}>
                     {SPOT_LABELS[s.kind] || s.kind}
                   </span>
                   {' · '}of {home.label}
-                  {s.length_nm >= 2 ? ` · runs ${Math.round(s.length_nm)} nm` : ''}
                   {spotsAge != null ? ` · saved ${describeAge(spotsAge)}` : ''}
                 </div>
-                {on && (
-                  <div style={{ fontSize: 11.5, color: colour, fontWeight: 700, marginTop: 4 }}>
-                    Shown on the map below
-                  </div>
-                )}
               </div>
               {/* What the score MEANS, not a letter borrowed from the
                   safety scale. A 20 here is a faint fishing sign; an F on
-                  the day strip is a sea you should not be out in. Rendering
-                  both as a red F told the angler the only water worth
-                  running to was dangerous. */}
-              {(() => {
-                const st = spotStanding(s.score);
-                const tone = st.tone === 'good' ? T.open : st.tone === 'fair' ? T.brass : T.inkMute;
-                return (
-                  <span style={{
-                    flex: '0 0 auto', fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
-                    color: tone, border: `1px solid ${tone}55`, borderRadius: 999,
-                    padding: '4px 9px', whiteSpace: 'nowrap', textTransform: 'uppercase',
-                  }}>{st.label}</span>
-                );
-              })()}
+                  the day strip is a sea you should not be out in. */}
+              <span style={{
+                flex: '0 0 auto', fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+                color: tone, border: `1px solid ${tone}55`, borderRadius: 999,
+                padding: '4px 9px', whiteSpace: 'nowrap', textTransform: 'uppercase',
+              }}>{st.label}</span>
             </div>
-            {/* The server's `why` ends with the run from that REGION's port.
-                The heading above already gives the run from the angler's own
-                water, and two distances to one spot reads as a contradiction
-                — see the Home card, which had exactly that bug. */}
-            <div style={{ fontSize: sz(13, 14.5, 16), color: T.inkSoft, lineHeight: 1.55, marginTop: 10 }}>
-              {String(s.why || '')
-                .replace(/\s*\d+(\.\d+)?\s*nm\s+[NSEW]{1,3}\s+of\s+[^.]+\.\s*$/, '')
-                // The badge already says the signal is faint. Matches both
-                // the old wording and the new one, so rows written before
-                // the function is redeployed still read cleanly.
-                .replace(/^Nothing strong (in this satellite |this )pass\s*—\s*this is the best of it\.\s*/, '')}
+
+            {/* A sentence, not the instrument read-out. The server's `why`
+                is a comma-run of six measurements ending in the run from
+                that REGION's port — a second, different distance to one
+                spot, which is the bug the Home card had. */}
+            <div style={{ fontSize: sz(13.5, 15, 16), color: T.inkSoft, lineHeight: 1.5, marginTop: 9 }}>
+              {plainWhy(s)}
             </div>
+
+            {/* The numbers in a row, so two breaks can be read across
+                rather than parsed out of two paragraphs. */}
+            {stats.length > 0 && (
+              <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
+                {stats.map((x) => (
+                  <div key={x.label}>
+                    <div style={{ fontSize: 10, letterSpacing: 0.5, color: T.inkMute,
+                                  textTransform: 'uppercase', fontWeight: 800 }}>{x.label}</div>
+                    <div style={{ fontSize: sz(15, 16.5, 18), fontWeight: 800, color: T.ink,
+                                  marginTop: 2 }}>{x.value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
           );
         })}
@@ -218,9 +233,17 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
           and padding so it reads as part of this page. */}
       <div style={{ marginTop: 18 }}>
         <SectionLabel>On the map</SectionLabel>
+        {/* Why the shapes look the way they do, said once. The areas are
+            drawn from the break's own length and heading, so they read
+            with every satellite layer switched off — the imagery is a
+            separate switch, not what makes the spots visible. */}
+        <div style={{ fontSize: 12, color: T.inkMute, lineHeight: 1.5, marginTop: 4 }}>
+          All {shown.length} areas are shown together, numbered to match the list.
+          Sea temp and chlorophyll are separate switches on the map.
+        </div>
         <div style={{ marginTop: 8 }}>
           <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
-                           embedded focusBreak={focus} />
+                           embedded focusBreak={focus} spotNumbers={numbers} />
         </div>
       </div>
     </div>

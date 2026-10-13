@@ -166,3 +166,38 @@ export function spotAgeNote(observedIso, dayIso, isToday) {
   return `These spots will be ${days === 1 ? 'a day' : days + ' days'} old by the day you have `
        + `picked. ${drift}`;
 }
+
+/* What the break IS, in a sentence an angler would say.
+ *
+ * The server's `why` is a measurement list — "81.8°F temperature break,
+ * about 2.3° across it, running 16 nm ENE, on a colour change, in 580 ft"
+ * — which is everything at once and reads as instrument output. The
+ * numbers belong in their own row where they can be compared; the
+ * sentence should say what kind of feature this is and how big.
+ */
+export function plainWhy(s) {
+  const len = Number(s?.length_nm);
+  const edge = len >= 2 ? `a ${Math.round(len)} nm edge` : 'a short edge';
+  if (s?.kind === 'convergence') return `Temperature and colour change meet along ${edge}.`;
+  if (s?.kind === 'color_edge') return `Clean water meets green along ${edge}.`;
+  const drop = Number(s?.sst_drop_f);
+  return drop >= 0.5
+    ? `A ${drop.toFixed(1)}°F temperature change along ${edge}.`
+    : `A temperature change along ${edge}.`;
+}
+
+/* The numbers, for a row that can be read across. */
+export function spotStats(s) {
+  const out = [];
+  if (s?.sst_f != null) out.push({ label: 'Sea temp', value: `${Number(s.sst_f).toFixed(1)}°F` });
+  if (s?.sst_drop_f != null) out.push({ label: 'Temp change', value: `${Number(s.sst_drop_f).toFixed(1)}°F` });
+  if (s?.depth_ft != null) out.push({ label: 'Depth', value: `${Math.round(s.depth_ft)} ft` });
+  else if (s?.current_kt != null) out.push({ label: 'Current', value: `${Number(s.current_kt).toFixed(1)} kt` });
+  return out.slice(0, 3);
+}
+
+/* Marker colours, by rank. The strongest break is the one the page is
+   recommending, so it gets the accent; the rest are numbered alternatives
+   in one neutral colour rather than three colours that have to be learned. */
+export const SPOT_RANK_COLORS = { lead: '#A855F7', other: '#F59E0B' };
+export const spotRankColor = (i) => (i === 0 ? SPOT_RANK_COLORS.lead : SPOT_RANK_COLORS.other);

@@ -145,7 +145,7 @@ export const SPOT_LABELS = {
    rather than behind a button, since the map IS the answer there and a tap
    to reach it is a tap to do nothing with. */
 export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = false,
-                                 focusBreak = null }) {
+                                 focusBreak = null, spotNumbers = null }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -473,8 +473,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
     const group = L.layerGroup();
     let focusTarget = null;
+    let allAreas = [];
     groupByBreak(spots).forEach((h) => {
-      const color = SPOT_COLORS[h.kind] || T.brass;
+      /* Numbered by the list above, where the page gives one.
+         Three colours for three KINDS of edge asked the angler to learn a
+         key before they could read the map; a number ties the shape to the
+         card that explains it, which is the thing they actually need. The
+         kind colours stay for the standalone map, which has no list. */
+      const rank = spotNumbers ? spotNumbers[breakKey(h)] : null;
+      const color = rank ? rank.color : (SPOT_COLORS[h.kind] || T.brass);
       // The one the angler tapped in the list above the map.
       const isFocus = focusBreak != null && breakKey(h) === focusBreak;
       // The break's own span, in metres, floored so a short one is still
@@ -519,20 +526,71 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         blob.addTo(group);
         ring = blob;
       } else {
-        ring = L.circle([h.lat, h.lon], {
-          pane: 'spotspane',
-          radius: radiusM, stroke: true, color,
-          weight: isFocus ? 4 : 3, opacity: 1,
-          fillColor: color, fillOpacity: isFocus ? 0.40 : 0.30,
-        }).addTo(group);
+        /* No published shape: draw the feature the row DESCRIBES.
+           A break has a length and a heading — a circle throws both away
+           and claims a disc of water that is mostly not the break. An
+           elongated ribbon along `bearing_deg`, as long as `length_nm`
+           and a couple of miles across, is the same information the row
+           already carries, drawn as the thing it is. It also means the
+           area reads on its own, with every satellite layer switched off. */
+        const ribbon = L.featureGroup();
+        const half = Math.max(2500, (Number(h.length_nm) || 4) * 1852 / 2);
+        const wide = Math.max(1800, half * 0.22);
+        const brg = ((Number(h.bearing_deg) || 0) * Math.PI) / 180;
+        const mPerDegLat = 111320;
+        const mPerDegLon = Math.max(1, 111320 * Math.cos((h.lat * Math.PI) / 180));
+        // An ellipse, rotated onto the break's heading. Bearing is from
+        // north, clockwise, so the long axis is (sin, cos) not (cos, sin).
+        const outline = (gl, gw) => {
+          const pts = [];
+          for (let d = 0; d < 360; d += 12) {
+            const t = (d * Math.PI) / 180;
+            const along = Math.cos(t) * gl;
+            const across = Math.sin(t) * gw;
+            const dx = along * Math.sin(brg) + across * Math.cos(brg);
+            const dy = along * Math.cos(brg) - across * Math.sin(brg);
+            pts.push([h.lat + dy / mPerDegLat, h.lon + dx / mPerDegLon]);
+          }
+          return pts;
+        };
+        // Same halo-under-core as the published shape, so a row with cells
+        // and a row without look like the same kind of thing on one map.
+        L.polygon(outline(half * 1.25, wide * 2.1), {
+          pane: 'spotspane', stroke: false, fillColor: color,
+          fillOpacity: isFocus ? 0.18 : 0.12, interactive: false,
+        }).addTo(ribbon);
+        L.polygon(outline(half, wide), {
+          pane: 'spotspane', stroke: true, color, weight: isFocus ? 3 : 2,
+          opacity: 0.9, fillColor: color, fillOpacity: isFocus ? 0.50 : 0.38,
+          interactive: false,
+        }).addTo(ribbon);
+        ribbon.addTo(group);
+        ring = ribbon;
       }
       if (isFocus) focusTarget = ring;
-      const core = L.circleMarker([h.lat, h.lon], {
-        pane: 'spotspane',
-        radius: isFocus ? 8 : 6,
-        stroke: true, color: '#ffffff', weight: 2, opacity: 0.9,
-        fillColor: color, fillOpacity: 1,
-      }).addTo(group);
+      allAreas.push(ring);
+      /* The pin in the middle of the area carries the number, so the
+         angler can go from "1" in the list straight to the water without
+         matching shapes by colour. */
+      const core = rank
+        ? L.marker([h.lat, h.lon], {
+            pane: 'spotspane',
+            icon: L.divIcon({
+              className: '',
+              iconSize: [26, 26], iconAnchor: [13, 13],
+              html: `<div style="width:26px;height:26px;border-radius:50%;`
+                  + `background:${color};border:2.5px solid #fff;`
+                  + `box-shadow:0 2px 6px rgba(0,0,0,.45);`
+                  + `display:flex;align-items:center;justify-content:center;`
+                  + `font:800 14px/1 system-ui,sans-serif;color:#0b1220">${rank.n}</div>`,
+            }),
+          }).addTo(group)
+        : L.circleMarker([h.lat, h.lon], {
+            pane: 'spotspane',
+            radius: isFocus ? 8 : 6,
+            stroke: true, color: '#ffffff', weight: 2, opacity: 0.9,
+            fillColor: color, fillOpacity: 1,
+          }).addTo(group);
 
       /* The key, ON the area rather than under the map.
          A legend at the bottom asks the angler to look away, hold three
@@ -547,16 +605,30 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          carries the meaning; the list carries the words. */
 
       const bits = [
-        `<div style="font-weight:800;margin-bottom:4px">${SPOT_LABELS[h.kind] || h.kind}</div>`,
+        `<div style="font-weight:800;margin-bottom:4px">${rank ? `${rank.n}. ` : ''}`
+          + `${SPOT_LABELS[h.kind] || h.kind}</div>`,
         `<div style="margin-bottom:4px">${h.why || ''}</div>`,
       ].join('');
       core.bindPopup(`<div style="font-size:12px;max-width:230px">${bits}</div>`);
     });
     group.addTo(map);
     spotsRef.current = group;
+    allAreas = allAreas.filter(Boolean);
     // Bring the tapped one into view, so the card and the area are
     // obviously the same thing rather than two things that happen to
     // share a colour.
+    /* All of them, at once.
+       Numbering the areas is no use if the angler has to tap each card to
+       bring one into view — the point of a numbered list beside a map is
+       comparing the options side by side. With a list driving the map, the
+       default view is every area it lists. */
+    if (!focusTarget && spotNumbers && allAreas.length) {
+      const all = L.featureGroup(allAreas);
+      const ab = all.getBounds();
+      if (ab && ab.isValid && ab.isValid()) {
+        map.fitBounds(ab, { padding: [36, 36], maxZoom: 8 });
+      }
+    }
     if (focusTarget) {
       // A layerGroup of circles has no bounds of its own; build them from
       // what it contains.
@@ -567,7 +639,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         map.fitBounds(b, { padding: [40, 40], maxZoom: 9 });
       }
     }
-  }, [showSpots, spots, focusBreak]);
+  }, [showSpots, spots, focusBreak, spotNumbers]);
 
   /* Which catches hold a species record.
      The log is the source: the biggest one of each species that carries a
