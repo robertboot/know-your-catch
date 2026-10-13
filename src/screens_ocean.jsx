@@ -574,15 +574,19 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          matching shapes by colour. */
       const core = rank
         ? L.marker([h.lat, h.lon], {
-            pane: 'spotspane',
+            /* Leaflet's own marker pane (z 600), NOT the spot pane.
+               Inside one pane the discs are drawn in the order they are
+               added, so every blob added after this one covered the
+               number — the one label on the map that has to be readable
+               was underneath the decoration. */
             icon: L.divIcon({
               className: '',
-              iconSize: [26, 26], iconAnchor: [13, 13],
-              html: `<div style="width:26px;height:26px;border-radius:50%;`
-                  + `background:${color};border:2.5px solid #fff;`
-                  + `box-shadow:0 2px 6px rgba(0,0,0,.45);`
+              iconSize: [28, 28], iconAnchor: [14, 14],
+              html: `<div style="width:28px;height:28px;border-radius:50%;`
+                  + `background:${color};border:3px solid #fff;`
+                  + `box-shadow:0 2px 7px rgba(0,0,0,.5);`
                   + `display:flex;align-items:center;justify-content:center;`
-                  + `font:800 14px/1 system-ui,sans-serif;color:#0b1220">${rank.n}</div>`,
+                  + `font:900 15px/1 system-ui,sans-serif;color:#0b1220">${rank.n}</div>`,
             }),
           }).addTo(group)
         : L.circleMarker([h.lat, h.lon], {
