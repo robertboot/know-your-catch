@@ -967,8 +967,10 @@ export function HomeScreen({
       {/* Today's Conditions — live, with the Fishability score gauge */}
       <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
 
-      {/* Where to go — renders nothing when there are no spots. */}
-      <TripSpot onOceanMaps={onOceanMaps} tier={screenSize} state={state} />
+      {/* Where to go has moved off Home — it belongs on Plan Your Trip,
+          which the banner above opens. The TripSpot component is kept
+          because that page is the next thing to be built and will mount
+          it; if that stalls, this is dead code and should go. */}
 
       {/* Recent Catches — horizontally-scrolling preview strip. Tap a
           tile to jump straight into the catch's detail view. Hidden
