@@ -104,6 +104,20 @@ echo "✓ model publish verification"
 echo "✓ daily brief reports a dead pipeline"
 echo "✓ ERDDAP host walk"
 
+# The iOS build strips public/marketing to keep the bundle small, so an
+# app screen that points there renders a broken image on the phone and a
+# perfect one on the web — which is why the Plan Your Trip banner was
+# broken for a day. App assets belong in public/brand/.
+BAD_ASSETS="$(grep -rn 'marketing/' src/*.jsx src/*.js 2>/dev/null \
+  | grep -v '^src/screens_marketing.jsx' | grep -v '^src/screens_marketing_' || true)"
+if [ -n "$BAD_ASSETS" ]; then
+  echo "✗ app code points at public/marketing/, which the iOS build deletes:"
+  echo "$BAD_ASSETS"
+  echo "  Move the file to public/brand/ and update the reference."
+  exit 1
+fi
+echo "✓ no app screen depends on a marketing asset"
+
 echo "▶ Building web/admin bundle…"
 npm run web:build >/tmp/ship-web.log 2>&1 || { echo "✗ web:build FAILED"; tail -20 /tmp/ship-web.log; exit 1; }
 echo "✓ web:build passed"

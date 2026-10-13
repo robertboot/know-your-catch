@@ -844,7 +844,7 @@ export function HomeScreen({
           }}
         >
           <img
-            src={`${import.meta.env.BASE_URL}marketing/trip-planning-banner.jpg`}
+            src={`${import.meta.env.BASE_URL}brand/trip-planning-banner.jpg`}
             alt="Plan your next trip. Find promising water. See your past catches."
             style={{ display: 'block', width: '100%', height: 'auto' }}
           />

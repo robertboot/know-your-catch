@@ -178,6 +178,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
      angler scrolled past four rows of switches to reach the thing the
      switches are for. Only one panel is open at a time, and only when
      asked for. */
+  const followedRef = useRef(undefined);      // which break the map last moved to
   const [panel, setPanel] = useState(null);   // 'layers' | 'when' | null
   const [full, setFull] = useState(false);
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
@@ -595,10 +596,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         ribbon.addTo(group);
         ring = ribbon;
       }
-      // Only a TAP moves the map. The pager's highlight must not, or
-      // paging through four areas would zoom the map four times and the
-      // comparison this page exists for would never be on screen.
+      /* The map follows the card. Paging to area 3 and leaving the map
+         where it was made the arrows feel broken — the number changed,
+         the water did not. It still opens showing all of them; it moves
+         only once the angler picks one. */
       if (focusBreak != null && bk === focusBreak) focusTarget = ring;
+      else if (focusBreak == null && highlightBreak != null && bk === highlightBreak
+               && followedRef.current !== undefined && followedRef.current !== bk) {
+        focusTarget = ring;
+      }
       allAreas.push(ring);
       /* The pin in the middle of the area carries the number, so the
          angler can go from "1" in the list straight to the water without
@@ -665,6 +671,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
        bring one into view — the point of a numbered list beside a map is
        comparing the options side by side. With a list driving the map, the
        default view is every area it lists. */
+    followedRef.current = focusBreak != null ? focusBreak : highlightBreak;
     if (!focusTarget && spotNumbers && allAreas.length) {
       const all = L.featureGroup(allAreas);
       const ab = all.getBounds();
@@ -679,7 +686,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         ? focusTarget.getBounds()
         : null;
       if (b && b.isValid && b.isValid()) {
-        map.fitBounds(b, { padding: [40, 40], maxZoom: 9 });
+        map.fitBounds(b, { padding: [50, 50], maxZoom: 8 });
       }
     }
   }, [showSpots, spots, focusBreak, spotNumbers, highlightBreak, onPickSpot]);
