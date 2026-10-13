@@ -874,7 +874,11 @@ export function HomeScreen({
       <div style={{
         position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
         border: `1px solid ${T.cardEdge}`,
-        background: '#031B33',
+        // Sampled from the artwork's deep water. The card was #031B33 and
+        // the photograph is #0b2c44, so the flat panel and the image met in
+        // a visible seam down the middle and the card read as two blocks
+        // rather than one.
+        background: '#0b2c44',
         minHeight: isTablet ? (isLandscape ? 300 : 270) : undefined,
       }}>
         {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
@@ -884,15 +888,22 @@ export function HomeScreen({
             wide card, dark panel left, fish right. The buttons stay REAL
             controls rather than being baked into artwork — a painted
             button is untappable and invisible to a screen reader. */}
-        {/* No overscan, and no Ken Burns drift on this card.
-            Both existed to move a COVER image around behind a tall hero.
-            With contain the image already sits inside the box, so an inset
-            only magnifies it — and the drift's 1.09 scale would crop back
-            exactly the shrink this card is after, clipping the fins at the
-            ends of the loop. The gyroscope tilt stays: it translates a few
-            pixels and never resizes. */}
+        {/* Sizing, deliberately.
+            The artwork is 1.78:1 inside a much wider box, so contain scales
+            it by HEIGHT — which is why plain contain left the fish small
+            with the card showing around it. Giving the box 15% more height
+            top and bottom scales the tuna up by roughly a third and the
+            card clips the overflow; centred, so the crop is shared between
+            the surface rays and the lower fins rather than taking the head.
+            cover is not the answer here: it scales by width and magnifies
+            the fish until its head leaves the card.
+
+            No Ken Burns drift on this card — its 1.09 scale would fight the
+            sizing above and clip the fins at the ends of the loop. The
+            gyroscope tilt stays: it translates a few pixels, never resizes. */}
         <div aria-hidden style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
+          position: 'absolute', top: '-15%', right: 0, bottom: '-15%', left: 0,
+          pointerEvents: 'none',
         }}>
           <img
             src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
@@ -907,7 +918,7 @@ export function HomeScreen({
               // the top. contain sizes the whole fish to fit, so it shrinks
               // rather than crops, and bottom-right drops it clear of the
               // headline and keeps it against the edge the layout wants.
-              objectFit: 'contain', objectPosition: 'right bottom',
+              objectFit: 'contain', objectPosition: 'right center',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
@@ -917,8 +928,8 @@ export function HomeScreen({
         <div aria-hidden style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
           background: isTablet
-            ? 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.92) 28%, rgba(3, 27, 51, 0.50) 45%, rgba(3, 27, 51, 0) 65%)'
-            : 'linear-gradient(90deg, #031B33 0%, rgba(3, 27, 51, 0.94) 22%, rgba(3, 27, 51, 0.55) 38%, rgba(3, 27, 51, 0) 58%)',
+            ? 'linear-gradient(90deg, #0b2c44 0%, rgba(11, 44, 68, 0.92) 28%, rgba(11, 44, 68, 0.50) 45%, rgba(11, 44, 68, 0) 65%)'
+            : 'linear-gradient(90deg, #0b2c44 0%, rgba(11, 44, 68, 0.94) 22%, rgba(11, 44, 68, 0.55) 38%, rgba(11, 44, 68, 0) 58%)',
           pointerEvents: 'none',
         }} />
 
