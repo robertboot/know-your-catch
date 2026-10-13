@@ -874,11 +874,12 @@ export function HomeScreen({
       <div style={{
         position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
         border: `1px solid ${T.cardEdge}`,
-        // Sampled from the artwork's deep water. The card was #031B33 and
-        // the photograph is #0b2c44, so the flat panel and the image met in
-        // a visible seam down the middle and the card read as two blocks
-        // rather than one.
-        background: '#0b2c44',
+        // The card and the left gradient share one colour so the panel and
+        // the photograph read as a single section rather than two blocks.
+        // The artwork's own deep water samples at #0b2c44; this is a shade
+        // deeper by choice, and the gradient blends the difference across
+        // most of the card's width, so there is no edge to see.
+        background: '#11273b',
         minHeight: isTablet ? (isLandscape ? 300 : 270) : undefined,
       }}>
         {/* Ken Burns drift on the wrapper + gyroscope tilt on the img so
@@ -928,8 +929,8 @@ export function HomeScreen({
         <div aria-hidden style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
           background: isTablet
-            ? 'linear-gradient(90deg, #0b2c44 0%, rgba(11, 44, 68, 0.92) 28%, rgba(11, 44, 68, 0.50) 45%, rgba(11, 44, 68, 0) 65%)'
-            : 'linear-gradient(90deg, #0b2c44 0%, rgba(11, 44, 68, 0.94) 22%, rgba(11, 44, 68, 0.55) 38%, rgba(11, 44, 68, 0) 58%)',
+            ? 'linear-gradient(90deg, #11273b 0%, rgba(17, 39, 59, 0.92) 28%, rgba(17, 39, 59, 0.50) 45%, rgba(17, 39, 59, 0) 65%)'
+            : 'linear-gradient(90deg, #11273b 0%, rgba(17, 39, 59, 0.94) 22%, rgba(17, 39, 59, 0.55) 38%, rgba(17, 39, 59, 0) 58%)',
           pointerEvents: 'none',
         }} />
 
