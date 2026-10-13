@@ -839,6 +839,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
   /* Floating chrome: an opaque pill that survives any imagery under it. */
   const floatBox = { position: 'absolute', zIndex: 500 };
+  /* Full screen, the top row has the notch above it and the bottom row
+     has the home indicator below it; inset nothing on a desktop browser,
+     where env() resolves to 0. Leaflet's zoom buttons own the top-left
+     corner, so the view chips start clear of them rather than under
+     them — in full screen the map is taller, not wider, so the clash was
+     permanent once the controls floated. */
+  const ZOOM_W = 56;
+  const topEdge = full ? 'calc(12px + env(safe-area-inset-top, 0px))' : 12;
+  const bottomEdge = full ? 'calc(20px + env(safe-area-inset-bottom, 0px))' : 24;
   const pillStyle = (on) => ({
     padding: '10px 15px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
     fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
@@ -1042,7 +1051,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           <>
             {/* Satellite view, top left — one at a time, and tapping the
                 one that is on takes the picture away. */}
-            <div style={{ ...floatBox, top: 12, left: 12, display: 'flex', gap: 8 }}>
+            <div style={{ ...floatBox, top: topEdge, left: ZOOM_W,
+                          right: 68, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {Object.values(LAYERS).map(l => (
                 <button key={l.key} type="button" onClick={() => {
                   setActive(prev => (prev === l.key ? null : l.key));
@@ -1055,7 +1065,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                 switches do not belong in front of the water. */}
             <button type="button" aria-label="Layers"
                     onClick={() => setPanel(p => (p === 'layers' ? null : 'layers'))}
-                    style={{ ...floatBox, top: 12, right: 12, ...pillStyle(panel === 'layers'),
+                    style={{ ...floatBox, top: topEdge, right: 12, ...pillStyle(panel === 'layers'),
                              width: 46, height: 46, borderRadius: 14, fontSize: 19,
                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               ☰
@@ -1063,7 +1073,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
             {panel === 'layers' && (
               <div style={{
-                ...floatBox, top: 66, right: 12, left: 12, maxWidth: 340, marginLeft: 'auto',
+                ...floatBox, top: `calc(${typeof topEdge === 'number' ? topEdge + 'px' : topEdge} + 54px)`,
+                right: 12, left: 12, maxWidth: 340, marginLeft: 'auto',
                 background: 'rgba(6,20,36,0.96)', border: `1px solid ${T.cardEdge}`,
                 borderRadius: 16, padding: 13,
                 maxHeight: '60%', overflowY: 'auto',
@@ -1114,7 +1125,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
             {/* Which composite, bottom left — the same four choices, out
                 of the way until asked for. */}
-            <div style={{ ...floatBox, bottom: 24, left: 12 }}>
+            <div style={{ ...floatBox, bottom: bottomEdge, left: 12 }}>
               <button type="button" onClick={() => setPanel(p => (p === 'when' ? null : 'when'))}
                       style={pillStyle(panel === 'when')}>
                 {dateISO ? `Imagery ${dateISO}` : 'Latest imagery'} ▾
@@ -1135,7 +1146,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
             {/* More water, one tap away and one tap back. */}
             <button type="button" aria-label={full ? 'Exit full screen' : 'Full screen'}
                     onClick={() => setFull(f => !f)}
-                    style={{ ...floatBox, bottom: 24, right: 12, ...pillStyle(false),
+                    style={{ ...floatBox, bottom: bottomEdge, right: 12, ...pillStyle(false),
                              width: 44, height: 44, borderRadius: 13, fontSize: 17,
                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {full ? '✕' : '⛶'}
