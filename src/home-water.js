@@ -91,11 +91,18 @@ export const compassPoint = (deg) =>
  * from one group is built with that group's own span and bearing, so
  * spots sharing region, length and bearing came from the same break.
  */
+/* The identity of a break, derived the same way wherever it is needed.
+   The list and the map have to agree on what "that one" means, or
+   highlighting a card cannot find its area. */
+export function breakKey(s) {
+  return [s?.region_id, Number(s?.length_nm || 0).toFixed(1),
+          Number(s?.bearing_deg || 0).toFixed(1)].join('|');
+}
+
 export function groupByBreak(spots) {
   const byBreak = new Map();
   for (const s of spots || []) {
-    const key = [s.region_id, Number(s.length_nm || 0).toFixed(1),
-                 Number(s.bearing_deg || 0).toFixed(1)].join('|');
+    const key = breakKey(s);
     const seen = byBreak.get(key);
     if (!seen) { byBreak.set(key, { ...s, _points: 1 }); continue; }
     seen._points += 1;

@@ -15,10 +15,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
 import { H1, Card, SectionLabel } from './components.jsx';
 import { client } from './supabase-client.js';
-import { OceanMapsScreen } from './screens_ocean.jsx';
+import { OceanMapsScreen, SPOT_COLORS, SPOT_LABELS } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
 import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
-         groupByBreak, spotStanding, spotAgeNote } from './home-water.js';
+         groupByBreak, spotStanding, spotAgeNote, breakKey } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
 export function PlanTripScreen({ state, tier = 'phone' }) {
@@ -26,6 +26,7 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
   const [spotsAge, setSpotsAge] = useState(null);
   const [outlook, setOutlook] = useState(null);
   const [dayPick, setDayPick] = useState(0);
+  const [focus, setFocus] = useState(null);   // which break the map should show
 
   const home = useMemo(() => homeWater(state), [state]);
   const sz = (p, t, d) => (tier === 'desktop' ? d : tier === 'tablet' ? t : p);
@@ -142,18 +143,40 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
       )}
 
       <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-        {(spots || []).slice(0, 8).map((s, i) => (
-          <Card key={s.id || i} style={{ padding: sz(13, 16, 18), borderRadius: 16 }}>
+        {(spots || []).slice(0, 8).map((s, i) => {
+          const key = breakKey(s);
+          const colour = SPOT_COLORS[s.kind] || T.brass;
+          const on = focus === key;
+          return (
+          /* Same colour and same name as the area drawn on the map, and
+             tapping it moves the map there. Without the link the card and
+             the ring are two things that happen to describe one place, and
+             the angler has to work out they are the same. */
+          <Card key={s.id || i} onClick={() => setFocus(on ? null : key)}
+                style={{
+                  padding: sz(13, 16, 18), borderRadius: 16, cursor: 'pointer',
+                  borderLeft: `5px solid ${colour}`,
+                  outline: on ? `2px solid ${colour}` : 'none',
+                }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: sz(17, 19, 21), fontWeight: 800, color: T.ink, lineHeight: 1.2 }}>
                   {Math.round(s._run.dist)} nm {compassPoint(s._run.brg)}
                 </div>
                 <div style={{ fontSize: 12.5, color: T.inkMute, marginTop: 2 }}>
-                  of {home.label}
-                  {s.length_nm >= 2 ? ` · the break runs ${Math.round(s.length_nm)} nm` : ''}
+                  {/* The map calls it this; so does the card. */}
+                  <span style={{ color: colour, fontWeight: 800 }}>
+                    {SPOT_LABELS[s.kind] || s.kind}
+                  </span>
+                  {' · '}of {home.label}
+                  {s.length_nm >= 2 ? ` · runs ${Math.round(s.length_nm)} nm` : ''}
                   {spotsAge != null ? ` · saved ${describeAge(spotsAge)}` : ''}
                 </div>
+                {on && (
+                  <div style={{ fontSize: 11.5, color: colour, fontWeight: 700, marginTop: 4 }}>
+                    Shown on the map below
+                  </div>
+                )}
               </div>
               {/* What the score MEANS, not a letter borrowed from the
                   safety scale. A 20 here is a faint fishing sign; an F on
@@ -183,7 +206,8 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
                 .replace(/^Nothing strong this pass\s*—\s*this is the best of it\.\s*/, '')}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {/* The map, open. It is the answer on this page, not a destination
@@ -193,7 +217,8 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
       <div style={{ marginTop: 18 }}>
         <SectionLabel>On the map</SectionLabel>
         <div style={{ marginTop: 8 }}>
-          <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state} embedded />
+          <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
+                           embedded focusBreak={focus} />
         </div>
       </div>
     </div>

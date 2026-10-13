@@ -25,7 +25,7 @@ import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } fro
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 import { TRIP_MODES } from './trip-modes.js';
-import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak } from './home-water.js';
+import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak, breakKey } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
 
@@ -129,12 +129,12 @@ const LAYERS = {
 };
 
 /* Suggested-spot colours by edge kind — match the popup copy. */
-const SPOT_COLORS = {
+export const SPOT_COLORS = {
   temp_break:  '#ff9a3d',
   color_edge:  '#2BE07F',
   convergence: '#c08cff',
 };
-const SPOT_LABELS = {
+export const SPOT_LABELS = {
   temp_break:  'Temp break',
   color_edge:  'Color edge',
   convergence: 'Convergence',
@@ -144,7 +144,8 @@ const SPOT_LABELS = {
    sit inside another page — Plan Your Trip shows it open below the spots
    rather than behind a button, since the map IS the answer there and a tap
    to reach it is a tap to do nothing with. */
-export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = false }) {
+export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = false,
+                                 focusBreak = null }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -459,16 +460,22 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
        grouped back into their break and drawn as the area they describe,
        sized by the break's own length. */
     const group = L.layerGroup();
+    let focusTarget = null;
     groupByBreak(spots).forEach((h) => {
       const color = SPOT_COLORS[h.kind] || T.brass;
+      // The one the angler tapped in the list above the map.
+      const isFocus = focusBreak != null && breakKey(h) === focusBreak;
       // The break's own span, in metres, floored so a short one is still
       // an area rather than a dot.
       const radiusM = Math.max(3000, (Number(h.length_nm) || 4) * 1852 / 2);
 
-      L.circle([h.lat, h.lon], {
-        radius: radiusM, stroke: true, color, weight: 2, opacity: 0.9,
-        dashArray: '6 5', fillColor: color, fillOpacity: 0.12,
+      const ring = L.circle([h.lat, h.lon], {
+        radius: radiusM, stroke: true, color,
+        weight: isFocus ? 4 : 2, opacity: isFocus ? 1 : 0.75,
+        dashArray: isFocus ? null : '6 5',
+        fillColor: color, fillOpacity: isFocus ? 0.26 : 0.1,
       }).addTo(group);
+      if (isFocus) focusTarget = ring;
       const core = L.circleMarker([h.lat, h.lon], {
         radius: 5, stroke: true, color: '#06212f', weight: 1, opacity: 0.6,
         fillColor: color, fillOpacity: 0.95,
@@ -501,7 +508,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     });
     group.addTo(map);
     spotsRef.current = group;
-  }, [showSpots, spots]);
+    // Bring the tapped one into view, so the card and the area are
+    // obviously the same thing rather than two things that happen to
+    // share a colour.
+    if (focusTarget) map.fitBounds(focusTarget.getBounds(), { padding: [40, 40], maxZoom: 9 });
+  }, [showSpots, spots, focusBreak]);
 
   /* Which catches hold a species record.
      The log is the source: the biggest one of each species that carries a
