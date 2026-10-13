@@ -943,21 +943,15 @@ export function HomeScreen({
           padding: isTablet ? '36px 32px 32px' : '20px 18px 18px',
           maxWidth: isTablet ? 500 : 320,
         }}>
-          {/* Two-line headline so the copy never overflows the fish
-              art at narrow widths. Line-height ~0.95 keeps them
-              feeling like one thought. */}
+          {/* Broken after "your" on purpose: on a phone the one-line
+              headline ran across the tuna's head, and the two lines of
+              body copy under it sat over the whole fish. The art is the
+              card; the words stay in the dark water on the left of it. */}
           <div style={{
             fontSize: isTablet ? (isLandscape ? 54 : 48) : 30, fontWeight: 900, color: T.ink,
             letterSpacing: 0.3, lineHeight: 1.05,
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
-          }}>Log your catch</div>
-          <div style={{
-            fontSize: isTablet ? 21 : 13.5, color: T.ink, lineHeight: 1.45,
-            marginTop: isTablet ? 20 : 10,
-            maxWidth: isTablet ? 480 : 260,
-          }}>
-            Save the species, location and conditions.<br />Build your personal fishing map.
-          </div>
+          }}>Log your<br />catch</div>
           {/* Two-button row: primary Take Photo (camera-direct) + secondary
               Select Photo (library only). Both feed the same shared post-
               capture pipeline (identify → confirmation card → catch entry).
