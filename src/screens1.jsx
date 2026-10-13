@@ -884,8 +884,13 @@ export function HomeScreen({
             wide card, dark panel left, fish right. The buttons stay REAL
             controls rather than being baked into artwork — a painted
             button is untappable and invisible to a screen reader. */}
+        {/* Overscan trimmed to 3%. At 10% the artwork's right edge sat a
+            tenth of the card's width BEYOND the border, so anchoring the
+            fish right still left it floating short of the edge. The Ken
+            Burns drift tops out at 2% translate on a 1.09 scale, so 3%
+            is enough headroom and keeps the fish against the border. */}
         <div aria-hidden className="kyc-kenburns" style={{
-          position: 'absolute', inset: '-10%', pointerEvents: 'none',
+          position: 'absolute', inset: '-3%', pointerEvents: 'none',
         }}>
           <img
             src={brandAsset('hero_tuna', `${import.meta.env.BASE_URL}brand/hero-tuna.png`)}
@@ -893,7 +898,13 @@ export function HomeScreen({
             aria-hidden
             style={{
               width: '100%', height: '100%',
-              objectFit: 'contain', objectPosition: 'center center',
+              // cover + right: the artwork fills the card and is anchored to
+              // the right edge, so the fish runs to the border instead of
+              // floating in the middle with the card's background showing
+              // around it. contain was right for the old tall hero, where
+              // nothing could be cropped; this banner is short and wide and
+              // the tail is the part that may go.
+              objectFit: 'cover', objectPosition: 'right center',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
