@@ -462,6 +462,23 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     spotsRef.current = group;
   }, [showSpots, spots]);
 
+  /* Which catches hold a species record.
+     The log is the source: the biggest one of each species that carries a
+     measurement. state.pbs is the angler's own record card and can predate
+     the log entirely, so matching against it would ring nothing for a spot
+     logged before they started measuring. */
+  const pbCatchIds = useMemo(() => {
+    const best = new Map();                 // speciesId -> { id, value }
+    for (const c of state?.catchLog || []) {
+      if (!c.speciesId) continue;
+      const value = Number(c.length) || Number(c.weight) || 0;
+      if (!value) continue;
+      const seen = best.get(c.speciesId);
+      if (!seen || value > seen.value) best.set(c.speciesId, { id: c.id, value });
+    }
+    return new Set([...best.values()].map(b => b.id));
+  }, [state?.catchLog]);
+
   // Draw/remove the angler's own catches.
   useEffect(() => {
     const map = mapRef.current;
@@ -470,19 +487,59 @@ export function OceanMapsScreen({ isTablet, initialLayer, state }) {
     if (!showCatches) return;
     const catches = (state?.catchLog || []).filter(c => c.lat != null && c.lon != null);
     if (!catches.length) return;
+
+    /* Names appear once the map is close enough for them not to collide.
+       Below this the dots are often within a few pixels of each other and
+       a label per dot is a wall of text, not information. */
+    const LABEL_ZOOM = 9;
+
     const group = L.layerGroup();
-    catches.forEach((c) => {
-      const m = L.circleMarker([c.lat, c.lon], {
-        radius: 5, stroke: true, color: '#06212f', weight: 1,
-        fillColor: '#5ac8f5', fillOpacity: 0.95,
-      }).addTo(group);
-      const name = SPECIES.find(s => s.id === c.speciesId)?.commonName || 'Catch';
-      const when = c.dateIso ? new Date(c.dateIso).toLocaleDateString() : '';
-      m.bindPopup(`<div style="font-size:12px"><b>${name}</b>${when ? `<br/>${when}` : ''}</div>`);
-    });
+    const draw = () => {
+      group.clearLayers();
+      const named = map.getZoom() >= LABEL_ZOOM;
+      catches.forEach((c) => {
+        const isPB = pbCatchIds.has(c.id);
+        const name = SPECIES.find(s => s.id === c.speciesId)?.commonName || 'Catch';
+        const when = c.dateIso ? new Date(c.dateIso).toLocaleDateString() : '';
+
+        // A record gets a gold ring around the dot, drawn as its own circle
+        // so the dot keeps its size and the ring reads as a surround.
+        if (isPB) {
+          L.circleMarker([c.lat, c.lon], {
+            radius: 9, stroke: true, color: '#FFC857', weight: 2.5,
+            fill: false, interactive: false,
+          }).addTo(group);
+        }
+        const m = L.circleMarker([c.lat, c.lon], {
+          radius: 5, stroke: true, color: '#06212f', weight: 1,
+          fillColor: '#5ac8f5', fillOpacity: 0.95,
+        }).addTo(group);
+        m.bindPopup(`<div style="font-size:12px"><b>${name}</b>${isPB ? ' · PB' : ''}`
+          + `${when ? `<br/>${when}` : ''}</div>`);
+
+        if (named) {
+          L.marker([c.lat, c.lon], {
+            interactive: false,
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="transform:translate(14px,-9px);white-space:nowrap;`
+                  + `font-size:11px;font-weight:700;color:#fff;`
+                  + `text-shadow:0 1px 3px rgba(0,0,0,0.95),0 0 2px rgba(0,0,0,0.9)">`
+                  + `${isPB ? '<span style="color:#FFC857">★ </span>' : ''}${name}</div>`,
+              iconSize: [0, 0],
+            }),
+          }).addTo(group);
+        }
+      });
+    };
+
+    draw();
     group.addTo(map);
     catchesRef.current = group;
-  }, [showCatches, state?.catchLog]);
+    // Labels appear and disappear with zoom, so redraw on the way in and out.
+    map.on('zoomend', draw);
+    return () => { map.off('zoomend', draw); };
+  }, [showCatches, state?.catchLog, pbCatchIds]);
 
 
   const cfg = active ? LAYERS[active] : null;
