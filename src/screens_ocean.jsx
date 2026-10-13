@@ -839,15 +839,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
   /* Floating chrome: an opaque pill that survives any imagery under it. */
   const floatBox = { position: 'absolute', zIndex: 500 };
-  /* Full screen, the top row has the notch above it and the bottom row
-     has the home indicator below it; inset nothing on a desktop browser,
-     where env() resolves to 0. Leaflet's zoom buttons own the top-left
-     corner, so the view chips start clear of them rather than under
-     them — in full screen the map is taller, not wider, so the clash was
-     permanent once the controls floated. */
-  const ZOOM_W = 56;
-  const topEdge = full ? 'calc(12px + env(safe-area-inset-top, 0px))' : 12;
-  const bottomEdge = full ? 'calc(20px + env(safe-area-inset-bottom, 0px))' : 24;
+  /* Leaflet's zoom buttons own the top-left corner, so nothing of ours
+     goes there. In full screen the container insets for the notch and the
+     home indicator, which moves Leaflet's own controls with it. */
+  const topEdge = 12;
+  const bottomEdge = full ? 20 : 24;
   const pillStyle = (on) => ({
     padding: '10px 15px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
     fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
@@ -1038,6 +1034,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           were taking. */}
       <div style={full ? {
         position: 'fixed', inset: 0, zIndex: 4000, background: '#06182b',
+        /* The map itself stops below the notch and above the home
+           indicator. Insetting only our own controls left Leaflet's zoom
+           buttons under the clock. */
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        boxSizing: 'border-box',
       } : {
         position: 'relative', borderRadius: embedded ? 0 : 16, overflow: 'hidden',
         border: embedded ? 'none' : `1px solid ${T.cardEdge}`,
@@ -1049,20 +1051,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
         {embedded && (
           <>
-            {/* Satellite view, top left — one at a time, and tapping the
-                one that is on takes the picture away. */}
-            <div style={{ ...floatBox, top: topEdge, left: ZOOM_W,
-                          right: 68, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {Object.values(LAYERS).map(l => (
-                <button key={l.key} type="button" onClick={() => {
-                  setActive(prev => (prev === l.key ? null : l.key));
-                  if (active !== l.key) clearOverlays();
-                }} style={pillStyle(active === l.key)}>{l.label}</button>
-              ))}
-            </div>
-
-            {/* Everything else behind one button, because four rows of
-                switches do not belong in front of the water. */}
+            {/* Every layer behind one button.
+                The two satellite chips used to float top-left, where they
+                sat under the status bar in full screen and, with the
+                layers panel open, made two competing menus on one map.
+                One button, one panel, both kinds of layer in it. */}
             <button type="button" aria-label="Layers"
                     onClick={() => setPanel(p => (p === 'layers' ? null : 'layers'))}
                     style={{ ...floatBox, top: topEdge, right: 12, ...pillStyle(panel === 'layers'),
@@ -1073,13 +1066,21 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
 
             {panel === 'layers' && (
               <div style={{
-                ...floatBox, top: `calc(${typeof topEdge === 'number' ? topEdge + 'px' : topEdge} + 54px)`,
-                right: 12, left: 12, maxWidth: 340, marginLeft: 'auto',
+                ...floatBox, top: topEdge + 54, right: 12, left: 12,
+                maxWidth: 340, marginLeft: 'auto',
                 background: 'rgba(6,20,36,0.96)', border: `1px solid ${T.cardEdge}`,
                 borderRadius: 16, padding: 13,
                 maxHeight: '60%', overflowY: 'auto',
               }}>
-                <div style={panelLabel}>Show on the water</div>
+                <div style={panelLabel}>Satellite layers</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {Object.values(LAYERS).map(l => viewChip(active === l.key, l.label, () => {
+                    setActive(prev => (prev === l.key ? null : l.key));
+                    if (active !== l.key) clearOverlays();
+                  }))}
+                </div>
+
+                <div style={{ ...panelLabel, marginTop: 14 }}>Show on the water</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {overlayChip(showSpots, 'Suggested spots', () => toggleOverlay(setShowSpots))}
                   {overlayChip(showCatches, 'My catches', () => toggleOverlay(setShowCatches))}
