@@ -500,16 +500,31 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          colours in their head and look back. Naming the thing where it is
          drawn means it cannot be missed, which is the whole point of
          saying it. */
-      L.marker([h.lat, h.lon], {
+      /* Below the circle, centred, on two lines.
+         Beside it the label ran off the right of the map whenever the area
+         sat near that edge — and a label you have to pan to read is a label
+         nobody reads. Under it the text is as wide as it is tall, so it
+         stays on screen, and the kind sits above the span rather than
+         trailing off it. */
+      /* Anchored to the circle's SOUTHERN EDGE, not its centre with a
+         pixel offset — the circle's radius in pixels changes with every
+         zoom, so a fixed offset would sit inside the area zoomed out and
+         far below it zoomed in. A degree of latitude is ~111.32 km. */
+      L.marker([h.lat - radiusM / 111320, h.lon], {
         interactive: false,
+        pane: 'spotspane',
         icon: L.divIcon({
           className: '',
-          html: `<div style="transform:translate(${Math.round(radiusM / 1852 * 2) + 10}px,-10px);`
-              + `white-space:nowrap;font-size:12px;font-weight:800;color:${color};`
+          html: `<div style="transform:translate(-50%,8px);text-align:center;`
+              + `font-size:12px;line-height:1.3;`
               + `text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 3px rgba(0,0,0,0.9)">`
-              + `${SPOT_LABELS[h.kind] || h.kind}`
-              + `<span style="font-weight:600;color:#fff;opacity:0.85">`
-              + `${h.length_nm >= 2 ? ` · runs ${Math.round(h.length_nm)} nm` : ''}</span></div>`,
+              + `<div style="font-weight:800;color:${color};white-space:nowrap">`
+              + `${SPOT_LABELS[h.kind] || h.kind}</div>`
+              + (h.length_nm >= 2
+                  ? `<div style="font-weight:600;color:#fff;opacity:0.85;white-space:nowrap">`
+                    + `runs ${Math.round(h.length_nm)} nm</div>`
+                  : '')
+              + `</div>`,
           iconSize: [0, 0],
         }),
       }).addTo(group);
