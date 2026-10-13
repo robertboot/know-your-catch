@@ -365,7 +365,14 @@ function TripSpot({ onOceanMaps, tier = 'phone', state }) {
           </div>
         </div>
         <div style={{ fontSize: sz(12.5, 13.5, 15), color: T.inkMute, marginTop: 10, lineHeight: 1.5 }}>
-          {spot.why}
+          {/* The server's `why` ends with the run from that REGION's port —
+              "32 nm SSE of Venice". The headline above gives the run from
+              the angler's own water, so printing both puts two different
+              distances to one spot in the same card and reads as a
+              contradiction. Both are correct; only one is the reader's.
+              Dropped here rather than server-side because the admin map,
+              where the port reference is the useful one, still wants it. */}
+          {String(spot.why || '').replace(/\s*\d+(\.\d+)?\s*nm\s+[NSEW]{1,3}\s+of\s+[^.]+\.\s*$/, '')}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12,
                       color: T.brass, fontSize: sz(12.5, 13.5, 15), fontWeight: 800 }}>
@@ -924,6 +931,33 @@ export function HomeScreen({
           </div>
         </div>
       </div>
+
+      {/* Trip planning, where the four shortcut tiles used to be.
+          One destination instead of four, and the one thing on Home that
+          is not about today — the rest of the screen answers "should I go
+          now", this answers "where next".
+
+          The artwork carries its own words, so the alt text has to say
+          them: a reader with images off, or a screen reader, otherwise
+          gets a button that announces nothing. */}
+      {onOceanMaps && (
+        <button
+          onClick={() => onOceanMaps()}
+          className="kyc-press"
+          aria-label="Plan your next trip — find promising water and see your past catches"
+          style={{
+            display: 'block', width: '100%', marginTop: 14, padding: 0,
+            border: `1px solid ${T.cardEdge}`, borderRadius: 18, overflow: 'hidden',
+            background: T.card, cursor: 'pointer',
+          }}
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}marketing/trip-planning-banner.jpg`}
+            alt="Plan your next trip. Find promising water. See your past catches."
+            style={{ display: 'block', width: '100%', height: 'auto' }}
+          />
+        </button>
+      )}
 
       {/* Conditions + Regulation Alerts.
           Phone: horizontal scroll row so each card keeps a comfortable
