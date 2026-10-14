@@ -46,6 +46,36 @@ MSG
   exit 1
 fi
 
+# Gradle needs a JDK 17+, and macOS ships a stub `java` that only offers
+# to install one. Android Studio bundles a JetBrains Runtime, which is the
+# JDK Google tests the build tools against — use it unless JAVA_HOME
+# already points at something modern enough.
+java_major() {
+  local home="$1"
+  [ -x "$home/bin/java" ] || return 1
+  "$home/bin/java" -version 2>&1 | head -1 \
+    | sed -E 's/.*version "([0-9]+).*/\1/' | grep -E '^[0-9]+$' || return 1
+}
+NEED=17
+CURRENT_JAVA="$(java_major "${JAVA_HOME:-/nonexistent}" || true)"
+if [ -z "$CURRENT_JAVA" ] || [ "$CURRENT_JAVA" -lt "$NEED" ]; then
+  for candidate in \
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+    "$HOME/Applications/Android Studio.app/Contents/jbr/Contents/Home"; do
+    if [ -x "$candidate/bin/java" ]; then
+      export JAVA_HOME="$candidate"
+      echo "→ Using Android Studio's Java ($(java_major "$JAVA_HOME"))"
+      break
+    fi
+  done
+fi
+CURRENT_JAVA="$(java_major "${JAVA_HOME:-/nonexistent}" || true)"
+if [ -z "$CURRENT_JAVA" ] || [ "$CURRENT_JAVA" -lt "$NEED" ]; then
+  echo "ERROR: no Java $NEED or newer found. Install Android Studio (it bundles one)," >&2
+  echo "       or set JAVA_HOME to a JDK $NEED+." >&2
+  exit 1
+fi
+
 # Play rejects a versionCode it has already accepted, so every bundle
 # gets a fresh one.
 CURRENT="$(grep -E '^[[:space:]]*versionCode' "$GRADLE_FILE" | head -1 | grep -oE '[0-9]+')"
