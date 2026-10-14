@@ -23,6 +23,7 @@
     "android:sync": "npm run android:build && cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:open": "cap open android",
+    "android:ship": "bash scripts/android-ship.sh",
     "check": "node scripts/check-parity.mjs"
   },
   "dependencies": {

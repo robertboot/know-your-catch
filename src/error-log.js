@@ -74,6 +74,14 @@ const BENIGN = [
   'chunkloaderror',
   'java object is gone',
   'java exception was raised during method invocation',
+  /* The iOS half of the same story. Facebook's and Instagram's in-app
+     browsers inject scripts that post to their own WKWebView message
+     handlers; when one of those handlers is not registered the page
+     throws "window.webkit.messageHandlers[x].postMessage". This app's
+     own native calls go through Capacitor, whose handlers ship inside
+     the binary and cannot be missing, so a missing handler is never
+     ours. Web visitors, nothing to change. */
+  'webkit.messagehandlers',
 ];
 const isBenign = (msg) => {
   const m = String(msg || '').trim().toLowerCase();
