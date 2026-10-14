@@ -46,33 +46,42 @@ MSG
   exit 1
 fi
 
-# Gradle needs a JDK 17+, and macOS ships a stub `java` that only offers
-# to install one. Android Studio bundles a JetBrains Runtime, which is the
-# JDK Google tests the build tools against — use it unless JAVA_HOME
-# already points at something modern enough.
+# Gradle needs a JDK in a WINDOW, not simply a new one: this wrapper
+# (8.14) refuses anything older than 17 and cannot read the class files
+# of anything newer than 21 — Android Studio's bundled Java 25 failed
+# with "Unsupported class file major version 69", which names neither.
+# macOS also ships a stub `java` that only offers to install one.
 java_major() {
   local home="$1"
   [ -x "$home/bin/java" ] || return 1
   "$home/bin/java" -version 2>&1 | head -1 \
     | sed -E 's/.*version "([0-9]+).*/\1/' | grep -E '^[0-9]+$' || return 1
 }
-NEED=17
+MIN_JAVA=17
+MAX_JAVA=21
+usable() { [ -n "$1" ] && [ "$1" -ge "$MIN_JAVA" ] && [ "$1" -le "$MAX_JAVA" ]; }
+
 CURRENT_JAVA="$(java_major "${JAVA_HOME:-/nonexistent}" || true)"
-if [ -z "$CURRENT_JAVA" ] || [ "$CURRENT_JAVA" -lt "$NEED" ]; then
+if ! usable "$CURRENT_JAVA"; then
   for candidate in \
-    "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
-    "$HOME/Applications/Android Studio.app/Contents/jbr/Contents/Home"; do
-    if [ -x "$candidate/bin/java" ]; then
+    "$(/usr/libexec/java_home -v 21 2>/dev/null || true)" \
+    "$(/usr/libexec/java_home -v 17 2>/dev/null || true)" \
+    "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home" \
+    "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home" \
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home"; do
+    [ -n "$candidate" ] || continue
+    found="$(java_major "$candidate" || true)"
+    if usable "$found"; then
       export JAVA_HOME="$candidate"
-      echo "→ Using Android Studio's Java ($(java_major "$JAVA_HOME"))"
+      CURRENT_JAVA="$found"
+      echo "→ Using Java $found at $JAVA_HOME"
       break
     fi
   done
 fi
-CURRENT_JAVA="$(java_major "${JAVA_HOME:-/nonexistent}" || true)"
-if [ -z "$CURRENT_JAVA" ] || [ "$CURRENT_JAVA" -lt "$NEED" ]; then
-  echo "ERROR: no Java $NEED or newer found. Install Android Studio (it bundles one)," >&2
-  echo "       or set JAVA_HOME to a JDK $NEED+." >&2
+if ! usable "$CURRENT_JAVA"; then
+  echo "ERROR: need a Java between $MIN_JAVA and $MAX_JAVA; found '${CURRENT_JAVA:-none}'." >&2
+  echo "       Install one with:  brew install --cask temurin@21" >&2
   exit 1
 fi
 
