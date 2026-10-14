@@ -33,6 +33,10 @@
       "destination": "/privacy.html"
     },
     {
+      "source": "/delete-account",
+      "destination": "/delete-account.html"
+    },
+    {
       "source": "/:path*",
       "destination": "/index.html"
     }

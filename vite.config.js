@@ -71,6 +71,9 @@ export default defineConfig(({ mode }) => ({
         // redeploy. Falls back to the HTML shipped in the file if
         // Supabase isn't reachable.
         privacy: resolve(__dirname, 'privacy.html'),
+        // Google Play requires a WEB page for account deletion, reachable
+        // without signing in — the in-app button is not enough on its own.
+        deleteAccount: resolve(__dirname, 'delete-account.html'),
       },
     },
   },
