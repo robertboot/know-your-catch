@@ -1021,7 +1021,10 @@ export function HomeScreen({
               objectFit: isTablet ? 'cover' : 'contain',
               objectPosition: 'right center',
               pointerEvents: 'none', display: 'block',
-              transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
+              /* Nudged right in the grid. objectPosition stops at the
+                 right edge of the box, so to push the fish further over
+                 the box itself has to move. */
+              transform: `translate(calc(${heroTilt.x}px + ${isTablet ? '9%' : '0%'}), ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
             }}
           />
