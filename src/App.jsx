@@ -1288,6 +1288,13 @@ export default function App() {
   const speciesActive = ['species_list', 'species', 'categories', 'category', 'search'].includes(screen.name);
 
   const chrome = chromeHeights(size);
+  /* A browser window wide enough for a menu gets one.
+     The bottom tab bar is a phone convention: on a desktop the pointer
+     starts at the top of the window, every other site puts navigation
+     there, and a bar pinned to the bottom of a 27-inch monitor is a
+     long way from whatever the angler was reading. iOS and narrow
+     windows keep the tab bar — it is right there under the thumb. */
+  const topNav = __KYC_WEB__ && size !== 'phone';
   const type = typeScale(size);
   const gridCols = cols(size);
   const screenCtx = { size, type, cols: gridCols, chrome };
@@ -1301,12 +1308,12 @@ export default function App() {
       // Push the chrome-height CSS vars into the tree so the safe-area
       // content-region padding scales with tablet.
       '--kyc-header-height': `${chrome.header}px`,
-      '--kyc-footer-height': `${chrome.footer}px`,
+      '--kyc-footer-height': `${topNav ? 0 : chrome.footer}px`,
       /* The capture button is seated in a socket that rises above the tab
          bar, so the bar is taller than its own height says. Padding the
          content by the bar alone left the last line of every screen under
          that circle — on Plan Your Trip, under the camera. */
-      '--kyc-footer-overhang': `${size === 'phone' ? 36 : 40}px`,
+      '--kyc-footer-overhang': `${topNav ? 0 : (size === 'phone' ? 36 : 40)}px`,
     }}>
       {/* Top app bar — fixed to the viewport with safe-area padding so
           the header can't scroll into the iOS status bar area. Centered
@@ -1328,7 +1335,8 @@ export default function App() {
             ever conditionally skipped we regress the "logo missing on
             non-home pages" bug. The render-time assertion below fires a
             console.warn so any future regression surfaces during dev/QA. */}
-        <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, height: chrome.header }}>
+        <div style={{ display: 'flex', alignItems: 'center',
+                      flex: topNav ? '0 0 auto' : 1, minWidth: 0, height: chrome.header }}>
           {stack.length > 1 && (
             <button
               onClick={pop}
@@ -1353,7 +1361,7 @@ export default function App() {
             aria-label="ReelIntel — home"
             style={{
               background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
+              display: 'flex', alignItems: 'center', flex: topNav ? '0 0 auto' : 1, minWidth: 0,
               height: chrome.header,
             }}
           >
@@ -1373,7 +1381,46 @@ export default function App() {
             />
           </button>
         </div>
+        {/* The menu, where a website keeps it. Same five destinations as
+            the tab bar, in the same order, so the two layouts cannot
+            disagree about what the app contains — and the capture action
+            becomes a labelled button, because a bare camera circle on a
+            desktop is an icon for a thing that machine may not have. */}
+        {topNav && (
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1,
+                        justifyContent: 'center', minWidth: 0 }}>
+            {[
+              ['Home',        'home',        () => reset([{ name: 'home' }])],
+              ['Logbook',     'logbook',     () => reset([{ name: 'catch_log' }])],
+              ['Plan a trip', 'plan',        () => reset([{ name: 'home' }, { name: 'plan' }])],
+              ['Regulations', 'regulations', () => reset([{ name: 'regulations' }])],
+              ['Fish Quiz',   'quiz',        () => reset([{ name: 'quiz' }])],
+            ].map(([label, tab, go]) => {
+              const on = activeTab === tab || (tab === 'plan' && screen.name === 'plan');
+              return (
+                <button key={tab} type="button" onClick={go} style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 14.5, fontWeight: on ? 800 : 600,
+                  color: on ? T.brass : T.parchment,
+                  padding: '8px 14px', borderRadius: 9, whiteSpace: 'nowrap',
+                  borderBottom: `2px solid ${on ? T.brass : 'transparent'}`,
+                }}>{label}</button>
+              );
+            })}
+          </nav>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 12, flexShrink: 0 }}>
+          {topNav && (
+            <button type="button" onClick={() => startCaptureFlow('library')} style={{
+              background: T.brass, color: T.oceanDeep, border: 'none',
+              padding: '9px 16px', borderRadius: 10, cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap',
+            }}>
+              {/* Library, not camera: a desktop browser has no boat camera
+                  to open, and the photo is already on the machine. */}
+              Log a catch
+            </button>
+          )}
           {/* Sync pill: signed-in users get the real status. Signed-out
               users get an honest "Not signed in" affordance that
               opens the sign-in modal. Shown on non-home routes; on
@@ -1577,6 +1624,7 @@ export default function App() {
           center slot is an unlabeled action (not a tab): it never
           highlights, it always triggers the shared capture flow.
           Padding tightened so the row hugs the bottom safe area. */}
+      {!topNav && (
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         maxWidth: containerMaxWidth(size), margin: '0 auto',
@@ -1596,6 +1644,7 @@ export default function App() {
             something else. */}
         <TabBtn size={size} label="Fish Quiz"   active={activeTab === 'quiz'}                          onClick={() => reset([{ name: 'quiz' }])}         icon={<Fish />} />
       </div>
+      )}
 
       {showIntro && (
         <WelcomeIntroModal
