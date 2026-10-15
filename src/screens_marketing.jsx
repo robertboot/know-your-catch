@@ -1199,39 +1199,6 @@ const PRIVACY_CARDS = [
    who never look at it, and `preload="none"` means the file is not
    fetched at all until someone presses play — the page still costs what
    it did before for everyone else. */
-function PromoVideo() {
-  return (
-    <section className="rl-section" id="video">
-      <div className="rl-container">
-        <h2 className="rl-h2" style={{ textAlign: 'center' }}>We need 50 testers</h2>
-        <p className="rl-lead" style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 28px' }}>
-          Watch this, then take a spot. Finish the checklist and the shirt is yours.
-        </p>
-        <div className="rl-video">
-          <video
-            controls
-            playsInline
-            preload="none"
-            poster={`${import.meta.env.BASE_URL}marketing/reelintel-promo-poster.jpg`}
-          >
-            <source src={`${import.meta.env.BASE_URL}marketing/reelintel-promo.mp4`} type="video/mp4" />
-            Your browser cannot play this video.
-          </video>
-        </div>
-        {/* The ask, directly under the thing that makes it. A video that
-            asks for testers and then leaves the viewer on a page with no
-            way to become one has wasted the ninety seconds. */}
-        <div style={{ textAlign: 'center', marginTop: 26 }}>
-          <a className="rl-btn rl-btn-primary" href="/testers">Take a tester spot</a>
-          <p style={{ marginTop: 12, fontSize: 13, color: P.inkMute }}>
-            iPhone and iPad. Free while testing.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 /* The walkthrough, hosted on YouTube.
    nocookie host and no autoplay: the page should not start making
    noise at someone, and it should not set a tracking cookie for a
@@ -1240,7 +1207,7 @@ function PromoVideo() {
    and most visitors scroll past it. */
 function WalkthroughVideo() {
   return (
-    <section className="rl-section" id="walkthrough" style={{ paddingTop: 0 }}>
+    <section className="rl-section" id="walkthrough">
       <div className="rl-container">
         <h2 className="rl-h2" style={{ textAlign: 'center' }}>See it on the water</h2>
         <p className="rl-lead" style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 28px' }}>
@@ -1582,7 +1549,6 @@ export function MarketingLanding() {
         <AnnouncementBanner />
       </div>
       <Hero />
-      <PromoVideo />
       <WalkthroughVideo />
       <MarineIntel />
       <YourDataYourRules />
