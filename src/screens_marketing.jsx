@@ -977,6 +977,14 @@ function Nav() {
          style={{ padding: '11px 18px', fontSize: 13, marginRight: 10 }}>
         Log in
       </a>
+      {/* The other half of the same door. Someone who has never used the
+          app needs an account before anything on /app works, and being
+          shown a sign-in form first is being asked for something they do
+          not have yet. */}
+      <a className="rl-btn rl-btn-ghost rl-nav-login" href="/app?signup"
+         style={{ padding: '11px 18px', fontSize: 13, marginRight: 10 }}>
+        Create account
+      </a>
       <a className="rl-btn rl-btn-primary rl-nav-cta" href={storeUrl()} style={{ padding: '11px 20px', fontSize: 13 }}>
         Get the app
       </a>
@@ -995,6 +1003,7 @@ function Nav() {
           ))}
           <a className="rl-btn rl-btn-primary" href={storeUrl()} onClick={() => setMenuOpen(false)}>Get the app</a>
           <a className="rl-btn rl-btn-ghost" href="/app" onClick={() => setMenuOpen(false)}>Log in</a>
+          <a className="rl-btn rl-btn-ghost" href="/app?signup" onClick={() => setMenuOpen(false)}>Create account</a>
         </div>
       )}
     </nav>
@@ -1023,12 +1032,12 @@ function Hero() {
                 account — there is no guest route there, and the page
                 says so rather than letting someone click in and bounce
                 off a sign-in wall they were not told about. */}
-            <a className="rl-btn rl-btn-ghost rl-btn-lg" href="/app">
-              Open in browser <ArrowRight size={16} />
+            <a className="rl-btn rl-btn-ghost rl-btn-lg" href="/app?signup">
+              Use it free in your browser <ArrowRight size={16} />
             </a>
           </div>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.62)', margin: '-20px 0 32px' }}>
-            Using it in a browser needs a free account. The phone app does not.
+            Free, in any browser — it just needs an account so your logbook follows you.
           </p>
           <div className="rl-store-row">
             <a href={APP_STORE_URL} aria-label="Download on the App Store">

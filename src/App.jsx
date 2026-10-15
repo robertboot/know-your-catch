@@ -487,8 +487,14 @@ export default function App() {
 
   // Splash auth modal state — Sign in and Create account both open
   // the same modal; splashInitialMode picks which tab starts active.
-  const [splashSignInOpen, setSplashSignInOpen] = useState(false);
-  const [splashInitialMode, setSplashInitialMode] = useState('signin');
+  /* /app?signup — the marketing site links straight to the create-account
+     form. A visitor who clicked "Create account" and landed on a sign-in
+     screen has to find the right tab before they can do the thing they
+     asked for. */
+  const signupLinked = typeof window !== 'undefined'
+    && /(^|[?&])signup(=|&|$)/.test(window.location.search);
+  const [splashSignInOpen, setSplashSignInOpen] = useState(signupLinked);
+  const [splashInitialMode, setSplashInitialMode] = useState(signupLinked ? 'signup' : 'signin');
 
   const [saveError, setSaveError] = useState(null); // 'quota' | 'other' | null
   // Photo pipeline diagnostics — visible on-device via 5 taps on the
