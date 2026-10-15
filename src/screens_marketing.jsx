@@ -37,7 +37,10 @@ const LOGO_HEADER     = `${import.meta.env.BASE_URL}brand/icon-horz.png`;
 const LOGO_BRAND      = `${import.meta.env.BASE_URL}marketing/testers-logo.png`;
 
 const A = {
-  heroBg:              `${M}888866A1-EE9A-4408-B410-E19A5141D228.png`,
+  /* The hero is the trip planner now: a real chlorophyll scene, dark on
+     the left where the words go and coloured on the right where the
+     water is worth looking at. */
+  heroBg:              `${M}hero-trip-planner.webp`,
   patternsHeatmap:     `${M}patterns-heatmap.jpg`,
   regulationsPhone:    `${M}regulations-phone.png`,
   reviewCatchPhone:    `${M}review-catch-phone.png`,
@@ -89,6 +92,12 @@ const P = {
   ink:       T.ink,
   inkSoft:   T.inkSoft,
   inkMute:   T.inkMute,
+  /* The mockup's golden yellow. Kept separate from `accent` (the brand
+     cyan) because the hero uses both: cyan still carries the rest of the
+     page, gold carries the one action this page is asking for. */
+  gold:      '#F5B81B',
+  goldHi:    '#FFD152',
+  goldInk:   '#06182b',
 };
 
 const FACEBOOK_URL = 'https://www.facebook.com/profile.php?id=61593471966114';
@@ -394,23 +403,41 @@ body { margin: 0; }
 .rl-hero {
   position: relative; overflow: hidden;
   padding: 12px 0 48px;
-  min-height: 0;
+  min-height: min(680px, 78vh);
+  display: flex; align-items: center;
 }
+@media (max-width: 900px) { .rl-hero { min-height: 0; padding-bottom: 32px; } }
 .rl-hero-bg {
   position: absolute; inset: 0; z-index: 0;
   background-color: ${P.bg};
-  /* Full WIDTH, natural proportional height (no skew). The image spans
-     the hero's full width and is as tall as its own 2:1 ratio makes it,
-     anchored to the top; any area below just fades into the page bg via
-     the scrim. */
+  /* Cover, anchored RIGHT: the picture's own dark water is on the left
+     and the colour is on the right, so holding the right edge keeps the
+     bloom in frame at every width while the words stay over the dark. */
   background-image: url("${A.heroBg}");
-  background-size: 100% auto;
-  background-position: center top;
+  background-size: cover;
+  background-position: right center;
   background-repeat: no-repeat;
 }
+/* Two scrims, not one. Across: dark enough on the left for white text
+   on a bright satellite image, clear on the right so the water shows.
+   Down: the last stop meets the page background so the hero ends
+   without a seam. */
 .rl-hero-scrim {
   position: absolute; inset: 0; z-index: 1;
-  background: linear-gradient(180deg, rgba(6,17,31,0.32) 0%, rgba(6,17,31,0.56) 45%, ${P.bg} 100%);
+  background:
+    linear-gradient(90deg, rgba(4,16,30,0.97) 0%, rgba(4,16,30,0.93) 30%,
+                           rgba(4,16,30,0.55) 52%, rgba(4,16,30,0.10) 72%,
+                           rgba(4,16,30,0) 100%),
+    linear-gradient(180deg, rgba(4,16,30,0.55) 0%, rgba(4,16,30,0.10) 35%,
+                            rgba(4,16,30,0.35) 78%, ${P.bg} 100%);
+}
+@media (max-width: 900px) {
+  /* Stacked, the words sit over the whole image, so the wash goes flat
+     and heavy rather than left-to-right. */
+  .rl-hero-scrim {
+    background: linear-gradient(180deg, rgba(4,16,30,0.86) 0%, rgba(4,16,30,0.80) 55%,
+                                        rgba(4,16,30,0.92) 82%, ${P.bg} 100%);
+  }
 }
 .rl-hero-inner {
   position: relative; z-index: 2;
@@ -713,7 +740,9 @@ body { margin: 0; }
 /* Hero split — copy left, phones right */
 .rl-hero-grid {
   position: relative; z-index: 2;
-  display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 36px; align-items: start;
+  /* One column. The phones are gone: the hero's job is now the trip
+     planner, and two device shots of other screens argued with it. */
+  display: grid; grid-template-columns: minmax(0, 760px); gap: 36px; align-items: start;
   /* top/bottom only — leave the horizontal padding from .rl-container
      intact. A left/right shorthand here would zero the side gutters and
      make the headline sit flush to the edge. Extra top padding drops the
@@ -721,7 +750,45 @@ body { margin: 0; }
   padding-top: 48px; padding-bottom: 20px;
 }
 .rl-hero-grid .rl-h1 { margin-top: 0; }
-.rl-hero-copy { max-width: 560px; }
+.rl-hero-copy { max-width: 760px; }
+/* Hero headline: bigger than the section headings, and it owns the
+   left half of the picture. */
+.rl-hero-copy .rl-h1 {
+  /* "Your next great trip" has to hold one line on a desktop: broken
+     after "great" it reads as three fragments and the gold line stops
+     being the punchline. */
+  font-size: clamp(36px, 4.2vw, 58px);
+  line-height: 1.04; letter-spacing: -1.2px; margin-bottom: 18px;
+  text-wrap: balance;
+}
+/* The page-wide rule paints every span in a headline cyan; here the
+   first line is white and only the second is gold. */
+.rl-hero-copy .rl-h1 span { color: ${P.ink}; }
+.rl-hero-copy .rl-h1 .rl-gold { color: ${P.gold}; }
+@media (max-width: 560px) {
+  /* Narrow, one unbroken line would run off the screen — let it wrap. */
+  .rl-hero-copy .rl-h1 span { white-space: normal !important; }
+}
+.rl-hero-copy .rl-lead { font-size: 19px; line-height: 1.55; max-width: 560px; }
+@media (max-width: 560px) { .rl-hero-copy .rl-lead { font-size: 17px; } }
+.rl-hero-eyebrow {
+  font-size: 13px; font-weight: 800; letter-spacing: 3px;
+  color: ${P.gold}; text-transform: uppercase; margin: 0 0 14px;
+}
+.rl-btn-gold {
+  background: ${P.gold}; color: ${P.goldInk}; border: none;
+  box-shadow: 0 10px 30px rgba(245,184,27,0.28);
+}
+.rl-btn-gold:hover { background: ${P.goldHi}; transform: translateY(-1px); }
+.rl-hero-signin { font-size: 15px; color: ${P.inkSoft}; margin: 14px 0 0; }
+.rl-hero-signin a { color: ${P.ink}; font-weight: 700; text-decoration: underline; }
+.rl-hero-note { font-size: 14.5px; line-height: 1.6; color: ${P.inkMute}; margin: 22px 0 0; }
+.rl-hero-note a { color: ${P.inkSoft}; text-decoration: underline; }
+@media (max-width: 560px) {
+  /* A full-width button is the easiest target on a phone, and the only
+     thing the hero is asking for. */
+  .rl-hero-cta .rl-btn { width: 100%; }
+}
 .rl-hero-copy .rl-lead { margin-bottom: 20px; }
 .rl-hero-free {
   display: inline-flex; align-items: center; gap: 8px;
@@ -977,16 +1044,12 @@ function Nav() {
          style={{ padding: '11px 18px', fontSize: 13, marginRight: 10 }}>
         Log in
       </a>
-      {/* The other half of the same door. Someone who has never used the
-          app needs an account before anything on /app works, and being
-          shown a sign-in form first is being asked for something they do
-          not have yet. */}
-      <a className="rl-btn rl-btn-ghost rl-nav-login" href="/app?signup"
-         style={{ padding: '11px 18px', fontSize: 13, marginRight: 10 }}>
-        Create account
-      </a>
-      <a className="rl-btn rl-btn-primary rl-nav-cta" href={storeUrl()} style={{ padding: '11px 20px', fontSize: 13 }}>
-        Get the app
+      {/* The header's one action. It was "Get the app", which sent a
+          desktop visitor to a phone store for software they could have
+          been using in the tab they were already in. */}
+      <a className="rl-btn rl-btn-gold rl-nav-cta" href="/app?signup&next=plan"
+         style={{ padding: '11px 20px', fontSize: 13 }}>
+        Sign Up Free
       </a>
       <button
         className="rl-nav-toggle"
@@ -1001,56 +1064,93 @@ function Nav() {
           {NAV_ITEMS.map(n => (
             <a key={n.label} href={n.href} onClick={() => setMenuOpen(false)}>{n.label}</a>
           ))}
-          <a className="rl-btn rl-btn-primary" href={storeUrl()} onClick={() => setMenuOpen(false)}>Get the app</a>
+          <a className="rl-btn rl-btn-gold" href="/app?signup&next=plan" onClick={() => setMenuOpen(false)}>Sign Up Free</a>
           <a className="rl-btn rl-btn-ghost" href="/app" onClick={() => setMenuOpen(false)}>Log in</a>
-          <a className="rl-btn rl-btn-ghost" href="/app?signup" onClick={() => setMenuOpen(false)}>Create account</a>
+          <a className="rl-btn rl-btn-ghost" href={storeUrl()} onClick={() => setMenuOpen(false)}>Get the app</a>
         </div>
       )}
     </nav>
   );
 }
 
+/* Is anyone signed in?
+   The marketing page is static and signed-out for almost everyone, so
+   this starts as null and only ever upgrades: an angler who already has
+   a session is sent straight to the planner instead of being asked to
+   create the account they already have. */
+function useSignedIn() {
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const c = supabaseClient();
+    if (!c) return;
+    c.auth.getSession()
+      .then(({ data }) => { if (alive) setSignedIn(!!data?.session); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return signedIn;
+}
+
 function Hero() {
+  const signedIn = useSignedIn();
   return (
     <section className="rl-hero" id="top">
       <div className="rl-hero-bg" />
       <div className="rl-hero-scrim" />
       <div className="rl-container rl-hero-grid">
         <div className="rl-hero-copy">
+          <p className="rl-hero-eyebrow">Plan smarter with AI</p>
           <h1 className="rl-h1">
-            Know your catch.<br/><span>Keep it legal.</span><br/>Save the memory.
+            <span style={{ whiteSpace: 'nowrap' }}>Your next great trip</span>
+            <br/><span className="rl-gold">starts here.</span>
           </h1>
           <p className="rl-lead">
-            Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
+            Find promising water with AI-powered trip planning, satellite maps, and marine
+            forecasts. Overlay your past catches to help decide where to go next.
           </p>
-          <p className="rl-hero-free"><CheckIcon size={16} /> 100% free. No in-app purchases.</p>
-          <div className="rl-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <a className="rl-btn rl-btn-primary rl-btn-lg" href={storeUrl()}>
-              Download App <ArrowRight size={16} />
+          <div className="rl-hero-cta">
+            {/* One ask. ?signup opens the create-account form directly;
+                an angler who is already signed in goes to the planner,
+                because asking them to make an account they have is how
+                a landing page loses the person it already converted. */}
+            <a className="rl-btn rl-btn-gold rl-btn-lg"
+               href={signedIn ? '/app?plan' : '/app?signup&next=plan'}>
+              {signedIn ? 'Open the Trip Planner' : 'Start Planning Free'} <ArrowRight size={16} />
             </a>
-            {/* Same app, same account, in a browser. The web needs an
-                account — there is no guest route there, and the page
-                says so rather than letting someone click in and bounce
-                off a sign-in wall they were not told about. */}
-            <a className="rl-btn rl-btn-ghost rl-btn-lg" href="/app?signup">
-              Use it free in your browser <ArrowRight size={16} />
-            </a>
+            {!signedIn && (
+              <p className="rl-hero-signin">
+                Already have an account? <a href="/app">Log in</a>
+              </p>
+            )}
           </div>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.62)', margin: '-20px 0 32px' }}>
-            Free, in any browser — it just needs an account so your logbook follows you.
+          <p className="rl-hero-note">
+            Create your free account and use ReelIntel right in your browser.<br/>
+            No app download required.
           </p>
-          <div className="rl-store-row">
-            <a href={APP_STORE_URL} aria-label="Download on the App Store">
-              <img src={A.appStoreBadge} alt="Download on the App Store" />
-            </a>
-            <a href={PLAY_STORE_URL || APP_STORE_URL} aria-label="Get it on Google Play">
-              <img src={A.googlePlayBadge} alt="Get it on Google Play" />
-            </a>
-          </div>
+          <p className="rl-hero-note" style={{ marginTop: 10 }}>
+            Prefer your phone? <a href={storeUrl()}>Get the app.</a>
+          </p>
         </div>
-        <div className="rl-hero-phones" aria-hidden="true">
-          <img className="rl-hero-phone-back" src={A.regulationsPhone} alt="" loading="eager" />
-          <img className="rl-hero-phone-front" src={A.reviewCatchPhone} alt="" loading="eager" />
+      </div>
+    </section>
+  );
+}
+
+/* The badges, under the hero rather than in it.
+   In the hero they competed with the one thing the page is asking for;
+   under it they are still the first thing a phone user meets. */
+function StoreBadges() {
+  return (
+    <section style={{ padding: '26px 0 6px' }}>
+      <div className="rl-container">
+        <div className="rl-store-row" style={{ justifyContent: 'center' }}>
+          <a href={APP_STORE_URL} aria-label="Download on the App Store">
+            <img src={A.appStoreBadge} alt="Download on the App Store" />
+          </a>
+          <a href={PLAY_STORE_URL || APP_STORE_URL} aria-label="Get it on Google Play">
+            <img src={A.googlePlayBadge} alt="Get it on Google Play" />
+          </a>
         </div>
       </div>
     </section>
@@ -1563,6 +1663,7 @@ export function MarketingLanding() {
         <AnnouncementBanner />
       </div>
       <Hero />
+      <StoreBadges />
       <WalkthroughVideo />
       <MarineIntel />
       <YourDataYourRules />

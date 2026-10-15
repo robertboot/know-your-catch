@@ -92,7 +92,15 @@ export default function App() {
   const [, setPhotoPathsReady] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  const [stack, setStack] = useState([{ name: 'home' }]);
+  /* ?next=plan — the marketing hero sells the trip planner, so the
+     account it just asked someone to make lands on the trip planner.
+     Dropping them on Home means the first thing they see is not the
+     thing they clicked. */
+  const [stack, setStack] = useState(() => {
+    const wantsPlan = typeof window !== 'undefined'
+      && /(^|[?&])(next=plan|plan)(&|=|$)/.test(window.location.search);
+    return wantsPlan ? [{ name: 'home' }, { name: 'plan' }] : [{ name: 'home' }];
+  });
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [disclaimerReadOnly, setDisclaimerReadOnly] = useState(false);
   const [showJur, setShowJur] = useState(false);
