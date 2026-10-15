@@ -869,7 +869,10 @@ body { margin: 0; }
 }
 /* aspect-ratio rather than a padding hack: the box is the right shape
    before the file loads, so nothing on the page jumps when it does. */
-.rl-video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #06182b; }
+.rl-video video, .rl-video iframe {
+  display: block; width: 100%; height: auto; aspect-ratio: 16 / 9;
+  background: #06182b; border: 0;
+}
 
 .rl-priv-card h4 { font-size: 16px; font-weight: 800; color: ${P.ink}; margin: 0 0 10px; line-height: 1.25; }
 .rl-priv-card p { font-size: 13.5px; line-height: 1.55; color: ${P.inkSoft}; margin: 0; }
@@ -1229,6 +1232,35 @@ function PromoVideo() {
   );
 }
 
+/* The walkthrough, hosted on YouTube.
+   nocookie host and no autoplay: the page should not start making
+   noise at someone, and it should not set a tracking cookie for a
+   visitor who never pressed play. loading="lazy" keeps the player off
+   the critical path — the iframe is the heaviest thing on this page
+   and most visitors scroll past it. */
+function WalkthroughVideo() {
+  return (
+    <section className="rl-section" id="walkthrough" style={{ paddingTop: 0 }}>
+      <div className="rl-container">
+        <h2 className="rl-h2" style={{ textAlign: 'center' }}>See it on the water</h2>
+        <p className="rl-lead" style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 28px' }}>
+          A walk through the app — identifying a fish, checking the rules, and logging the catch.
+        </p>
+        <div className="rl-video">
+          <iframe
+            src="https://www.youtube-nocookie.com/embed/NJL_8MoSdgU?rel=0"
+            title="ReelIntel walkthrough"
+            loading="lazy"
+            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function YourDataYourRules() {
   return (
     <section className="rl-section" id="features" style={{ paddingTop: 36 }}>
@@ -1551,6 +1583,7 @@ export function MarketingLanding() {
       </div>
       <Hero />
       <PromoVideo />
+      <WalkthroughVideo />
       <MarineIntel />
       <YourDataYourRules />
       <AiLearnsWaters />
