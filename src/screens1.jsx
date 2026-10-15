@@ -946,7 +946,7 @@ export function HomeScreen({
           conditions card carries six numbers, the logging card carries
           one button. */}
       <div style={isTablet
-        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 65fr) minmax(0, 35fr)',
+        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 61fr) minmax(0, 39fr)',
             gap: 24, alignItems: 'stretch', marginTop: 24 }
         : null}>
       {/* Today's Conditions — live, with the Fishability score gauge */}
@@ -1019,7 +1019,7 @@ export function HomeScreen({
               // rather than crops, and bottom-right drops it clear of the
               // headline and keeps it against the edge the layout wants.
               objectFit: isTablet ? 'cover' : 'contain',
-              objectPosition: isTablet ? 'right bottom' : 'right center',
+              objectPosition: 'right center',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
@@ -1033,15 +1033,23 @@ export function HomeScreen({
         <div aria-hidden style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
           background: isTablet
-            ? 'linear-gradient(90deg, #000614 0%, rgba(0, 6, 20, 0.80) 22%, rgba(0, 6, 20, 0.30) 38%, rgba(0, 6, 20, 0) 52%)'
+            ? 'linear-gradient(180deg, rgba(0, 6, 20, 0.55) 0%, rgba(0, 6, 20, 0.12) 34%, '
+              + 'rgba(0, 6, 20, 0.72) 68%, rgba(0, 6, 20, 0.94) 100%)'
             : 'linear-gradient(90deg, #000614 0%, rgba(0, 6, 20, 0.85) 18%, rgba(0, 6, 20, 0.35) 32%, rgba(0, 6, 20, 0) 48%)',
           pointerEvents: 'none',
         }} />
 
+        {/* Bottom of the card in the grid: the fish gets the open water
+            above and the words sit on the darkest part of it, which is
+            also where a reader's eye lands after the picture. */}
         <div style={{
           position: 'relative',
           padding: isTablet ? '24px 24px 24px' : '20px 18px 18px',
-          maxWidth: isTablet ? 340 : 320,
+          maxWidth: isTablet ? 380 : 320,
+          ...(isTablet ? {
+            height: '100%', minHeight: 420, boxSizing: 'border-box',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+          } : null),
         }}>
           {/* Broken after "your" on purpose: on a phone the one-line
               headline ran across the tuna's head, and the two lines of
