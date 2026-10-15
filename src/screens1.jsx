@@ -1000,9 +1000,15 @@ export function HomeScreen({
             in a tall narrow box becomes a band of art floating in empty
             navy — which is what it did. There it covers instead and is
             allowed to crop; everywhere else contain keeps the whole fish. */}
+        {/* To move the fish right, the FRAME runs past the card's right
+            edge rather than the image sliding inside it — translating the
+            box left a strip of bare navy down the left side, which is
+            what it looked like. Overflow hidden on the card trims the
+            overhang. */}
         <div aria-hidden style={{
           position: 'absolute',
-          top: isTablet ? 0 : '-15%', right: 0, bottom: isTablet ? 0 : '-15%', left: 0,
+          top: isTablet ? 0 : '-15%', bottom: isTablet ? 0 : '-15%',
+          left: 0, right: isTablet ? '-18%' : 0,
           pointerEvents: 'none',
         }}>
           <img
@@ -1024,7 +1030,7 @@ export function HomeScreen({
               /* Nudged right in the grid. objectPosition stops at the
                  right edge of the box, so to push the fish further over
                  the box itself has to move. */
-              transform: `translate(calc(${heroTilt.x}px + ${isTablet ? '9%' : '0%'}), ${heroTilt.y}px)`,
+              transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
             }}
           />

@@ -1,4 +1,4 @@
-import{S as b,k as S,N as t,R as y,a as x,T as l,Y as d,r as u,a0 as v,$ as w,H as E}from"./main-C_DMDD_l.js";const j="https://www.reelintel.ai/brand/email-signature.png",f="https://www.reelintel.ai";function A({name:n,title:e,email:s,phone:o}){return`
+import{S as b,k as S,N as t,R as y,a as x,T as l,Y as d,r as u,a0 as v,$ as w,H as E}from"./main-CUslBlLa.js";const j="https://www.reelintel.ai/brand/email-signature.png",f="https://www.reelintel.ai";function A({name:n,title:e,email:s,phone:o}){return`
 <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif">
   <tr>
     <td valign="top" style="padding:0 22px 0 0">
