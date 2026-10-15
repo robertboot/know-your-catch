@@ -100,7 +100,12 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
     const chosen = fromId ? ports.find(p => (p.id || p.name) === fromId) : null;
     return chosen ? { lat: chosen.lat, lon: chosen.lon, label: chosen.name } : homeWater(state);
   }, [state, ports, fromId]);
-  const sz = (p, t, d) => (tier === 'desktop' ? d : tier === 'tablet' ? t : p);
+  /* App passes screenSize(), which says 'tablet-landscape' for a desktop
+     browser — a tier this screen never tested for, so every size here
+     fell through to the PHONE value and a 27-inch monitor got phone
+     type. Both wide tiers are the desktop case. */
+  const wide = tier === 'desktop' || tier === 'tablet-landscape';
+  const sz = (p, t, d) => (wide ? d : tier === 'tablet' ? t : p);
   const gutter = sz(16, 20, 24);
 
   // The ten-day outlook Home caches. Read-only — this screen never fetches
@@ -161,14 +166,18 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
   });
 
   return (
-    <div style={{ padding: sz('16px 16px 8px', '20px 20px 10px', '24px 24px 12px') }}>
+    <div style={{ padding: sz('16px 16px 8px', '20px 20px 10px', '24px 24px 12px'),
+                  position: 'relative' }}>
       <H1 size={sz(22, 26, 30)} style={{ marginBottom: 4 }}>Plan your trip</H1>
       <div style={{ fontSize: sz(12.5, 14, 15.5), color: T.inkMute, marginBottom: 12, lineHeight: 1.5 }}>
         Find promising water.
       </div>
 
-      {/* The two inputs the whole page is computed from, on the page. */}
-      <div style={{ display: 'flex', gap: 9, marginBottom: 14, flexWrap: 'wrap' }}>
+      {/* The two inputs the whole page is computed from, on the page.
+          Wide, they sit up on the title line where a website puts its
+          filters, instead of stacking under the heading. */}
+      <div style={{ display: 'flex', gap: 9, marginBottom: 14, flexWrap: 'wrap',
+                    ...(wide ? { position: 'absolute', top: 24, right: gutter } : null) }}>
         <PickerChip icon="◉" label={home.label} value={fromId}
                     options={[{ value: null, label: `${homeWater(state).label} (default)` },
                               ...ports.map(p => ({ value: p.id || p.name, label: p.name }))]}
@@ -183,15 +192,17 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
       {outlook?.length > 1 && (
         <>
           <SectionLabel>When to go</SectionLabel>
-          <div style={{ display: 'flex', gap: 7, margin: '8px 0 16px', overflowX: 'auto', paddingBottom: 4 }}>
+          <div style={{ display: 'flex', gap: wide ? 10 : 7, margin: '8px 0 16px',
+                        overflowX: wide ? 'visible' : 'auto', paddingBottom: 4 }}>
             {outlook.slice(0, 7).map((d, i) => {
               const score = gradeOf(d);
               const on = i === dayPick;
               const dt = new Date(d.date + 'T12:00:00');
               return (
                 <button key={d.date} type="button" onClick={() => setDayPick(i)} style={{
-                  flex: '0 0 auto', width: 58, textAlign: 'center', padding: '7px 0 8px',
-                  borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  flex: wide ? '1 1 0' : '0 0 auto', width: wide ? 'auto' : 58,
+                  textAlign: 'center', padding: wide ? '12px 0 13px' : '7px 0 8px',
+                  borderRadius: wide ? 14 : 11, cursor: 'pointer', fontFamily: 'inherit',
                   background: on ? T.parchmentDeep : 'transparent',
                   border: `1.5px solid ${on ? T.brass : T.cardEdge}`,
                 }}>
@@ -216,9 +227,18 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
           off it — a button that only reveals something already loaded is a
           tap that does nothing. Embedded drops the map screen's own title
           and padding so it reads as part of this page. */}
-      {/* Edge to edge. The map is the page; a 16 px gutter on each side
-          of it bought nothing and cost the width where the water is. */}
-      <div style={{ marginTop: 2, marginLeft: -gutter, marginRight: -gutter }}>
+      {/* Wide, the map and the card sit side by side: a browser window is
+          wider than it is tall, so stacking them put the card off the
+          bottom of a screen that had room for both. Narrow, it stays one
+          column, edge to edge — the map is the page there, and a 16 px
+          gutter on each side bought nothing and cost the water. */}
+      <div style={wide
+        ? { display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 2 }
+        : { display: 'block' }}>
+      <div style={wide
+        ? { flex: '1 1 0', minWidth: 0, borderRadius: 16, overflow: 'hidden',
+            border: `1px solid ${T.cardEdge}` }
+        : { marginTop: 2, marginLeft: -gutter, marginRight: -gutter }}>
         <OceanMapsScreen isTablet={tier !== 'phone'} initialLayer={null} state={state}
                          embedded focusBreak={focus} spotNumbers={numbers}
                          highlightBreak={shown[pick] ? breakKey(shown[pick]) : null}
@@ -228,6 +248,9 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
                          }} />
       </div>
 
+      {/* The side panel: everything that describes the water the map is
+          showing. */}
+      <div style={wide ? { flex: '0 0 360px', maxWidth: 360 } : null}>
 
       {spots == null && (
         <Card style={{ marginTop: 8 }}>
@@ -396,6 +419,8 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
             <span>{ageNote}</span>
           </div>
         )}
+      </div>
+      </div>
       </div>
 
     </div>

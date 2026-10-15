@@ -1072,7 +1072,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
             visible, and the full-screen button is right there for when the
             water is the only thing wanted. */}
         <div ref={mapElRef} style={{
-          height: full ? '100%' : (embedded ? '42vh' : '58vh'),
+          /* Short on a phone so the first card clears the fold; tall in a
+             browser, where the card sits BESIDE the map and nothing is
+             pushed off the bottom by giving the water more room. */
+          height: full ? '100%' : (embedded ? (isTablet ? '66vh' : '42vh') : '58vh'),
           minHeight: full ? 0 : (embedded ? 300 : 380),
           width: '100%', background: '#06182b',
         }} />
