@@ -41,7 +41,7 @@ export function containerMaxWidth(size = screenSize()) {
      map beside its card - have real use for the extra width, and the
      hero banner is no longer a fixed-ratio image that a wider box would
      distort. */
-  if (__KYC_WEB__ && size !== 'phone') return 1280;
+  if (__KYC_WEB__ && size !== 'phone') return 1200;
   if (size === 'tablet-landscape') return 'none';
   if (size === 'tablet')           return 'none';
   return WIDTH.phone;

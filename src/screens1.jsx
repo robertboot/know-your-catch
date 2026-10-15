@@ -604,7 +604,8 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
   );
 
   return (
-    <Card style={{ marginTop: 14, padding: sz(16, 20, 26), borderRadius: 22 }}>
+    <Card style={{ marginTop: isTablet ? 0 : 14, padding: sz(16, 20, 24),
+                   borderRadius: 16, height: isTablet ? '100%' : undefined }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ fontSize: sz(12, 13.5, 16), color: T.ink, fontWeight: 800, letterSpacing: 1.2 }}>{CONDITIONS_TITLE}</span>
@@ -653,6 +654,26 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
             </div>
             {/* Fishability gauge + Why link */}
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              {/* A badge, not a dial, where there is a second card beside
+                  this one. The ring was drawn at 110 px to be read from a
+                  phone on a console; in a desktop grid it was the biggest
+                  thing on the page and said one letter. */}
+              {isTablet ? (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', minWidth: 104,
+                  padding: '10px 18px', borderRadius: 14,
+                  border: `2px solid ${sColor}`, background: `${sColor}1A`,
+                }}>
+                  <span style={{ fontSize: 34, fontWeight: 900, color: T.ink, lineHeight: 1 }}>
+                    {fishabilityGrade(score)}
+                  </span>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2,
+                                 color: sColor, marginTop: 4 }}>
+                    {fishabilityLabel(score)}
+                  </span>
+                </div>
+              ) : (
               <div style={{ position: 'relative', width: gSize, height: gSize }}>
                 <svg width={gSize} height={gSize}>
                   <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
@@ -665,6 +686,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
                   <span style={{ fontSize: sz(8, 10, 12), fontWeight: 800, letterSpacing: 1, color: sColor, marginTop: 2 }}>{fishabilityLabel(score)}</span>
                 </div>
               </div>
+              )}
               {/* Severe-weather limiter — Home grades the same hour as the
                   Forecast hero and shows the same capped letter. */}
               {(() => {
@@ -845,7 +867,7 @@ export function HomeScreen({
           aria-label="Plan your next trip — find promising water and see your past catches"
           style={{
             display: 'block', width: '100%', marginTop: 14, padding: 0,
-            border: `1px solid ${T.cardEdge}`, borderRadius: 18, overflow: 'hidden',
+            border: `1px solid ${T.cardEdge}`, borderRadius: 16, overflow: 'hidden',
             background: '#041021', cursor: 'pointer', position: 'relative',
             textAlign: 'left', fontFamily: 'inherit',
           }}
@@ -871,7 +893,10 @@ export function HomeScreen({
             padding: isTablet ? '34px 32px' : '22px 18px',
             minHeight: isTablet ? 260 : 190,
             display: 'flex', flexDirection: 'column', justifyContent: 'center',
-            maxWidth: isTablet ? '62%' : '78%',
+            /* No column cap on a wide screen: the headline is the banner,
+               and holding it to 62% forced a break that left the right
+               half of the artwork doing nothing. */
+            maxWidth: isTablet ? '100%' : '78%',
           }}>
             <div style={{
               fontSize: isTablet ? 13 : 10.5, fontWeight: 800, letterSpacing: 2.4,
@@ -880,17 +905,21 @@ export function HomeScreen({
               Plan smarter with AI
             </div>
             <div style={{
-              fontSize: isTablet ? 42 : 26, fontWeight: 900, color: T.ink,
-              lineHeight: 1.05, letterSpacing: -0.8,
+              /* One line across the banner when there is room, wrapping
+                 naturally when there is not — clamp does the scaling, so
+                 it never clips and never shrinks to nothing. */
+              fontSize: isTablet ? 'clamp(34px, 5.2vw, 72px)' : 'clamp(24px, 7.4vw, 34px)',
+              fontWeight: 900, color: T.ink,
+              lineHeight: 1.03, letterSpacing: -1.4,
               fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
             }}>
-              Plan your<br />next trip.
+              Plan your next trip.
             </div>
             <div style={{
               fontSize: isTablet ? 17 : 13.5, color: T.inkSoft,
               lineHeight: 1.45, marginTop: isTablet ? 12 : 8,
             }}>
-              Find promising water.<br />See your past catches.
+              Find promising water. See your past catches.
             </div>
             <span style={{
               alignSelf: 'flex-start', marginTop: isTablet ? 20 : 14,
@@ -911,6 +940,15 @@ export function HomeScreen({
           width and the user swipes between them.
           Tablet: split the row 50/50 across the full container width —
           scrolling makes no sense with the room the iPad canvas offers. */}
+      {/* Conditions and catch logging share a row on a wide screen.
+          Stacked, the logging card sat a scroll below the fold on a
+          desktop that had the width for both side by side. 65/35: the
+          conditions card carries six numbers, the logging card carries
+          one button. */}
+      <div style={isTablet
+        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 65fr) minmax(0, 35fr)',
+            gap: 24, alignItems: 'stretch', marginTop: 24 }
+        : null}>
       {/* Today's Conditions — live, with the Fishability score gauge */}
       <HomeConditions state={state} jurisdiction={jurisdiction} onForecast={onForecast} onOceanMaps={onOceanMaps} isTablet={isTablet} tier={screenSize} />
 
@@ -927,8 +965,8 @@ export function HomeScreen({
           set a minHeight so the tuna has real vertical room and isn't
           cropped at the fin/tail. */}
       <div style={{
-        position: 'relative', marginTop: 14, borderRadius: 18, overflow: 'hidden',
-        border: `1px solid ${T.cardEdge}`,
+        position: 'relative', marginTop: isTablet ? 0 : 14, borderRadius: 16, overflow: 'hidden',
+        border: `1px solid ${T.cardEdge}`, height: isTablet ? '100%' : undefined,
         // The card and the left gradient share one colour so the panel and
         // the photograph read as a single section rather than two blocks.
         // The artwork's own deep water samples at #0b2c44; this is a shade
@@ -995,23 +1033,47 @@ export function HomeScreen({
 
         <div style={{
           position: 'relative',
-          padding: isTablet ? '36px 32px 32px' : '20px 18px 18px',
-          maxWidth: isTablet ? 500 : 320,
+          padding: isTablet ? '24px 24px 24px' : '20px 18px 18px',
+          maxWidth: isTablet ? 340 : 320,
         }}>
           {/* Broken after "your" on purpose: on a phone the one-line
               headline ran across the tuna's head, and the two lines of
               body copy under it sat over the whole fish. The art is the
               card; the words stay in the dark water on the left of it. */}
           <div style={{
-            fontSize: isTablet ? (isLandscape ? 54 : 48) : 30, fontWeight: 900, color: T.ink,
+            fontSize: isTablet ? (isLandscape ? 40 : 36) : 30, fontWeight: 900, color: T.ink,
             letterSpacing: 0.3, lineHeight: 1.05,
             fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
           }}>Log your<br />catch</div>
+          {isTablet && (
+            <div style={{ fontSize: 15, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
+              Upload a photo. Save the details.
+            </div>
+          )}
           {/* Two-button row: primary Take Photo (camera-direct) + secondary
               Select Photo (library only). Both feed the same shared post-
               capture pipeline (identify → confirmation card → catch entry).
               The distinction is only which native picker fires. */}
-          <div style={{ display: 'flex', gap: isTablet ? 14 : 10, marginTop: isTablet ? 22 : 14 }}>
+          <div style={{ display: 'flex', gap: isTablet ? 14 : 10, marginTop: isTablet ? 20 : 14 }}>
+            {/* A desktop has no boat camera to open and the photo is
+                already on the machine, so the browser gets one button
+                that does the thing. The phone keeps both pickers. */}
+            {__KYC_WEB__ && isTablet ? (
+              <button
+                onClick={onSelectFromLibrary || onLogMenu || onReport}
+                aria-label="Upload a catch photo"
+                style={{
+                  flex: 1, background: T.brass, color: T.oceanDeep, border: 'none',
+                  padding: '15px 18px', borderRadius: 10,
+                  fontSize: 15, fontWeight: 800, letterSpacing: 1.2, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 10, minHeight: 52,
+                  boxShadow: '0 8px 24px rgba(25, 212, 242, 0.30)',
+                }}
+              >
+                <ImageIcon size={24} strokeWidth={2} /> UPLOAD CATCH PHOTO
+              </button>
+            ) : (<>
             <button
               onClick={onCapture || onLogMenu || onReport}
               aria-label="Take a photo"
@@ -1044,8 +1106,10 @@ export function HomeScreen({
             >
               <ImageIcon size={isTablet ? 28 : 22} strokeWidth={2} /> SELECT PHOTO
             </button>
+            </>)}
           </div>
         </div>
+      </div>
       </div>
 
       {/* Recent Catches — horizontally-scrolling preview strip. Tap a
