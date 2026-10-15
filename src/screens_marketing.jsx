@@ -91,6 +91,9 @@ const P = {
   inkMute:   T.inkMute,
 };
 
+const FACEBOOK_URL = 'https://www.facebook.com/profile.php?id=61593471966114';
+const YOUTUBE_URL  = 'https://www.youtube.com/channel/UCCIisyhiWIrzLzK5XY38eKQ';
+
 const NAV_ITEMS = [
   { label: 'Features',     href: '#features'    },
   { label: 'Forecast',     href: '#marine'      },
@@ -1438,9 +1441,11 @@ function Footer() {
           <a href={TERMS_URL}>Terms</a>
         </div>
         <div className="rl-footer-social">
-          <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramIcon /></a>
-          <a href="https://facebook.com" target="_blank" rel="noreferrer" aria-label="Facebook"><FacebookIcon /></a>
-          <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube"><YouTubeIcon /></a>
+          {/* The real pages. These pointed at facebook.com and
+              youtube.com - icons that looked like links and went to the
+              front door of someone else's website. */}
+          <a href={FACEBOOK_URL} target="_blank" rel="noreferrer" aria-label="ReelIntel on Facebook"><FacebookIcon /></a>
+          <a href={YOUTUBE_URL} target="_blank" rel="noreferrer" aria-label="ReelIntel on YouTube"><YouTubeIcon /></a>
         </div>
       </div>
     </footer>
