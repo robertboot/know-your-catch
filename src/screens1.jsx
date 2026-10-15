@@ -995,8 +995,14 @@ export function HomeScreen({
             No Ken Burns drift on this card — its 1.09 scale would fight the
             sizing above and clip the fins at the ends of the loop. The
             gyroscope tilt stays: it translates a few pixels, never resizes. */}
+        {/* In the desktop grid this card is stretched to the height of the
+            conditions card beside it, and a 1.78:1 image set to `contain`
+            in a tall narrow box becomes a band of art floating in empty
+            navy — which is what it did. There it covers instead and is
+            allowed to crop; everywhere else contain keeps the whole fish. */}
         <div aria-hidden style={{
-          position: 'absolute', top: '-15%', right: 0, bottom: '-15%', left: 0,
+          position: 'absolute',
+          top: isTablet ? 0 : '-15%', right: 0, bottom: isTablet ? 0 : '-15%', left: 0,
           pointerEvents: 'none',
         }}>
           <img
@@ -1012,7 +1018,8 @@ export function HomeScreen({
               // the top. contain sizes the whole fish to fit, so it shrinks
               // rather than crops, and bottom-right drops it clear of the
               // headline and keeps it against the edge the layout wants.
-              objectFit: 'contain', objectPosition: 'right center',
+              objectFit: isTablet ? 'cover' : 'contain',
+              objectPosition: isTablet ? 'right bottom' : 'right center',
               pointerEvents: 'none', display: 'block',
               transform: `translate(${heroTilt.x}px, ${heroTilt.y}px)`,
               transition: 'transform 120ms ease-out', willChange: 'transform',
