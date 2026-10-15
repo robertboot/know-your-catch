@@ -372,6 +372,15 @@ body { margin: 0; }
 .rl-btn-lg {
   padding: 18px 30px; font-size: 15px; letter-spacing: 0.6px;
 }
+/* The second way in. An outline rather than a second filled button:
+   downloading the app is still the thing being asked for, and two
+   equal buttons ask twice. */
+.rl-btn-ghost {
+  background: transparent; color: ${P.ink};
+  border: 1.5px solid rgba(255,255,255,0.28);
+}
+.rl-btn-ghost:hover { border-color: ${P.accent}; color: ${P.accent}; }
+@media (max-width: 900px) { .rl-nav .rl-nav-login { display: none; } }
 
 /* Hero — bg image + scrim + centered single-column text.
    The scrim's top+mid opacities are dialled ~10% down from the
@@ -954,6 +963,14 @@ function Nav() {
       <div className="rl-nav-links">
         {NAV_ITEMS.map(n => <a key={n.label} href={n.href}>{n.label}</a>)}
       </div>
+      {/* The app runs in a browser, and until now nothing on this page
+          said so — /app existed and was reachable only by knowing the
+          URL. An angler at a desk should not have to find their phone
+          to look at their own logbook. */}
+      <a className="rl-btn rl-btn-ghost rl-nav-login" href="/app"
+         style={{ padding: '11px 18px', fontSize: 13, marginRight: 10 }}>
+        Log in
+      </a>
       <a className="rl-btn rl-btn-primary rl-nav-cta" href={storeUrl()} style={{ padding: '11px 20px', fontSize: 13 }}>
         Get the app
       </a>
@@ -971,6 +988,7 @@ function Nav() {
             <a key={n.label} href={n.href} onClick={() => setMenuOpen(false)}>{n.label}</a>
           ))}
           <a className="rl-btn rl-btn-primary" href={storeUrl()} onClick={() => setMenuOpen(false)}>Get the app</a>
+          <a className="rl-btn rl-btn-ghost" href="/app" onClick={() => setMenuOpen(false)}>Log in</a>
         </div>
       )}
     </nav>
@@ -991,11 +1009,21 @@ function Hero() {
             Snap a photo to identify your fish, see the rules for your waters instantly, and log every catch. Then AI studies your logs to find your patterns — so every trip gets better.
           </p>
           <p className="rl-hero-free"><CheckIcon size={16} /> 100% free. No in-app purchases.</p>
-          <div className="rl-hero-cta">
+          <div className="rl-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <a className="rl-btn rl-btn-primary rl-btn-lg" href={storeUrl()}>
               Download App <ArrowRight size={16} />
             </a>
+            {/* Same app, same account, in a browser. The web needs an
+                account — there is no guest route there, and the page
+                says so rather than letting someone click in and bounce
+                off a sign-in wall they were not told about. */}
+            <a className="rl-btn rl-btn-ghost rl-btn-lg" href="/app">
+              Open in browser <ArrowRight size={16} />
+            </a>
           </div>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.62)', margin: '-20px 0 32px' }}>
+            Using it in a browser needs a free account. The phone app does not.
+          </p>
           <div className="rl-store-row">
             <a href={APP_STORE_URL} aria-label="Download on the App Store">
               <img src={A.appStoreBadge} alt="Download on the App Store" />
