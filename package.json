@@ -24,6 +24,7 @@
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:open": "cap open android",
     "android:ship": "bash scripts/android-ship.sh",
+    "sync": "git checkout -- dist && git pull",
     "check": "node scripts/check-parity.mjs"
   },
   "dependencies": {
