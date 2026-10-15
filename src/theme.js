@@ -35,7 +35,13 @@ export function containerMaxWidth(size = screenSize()) {
      1180px and a browser window at 1180px get the same thing; only the
      monitor is held back. iOS is untouched: there, the viewport IS the
      device. */
-  if (__KYC_WEB__ && size !== 'phone') return 1024;
+  /* 1280, not 1024. The cap exists so the app does not stretch across a
+     27-inch monitor, but 1024 was set when every screen was a phone
+     column; the browser layouts since - a top menu, the trip planner's
+     map beside its card - have real use for the extra width, and the
+     hero banner is no longer a fixed-ratio image that a wider box would
+     distort. */
+  if (__KYC_WEB__ && size !== 'phone') return 1280;
   if (size === 'tablet-landscape') return 'none';
   if (size === 'tablet')           return 'none';
   return WIDTH.phone;

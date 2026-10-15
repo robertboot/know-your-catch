@@ -7,7 +7,7 @@ import {
   ShieldCheck, MoreHorizontal, BarChart2, Share2, Shuffle,
   Crosshair, Crop, Save as SaveIcon, Navigation, Sunrise, Sunset, Info, Moon,
   Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog,
-  Star, StarHalf,
+  Star, StarHalf, ArrowRight,
 } from 'lucide-react';
 import { T } from './theme.js';
 import {
@@ -833,6 +833,12 @@ export function HomeScreen({
           them: a reader with images off, or a screen reader, otherwise
           gets a button that announces nothing. */}
       {(onPlanTrip || onOceanMaps) && (
+        /* The banner was a flat JPEG with its words baked in: it had one
+           aspect ratio, so every width that was not that ratio either
+           squashed the type or cropped it, and the words could not grow
+           with the screen or be read aloud. Same picture, live text — it
+           now holds any shape, which is also what lets the desktop layout
+           get wider. */
         <button
           onClick={onPlanTrip || (() => onOceanMaps())}
           className="kyc-press"
@@ -840,14 +846,63 @@ export function HomeScreen({
           style={{
             display: 'block', width: '100%', marginTop: 14, padding: 0,
             border: `1px solid ${T.cardEdge}`, borderRadius: 18, overflow: 'hidden',
-            background: T.card, cursor: 'pointer',
+            background: '#041021', cursor: 'pointer', position: 'relative',
+            textAlign: 'left', fontFamily: 'inherit',
           }}
         >
           <img
-            src={`${import.meta.env.BASE_URL}brand/trip-planning-banner.jpg`}
-            alt="Plan your next trip. Find promising water. See your past catches."
-            style={{ display: 'block', width: '100%', height: 'auto' }}
+            src={`${import.meta.env.BASE_URL}brand/hero-trip-planner.webp`}
+            alt=""
+            aria-hidden="true"
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: 'right center',
+            }}
           />
+          {/* Dark on the left where the words are, clear on the right
+              where the water is. */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(90deg, rgba(4,16,33,0.96) 0%, rgba(4,16,33,0.90) 34%, '
+                      + 'rgba(4,16,33,0.52) 56%, rgba(4,16,33,0.06) 82%, rgba(4,16,33,0) 100%)',
+          }} />
+          <div style={{
+            position: 'relative',
+            padding: isTablet ? '34px 32px' : '22px 18px',
+            minHeight: isTablet ? 260 : 190,
+            display: 'flex', flexDirection: 'column', justifyContent: 'center',
+            maxWidth: isTablet ? '62%' : '78%',
+          }}>
+            <div style={{
+              fontSize: isTablet ? 13 : 10.5, fontWeight: 800, letterSpacing: 2.4,
+              color: T.brass, textTransform: 'uppercase', marginBottom: isTablet ? 12 : 8,
+            }}>
+              Plan smarter with AI
+            </div>
+            <div style={{
+              fontSize: isTablet ? 42 : 26, fontWeight: 900, color: T.ink,
+              lineHeight: 1.05, letterSpacing: -0.8,
+              fontFamily: 'system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
+            }}>
+              Plan your<br />next trip.
+            </div>
+            <div style={{
+              fontSize: isTablet ? 17 : 13.5, color: T.inkSoft,
+              lineHeight: 1.45, marginTop: isTablet ? 12 : 8,
+            }}>
+              Find promising water.<br />See your past catches.
+            </div>
+            <span style={{
+              alignSelf: 'flex-start', marginTop: isTablet ? 20 : 14,
+              background: '#F5B81B', color: '#06182b',
+              padding: isTablet ? '13px 22px' : '10px 16px', borderRadius: 10,
+              fontSize: isTablet ? 15 : 12.5, fontWeight: 900, letterSpacing: 0.8,
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              textTransform: 'uppercase',
+            }}>
+              Plan your trip <ArrowRight size={isTablet ? 18 : 15} strokeWidth={2.6} />
+            </span>
+          </div>
         </button>
       )}
 
