@@ -845,6 +845,21 @@ Deno.serve(async (req: Request) => {
         } catch { /* currents are optional — zones still publish without them */ }
       }
 
+      /* Currents survive a pass that could not fetch them.
+         Zones are replaced wholesale, so a region that ran while the
+         current grid was unreachable had its '_currents' row DELETED and
+         not replaced — one bad fetch wiped that region's flow until the
+         next good one, and with one region per call that is days. Nine of
+         twelve regions were blank this way while the layer itself worked
+         perfectly. A current field hours old still says which way the
+         water turns; no field at all says nothing. */
+      if (!zoneRows.some(z => z.mode_key === '_currents')) {
+        const { data: keep } = await db.from('hotspot_zones')
+          .select('region_id, mode_key, observed_at, step_deg, cells')
+          .eq('region_id', reg.id).eq('mode_key', '_currents').limit(1);
+        if (keep?.length) zoneRows.push(keep[0] as typeof zoneRows[number]);
+      }
+
       // Zones replace wholesale — perishable, no history worth keeping.
       // Delete-then-insert also clears rows keyed by retired mode/species
       // ids (the first cut keyed rows by trip mode, not species).

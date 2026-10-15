@@ -1307,7 +1307,10 @@ export default function App() {
       fontSize: type.body,
       // Push the chrome-height CSS vars into the tree so the safe-area
       // content-region padding scales with tablet.
-      '--kyc-header-height': `${chrome.header}px`,
+      /* The menu row makes the header taller; the scroll region pads by
+         this var, so it has to carry the whole thing or the first card
+         sits under the menu. */
+      '--kyc-header-height': `${chrome.header + (topNav ? 44 : 0)}px`,
       '--kyc-footer-height': `${topNav ? 0 : chrome.footer}px`,
       /* The capture button is seated in a socket that rises above the tab
          bar, so the bar is taller than its own height says. Padding the
@@ -1321,12 +1324,21 @@ export default function App() {
       <div style={{
         background: T.oceanDeep, color: T.parchment,
         padding: 0, paddingTop: 'env(safe-area-inset-top)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        display: 'flex',
+        /* Two rows in a browser. On one line the logo, five links, the
+           capture button, the sync pill and the gear ran into each other
+           — "Fish Quiz" was printed under "Log a catch". The menu gets
+           its own row, the way a website's does. */
+        flexDirection: topNav ? 'column' : 'row',
+        alignItems: topNav ? 'stretch' : 'center',
+        justifyContent: 'space-between', gap: 0,
         borderBottom: `1px solid ${T.cardEdge}`,
         position: 'fixed', top: 0, left: 0, right: 0,
         maxWidth: containerMaxWidth(size), margin: '0 auto',
         zIndex: 50,
       }}>
+      <div style={{ display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between', gap: 8, width: '100%' }}>
         {/* Header left cluster. Layout, left-to-right:
               1. Back chevron  — only when stack.length > 1
               2. ReelIntel wordmark — ALWAYS renders (any screen, any depth).
@@ -1381,34 +1393,6 @@ export default function App() {
             />
           </button>
         </div>
-        {/* The menu, where a website keeps it. Same five destinations as
-            the tab bar, in the same order, so the two layouts cannot
-            disagree about what the app contains — and the capture action
-            becomes a labelled button, because a bare camera circle on a
-            desktop is an icon for a thing that machine may not have. */}
-        {topNav && (
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1,
-                        justifyContent: 'center', minWidth: 0 }}>
-            {[
-              ['Home',        'home',        () => reset([{ name: 'home' }])],
-              ['Logbook',     'logbook',     () => reset([{ name: 'catch_log' }])],
-              ['Plan a trip', 'plan',        () => reset([{ name: 'home' }, { name: 'plan' }])],
-              ['Regulations', 'regulations', () => reset([{ name: 'regulations' }])],
-              ['Fish Quiz',   'quiz',        () => reset([{ name: 'quiz' }])],
-            ].map(([label, tab, go]) => {
-              const on = activeTab === tab || (tab === 'plan' && screen.name === 'plan');
-              return (
-                <button key={tab} type="button" onClick={go} style={{
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  fontFamily: 'inherit', fontSize: 14.5, fontWeight: on ? 800 : 600,
-                  color: on ? T.brass : T.parchment,
-                  padding: '8px 14px', borderRadius: 9, whiteSpace: 'nowrap',
-                  borderBottom: `2px solid ${on ? T.brass : 'transparent'}`,
-                }}>{label}</button>
-              );
-            })}
-          </nav>
-        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 12, flexShrink: 0 }}>
           {topNav && (
             <button type="button" onClick={() => startCaptureFlow('library')} style={{
@@ -1472,6 +1456,37 @@ export default function App() {
             <SettingsIcon size={24} strokeWidth={1.8} />
           </button>
         </div>
+      </div>
+
+      {/* Row two: the menu. Same five destinations as the tab bar, in the
+          same order, so the two layouts cannot disagree about what the
+          app contains. */}
+      {topNav && (
+        <nav style={{
+          display: 'flex', alignItems: 'center', gap: 2,
+          padding: '0 12px 4px 20px', borderTop: `1px solid ${T.cardEdge}66`,
+          overflowX: 'auto',
+        }}>
+          {[
+            ['Home',        'home',        () => reset([{ name: 'home' }])],
+            ['Logbook',     'logbook',     () => reset([{ name: 'catch_log' }])],
+            ['Plan a trip', 'plan',        () => reset([{ name: 'home' }, { name: 'plan' }])],
+            ['Regulations', 'regulations', () => reset([{ name: 'regulations' }])],
+            ['Fish Quiz',   'quiz',        () => reset([{ name: 'quiz' }])],
+          ].map(([label, tab, go]) => {
+            const on = activeTab === tab || (tab === 'plan' && screen.name === 'plan');
+            return (
+              <button key={tab} type="button" onClick={go} style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: 14.5, fontWeight: on ? 800 : 600,
+                color: on ? T.brass : T.parchment,
+                padding: '10px 14px 8px', whiteSpace: 'nowrap',
+                borderBottom: `2px solid ${on ? T.brass : 'transparent'}`,
+              }}>{label}</button>
+            );
+          })}
+        </nav>
+      )}
       </div>
 
       {photoDiagOpen && (
