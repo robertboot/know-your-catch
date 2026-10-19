@@ -231,6 +231,20 @@ export default function WeeklyEmailTab() {
                     one further down the page could ever unblock anything.
                     This button now does the thing the state calls for, and
                     says which. */}
+                {/* Two ways out of a block, because there are two reasons
+                    to be in one. Leaving the record out is right when it
+                    cannot be confirmed; but once it HAS been verified in
+                    the Regulations tab, the stored blocker list is simply
+                    out of date, and the only button on offer would have
+                    dropped a species that is now fine. */}
+                {!none && !sent && blockedOf(row).length > 0 && (
+                  <GhostButton
+                    disabled={busy === 'generate'}
+                    onClick={() => generate(w.id)}
+                  >
+                    Re-check & regenerate
+                  </GhostButton>
+                )}
                 {!none && !sent && (
                   <GhostButton
                     disabled={busy === 'generate'}
