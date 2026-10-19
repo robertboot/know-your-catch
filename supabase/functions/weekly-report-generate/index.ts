@@ -343,6 +343,23 @@ async function handle(req: Request): Promise<Response> {
   // 30-day rule over ~215 rows can never come back clean. What matters is
   // the handful of regulations this email puts in front of people — if we
   // are going to print it, it has to be fresh.
+  /* Automatic mode — the scheduled pass, with nobody watching.
+     A block is the right answer when a human is about to look at it: it
+     says "do not print this change, it is not confirmed". It is the
+     wrong answer at 11am on a Thursday with no operator, because the
+     block does not just withhold the unconfirmed line, it withholds the
+     whole email - forecast, satellite maps and all - from everyone, and
+     it stays that way until somebody notices. Four waters sat blocked
+     for days this way.
+
+     So on the scheduled pass the unconfirmed CHANGE is dropped and the
+     rest of the email goes out, with the line it already prints saying
+     what was left out. The record is still kept in block_reasons, so
+     admin shows exactly what needs verifying - it is a to-do list
+     instead of a dead newsletter. An operator pressing Generate by hand
+     still gets the block, because then there IS somebody to act on it. */
+  const autoMode = body.auto === true;
+
   const printed = new Set(changes.map(c => `${c.species_id}|${c.jurisdiction_id}`));
   const blockers: Array<Record<string, unknown>> = [];
   let staleCoverage = 0;
@@ -357,6 +374,17 @@ async function handle(req: Request): Promise<Response> {
       blockers.push({ species_id: r.species_id, jurisdiction_id: r.jurisdiction_id, reason: r.status });
     } else if (old) {
       blockers.push({ species_id: r.species_id, jurisdiction_id: r.jurisdiction_id, reason: 'stale', days: age });
+    }
+  }
+
+  /* Auto mode: move every blocker out of the printed changes and into
+     the excluded list, which the email already discloses. */
+  const autoDropped: Array<Record<string, unknown>> = [];
+  if (autoMode && blockers.length) {
+    for (const b of blockers) {
+      const i = changes.findIndex((c: any) =>
+        c.species_id === b.species_id && c.jurisdiction_id === b.jurisdiction_id);
+      if (i >= 0) autoDropped.push(...changes.splice(i, 1));
     }
   }
 
@@ -412,7 +440,7 @@ async function handle(req: Request): Promise<Response> {
     fetched_at: new Date().toISOString(),
     days, changes, blockers, recipient_count: recipients.length,
     summary, date_range: dateRange, spotlight: PB_SPOTLIGHT, desktop_ad: DESKTOP_AD,
-    excluded: excluded.map((c: any) => ({ species: c.species, species_id: c.species_id,
+    excluded: [...excluded, ...autoDropped].map((c: any) => ({ species: c.species, species_id: c.species_id,
       jurisdiction_id: c.jurisdiction_id, jurisdiction_label: c.jurisdiction_label })),
     // Not a blocker — the updater's own backlog, surfaced so it is
     // visible in admin rather than invisible until it matters.
@@ -425,7 +453,8 @@ async function handle(req: Request): Promise<Response> {
   };
 
   const best = days.reduce((a, b) => (b.score > (a?.score ?? -1) ? b : a), days[0]);
-  const subject = blockers.length
+  const held = autoMode ? 0 : blockers.length;
+  const subject = held
     ? `[BLOCKED] ${jur.name} — week of ${week}`
     : `${jur.name}: ${best ? grade(best.score) + ' on ' + best.dayLabel : 'your week ahead'}`;
 
@@ -434,7 +463,7 @@ async function handle(req: Request): Promise<Response> {
 
   const row = {
     jurisdiction_id: jid, federal_id: jur.federal, week_start: week,
-    status: blockers.length ? 'blocked' : 'draft',
+    status: held ? 'blocked' : 'draft',
     subject, html, text_body: text, payload,
     block_reasons: blockers, recipient_count: recipients.length,
     generated_at: new Date().toISOString(),
@@ -448,7 +477,8 @@ async function handle(req: Request): Promise<Response> {
   return json({
     ok: true, id: saved.id, status: saved.status, week_start: week,
     recipients: recipients.length, changes: changes.length, blocked: blockers.length,
-    refresh_started: refreshStarted, excluded: excluded.length,
+    refresh_started: refreshStarted, excluded: excluded.length + autoDropped.length,
+    auto_dropped: autoDropped.length,
   });
 }
 
