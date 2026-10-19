@@ -411,7 +411,7 @@ async function handle(req: Request): Promise<Response> {
     place: jur.place, lat: jur.lat, lon: jur.lon,
     fetched_at: new Date().toISOString(),
     days, changes, blockers, recipient_count: recipients.length,
-    summary, date_range: dateRange, spotlight: PB_SPOTLIGHT,
+    summary, date_range: dateRange, spotlight: PB_SPOTLIGHT, desktop_ad: DESKTOP_AD,
     excluded: excluded.map((c: any) => ({ species: c.species, species_id: c.species_id,
       jurisdiction_id: c.jurisdiction_id, jurisdiction_label: c.jurisdiction_label })),
     // Not a blocker — the updater's own backlog, surfaced so it is
@@ -613,13 +613,22 @@ const SITE = 'https://www.reelintel.ai';
 
    Featured with the angler's permission — the submission email asks for
    it explicitly, and a catch goes in here only if that line was kept. */
-const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = {
-  image: 'pb-spotlight.jpg',
-  alt: 'Andy with a 22 inch triggerfish caught in Alabama state waters',
-  headline: 'Andy\u2019s 22-inch triggerfish \u2014 a new PB',
-  body: '22 inches on a high-low rig with squid, Alabama state waters, September 26. '
-      + 'A proper gray triggerfish and a new personal best. Congratulations Andy, and '
-      + 'thank you for sending it in.',
+const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = null;
+
+/* The browser version, in the slot the spotlight usually holds.
+   One image and one link, because a newsletter ad that needs three
+   paragraphs is an article. The alt text carries the whole offer: a
+   third of recipients never load images, and for them this block is the
+   alt line and the link under it, which is why both say the same thing
+   the artwork says. Set to null to give the slot back to a PB. */
+const DESKTOP_AD: { image: string; alt: string; line: string; cta: string; href: string } | null = {
+  image: 'newsletter-desktop-ad.jpg',
+  alt: 'Plan your next trip on a bigger screen \u2014 ReelIntel in your browser, '
+     + 'with satellite maps, marine forecasts and your past catches. Free account, no app download.',
+  line: 'The planning tools you know, on a full-size screen: satellite maps, marine '
+      + 'forecasts and your own catches on one map. Free, and nothing to download.',
+  cta: 'Start planning free',
+  href: 'https://www.reelintel.ai/app?signup&next=plan',
 };
 
 const PB_MAILTO = "mailto:harper@reelintel.ai?subject=My%20personal%20best&body=Hi%20Harper%2C%0A%0AHere%27s%20my%20personal%20best%20%E2%80%94%20photo%20attached.%0A%0ASpecies%3A%0ALength%20/%20weight%3A%0AGeneral%20area%20%28no%20exact%20numbers%20needed%29%3A%0ADate%20caught%3A%0A%0AShirt%20size%3A%0AMailing%20address%3A%0A%0A%0A---%20Permission%20---%0AKeep%20the%20line%20below%20if%20you%27re%20happy%20for%20us%20to%20run%20this%20catch%20in%20the%0Aweekly%20newsletter.%20Delete%20it%20if%20you%27d%20rather%20we%20didn%27t%20%E2%80%94%20either%20way%20the%0Ashirt%20is%20yours.%0A%0AI%20give%20ReelIntel%20permission%20to%20feature%20this%20catch%2C%20my%20first%20name%20and%20this%0Aphoto%20in%20the%20ReelIntel%20weekly%20email.%20My%20exact%20location%20will%20not%20be%20shared.%0A%0AThanks%2C%0A";
@@ -806,6 +815,16 @@ function renderHtml(p: any, best: Day | undefined): string {
 
   ${wrap(`<div style="padding:34px 0 0;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${GOLD};border-radius:12px;">
+      ${p.desktop_ad ? `<tr><td style="padding:22px 22px 0;font-family:${F};">
+        <div style="font-size:12px;font-weight:bold;letter-spacing:1.6px;color:${GOLD};text-transform:uppercase;">Now in your browser</div>
+        <a href="${esc(p.desktop_ad.href)}" style="text-decoration:none;">
+          <img src="${SITE}/brand/${esc(p.desktop_ad.image)}" width="560" alt="${esc(p.desktop_ad.alt)}"
+               style="display:block;width:100%;max-width:560px;height:auto;border-radius:12px;border:0;margin:12px auto 0;">
+        </a>
+        <div style="font-size:14px;color:${SOFT};line-height:1.6;padding-top:12px;">${esc(p.desktop_ad.line)}</div>
+        <a href="${esc(p.desktop_ad.href)}" style="display:inline-block;background:${GOLD};color:#06212f;font-size:15px;font-weight:bold;text-decoration:none;padding:13px 24px;border-radius:10px;margin-top:14px;">${esc(p.desktop_ad.cta)}</a>
+        <div style="border-top:1px solid ${EDGE};margin-top:20px;"></div>
+      </td></tr>` : ''}
       ${p.spotlight ? `<tr><td style="padding:22px 22px 0;font-family:${F};">
         <div style="font-size:12px;font-weight:bold;letter-spacing:1.6px;color:${GOLD};text-transform:uppercase;">This week&rsquo;s catch</div>
         <img src="${SITE}/brand/${esc(p.spotlight.image)}" width="560" alt="${esc(p.spotlight.alt)}"
