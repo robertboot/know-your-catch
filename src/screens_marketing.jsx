@@ -63,9 +63,9 @@ const A = {
 };
 
 const APP_STORE_URL = 'https://apps.apple.com/app/reelintel/id6785558103';
-// Set this to the Google Play listing once Android is live. While empty,
-// Android users fall back to the App Store (nothing dead-ends).
-const PLAY_STORE_URL = '';
+// Google Play listing. Android is in open beta, so this page works for
+// anyone; it becomes the regular listing at production launch.
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.reelintel.app';
 
 /* Route generic "get the app" CTAs to the right store for the device.
    iOS + desktop → App Store; Android → Google Play (once PLAY_STORE_URL
@@ -1845,16 +1845,50 @@ export function ResetPasswordPage() {
 
    It reuses the site's design system wholesale — the `rl-*` classes,
    the P palette, the button and card language — and adds only what the
-   tester flow needs. iOS only: ReelIntel has no Android build, so there
-   is deliberately no Play badge or "available on both stores" copy.
+   tester flow needs. Both stores: iPhone testers install from the App
+   Store, Android testers opt in to the Google Play beta. Each CTA leads
+   with the visitor's own store and offers the other as a quieter link.
 
    The phone is composed in markup rather than shipped as a flat export:
    it stays sharp on every display, costs no image bytes on a page that
    is opened over cellular from a text message, and the screen content
    can be edited in code instead of re-cut in a design tool.  */
 
-/* Every download CTA on the page points here. */
+/* Every download CTA on the page points here. Android testers go to the
+   Play opt-in page (tap "Become a tester", then install), not the bare
+   listing, so joining the beta is one obvious step. */
 const TESTER_APP_URL = APP_STORE_URL;
+const TESTER_PLAY_URL = 'https://play.google.com/apps/testing/com.reelintel.app';
+const isAndroidUA = () =>
+  typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent || '');
+
+function PlayIcon({ size = 19, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
+      <path d="M4.2 2.4c-.3.3-.4.7-.4 1.2v16.8c0 .5.1.9.4 1.2l9.4-9.6-9.4-9.6zm10.5 10.7 2.6 2.7-11.6 6.6c-.4.2-.8.3-1.1.2l10.1-9.5zm0-2.2L4.6 1.4c.3-.1.7 0 1.1.2l11.6 6.6-2.6 2.7zm3.9-1.8 3 1.7c.9.5.9 1.9 0 2.4l-3 1.7-2.9-2.9 2.9-2.9z" />
+    </svg>
+  );
+}
+
+/* Primary button for the visitor's own store, the other store as a
+   ghost button beside it. `long` keeps the hero's fuller label. */
+function TesterCtas({ long = false }) {
+  const android = isAndroidUA();
+  const apple = { href: TESTER_APP_URL, Icon: AppleIcon, store: 'the App Store' };
+  const play = { href: TESTER_PLAY_URL, Icon: PlayIcon, store: 'Google Play' };
+  const [first, second] = android ? [play, apple] : [apple, play];
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'inherit' }}>
+      <a className="rl-tt-cta" href={first.href} target="_blank" rel="noreferrer">
+        <first.Icon />
+        <span>{long ? <>Download<span className="rl-tt-cta-long">&nbsp;ReelIntel</span>&nbsp;on</> : 'Get it on'}&nbsp;{first.store}&nbsp;→</span>
+      </a>
+      <a className="rl-tt-cta rl-tt-cta-ghost" href={second.href} target="_blank" rel="noreferrer">
+        <second.Icon /> <span>{second.store === 'Google Play' ? 'Android beta' : 'iPhone'}</span>
+      </a>
+    </div>
+  );
+}
 
 function AppleIcon({ size = 19, color = 'currentColor' }) {
   return (
@@ -2254,7 +2288,7 @@ export function TestersPage() {
         </a>
         <span className="rl-tt-nav-sp" />
         <a className="rl-tt-back" href="/">Back to ReelIntel</a>
-        <a className="rl-btn rl-btn-primary rl-tt-navcta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
+        <a className="rl-btn rl-btn-primary rl-tt-navcta" href={isAndroidUA() ? TESTER_PLAY_URL : TESTER_APP_URL} target="_blank" rel="noreferrer">
           Download App
         </a>
       </nav>
@@ -2278,7 +2312,7 @@ export function TestersPage() {
               <span className="accent">fishing app</span><br />on the water.
             </h1>
             <p className="rl-tt-sub">
-              ReelIntel is live on the App Store, but we’re not marketing it heavily yet.
+              ReelIntel is live on the App Store and in beta on Google Play, but we’re not marketing it heavily yet.
               I’m looking for 50 anglers to put it through real-world testing, log some
               catches, and help me make it better before the public launch.
             </p>
@@ -2293,10 +2327,7 @@ export function TestersPage() {
             </ul>
 
             <div className="rl-tt-hero-cta">
-              <a className="rl-tt-cta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
-                <AppleIcon />
-                <span>Download<span className="rl-tt-cta-long">&nbsp;ReelIntel</span>&nbsp;on the App Store&nbsp;→</span>
-              </a>
+              <TesterCtas long />
               <p className="rl-tt-note"><span className="accent">Free to use.</span> No in-app purchase required.</p>
             </div>
           </div>
@@ -2368,10 +2399,9 @@ export function TestersPage() {
           <h2 className="rl-tt-h2" style={{ marginBottom: 14 }}>Ready to take it out?</h2>
           <p className="rl-tt-lead" style={{ margin: '0 auto 30px' }}>
             Download ReelIntel, create your account, and start fishing with it.
+            On Android, tap “Become a tester” first, then install from Google Play.
           </p>
-          <a className="rl-tt-cta" href={TESTER_APP_URL} target="_blank" rel="noreferrer">
-            <AppleIcon /> Download on the App Store →
-          </a>
+          <div style={{ display: 'flex', justifyContent: 'center' }}><TesterCtas /></div>
           <p className="rl-tt-note" style={{ marginTop: 16 }}>
             Then come back here and <a href="#feedback" style={{ color: P.accent }}>tell me what you found</a>.
           </p>
