@@ -179,6 +179,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
      switches are for. Only one panel is open at a time, and only when
      asked for. */
   const followedRef = useRef(undefined);      // which break the map last moved to
+  /* Fetched-once flags, as refs rather than state.
+     The effects below guarded on their own state — `if (currentCells)
+     return` — with that state in the dependency list. So painting the
+     CACHED copy re-ran the effect, the cleanup set alive = false, and
+     the live fetch that was already in flight threw its own result
+     away. The cached copy then stood for a week, which is exactly how
+     long the Gulf kept showing one corner of current after every region
+     had published. A ref does not re-run anything. */
+  const curFetched = useRef(false);
+  const zonesFetched = useRef(false);
   const [panel, setPanel] = useState(null);   // 'layers' | 'when' | null
   const [full, setFull] = useState(false);
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
@@ -355,7 +365,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
      layer is first switched on — most trips never ask for it, and this is
      a map that has to be careful about what it downloads. */
   useEffect(() => {
-    if (!showCurrent || currentCells) return;
+    if (!showCurrent || curFetched.current) return;
+    curFetched.current = true;
     let alive = true;
     (async () => {
       // Versioned key. Every phone that opened this layer before the
@@ -364,7 +375,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       // and a cache entry is good for a week, so those devices would keep
       // drawing it. Bumping the name retires them all at once; nobody has
       // to clear anything.
-      const cached = readMarineCache('currents.v2', 0, 0);
+      const cached = readMarineCache('currents.v3', 0, 0);
       if (cached && alive) setCurrentCells(cached.data);
       const c = client();
       if (!c) return;
@@ -382,10 +393,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       };
       if (!merged.cells.length) return;
       setCurrentCells(merged);
-      writeMarineCache('currents.v2', 0, 0, merged);
+      writeMarineCache('currents.v3', 0, 0, merged);
     })();
     return () => { alive = false; };
-  }, [showCurrent, currentCells]);
+  }, [showCurrent]);
 
   /* How old the drawn spots will be on the selected day. Null when there
      is nothing to say — same day, or no spots. */
@@ -413,10 +424,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
      worth having aboard with no signal. Fetched once, when the layer is
      first switched on. */
   useEffect(() => {
-    if (!showSpecies || zoneRows) return;
+    if (!showSpecies || zonesFetched.current) return;
+    zonesFetched.current = true;
     let alive = true;
     (async () => {
-      const cached = readMarineCache('zones.v1', 0, 0);
+      const cached = readMarineCache('zones.v2', 0, 0);
       if (cached && alive) setZoneRows(cached.data);
       const c = client();
       if (!c) return;
@@ -425,10 +437,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         .in('mode_key', ZONE_SPECIES);
       if (!alive || !data?.length) return;
       setZoneRows(data);
-      writeMarineCache('zones.v1', 0, 0, data);
+      writeMarineCache('zones.v2', 0, 0, data);
     })();
     return () => { alive = false; };
-  }, [showSpecies, zoneRows]);
+  }, [showSpecies]);
 
   // Paint them. The painter is shared with the admin tab so the two can
   // never drift — see src/species-zone-layer.js.
