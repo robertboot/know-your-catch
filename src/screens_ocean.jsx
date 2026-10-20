@@ -460,7 +460,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     if (!map) return;
     if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; }
     if (!showCurrent || !currentCells?.cells?.length) return;
-    const layer = createCurrentFlowLayer(currentCells.cells, { step: currentCells.step_deg || 0.25 });
+    /* Its own pane, over the species zones (405) and under the suggested
+       spots (450). */
+    if (!map.getPane('currentpane')) {
+      map.createPane('currentpane');
+      map.getPane('currentpane').style.zIndex = 430;
+      map.getPane('currentpane').style.pointerEvents = 'none';
+    }
+    const layer = createCurrentFlowLayer(currentCells.cells,
+      { step: currentCells.step_deg || 0.25, pane: 'currentpane' });
     layer.addTo(map);
     layer.setOpacity(0.85);
     flowRef.current = layer;

@@ -527,7 +527,13 @@ export default function TripPlanningPanel() {
     if (!map) return;
     if (flowRef.current) { map.removeLayer(flowRef.current); flowRef.current = null; }
     if (!showCurrents || !currents?.cells?.length) return;
-    const layer = createCurrentFlowLayer(currents.cells, { step: currents.step_deg || 0.25 });
+    if (!map.getPane('currentpane')) {
+      map.createPane('currentpane');
+      map.getPane('currentpane').style.zIndex = 430;
+      map.getPane('currentpane').style.pointerEvents = 'none';
+    }
+    const layer = createCurrentFlowLayer(currents.cells,
+      { step: currents.step_deg || 0.25, pane: 'currentpane' });
     layer.addTo(map);
     layer.setOpacity(opacity.cur);
     flowRef.current = layer;

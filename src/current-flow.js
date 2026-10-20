@@ -43,7 +43,7 @@ const SPEED_BANDS = [
 // and several hundred markers, which is where the budget actually goes.
 const FRAME_MS = 1000 / 30;
 
-export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
+export function createCurrentFlowLayer(vectors, { step = 0.25, pane } = {}) {
   // vectors: [lat, lon, kt, dirDegToward]
   const byKey = new Map();
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
@@ -57,6 +57,20 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
     if (lon < minLon) minLon = lon; if (lon > maxLon) maxLon = lon;
   }
   const at = (gi, gj) => byKey.get(`${gi},${gj}`) || null;
+
+  /* Where the field actually HAS data.
+     Particles used to be scattered uniformly across the view, which was
+     fine when the data was one region: almost every seed landed on a
+     cell. With the whole basin published the grid is sparse and holey —
+     land, cloud, water below the 0.03 kt floor — so most seeds landed on
+     nothing, died on their first frame and respawned on nothing again.
+     The layer was working; it just spent its thousand particles on empty
+     water. Seeding FROM the cells puts every particle on live data and
+     spreads them the way the field itself is spread. */
+  const cells = [...byKey.keys()].map((k) => {
+    const [gi, gj] = k.split(',');
+    return [Number(gi) * step, Number(gj) * step];
+  });
 
   /* Bilinear sample. Returns null where the field has no data on any
      corner — over land, or outside the region — so a particle there dies
@@ -77,10 +91,17 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
     return [u, v];
   }
 
+  const paneName = pane;
   const Flow = L.Layer.extend({
     onAdd(map) {
       this._map = map;
-      const pane = map.getPane('overlayPane');
+      /* The canvas needs a pane ABOVE the species zones.
+         Zones are a raster in their own pane at z-index 405; the overlay
+         pane is 400, so wherever a zone was drawn it painted straight
+         over the flow — the layer was running the whole time, under a
+         sheet of yellow. Whoever passes a pane gets it; the default
+         stays the overlay pane. */
+      const pane = (paneName && map.getPane(paneName)) || map.getPane('overlayPane');
       this._canvas = L.DomUtil.create('canvas', 'kyc-current-flow');
       this._canvas.style.position = 'absolute';
       this._canvas.style.pointerEvents = 'none';
@@ -152,14 +173,28 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
       const w = Math.max(b.getWest(), minLon), e = Math.min(b.getEast(), maxLon);
       this._particles = [];
       if (!(n > s && e > w)) return;   // no overlap with the data: nothing to draw
-      for (let k = 0; k < PARTICLE_COUNT; k++) {
-        this._particles.push({
-          lat: s + Math.random() * (n - s),
-          lon: w + Math.random() * (e - w),
-          age: Math.floor(Math.random() * MAX_AGE_FRAMES),
-        });
-      }
+      // The cells inside this view. Jitter within the cell so the
+      // particles do not sit on a visible lattice.
+      this._live = cells.filter(([la, lo]) => la >= s && la <= n && lo >= w && lo <= e);
+      for (let k = 0; k < PARTICLE_COUNT; k++) this._particles.push(this._born(s, n, w, e));
       this._bounds = { s, n, w, e };
+    },
+
+    _born(s, n, w, e) {
+      const live = this._live;
+      if (live && live.length) {
+        const [la, lo] = live[(Math.random() * live.length) | 0];
+        return {
+          lat: la + (Math.random() - 0.5) * step,
+          lon: lo + (Math.random() - 0.5) * step,
+          age: Math.floor(Math.random() * MAX_AGE_FRAMES),
+        };
+      }
+      return {
+        lat: s + Math.random() * (n - s),
+        lon: w + Math.random() * (e - w),
+        age: Math.floor(Math.random() * MAX_AGE_FRAMES),
+      };
     },
 
     _start() {
@@ -201,9 +236,8 @@ export function createCurrentFlowLayer(vectors, { step = 0.25 } = {}) {
       for (const p of this._particles) {
         const f = sample(p.lat, p.lon);
         if (!f || p.age++ > MAX_AGE_FRAMES) {
-          p.lat = s + Math.random() * (n - s);
-          p.lon = w + Math.random() * (e - w);
-          p.age = 0;
+          const b2 = this._born(s, n, w, e);
+          p.lat = b2.lat; p.lon = b2.lon; p.age = 0;
           continue;
         }
         let [u, v] = f;
