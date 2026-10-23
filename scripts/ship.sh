@@ -93,6 +93,12 @@ echo "✓ where-to-go stays near the angler"
 node scripts/auth-gate-test/run.mjs >/dev/null || { echo "✗ auth gate FAILED"; exit 1; }
 echo "✓ auth gate: web needs an account, app keeps guest"
 
+# The grade has to match the water. A wave model's smoothed significant
+# height is slow to carry the chop a fresh breeze stands up, which is how
+# a 15 kt morning once graded A.
+node scripts/fishability-test/run.mjs >/dev/null || { echo "✗ fishability scoring FAILED"; node scripts/fishability-test/run.mjs | tail -12; exit 1; }
+echo "✓ fishability: wind builds its own sea"
+
 # The cached model and its species list must belong together. A torn
 # pair does not fail — it renames every species.
 node scripts/model-cache-test/run.mjs >/dev/null || { echo "✗ model cache pairing FAILED"; exit 1; }

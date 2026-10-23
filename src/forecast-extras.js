@@ -110,6 +110,38 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x));
 // Wind is in knots (the app's marine unit). Calibrated against typical
 // Gulf days: small seas with a short period are calm and fishable, so
 // period only bites hard when the seas are also up (steep chop).
+/* The sea the WIND is making, right here, right now.
+ *
+ * The wave model carries one significant height for the cell, and it is
+ * a smoothed, hourly, ~8 km number: it is good at swell and slow to
+ * notice a breeze that got up an hour ago. An angler does not feel the
+ * mean of a grid cell, he feels the chop — and on this coast a morning
+ * can be rated on a 1 ft swell while 15 kt of onshore wind is standing
+ * up two feet of square water on top of it.
+ *
+ * JONSWAP fetch-limited growth is the standard answer to "how big a sea
+ * does this wind build over this much water". Fetch is the one unknown;
+ * 20 nm is the honest default for fishing out of a Gulf pass — it is
+ * roughly the run to the first decent bottom, and it is deliberately not
+ * the open-ocean figure, which would overstate everything inshore.
+ *
+ * Returns { ft, s } — significant height and peak period of the WIND
+ * sea alone, not the total.
+ */
+export function windSeaFromWind(windKt, fetchNm = 20) {
+  const g = 9.81;
+  const U = (Number(windKt) || 0) * 0.514444;     // kt → m/s
+  const F = (Number(fetchNm) || 0) * 1852;        // nm → m
+  if (U <= 0 || F <= 0) return { ft: 0, s: 0 };
+  const fHat = (g * F) / (U * U);                 // dimensionless fetch
+  const eHat = 1.6e-7 * fHat;                     // dimensionless energy
+  const E = eHat * Math.pow(U, 4) / (g * g);
+  return {
+    ft: 4 * Math.sqrt(E) * 3.28084,
+    s: 0.286 * Math.pow(fHat, 0.33) * U / g,
+  };
+}
+
 export function subScores(h) {
   // Wind (kt): factor GUSTS in — gusty air is less safe/comfortable than
   // the sustained number alone, so blend the two. Ideal stays at calm;
@@ -120,22 +152,78 @@ export function subScores(h) {
     const eff = h.gust != null ? h.wind * 0.65 + h.gust * 0.35 : h.wind;
     wind = Math.round(clamp01((28 - eff) / 22) * 100);
   }
+  /* What the sea actually IS, which is not always what the wave model
+     says. Two better answers than the total height, in order:
+
+       1. The model's own wind-wave split, when the fetch asked for it
+          (wind_wave_height / wind_wave_period). That is the chop,
+          measured, separated from the swell underneath it.
+       2. Failing that, the sea this wind implies over a 20 nm fetch.
+
+     Whichever is WORSE than the modelled total wins, and only when it is
+     worse — this can take a day down, never lift one. A grid-cell mean
+     that says 1 ft while 15 kt is blowing is the case this exists for;
+     it was rating mornings A that anglers would call a C. */
+  let waveFt = h.waveFt, periodS = h.periodS;
+  let chop = null;
+  if (h.windWaveFt != null && h.windWaveFt > 0) {
+    // Measured split — trust it as given.
+    chop = { ft: h.windWaveFt, s: h.windWavePeriodS || null };
+  } else if (h.wind != null && h.wind > 10) {
+    /* Estimated. Ramped in from 10 kt rather than switched on, because
+       below that the chop is ripple: a first cut applied the full
+       estimate from 8 kt and dropped an 8-kt morning on a 2 ft nine-
+       second swell from A- to F, which is not a day any angler would
+       call unfishable. By 18 kt the estimate counts in full. */
+    const ramp = Math.max(0, Math.min(1, (h.wind - 10) / 8));
+    const est = windSeaFromWind(h.wind, h.fetchNm);
+    chop = { ft: est.ft * ramp, s: est.s };
+  }
+  if (chop && chop.ft > 0.2) {
+    /* Seas add as energy, not as heights: a 1 ft swell under a 2 ft chop
+       is a 2.2 ft sea, never a 3 ft one.
+
+       When the wind wave came from the API the total ALREADY contains
+       it, so the swell underneath is what is left after taking the chop
+       back out — adding the two again counted the chop twice and turned
+       a 2.2 ft sea into 3 ft. With an estimate there is nothing to take
+       out: the model never saw that chop, which is the whole point. */
+    const measured = h.windWaveFt != null && h.windWaveFt > 0;
+    const total = h.waveFt ?? 0;
+    const sw = measured
+      ? Math.sqrt(Math.max(0, total * total - chop.ft * chop.ft))
+      : total;
+    const combined = Math.sqrt(sw * sw + chop.ft * chop.ft);
+    if (waveFt == null || combined > waveFt) {
+      waveFt = combined;
+      /* Energy-weighted period, not the shorter of the two. Taking the
+         minimum let a one-foot chop impose its three seconds on a sea
+         that is mostly long swell, which reads as a square ride when it
+         is a gentle one. */
+      if (chop.s) {
+        const tw = h.swellPeriodS ?? h.periodS ?? chop.s;
+        periodS = Math.sqrt((sw * sw * tw * tw + chop.ft * chop.ft * chop.s * chop.s)
+                            / (sw * sw + chop.ft * chop.ft));
+      }
+    }
+  }
+
   // Steepness is the one number both sea terms below are really asking
   // about: deep-water wave length is 5.12*T^2 ft, so the same 3 ft is a
   // gentle roll at 7 s and a square wall at 3 s. ~0.010 is a lazy swell,
   // ~0.045 is the wall.
-  const steepness = (h.waveFt != null && h.periodS != null && h.periodS > 0)
-    ? h.waveFt / (5.12 * h.periodS * h.periodS)
+  const steepness = (waveFt != null && periodS != null && periodS > 0)
+    ? waveFt / (5.12 * periodS * periodS)
     : null;
 
   let seas = null;
-  if (h.waveFt != null) {
+  if (waveFt != null) {
     // Judge height against steepness, then run the existing curve on the
     // adjusted number. Clamped both ends so a long swell can never shrink
     // a genuinely big sea to nothing.
     const factor = steepness == null ? 1
       : Math.max(0.8, Math.min(1.8, Math.pow(steepness / 0.018, 0.4)));
-    seas = Math.round(clamp01((6 - h.waveFt * factor) / 5) * 100);
+    seas = Math.round(clamp01((6 - waveFt * factor) / 5) * 100);
   }
 
   // Wave period, judged against the sea it carries. A period is only
@@ -149,11 +237,11 @@ export function subScores(h) {
   let period = null;
   if (steepness != null) {
     period = Math.round(clamp01((0.045 - steepness) / 0.035) * 100);
-  } else if (h.periodS != null) {
+  } else if (periodS != null) {
     // No height to judge it against — fall back to the raw interval.
-    period = Math.round(clamp01((h.periodS - 3) / 5) * 100);
+    period = Math.round(clamp01((periodS - 3) / 5) * 100);
   }
-  return { wind, seas, period };
+  return { wind, seas, period, waveFt, periodS };
 }
 
 /* Severe-weather ceiling, keyed on WMO weather codes (Open-Meteo).
