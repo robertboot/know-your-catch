@@ -619,6 +619,29 @@ function buildRegs() {
     return out;
   }
   return {
+    /* The inshore fish were missing from this table entirely.
+       Sixty-eight species here and not one of them a redfish: an angler
+       in Alabama who asked the app whether he could keep a red drum got
+       nothing, because the inshore species live only in the Supabase
+       overlay and that row was an unverified draft. The fallback exists
+       for exactly that case.
+
+       Only values traceable to a state rule are filled in. Where the
+       rule could not be read from the agency, the entry says so rather
+       than carrying a neighbouring state's numbers — a slot that is
+       wrong by two inches is worse than no slot at all. */
+    red_drum: R({
+      default: { open: 'Year-round (verify)', minSize: null, maxSize: null, bagLimit: null,
+                 notes: 'Slot and bag differ by state and are not verified here — check your state agency before keeping one.' },
+      al_state: { open: 'Year-round', minSize: 16, maxSize: 26, bagLimit: 3,
+                  notes: 'Slot 16–26 in total length. No oversize fish: the over-26 in allowance was removed in 2025.' },
+      la_state: { open: 'Year-round', minSize: 18, maxSize: 27, bagLimit: 4,
+                  notes: 'Slot 18–27 in total length.' },
+      fed_gulf: { open: 'Closed', minSize: null, maxSize: null, bagLimit: 0,
+                  notes: 'Harvest and possession of red drum is prohibited in federal Gulf waters.' },
+      source: 'outdooralabama.com · wlf.louisiana.gov',
+    }),
+
     red_snapper: R({
       default: { open: 'Check current season', minSize: 16, bagLimit: 2, gear: reefGear, notes: 'Federal seasons differ by sector. Most Gulf states manage private rec under delegated authority.' },
       la_state: { bagLimit: 4, notes: 'Louisiana ROLP required. Higher bag limit than other Gulf states.' },
