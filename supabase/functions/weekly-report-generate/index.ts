@@ -532,7 +532,14 @@ function seasonEdges(seasonText: string | null, now: Date): Edge[] {
     // Open season or closure? Judge from this clause only — "Open Aug 1 –
     // Dec 31; closed annually in January" must not read the later word.
     const clause = body.slice(0, m.index).split(/[;.]/).pop()!.toLowerCase();
-    const isClosure = /clos/.test(clause) && !/open/.test(clause);
+    /* "Closed — ran Jun 1 – Oct 26" is a season that RAN between those
+       dates and has since ended. Reading the word "closed" as if the
+       range itself were the closure window flipped the edges and the
+       email announced that red snapper OPENED YESTERDAY, on the day the
+       for-hire season shut. A past-tense marker says the range is the
+       open window whatever state the sentence opens with. */
+    const ranMarker = /\b(ran|was open|reopened|open)\b/.test(clause);
+    const isClosure = /clos/.test(clause) && !ranMarker;
     const start = Date.UTC(y1, m1, d1), end = Date.UTC(y2, m2, d2);
     if (isClosure) out.push({ kind: 'closes', at: start }, { kind: 'opens', at: end });
     else           out.push({ kind: 'opens', at: start }, { kind: 'closes', at: end });
@@ -559,6 +566,20 @@ function notableEdge(seasonText: string | null, horizonDays: number, lookbackDay
   }
   return future ?? past;
 }
+
+/* Who a season belongs to, said so it cannot be read as who is allowed
+   to fish. "Federally permitted for-hire boats only" was read as "only
+   those boats may fish" — the opposite of the truth, which is that they
+   are the ones who have stopped. Naming the OTHER sector in the same
+   breath removes the ambiguity entirely. */
+const SECTOR_LINE: Record<string, string> = {
+  private: 'Applies to private boats and state-licensed charters. '
+         + 'Federally permitted for-hire boats fish a separate season.',
+  state_charter: 'Applies to state-licensed charter boats. '
+               + 'Federally permitted for-hire boats fish a separate season.',
+  for_hire_federal: 'Applies to federally permitted for-hire boats. '
+                  + 'Private boats and state-licensed charters fish a separate season.',
+};
 
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -731,9 +752,7 @@ function renderHtml(p: any, best: Day | undefined): string {
         <div style="font-size:18px;font-weight:bold;color:${INK};">${esc(c.species)}</div>
         <div style="font-size:14px;color:${SOFT};line-height:1.55;padding-top:5px;">${esc(c.season_text || '')}</div>
         ${c.sector ? `<div style="font-size:13px;font-weight:bold;color:${GOLD};padding-top:5px;">${
-          esc({ private: 'Private anglers only',
-                state_charter: 'State charter only',
-                for_hire_federal: 'Federally permitted for-hire boats only' }[c.sector] || c.sector)
+          esc(SECTOR_LINE[c.sector] || c.sector)
         }</div>` : ''}
       </td></tr>
     </table>`;

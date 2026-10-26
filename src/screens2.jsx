@@ -419,9 +419,9 @@ function VerifiedRegFooter({ row, jurisdiction, isTablet }) {
 
 /* Sector names as an angler says them, not as the table stores them. */
 const SECTOR_LABEL = {
-  private: 'Private anglers only',
-  state_charter: 'State charter only',
-  for_hire_federal: 'Federal for-hire only',
+  private: 'For private boats & state charters',
+  state_charter: 'For state-licensed charters',
+  for_hire_federal: 'For federal for-hire boats',
 };
 
 function RegBlock({ reg, units, jurisdiction, fedColumn }) {
