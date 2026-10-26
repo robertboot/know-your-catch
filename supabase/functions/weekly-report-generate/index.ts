@@ -643,7 +643,14 @@ const SITE = 'https://www.reelintel.ai';
 
    Featured with the angler's permission — the submission email asks for
    it explicitly, and a catch goes in here only if that line was kept. */
-const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = null;
+const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = {
+  image: 'pb-spotlight.jpg',
+  alt: 'An angler holding a 26-inch big scale pomfret caught at the Spur out of Orange Beach',
+  headline: 'A 26-inch big scale pomfret \u2014 a new PB',
+  body: '26 inches fork length, taken at the Spur out of Orange Beach on October 24 while '
+      + 'swordfishing. A big scale pomfret is a deep-water fish most anglers never see, let '
+      + 'alone put in the boat. Congratulations, and thank you for sending it in.',
+};
 
 /* The browser version, in the slot the spotlight usually holds.
    One image and one link, because a newsletter ad that needs three
