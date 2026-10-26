@@ -224,7 +224,7 @@ async function handle(req: Request): Promise<Response> {
 
   // ---- regulations + the freshness gate -------------------------------
   const { data: regsInitial, error: regErr } = await db.from('regulations')
-    .select('species_id, jurisdiction_id, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, updated_at, verified_at, last_checked_at')
+    .select('species_id, jurisdiction_id, sector, status, season_text, min_size_in, max_size_in, bag_limit, boat_limit, notes, updated_at, verified_at, last_checked_at')
     .in('jurisdiction_id', [jid, jur.federal]);
   if (regErr) return json({ error: 'regulations_failed', detail: regErr.message }, 500);
   // Reassignable: the pre-send refresh below re-reads these rows, and the
@@ -269,6 +269,11 @@ async function handle(req: Request): Promise<Response> {
       is_federal: r.jurisdiction_id !== jid,
       jurisdiction_label: r.jurisdiction_id === jid ? jur.name : FEDERAL_NAME[jur.federal],
       season_text: r.season_text,
+      // Who the change applies to. Red snapper closes for federally
+      // permitted for-hire boats while the private season runs on; an
+      // email that does not say which one is telling most of its readers
+      // something untrue.
+      sector: r.sector && r.sector !== 'all' ? r.sector : null,
       bag_limit: r.bag_limit,
       min_size_in: r.min_size_in,
       notes: r.notes,
@@ -725,6 +730,11 @@ function renderHtml(p: any, best: Day | undefined): string {
       <tr><td style="padding:14px 15px;font-family:${F};">
         <div style="font-size:18px;font-weight:bold;color:${INK};">${esc(c.species)}</div>
         <div style="font-size:14px;color:${SOFT};line-height:1.55;padding-top:5px;">${esc(c.season_text || '')}</div>
+        ${c.sector ? `<div style="font-size:13px;font-weight:bold;color:${GOLD};padding-top:5px;">${
+          esc({ private: 'Private anglers only',
+                state_charter: 'State charter only',
+                for_hire_federal: 'Federally permitted for-hire boats only' }[c.sector] || c.sector)
+        }</div>` : ''}
       </td></tr>
     </table>`;
   }).join('') : `

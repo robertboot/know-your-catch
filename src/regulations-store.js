@@ -76,6 +76,11 @@ function overlayToRenderShape(row) {
     bagLimit:  row.bag_limit   != null ? Number(row.bag_limit)   : null,
     boatLimit: row.boat_limit  != null ? Number(row.boat_limit)  : null,
     notes:     row.notes || null,
+    /* Which anglers this rule is for. 'all' is the common case and
+       renders nothing; the others have to be said, because a for-hire
+       closure read as a private one is how an angler stays at the dock
+       on a day he could have fished - or keeps a fish he may not. */
+    sector:    row.sector && row.sector !== 'all' ? row.sector : null,
     // Every row in the overlay is status:'verified' (indexRows filters
     // to that), so mark it — otherwise the detail footer defaults to the
     // "Seed data — not official" warning ON a verified reg, contradicting
@@ -348,6 +353,7 @@ export async function adminUpsertRegulation(row, { sessionEmail = null } = {}) {
     species_id:      row.species_id,
     jurisdiction_id: row.jurisdiction_id,
     season_text:     row.season_text ?? null,
+    sector:          row.sector ?? 'all',
     min_size_in:     row.min_size_in ?? null,
     max_size_in:     row.max_size_in ?? null,
     bag_limit:       row.bag_limit   ?? null,

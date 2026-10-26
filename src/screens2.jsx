@@ -417,6 +417,13 @@ function VerifiedRegFooter({ row, jurisdiction, isTablet }) {
   );
 }
 
+/* Sector names as an angler says them, not as the table stores them. */
+const SECTOR_LABEL = {
+  private: 'Private anglers only',
+  state_charter: 'State charter only',
+  for_hire_federal: 'Federal for-hire only',
+};
+
 function RegBlock({ reg, units, jurisdiction, fedColumn }) {
   const ss = seasonState(reg.open);
   const status = ss.status;
@@ -432,6 +439,19 @@ function RegBlock({ reg, units, jurisdiction, fedColumn }) {
     <>
       <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <StatusPill status={status} />
+        {/* Who the rule is for, beside the open/closed pill.
+            Red snapper closes for federally permitted for-hire boats
+            months before the private season ends, in the same water. A
+            pill that does not say which sector it means is read as
+            "everyone", and the angler either stays at the dock on a day
+            he could have fished or keeps a fish he may not. */}
+        {reg.sector && SECTOR_LABEL[reg.sector] && (
+          <span style={{
+            fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4,
+            color: T.brassDeep, border: `1px solid ${T.brass}`,
+            borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap',
+          }}>{SECTOR_LABEL[reg.sector]}</span>
+        )}
         {ss.reason && !/^(open|closed)$/i.test(ss.reason.trim()) && (
           <span style={{ fontSize: 16, fontWeight: 700, color: ssColor }}>{ss.reason}</span>
         )}
