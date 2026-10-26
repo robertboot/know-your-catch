@@ -211,12 +211,29 @@ async function fetchOceanData() {
  * breaks loudly and nobody finds out. That is the part worth catching:
  * every phone quietly stuck on an old model, with the console showing a
  * newer one as promoted. */
+/* Check the file the PHONES load.
+   This asked for fish_id_model.tflite at the bucket root — a path
+   publishing has never written. Each version is stored under its own id,
+   and the copy every phone downloads is current.tflite beside the
+   manifest. So the dashboard reported the model missing, in red, while
+   6.3 MB of DeepBlue 12.4 sat there working: an alarm nobody can act on,
+   which is worse than no alarm, because the next real one reads the
+   same. */
+const PUBLISHED_MODEL_FILE = 'current.tflite';
+
 async function fetchPublishedModel() {
   const base = `${SUPABASE_URL}/storage/v1/object/public/models-published`;
   const [manifest, head] = await Promise.all([
     fetch(`${base}/current.json?cb=${Date.now()}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
-    fetch(`${base}/fish_id_model.tflite?cb=${Date.now()}`, { method: 'HEAD' })
-      .then(r => ({ ok: r.ok, bytes: Number(r.headers.get('content-length')) || 0 }))
+    /* A ranged GET, not a HEAD: Supabase Storage answers HEAD on a public
+       object inconsistently, and one byte settles both questions this
+       asks — is it there, and how big is it (from content-range). */
+    fetch(`${base}/${PUBLISHED_MODEL_FILE}?cb=${Date.now()}`, { headers: { Range: 'bytes=0-0' } })
+      .then(r => {
+        const range = r.headers.get('content-range') || '';
+        const total = Number(range.split('/')[1]) || Number(r.headers.get('content-length')) || 0;
+        return { ok: r.ok, bytes: total };
+      })
       .catch(() => null),
   ]);
   return { manifest, head };
@@ -726,7 +743,7 @@ export function buildBrief({ health, queue, coverage, training }) {
 
     if (!livePublish.head?.ok || bytes < 1024) {
       add('critical', 'The published Fish ID model is missing', 'models',
-        `fish_id_model.tflite returns ${livePublish.head?.ok ? bytes + ' bytes' : 'an error'}. `
+        `${PUBLISHED_MODEL_FILE} returns ${livePublish.head?.ok ? bytes + ' bytes' : 'an error'}. `
         + 'Every phone is falling back to the model built into the app. Press Publish again '
         + 'on the promoted version.');
     } else if (health.promotedVersion && live && live !== health.promotedVersion) {
