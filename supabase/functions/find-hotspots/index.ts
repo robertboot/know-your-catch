@@ -64,6 +64,16 @@ const CHL_STRIDE  = 1;
 // and pg_net hangs up on the whole call at 120 s. 25 s per dataset means a
 // stalled optional grid drops out instead of eating the budget: everything
 // but SST is fetched with .catch(() => null).
+/* Stays at 20 s, and that is a decision rather than an oversight.
+   A longer ceiling is tempting when NOAA is shedding load — it accepts
+   the connection and then takes its time, so "slow" looks like
+   "unreachable". But the walk is four attempts deep across three hosts,
+   and the whole run has a 100 s budget before the scheduler's socket
+   closes: at 35 s the worst case is 140 s and the function is killed
+   mid-region, losing the regions it had not reached yet. Failing this
+   region in 80 s and letting the next hourly pass pick it up first (a
+   failure stamps last_run_at 90 minutes in the past, so it sorts to the
+   front) rides out a shed better than one long wait does. */
 const FETCH_TIMEOUT_MS = 20_000;
 
 // What counts as an edge. A break under ~0.4 °F/nm is noise in a 1 km
@@ -254,6 +264,7 @@ async function fetchJson(path: string) {
         last = err;
         // A 400 means the query is wrong, and it will be just as wrong on
         // the next host — stop rather than walk the whole list to say so.
+        why = `${r.status}`;
         if (!RETRY_STATUS.has(r.status)) {
           // 404 means THIS host does not carry the dataset, which says
           // nothing about the next one — walk on. Anything else in the 4xx
@@ -278,11 +289,22 @@ async function fetchJson(path: string) {
         clearTimeout(t);
       }
       if (nextHost) break;
-      if (a < attemptsPerHost) await sleep(2000);
+      /* 3 s rather than 2 between attempts on the same host: asking a
+         shedding server again immediately gets the same answer. Kept
+         short because the budget is the binding constraint, not
+         politeness — the real retry is the next hourly pass. */
+      if (a < attemptsPerHost) await sleep(3000);
     }
     tried.push(`${shortName(host)}=${why}`);
   }
-  throw new Error(`every erddap host failed — ${tried.join(' ')} — last: ${last}`);
+  /* 503 and 429 are NOAA saying "not now", which is weather, not a
+     fault in this function. Naming it keeps the daily brief honest: the
+     operator reads "NOAA is shedding load" and waits, instead of hunting
+     for a bug in a job that did everything right. */
+  const shedding = tried.some(t => /=(429|503)/.test(t))
+    || /\b(429|503)\b/.test(String(last));
+  throw new Error(`every erddap host failed${shedding ? ' — NOAA is shedding load (503/429), not a fault here' : ''}`
+    + ` — ${tried.join(' ')} — last: ${last}`);
 }
 
 /* ERDDAP .json comes back as a column table, not a grid. Rebuild the grid

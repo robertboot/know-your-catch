@@ -212,30 +212,42 @@ async function fetchOceanData() {
  * every phone quietly stuck on an old model, with the console showing a
  * newer one as promoted. */
 /* Check the file the PHONES load.
-   This asked for fish_id_model.tflite at the bucket root — a path
-   publishing has never written. Each version is stored under its own id,
-   and the copy every phone downloads is current.tflite beside the
-   manifest. So the dashboard reported the model missing, in red, while
-   6.3 MB of DeepBlue 12.4 sat there working: an alarm nobody can act on,
-   which is worse than no alarm, because the next real one reads the
-   same. */
+ *
+ * Two wrong answers before this one. It first HEADed fish_id_model.tflite
+ * at the bucket root, a path publishing has never written, and called a
+ * working model missing. Then it asked for one byte and read
+ * content-length — which IS one — because content-range carries the real
+ * size and Supabase does not expose that header to a browser. Same red
+ * tile, new reason: "current.tflite returns 1 bytes".
+ *
+ * The bucket's own index does not go through CORS and does not need a
+ * range: list() reports the stored size directly. The size is then
+ * sanity-checked against the manifest, so an index that is lying (it has
+ * lied before — a 6 MB entry every read 404'd) still shows up as a
+ * mismatch rather than a pass.
+ */
 const PUBLISHED_MODEL_FILE = 'current.tflite';
 
 async function fetchPublishedModel() {
   const base = `${SUPABASE_URL}/storage/v1/object/public/models-published`;
-  const [manifest, head] = await Promise.all([
-    fetch(`${base}/current.json?cb=${Date.now()}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
-    /* A ranged GET, not a HEAD: Supabase Storage answers HEAD on a public
-       object inconsistently, and one byte settles both questions this
-       asks — is it there, and how big is it (from content-range). */
-    fetch(`${base}/${PUBLISHED_MODEL_FILE}?cb=${Date.now()}`, { headers: { Range: 'bytes=0-0' } })
-      .then(r => {
-        const range = r.headers.get('content-range') || '';
-        const total = Number(range.split('/')[1]) || Number(r.headers.get('content-length')) || 0;
-        return { ok: r.ok, bytes: total };
-      })
-      .catch(() => null),
-  ]);
+  const manifest = await fetch(`${base}/current.json?cb=${Date.now()}`)
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+
+  let head = null;
+  try {
+    const c = client();
+    if (c) {
+      const { data: entries, error } = await c.storage.from('models-published')
+        .list('', { search: PUBLISHED_MODEL_FILE, limit: 100 });
+      if (!error) {
+        const entry = (entries || []).find(e => e.name === PUBLISHED_MODEL_FILE);
+        head = entry
+          ? { ok: true, bytes: Number(entry.metadata?.size) || 0 }
+          : { ok: false, bytes: 0 };
+      }
+    }
+  } catch { head = null; }
+
   return { manifest, head };
 }
 
