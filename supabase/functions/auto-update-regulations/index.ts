@@ -53,6 +53,9 @@ interface Draft {
   sourceNote: string;
   sourceUrl:  string | null;
   confidence: 'high' | 'medium' | 'low';
+  /* "The agency does not list this fish." The only answer that ends the
+     rotation for a pair instead of handing a human another draft. */
+  notRegulated: boolean;
 }
 
 async function researchPair(
@@ -74,8 +77,21 @@ Return JSON ONLY in your final message:
   "notes":       "<short explanation or null>",
   "sourceNote":  "<REQUIRED: what page you found, retrieved ${todayStr}>",
   "sourceUrl":   "<the exact agency URL your season came from, or null>",
-  "confidence":  "<high | medium | low>"
+  "confidence":  "<high | medium | low>",
+  "notRegulated": <true ONLY if the agency publishes no species-specific rule for this fish here>
 }
+
+NOT REGULATED — read this before anything else:
+  Most saltwater species have no species-specific limit. The agency
+  names a few dozen and everything else falls under general rules. When
+  you have checked the agency's list and this species is simply not on
+  it, return notRegulated: true with every value null, and say in
+  sourceNote which page you checked. That is a real answer and it is
+  recorded as one.
+  It is NOT the answer for a species you could not find a CURRENT season
+  for — that is a null seasonText and an honest sourceNote, and it will
+  be asked again. Getting this backwards either buries a real rule or
+  keeps a non-rule in the rotation forever.
 
 CONFIDENCE CONTRACT — this gates automatic publishing:
 - "high" ONLY when you found the CURRENT season on an official agency
@@ -170,8 +186,15 @@ Final message: the JSON object only.`;
   if (rejects.length && conf === 'high') conf = 'medium';
   const noteParts  = [typeof parsed.sourceNote === 'string' ? parsed.sourceNote.trim() : '', ...rejects].filter(Boolean);
 
+  /* Accepted only alongside empty values: a "not regulated" flag next to
+     a bag limit is a contradiction, and the limit is the thing an angler
+     could be fined over, so the values win. */
+  const notRegulated = parsed.notRegulated === true
+    && seasonText == null && minSizeIn == null && maxSizeIn == null
+    && bagLimit == null && boatLimit == null;
+
   return {
-    seasonText, minSizeIn, maxSizeIn, bagLimit, boatLimit, notes,
+    seasonText, minSizeIn, maxSizeIn, bagLimit, boatLimit, notes, notRegulated,
     sourceNote: noteParts.join(' ') || 'No source note returned.',
     sourceUrl,
     confidence: conf,
@@ -341,6 +364,36 @@ Deno.serve(async (req: Request) => {
           await db.from('regulations').update({ last_checked_at: nowIso }).eq('id', nowRow.id);
         }
       }
+      return;
+    }
+
+    /* No rule to find: record that, and stop asking.
+       This pair was costing a research call every rotation and leaving a
+       draft nobody could ever verify — 17 of the 20 oldest drafts on the
+       board were species the agencies do not list. 'unregulated' is a
+       resolved state: it does not block the newsletter, it does not read
+       as a to-do, and last_checked_at sends it to the back of the queue
+       like any other answered pair. A VERIFIED row is never overwritten
+       by it — a human who entered a rule outranks a model that could not
+       find one. */
+    if (draft.notRegulated && !(row && row.status === 'verified' && !isEmptyRow(row))) {
+      const { error } = await db.from('regulations').upsert({
+        species_id: sp.id,
+        jurisdiction_id: jur.id,
+        season_text: null, min_size_in: null, max_size_in: null,
+        bag_limit: null, boat_limit: null,
+        notes: 'No species-specific rule published for these waters — general '
+             + 'state rules apply. Check the agency if you plan to keep one.',
+        status: 'unregulated',
+        drafted_by: 'ai',
+        drafted_at: nowIso,
+        last_checked_at: nowIso,
+        source_note: draft.sourceNote,
+        source_url: draft.sourceUrl,
+        auto_published: false,
+      }, { onConflict: 'species_id,jurisdiction_id' });
+      if (error) { failed += 1; detail.push({ pair: pairKey, outcome: 'failed', reason: error.message }); }
+      else       { unchanged += 1; detail.push({ pair: pairKey, outcome: 'not_regulated' }); }
       return;
     }
 

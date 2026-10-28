@@ -126,10 +126,21 @@ After researching, return a JSON object matching this exact schema — JSON ONLY
   "bagLimit":    <integer per angler per day, or null>,
   "boatLimit":   <integer per vessel, or null>,
   "notes":       "<short freeform explanation, or null>",
-  "sourceNote":  "<REQUIRED: which agency page / publication you found and how confident you are>"
+  "sourceNote":  "<REQUIRED: which agency page / publication you found and how confident you are>",
+  "notRegulated": <true ONLY when the agency publishes no species-specific rule for this fish in this jurisdiction, else false>
 }
 
 HARD RULES:
+
+0. notRegulated is the answer for a fish the agency simply does not
+   list. Most saltwater species have no species-specific limit: the
+   agency regulates a few dozen by name and everything else falls under
+   general rules. Say so with notRegulated: true and explain in
+   sourceNote which page you checked and that the species is absent from
+   it. Do NOT return notRegulated for a species you merely could not
+   find a CURRENT season for — that is a null seasonText with an honest
+   sourceNote. The difference matters: "no rule exists" is an answer and
+   gets recorded; "I could not resolve it" is a retry.
 
 1. SEARCH FIRST for the season. For major managed species (snappers,
    groupers, amberjack, triggerfish, red drum, flounder…) the current
@@ -236,6 +247,13 @@ Your FINAL message must be the JSON object only.`;
   }
 
   const seasonText = typeof parsed.seasonText === 'string' && parsed.seasonText.trim() ? parsed.seasonText.trim() : null;
+  /* "The agency does not list this fish" is a real answer, and the only
+     one that ends the rotation for that pair. It is accepted only when
+     the model also returned no values — a notRegulated flag sitting next
+     to a bag limit is a contradiction, and the values win. */
+  const notRegulated = parsed.notRegulated === true
+    && seasonText == null && parsed.minSizeIn == null && parsed.maxSizeIn == null
+    && parsed.bagLimit == null && parsed.boatLimit == null;
   const notes      = typeof parsed.notes      === 'string' && parsed.notes.trim()      ? parsed.notes.trim()      : null;
   const modelSourceNote = typeof parsed.sourceNote === 'string' ? parsed.sourceNote.trim() : '';
 
@@ -252,5 +270,6 @@ Your FINAL message must be the JSON object only.`;
     boatLimit,
     notes,
     sourceNote,
+    notRegulated,
   });
 });
