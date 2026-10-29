@@ -43,9 +43,12 @@ stop being read.
 - Read `docs/health-runbook.md`. Do the Daily section. On Mondays, or
   when asked for a weekly, do the Weekly section too. On Thursdays do
   the newsletter section (3b) whether or not it is a weekly day.
-- Run the commands as written. Where the runbook gives SQL and you have
-  no database credential, do not guess at the answer: put the query in
-  the report under NOT DONE so a human can paste it, and carry on.
+- Run the commands as written. The database checks go through
+  `health-report`, a read-only endpoint on reelintel.ai, using the
+  `REELINTEL_HEALTH_KEY` environment variable. If that variable is not
+  set, or the endpoint answers 401, put those checks under NOT DONE with
+  the endpoint named — do not guess at the numbers and do not report
+  them as passing.
 - Compare against the healthy figures the runbook records. Where
   something moved, say what it was and what it is.
 

@@ -25,6 +25,14 @@
       "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=errors"
     },
     {
+      "source": "/admin/api/health/newsletter",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=newsletter"
+    },
+    {
+      "source": "/admin/api/health/jobs",
+      "destination": "https://hfptpsmdfemduhkueyoz.supabase.co/functions/v1/health-report?section=jobs"
+    },
+    {
       "source": "/testers",
       "destination": "/testers.html"
     },

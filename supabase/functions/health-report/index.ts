@@ -18,6 +18,8 @@
  *   GET https://reelintel.ai/admin/api/health/regulations
  *   GET https://reelintel.ai/admin/api/health/queue
  *   GET https://reelintel.ai/admin/api/health/errors
+ *   GET https://reelintel.ai/admin/api/health/newsletter
+ *   GET https://reelintel.ai/admin/api/health/jobs
  *
  * Deploy:
  *   supabase secrets set HEALTH_API_KEY=<key>
@@ -127,12 +129,13 @@ Deno.serve(async (req: Request) => {
 
       const byR = new Map<string, {
         species: number; verified: number; draft: number; stale: number; disputed: number;
+        unregulated: number;
         newest_review: string | null; oldest_review: string | null;
       }>();
       for (const r of regs || []) {
         const k = r.jurisdiction_id;
         const e = byR.get(k) || {
-          species: 0, verified: 0, draft: 0, stale: 0, disputed: 0,
+          species: 0, verified: 0, draft: 0, stale: 0, disputed: 0, unregulated: 0,
           newest_review: null, oldest_review: null,
         };
         e.species += 1;
@@ -140,6 +143,11 @@ Deno.serve(async (req: Request) => {
         else if (r.status === 'draft') e.draft += 1;
         else if (r.status === 'stale') e.stale += 1;
         else if (r.status === 'disputed') e.disputed += 1;
+        /* 'unregulated' is an ANSWER: the agency publishes no
+           species-specific rule here. Counting it as pending review is
+           what made the backlog look like 282 things to do when four in
+           five of them were questions already settled. */
+        else if (r.status === 'unregulated') e.unregulated += 1;
         const t = r.verified_at || r.last_checked_at || r.updated_at;
         if (t) {
           if (!e.newest_review || t > e.newest_review) e.newest_review = t;
@@ -154,7 +162,7 @@ Deno.serve(async (req: Request) => {
         const age = daysSince(e.oldest_review);
         const status = e.disputed > 0 ? 'disputed'
           : age != null && age > OVERDUE_DAYS ? 'overdue'
-          : e.draft > 0 || e.stale > 0 || (age != null && age > STALE_DAYS) ? 'pending_review'
+          : e.draft > 0 || (age != null && age > STALE_DAYS) ? 'pending_review'
           : 'current';
         return {
           region,
@@ -162,7 +170,8 @@ Deno.serve(async (req: Request) => {
           last_reviewed: e.newest_review,
           oldest_review: e.oldest_review,
           days_since_oldest_review: age,
-          counts: { verified: e.verified, draft: e.draft, stale: e.stale, disputed: e.disputed },
+          counts: { verified: e.verified, draft: e.draft, stale: e.stale,
+                    disputed: e.disputed, unregulated: e.unregulated },
           status,
         };
       }).sort((a, b) => a.region.localeCompare(b.region));
@@ -347,6 +356,50 @@ Deno.serve(async (req: Request) => {
         broken: issues.filter(i => i.severity === 'broken').length,
         degraded: issues.filter(i => i.severity === 'degraded').length,
       };
+    }
+
+    /* ---- 6. The newsletter, as a state rather than a feeling --------
+       Thursday's issues generate themselves and stop. Whether they are
+       drafted, blocked or sent — and what is holding a blocked one — is
+       the question the operator asks every week, and it was being
+       answered by opening the admin console and reading tiles. */
+    if (want('newsletter')) {
+      const { data: wk } = await db.from('weekly_emails')
+        .select('jurisdiction_id, week_start, status, recipient_count, generated_at, sent_at, send_error, block_reasons, html')
+        .order('week_start', { ascending: false })
+        .limit(12);
+      const latest = wk?.[0]?.week_start ?? null;
+      out.newsletter = {
+        week_start: latest,
+        issues: (wk || []).filter(w => w.week_start === latest).map(w => ({
+          jurisdiction_id: w.jurisdiction_id,
+          status: w.status,
+          recipients: w.recipient_count,
+          generated_at: w.generated_at,
+          sent_at: w.sent_at,
+          send_error: w.send_error || null,
+          held_by: (w.block_reasons as unknown[] | null)?.length ? w.block_reasons : null,
+          /* The two images the email loads from the website. A 404 here
+             is a broken picture in every inbox, and nothing else in the
+             pipeline would notice. */
+          has_pb_image: typeof w.html === 'string' && w.html.includes('pb-spotlight'),
+          has_ad_image: typeof w.html === 'string' && w.html.includes('newsletter-desktop-ad'),
+        })),
+      };
+    }
+
+    /* ---- 7. Did the scheduled jobs actually run? --------------------
+       cron.job_run_details and net._http_response are outside `public`,
+       so this goes through an RPC. It is the question that went
+       unanswered twice: the drafts-drain job sat "scheduled" for a day
+       while every call came back 403, and a weekly generate ran past
+       the pg_net timeout with nobody the wiser. A job that is scheduled
+       and a job that is running are different things. */
+    if (want('jobs')) {
+      const { data: fails, error } = await db.rpc('health_job_failures', { hours: 24 });
+      out.job_failures = error
+        ? { error: error.message, hint: 'run supabase/health-job-failures-rpc.sql' }
+        : fails;
     }
 
     return json(out);

@@ -33,6 +33,34 @@ and the owner learns to scroll past both. So:
 
 ---
 
+## The one credential you need
+
+Everything that needs the database goes through `health-report`, an edge
+function that is read-only **by construction** — it holds no write path
+at all, so "read-only" is a property of the code rather than a promise
+about a token. It answers on the website's own host:
+
+```bash
+H="x-api-key: $REELINTEL_HEALTH_KEY"
+curl -s -H "$H" https://reelintel.ai/admin/api/health              # everything
+curl -s -H "$H" https://reelintel.ai/admin/api/health/monitored
+curl -s -H "$H" https://reelintel.ai/admin/api/health/regulations
+curl -s -H "$H" https://reelintel.ai/admin/api/health/queue
+curl -s -H "$H" https://reelintel.ai/admin/api/health/errors
+curl -s -H "$H" https://reelintel.ai/admin/api/health/newsletter
+curl -s -H "$H" https://reelintel.ai/admin/api/health/jobs
+```
+
+`REELINTEL_HEALTH_KEY` is an environment variable on the agent's
+environment, holding the same value as the project's `HEALTH_API_KEY`
+secret. If it is not set, every database check goes under NOT DONE with
+its endpoint named — do not guess at the numbers.
+
+A direct Postgres connection is not an option and is not worth chasing:
+the agent's container resolves no DNS for the database host and speaks
+only HTTPS through a proxy. That is a feature. The agent reads what this
+function chooses to publish, and cannot write anything at all.
+
 ## Daily
 
 ### 1. The Fish ID model the phones download
@@ -49,16 +77,11 @@ or the manifest's label count disagrees with the promoted version in
 admin. **Never recommend Republish on a file that downloads and parses.**
 
 ### 2. Suggested spots and currents
-```sql
-select id, last_run_at, last_status
-from public.hotspot_regions where active order by last_run_at nulls first;
-
-select count(*) as spots_72h from public.hotspots
-where observed_at > now() - interval '72 hours';
-
-select region_id, jsonb_array_length(cells) as cells, observed_at
-from public.hotspot_zones where mode_key = '_currents' order by region_id;
+```bash
+curl -s -H "$H" https://reelintel.ai/admin/api/health/queue | python3 -m json.tool
 ```
+`pipelines` names any region that failed its last run and how old the
+newest satellite pass is.
 Report: how many of the 12 regions ran in the last 24 h, spots in the
 last 72 h, and how many regions carry current cells (12 is right; three
 in a row meant nine regions were blank for a week).
@@ -76,24 +99,15 @@ first. Only a 4xx other than 404, or a hang on all three hosts for more
 than a day, is ours to chase.
 
 ### 4. What the app itself reported
-```sql
-select kind, count(*), max(created_at) as latest
-from public.app_errors
-where created_at > now() - interval '24 hours'
-group by kind order by 2 desc;
+```bash
+curl -s -H "$H" https://reelintel.ai/admin/api/health/errors | python3 -m json.tool
 ```
 `benign` is in-app-browser noise (Facebook, Instagram) — count it, don't
 raise it. Anything else: give the message and the first stack frame.
 
 ### 5. The scheduled jobs
-```sql
-select status_code, left(content::text, 160) as reply, created
-from net._http_response where created > now() - interval '24 hours'
-  and status_code <> 200 order by created desc limit 10;
-
-select jobname, status, start_time, return_message
-from cron.job_run_details where start_time > now() - interval '24 hours'
-  and status <> 'succeeded' order by start_time desc limit 10;
+```bash
+curl -s -H "$H" https://reelintel.ai/admin/api/health/jobs | python3 -m json.tool
 ```
 A 403 here means a job is sending the wrong cron secret and has never
 run — that happened to the drafts drain for a full day while it looked
@@ -112,12 +126,12 @@ The two brand images matter the week a newsletter goes out: a 404 there
 is a broken image in everyone's inbox.
 
 ### 7. The regulations pipeline
-```sql
-select status, count(*) from public.regulations group by status order by 2 desc;
-
-select count(*) as drafts_over_7d from public.regulations
-where status = 'draft' and drafted_at < now() - interval '7 days';
+```bash
+curl -s -H "$H" https://reelintel.ai/admin/api/health/regulations | python3 -m json.tool
 ```
+Each waters reports counts of verified / draft / stale / disputed /
+unregulated, and the age of its OLDEST reviewed row — a region is only
+as current as its worst row.
 Report the shape, not just the total. `unregulated` growing and `draft`
 falling is the pipeline working: most species have no species-specific
 rule and that is now a recorded answer. `draft` climbing again means the
@@ -147,13 +161,11 @@ Any species whose agency runs separate seasons and has only one row is a
 newsletter mistake waiting to happen.
 
 ### 3. The newsletter
-```sql
-select jurisdiction_id, status, recipient_count, generated_at, sent_at,
-       block_reasons, (html like '%pb-spotlight%') as has_pb
-from public.weekly_emails
-where week_start = (select max(week_start) from public.weekly_emails)
-order by jurisdiction_id;
+```bash
+curl -s -H "$H" https://reelintel.ai/admin/api/health/newsletter | python3 -m json.tool
 ```
+Per waters: status, recipients, what is holding a blocked one, and
+whether the PB and ad images are in the HTML.
 Report: which waters are draft vs blocked vs sent, what is holding a
 blocked one, and whether the PB and ad images are in the HTML.
 
