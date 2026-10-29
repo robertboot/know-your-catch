@@ -34,13 +34,14 @@ as $$
 
   union all
 
+  -- net._http_response keeps no url (the request queue row that had it
+  -- is gone once the call completes), so a failed call is named by its
+  -- request id; a timeout shows as 'timeout' rather than a blank status.
   select 'http'::text,
-         coalesce((select jobname from cron.job
-                    where command like '%' || split_part(r.url, '/functions/v1/', 2) || '%'
-                    limit 1), split_part(r.url, '/functions/v1/', 2))::text,
-         r.status_code::text,
+         ('request ' || r.id)::text,
+         coalesce(r.status_code::text, case when r.timed_out then 'timeout' else 'error' end),
          r.created,
-         left(coalesce(r.content::text, ''), 200)
+         left(coalesce(r.error_msg, r.content::text, ''), 200)
     from net._http_response r
    where r.created > now() - make_interval(hours => hours)
      and (r.status_code is null or r.status_code <> 200)
