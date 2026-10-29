@@ -157,6 +157,74 @@ order by jurisdiction_id;
 Report: which waters are draft vs blocked vs sent, what is holding a
 blocked one, and whether the PB and ad images are in the HTML.
 
+### 3b. Thursday: the newsletter, start to sent
+
+The draft generates itself at 11:00 UTC and a second pass runs at 11:20
+carrying `auto: true`, which drops any unconfirmed change rather than
+withholding the whole email. Nothing sends without a human. The weekly
+job is to get each waters from draft to sent, or to say why not.
+
+For each jurisdiction with subscribers:
+
+1. **Is there a draft?** If a waters is missing entirely, the generate
+   call failed — check `net._http_response` for its reply.
+2. **Is it blocked?** `block_reasons` names the rows. A `draft` or
+   `disputed` reason needs a human to verify the rule; a `stale` one
+   usually clears itself on the re-check. Report which, per waters.
+3. **Read the regulation block before it goes out.** Specifically: does
+   any season line apply to only one sector? Red snapper closed for
+   federal for-hire in October while the private season ran on, and the
+   email told every private angler the season had closed. If a line
+   names dates without naming who they apply to, stop and ask.
+4. **Check the images resolve** (daily check 6) — a 404 is a broken
+   image in every inbox.
+5. **Report the send**: recipients per waters, and anything in
+   `send_error`.
+
+Never approve or send. The owner presses that.
+
+### 3c. Is the whole regulation grid current, or only the bit we sampled?
+
+The five-species spot-check above says nothing about the other 600 rows.
+This does:
+
+```sql
+-- Verified rows going stale, by waters. The auto-updater's rotation is
+-- roughly 90 days wide, so a jurisdiction with a lot over 120 days is
+-- one the rotation is not reaching.
+select jurisdiction_id,
+       count(*) filter (where status = 'verified') as verified,
+       count(*) filter (where status = 'verified'
+                          and coalesce(verified_at, last_checked_at) < now() - interval '120 days') as over_120d,
+       count(*) filter (where status = 'draft')       as drafts,
+       count(*) filter (where status = 'unregulated') as no_rule,
+       count(*) filter (where status = 'stale')       as failed_lookup
+from public.regulations group by jurisdiction_id order by over_120d desc;
+```
+
+Report the table as it comes. Two patterns matter: a jurisdiction whose
+`over_120d` keeps climbing is starving in the rotation, and one whose
+`failed_lookup` is high has an agency page the researcher cannot read —
+Louisiana has done this.
+
+**The seasonal watchlist.** A rotation that is evenly spread is still
+wrong if it reaches a species the month after its season changed. Check
+these by hand in the weeks before they move, whatever the rotation says:
+
+| When | What changes |
+| --- | --- |
+| Feb – Mar | Gulf gag grouper, triggerfish season dates set |
+| Apr – May | Gulf red snapper private season announced (state by state) |
+| Jun 1 | Federal for-hire red snapper opens |
+| Aug – Sep | Greater amberjack opens; quota closures start landing |
+| Oct 14 – 26 | Amberjack and for-hire red snapper close; dates shift yearly |
+| Oct 15 | Florida flounder closure starts (reopens Dec 1) |
+| Dec 31 | State private red snapper seasons end or roll over |
+
+For each: open the agency page, compare to the app, and report the
+difference. These are the dates anglers plan around, and the ones a
+90-day rotation is most likely to miss.
+
 ### 4. The stores
 TestFlight: latest build number and processing state. Play Console:
 internal testing track — is a release live, and what version code.
