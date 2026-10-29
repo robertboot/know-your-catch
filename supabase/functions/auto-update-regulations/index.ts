@@ -353,7 +353,14 @@ Deno.serve(async (req: Request) => {
           await db.from('regulations').upsert({
             species_id: sp.id,
             jurisdiction_id: jur.id,
-            status: 'draft',
+            /* 'stale', not 'draft'. This row holds no rule — it is a
+               breadcrumb saying the research call failed, so the pair
+               keeps rotating. Filed as a draft it joined the human
+               review queue and sat there forever: about 74 of the 282
+               unverified drafts were these, and there is nothing in one
+               to review. 'stale' says what it is — a pair whose answer
+               is out of date and will be asked again. */
+            status: 'stale',
             drafted_by: 'ai',
             drafted_at: nowIso,
             source_note: `auto-updater: research failed — ${draft.error}`,
