@@ -671,11 +671,10 @@ const SITE = 'https://www.reelintel.ai';
    it explicitly, and a catch goes in here only if that line was kept. */
 const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = {
   image: 'pb-spotlight.jpg',
-  alt: 'An angler holding a 26-inch big scale pomfret caught at the Spur out of Orange Beach',
-  headline: 'A 26-inch big scale pomfret \u2014 a new PB',
-  body: '26 inches fork length, taken at the Spur out of Orange Beach on October 24 while '
-      + 'swordfishing. A big scale pomfret is a deep-water fish most anglers never see, let '
-      + 'alone put in the boat. Congratulations, and thank you for sending it in.',
+  alt: 'Annelies holding a 21-inch red snapper caught off Gulf Shores',
+  headline: 'Annelies\u2019 21-inch red snapper \u2014 a new PB',
+  body: '21 inches off Gulf Shores, on a high-low rig with squid, in 109 feet of water. '
+      + 'Congratulations Annelies, and thank you for sending it in.',
 };
 
 /* The browser version, in the slot the spotlight usually holds.
