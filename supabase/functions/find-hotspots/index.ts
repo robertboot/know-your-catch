@@ -186,6 +186,13 @@ const DEPTH_DATASET  = 'etopo180';   // static bathymetry, meters (negative = de
 // matters offshore. 0.25°, daily, lags a few days; eddies move slowly
 // enough that this is still the right map.
 const CUR_DATASET = 'nesdisSSH1day';
+// Preferred current source: CoastWatch's blended near-real-time surface
+// currents — the same altimetry geostrophy plus the wind-driven (Ekman)
+// part, which is what a drifting bait line actually feels. 0.25°, daily,
+// about a day behind; checked 2026-11-05 (newest day 2026-11-04). It is
+// only on coastwatch.noaa.gov, which is not in the ERDDAP_HOSTS walk, so
+// it is asked directly and the altimetry grid stays as the fallback.
+const BLENDED_CUR_URL = 'https://coastwatch.noaa.gov/erddap/griddap/noaacwBLENDEDNRTcurrentsDaily';
 const MS_TO_KT = 1.94384;
 const PELAGIC_SPECIES = TRIP_MODES.find((m) => m.key === 'troll_pelagic')!.species;
 
@@ -305,6 +312,33 @@ async function fetchJson(path: string) {
     || /\b(429|503)\b/.test(String(last));
   throw new Error(`every erddap host failed${shedding ? ' — NOAA is shedding load (503/429), not a fault here' : ''}`
     + ` — ${tried.join(' ')} — last: ${last}`);
+}
+
+/* Currents: blended first, altimetry second. The blended columns are
+   renamed to ugos/vgos so everything downstream reads one shape. `box`
+   is the same [(last)][lat][lon] subset either way — both are 0.25°. */
+async function fetchCurrents(box: string): Promise<{ doc: any; source: 'blended' | 'ssh' } | null> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${BLENDED_CUR_URL}.json?u_current${box},v_current${box}`, { signal: ctl.signal });
+    if (r.ok) {
+      const doc = await r.json();
+      doc.table.columnNames = doc.table.columnNames.map((n: string) =>
+        n === 'u_current' ? 'ugos' : n === 'v_current' ? 'vgos' : n);
+      return { doc, source: 'blended' };
+    }
+    console.log(`blended currents ${r.status}, falling back to ${CUR_DATASET}`);
+  } catch (e) {
+    console.log(`blended currents failed (${(e as Error)?.name || e}), falling back to ${CUR_DATASET}`);
+  } finally {
+    clearTimeout(t);
+  }
+  try {
+    return { doc: await fetchJson(`${CUR_DATASET}.json?ugos${box},vgos${box}`), source: 'ssh' };
+  } catch {
+    return null;
+  }
 }
 
 /* ERDDAP .json comes back as a column table, not a grid. Rebuild the grid
@@ -484,18 +518,19 @@ Deno.serve(async (req: Request) => {
       const depthStride = strideFor(4, 1 / 60);
       const depthBox = `[(${reg.south}):${depthStride}:(${reg.north})][(${reg.west}):${depthStride}:(${reg.east})]`;
       const curBox = `[(last)][(${reg.south}):1:(${reg.north})][(${reg.west}):1:(${reg.east})]`;
-      const [sstDoc, chlDoc, depthDoc, curDoc] = await Promise.all([
+      const [sstDoc, chlDoc, depthDoc, curGot] = await Promise.all([
         fetchJson(`${SST_DATASET}.json?analysed_sst${box(SST_STRIDE)}`),
         fetchJson(`${CHL_DATASET}.json?chlorophyll${box(CHL_STRIDE, 0.0417)}`).catch(() => null),
         fetchJson(`${DEPTH_DATASET}.json?altitude${depthBox}`).catch(() => null),
-        fetchJson(`${CUR_DATASET}.json?ugos${curBox},vgos${curBox}`).catch(() => null),
+        fetchCurrents(curBox),
       ]);
+      const curDoc = curGot?.doc ?? null;
 
       const sst = toGrid(sstDoc, 'analysed_sst');
       const chl = chlDoc ? toGrid(chlDoc, 'chlorophyll') : null;
       const bathy = depthDoc ? toGrid(depthDoc, 'altitude') : null;
       loaded = `sst${sstDoc ? '+' : '-'} chl${chlDoc ? '+' : '-'} ` +
-               `depth${depthDoc ? '+' : '-'} cur${curDoc ? '+' : '-'}`;
+               `depth${depthDoc ? '+' : '-'} cur${curGot ? `+${curGot.source}` : '-'}`;
 
       // A temperature break has to be corroborated by colour, bottom relief
       // or current before it may be drawn — see CORROBORATION below. All
