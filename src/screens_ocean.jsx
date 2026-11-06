@@ -117,7 +117,7 @@ const LAYERS = {
     dataset: 'erdMH1chla8day_R2022NRT', variable: 'chlorophyll',
     units: 'mg/m³',
     legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
-    blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water.',
+    blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water. Sharp areas are yesterday\'s satellite pass; softer areas are the 8-day average filling in under clouds.',
   },
   sst: {
     key: 'sst', label: 'Sea temp',
@@ -126,17 +126,16 @@ const LAYERS = {
     legendStops: sstLegendStops(),
     blurb: 'Warm-to-cool edges (temperature breaks) concentrate pelagics. Look for tight color gradients, not just the warmest water.',
   },
-  /* One day, not eight: sharper color breaks and weed lines, with holes
-     wherever cloud sat that day. NOAA-20 VIIRS, 4 km, served only by
-     coastwatch.noaa.gov — see refresh-ocean-maps for why not S-NPP. */
-  chld: {
-    key: 'chld', label: 'Chlorophyll (daily)',
-    dataset: 'noaacwN20VIIRSchlaDaily', variable: 'chlor_a',
-    units: 'mg/m³',
-    legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
-    blurb: 'Yesterday\'s water color, sharper than the 8-day view. Blank patches are clouds — switch to Chlorophyll for the gap-free picture.',
-  },
 };
+
+/* Chlorophyll is one button, two images. The 8-day composite has no
+   cloud holes but smears a break that moved during the week; the daily
+   NOAA-20 VIIRS pass (chld-latest.png, see refresh-ocean-maps) is sharp
+   but blank wherever cloud sat. Drawn daily-over-8-day, the sharp edges
+   show where yesterday was clear and the composite fills the holes, on
+   the same log 0.03-30 scale so the two meet without a seam in colour.
+   Latest view only: there is no daily snapshot for a past date. */
+const CHL_DAILY_KEY = 'chld';
 
 /* Suggested-spot colours by edge kind — match the popup copy. */
 export const SPOT_COLORS = {
@@ -160,6 +159,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
+  const dailyRef = useRef(null);   // the daily chlorophyll pass over the 8-day one
   /* No satellite view by default, current on.
      A composite is a wall of colour that hides everything drawn on it, so
      opening on one meant the spots, catches and current were all invisible
@@ -276,6 +276,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     const map = mapRef.current;
     if (!map) return;
     if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
+    if (dailyRef.current) { map.removeLayer(dailyRef.current); dailyRef.current = null; }
+    let alive = true;
     // No layer chosen: bare basemap, and no "didn't load" to explain —
     // nothing was asked for.
     if (!active) { setStatus('ok'); setOverlayAge(null); return; }
@@ -301,12 +303,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          can't be set at all. That left the whole 29-32 °C summer Gulf
          pinned at the top of the default scale, solid red. griddap
          honours .colorBar, which is the only way to fix it. */
-      if (cfg.key === 'chld') {
-        const t = dateISO ? `(${dateISO}T12:00:00Z)` : '(last)';
-        const [[sLat, wLon], [nLat, eLon]] = REGION_BOUNDS;
-        const subset = `${cfg.variable}[${t}][(0.0)][(${sLat}):(${nLat})][(${wLon}):(${eLon})]`;
-        return `https://coastwatch.noaa.gov/erddap/griddap/${cfg.dataset}.transparentPng?${subset}&.colorBar=Rainbow||Log|0.03|30|`;
-      }
       if (cfg.key === 'sst') {
         const [lo, hi] = sstRangeC();
         const t = dateISO ? `(${dateISO}T12:00:00Z)` : '(last)';
@@ -322,6 +318,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
        useful the moment it opens and current the moment there is signal. */
     const addOverlay = (url, onError) => {
       imageUrl(url).then(({ url: src, cached }) => {
+        if (!alive) return;
         if (!src) { onError?.(); return; }
         const layer = L.imageOverlay(src, REGION_BOUNDS, {
           opacity: 0.72, attribution: 'Ocean data: NOAA CoastWatch / NASA',
@@ -332,7 +329,24 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         overlayRef.current = layer;
         if (cached) cacheAge(url).then(ms => setOverlayAge(ms)).catch(() => {});
         else setOverlayAge(null);
+        // Added only once the composite is down, so it lands on top of it.
+        if (cfg.key === 'chl' && !dateISO) addDaily();
       }).catch(() => onError?.());
+    };
+
+    /* Best effort: no daily image (not rendered yet, or nothing cached
+       offline) just leaves the 8-day composite showing, which is the
+       whole picture this layer used to be. */
+    const addDaily = () => {
+      const url = snapshotUrl(CHL_DAILY_KEY);
+      if (!url) return;
+      imageUrl(url).then(({ url: src }) => {
+        if (!alive || !src) return;
+        const layer = L.imageOverlay(src, REGION_BOUNDS, { opacity: 0.85 });
+        layer.on('error', () => map.removeLayer(layer));
+        layer.addTo(map);
+        dailyRef.current = layer;
+      }).catch(() => {});
     };
 
     // "Latest" reads the pre-rendered snapshot; if it's missing (bucket
@@ -347,6 +361,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     } else {
       addOverlay(liveUrl(), () => setStatus('error'));
     }
+    return () => { alive = false; };
   }, [active, dateISO]);
 
   /* Suggested spots — the server-side find-hotspots cron reads the same
@@ -1287,7 +1302,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           <>
             <div style={{
               height: 14, borderRadius: 4, marginTop: 10,
-              background: active === 'chl' || active === 'chld'
+              background: active === 'chl'
                 ? 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #9acd32, #d4d400, #7a3d00)'
                 : 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #d4d400, #d47a00, #c62828)',
             }} />
