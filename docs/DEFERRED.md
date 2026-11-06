@@ -55,3 +55,21 @@ before optimizing that path.
 **Not shipping this pass** — needs enough logged catches to be
 meaningful; deferred until the model swap has landed and stable
 metrics exist.
+
+---
+
+## Newsletter "harvest trends" from NOAA catch estimates
+
+**Noted**: 2026-11-05, from the NOAA data handoff.
+
+**Why it is waiting**:
+- NOAA published recalibrated historical recreational catch estimates
+  (the FES calibration) in Sept 2026. That gives a consistent long
+  series, but only through NOAA's query tools; there is no API to pull.
+- Gulf state creel data (Alabama, Mississippi and Louisiana are
+  certified) will not have a central data system until about 2027.
+  Source: https://www.fisheries.noaa.gov/southeast/recreational-fishing-data/gulf-state-recreational-fishing-data-transition-process
+
+**Possible feature**: a seasonal "harvest trends" block in the weekly
+newsletter (e.g. red snapper landings this season vs. the last five).
+Revisit once either source has a machine-readable feed. Nothing built.
