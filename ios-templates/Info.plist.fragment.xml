@@ -1,0 +1,41 @@
+<!--
+  Merge these keys into ios/App/App/Info.plist (between the top-level
+  <dict>...</dict>). Order doesn't matter, but keep them together so
+  they're easy to spot in code review.
+
+  iOS rejects the upload if any feature is exercised without its usage
+  string. ReelIntel uses Camera, Photo Library, and Location, so all
+  four NS*UsageDescription keys below are required.
+
+  UISupportedInterfaceOrientations pins us to portrait — the UI is
+  laid out for a 440px-wide column and rotating to landscape produces a
+  reviewer-bait stretched layout.
+-->
+
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+
+<key>NSCameraUsageDescription</key>
+<string>ReelIntel uses the camera so you can photograph your catch.</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>ReelIntel reads photos you select to log a catch and pull location and time from the photo's metadata.</string>
+
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>ReelIntel can save shared catch report images to your Photos.</string>
+
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>ReelIntel uses your location to record where each catch was made and to pull regional regulations.</string>
+
+<key>UISupportedInterfaceOrientations</key>
+<array>
+  <string>UIInterfaceOrientationPortrait</string>
+</array>
+
+<key>UISupportedInterfaceOrientations~ipad</key>
+<array>
+  <string>UIInterfaceOrientationPortrait</string>
+  <string>UIInterfaceOrientationPortraitUpsideDown</string>
+  <string>UIInterfaceOrientationLandscapeLeft</string>
+  <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
