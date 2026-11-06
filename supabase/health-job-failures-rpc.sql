@@ -23,14 +23,18 @@ language sql
 security definer
 set search_path = public, cron, net
 as $$
+  -- job_run_details carries jobid, not jobname — the name lives on
+  -- cron.job. Left join so a run whose job was since unscheduled still
+  -- shows, named by its id.
   select 'cron'::text,
-         jobname::text,
-         status::text,
-         start_time,
-         left(coalesce(return_message, ''), 200)
-    from cron.job_run_details
-   where start_time > now() - make_interval(hours => hours)
-     and status is distinct from 'succeeded'
+         coalesce(j.jobname, 'job ' || d.jobid)::text,
+         d.status::text,
+         d.start_time,
+         left(coalesce(d.return_message, ''), 200)
+    from cron.job_run_details d
+    left join cron.job j on j.jobid = d.jobid
+   where d.start_time > now() - make_interval(hours => hours)
+     and d.status is distinct from 'succeeded'
 
   union all
 
