@@ -13,14 +13,13 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { T } from './theme.js';
-import { H1, Card, SectionLabel } from './components.jsx';
+import { H1, Card } from './components.jsx';
 import { client } from './supabase-client.js';
 import { OceanMapsScreen, SPOT_COLORS, SPOT_LABELS } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
-import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
+import { homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
          groupByBreak, spotStanding, spotAgeNote, breakKey,
-         plainWhy, spotStats, spotRankColor, formatLatLon, upcomingDays, dayChipLabel } from './home-water.js';
-import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
+         plainWhy, spotStats, spotRankColor, formatLatLon } from './home-water.js';
 
 /* A chip that opens a short list under itself. Used for the port and the
    range, which are the two things the whole page is computed from and
@@ -82,8 +81,6 @@ function PagerButton({ onClick, label, children }) {
 export function PlanTripScreen({ state, tier = 'phone' }) {
   const [spots, setSpots] = useState(null);
   const [spotsAge, setSpotsAge] = useState(null);
-  const [outlook, setOutlook] = useState(null);
-  const [dayPick, setDayPick] = useState(0);
   const [focus, setFocus] = useState(null);   // which break the map should zoom to
   const [pick, setPick] = useState(0);       // which break the card is showing
   const [fromId, setFromId] = useState(null); // which saved spot to plan from
@@ -108,12 +105,6 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
   const sz = (p, t, d) => (wide ? d : tier === 'tablet' ? t : p);
   const gutter = sz(16, 20, 24);
 
-  // The ten-day outlook Home caches. Read-only — this screen never fetches
-  // weather itself, so it cannot disagree with the Home card about the week.
-  useEffect(() => {
-    const hit = readMarineCache(DAYS_CACHE, home.lat, home.lon);
-    if (hit?.data?.length) setOutlook(upcomingDays(hit.data));
-  }, [home.lat, home.lon]);
 
   useEffect(() => {
     let alive = true;
@@ -142,11 +133,11 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
   /* How old these will be on the day picked. Null when there is nothing
      to say — same day, or nothing to say it about. */
   const ageNote = useMemo(() => {
-    if (!spots?.length || !outlook?.length) return null;
+    if (!spots?.length) return null;
     const observed = spots.reduce((a, s) => (a && a > s.observed_at ? a : s.observed_at), null);
-    const day = outlook[Math.min(dayPick, outlook.length - 1)]?.date;
-    return spotAgeNote(observed, day, dayPick === 0);
-  }, [spots, outlook, dayPick]);
+    const d = new Date(), p = (n) => String(n).padStart(2, '0');
+    return spotAgeNote(observed, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, true);
+  }, [spots]);
 
   /* One list, numbered once. The map is given the same numbers and the
      same colours, so "2" on the card and "2" on the water are the same
@@ -160,13 +151,6 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
 
   useEffect(() => { setPick(0); }, [shown.length]);
 
-  // Home grades each day from its daylight hours and stores the score
-  // (see dayScore); this only reads it. The fallback is for an outlook
-  // cached by an older build, which stored daily maxima and no score.
-  const gradeOf = (d) => d.score !== undefined ? d.score : fishabilityHour({
-    wind: d.windMax, gust: d.windMax != null ? d.windMax * 1.3 : null,
-    waveFt: d.waveFtMax, periodS: d.periodMaxS, weatherCode: d.code,
-  });
 
   return (
     <div style={{ padding: sz('16px 16px 8px', '20px 20px 10px', '24px 24px 12px'),
@@ -189,42 +173,6 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
                     options={[50, 100, 150, 200].map(n => ({ value: n, label: `${n} nm` }))}
                     onPick={setRange} />
       </div>
-
-      {/* WHEN. Graded by the same model as the Home card and the forecast,
-          so three screens cannot disagree about one week. */}
-      {outlook?.length > 1 && (
-        <>
-          <SectionLabel>When to go</SectionLabel>
-          <div style={{ display: 'flex', gap: wide ? 10 : 7, margin: '8px 0 16px',
-                        overflowX: wide ? 'visible' : 'auto', paddingBottom: 4 }}>
-            {outlook.slice(0, 7).map((d, i) => {
-              const score = gradeOf(d);
-              const on = i === dayPick;
-              const dt = new Date(d.date + 'T12:00:00');
-              return (
-                <button key={d.date} type="button" onClick={() => setDayPick(i)} style={{
-                  flex: wide ? '1 1 0' : '0 0 auto', width: wide ? 'auto' : 58,
-                  textAlign: 'center', padding: wide ? '12px 0 13px' : '7px 0 8px',
-                  borderRadius: wide ? 14 : 11, cursor: 'pointer', fontFamily: 'inherit',
-                  background: on ? T.parchmentDeep : 'transparent',
-                  border: `1.5px solid ${on ? T.brass : T.cardEdge}`,
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>
-                    {dayChipLabel(d.date)}
-                  </div>
-                  <div style={{ fontSize: 10, color: T.inkMute, marginTop: 1 }}>
-                    {dt.getMonth() + 1}/{dt.getDate()}
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, marginTop: 4,
-                                color: score == null ? T.inkMute : fishabilityColor(score) }}>
-                    {score == null ? '—' : fishabilityGrade(score)}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
 
       {/* The map, open. It is the answer on this page, not a destination
           off it — a button that only reveals something already loaded is a
