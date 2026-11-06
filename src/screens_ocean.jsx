@@ -25,7 +25,7 @@ import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } fro
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 import { TRIP_MODES } from './trip-modes.js';
-import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak, breakKey, upcomingDays } from './home-water.js';
+import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak, breakKey, upcomingDays, dayChipLabel } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
 
@@ -1079,7 +1079,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                 border: `1.5px solid ${on ? T.brass : T.cardEdge}`,
               }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>
-                  {i === 0 ? 'Today' : dt.toLocaleDateString(undefined, { weekday: 'short' })}
+                  {dayChipLabel(d.date)}
                 </div>
                 <div style={{ fontSize: 10, color: T.inkMute, marginTop: 1 }}>
                   {dt.getMonth() + 1}/{dt.getDate()}

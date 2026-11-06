@@ -19,7 +19,7 @@ import { OceanMapsScreen, SPOT_COLORS, SPOT_LABELS } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
 import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
          groupByBreak, spotStanding, spotAgeNote, breakKey,
-         plainWhy, spotStats, spotRankColor, formatLatLon, upcomingDays } from './home-water.js';
+         plainWhy, spotStats, spotRankColor, formatLatLon, upcomingDays, dayChipLabel } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
 /* A chip that opens a short list under itself. Used for the port and the
@@ -210,7 +210,7 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
                   border: `1.5px solid ${on ? T.brass : T.cardEdge}`,
                 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>
-                    {i === 0 ? 'Today' : dt.toLocaleDateString(undefined, { weekday: 'short' })}
+                    {dayChipLabel(d.date)}
                   </div>
                   <div style={{ fontSize: 10, color: T.inkMute, marginTop: 1 }}>
                     {dt.getMonth() + 1}/{dt.getDate()}

@@ -30,10 +30,21 @@ export function homeWater(state, jurisdiction) {
  * different weeks. */
 /* The cached outlook from today on. A strip opened the morning after the
    last fetch would otherwise lead with yesterday. */
-export function upcomingDays(days) {
+const todayKey = () => {
   const d = new Date(), p = (n) => String(n).padStart(2, '0');
-  const today = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+export function upcomingDays(days) {
+  const today = todayKey();
   return (days || []).filter(x => x.date >= today);
+}
+
+/* "Today" only when the date IS today. The strips used to call the first
+   chip Today, and once Home drops today after dark the first chip is
+   tomorrow — it read "Today 11/6" on the evening of the 5th. */
+export function dayChipLabel(date) {
+  if (date === todayKey()) return 'Today';
+  return new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' });
 }
 
 export const DAYS_CACHE = 'days.v1';
