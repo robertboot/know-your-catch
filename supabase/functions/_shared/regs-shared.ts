@@ -19,8 +19,8 @@ export const JURISDICTIONS = [
   { id: 'ms_state', name: 'Mississippi State Waters',  agency: 'MDMR',         regsUrl: 'https://dmr.ms.gov/' },
   { id: 'la_state', name: 'Louisiana State Waters',    agency: 'LDWF',         regsUrl: 'https://www.wlf.louisiana.gov/' },
   { id: 'tx_state', name: 'Texas State Waters',        agency: 'TPWD',         regsUrl: 'https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing' },
-  { id: 'fed_gulf', name: 'Federal Gulf Waters',       agency: 'NOAA / GMFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico' },
-  { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', agency: 'NOAA / SAFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-south-atlantic' },
+  { id: 'fed_gulf', name: 'Federal Gulf Waters',       agency: 'NOAA / GMFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/rules-regulations/fishing-regulations-and-seasonal-closures-gulf-america' },
+  { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', agency: 'NOAA / SAFMC', regsUrl: 'https://www.fisheries.noaa.gov/southeast/rules-regulations/current-fishing-regulations-south-atlantic' },
 ];
 
 // Plausibility bounds — any numeric outside these is dropped to null

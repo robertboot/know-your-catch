@@ -17,8 +17,8 @@ export const JURISDICTIONS = [
   { id: 'ms_state', name: 'Mississippi State Waters', short: 'MS', agency: 'MDMR', boundary: '3 nm', regsUrl: 'https://dmr.ms.gov/' },
   { id: 'la_state', name: 'Louisiana State Waters', short: 'LA', agency: 'LDWF', boundary: '3 nm', regsUrl: 'https://www.wlf.louisiana.gov/' },
   { id: 'tx_state', name: 'Texas State Waters', short: 'TX', agency: 'TPWD', boundary: '9 nm', regsUrl: 'https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing' },
-  { id: 'fed_gulf', name: 'Federal Gulf Waters', short: 'FED', agency: 'NOAA / GMFMC', boundary: 'Beyond state waters', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico' },
-  { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', short: 'FED-SA', agency: 'NOAA / SAFMC', boundary: 'Beyond state waters', coast: 'atlantic', regsUrl: 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-south-atlantic' },
+  { id: 'fed_gulf', name: 'Federal Gulf Waters', short: 'FED', agency: 'NOAA / GMFMC', boundary: 'Beyond state waters', regsUrl: 'https://www.fisheries.noaa.gov/southeast/rules-regulations/fishing-regulations-and-seasonal-closures-gulf-america' },
+  { id: 'fed_satlantic', name: 'Federal South Atlantic Waters', short: 'FED-SA', agency: 'NOAA / SAFMC', boundary: 'Beyond state waters', coast: 'atlantic', regsUrl: 'https://www.fisheries.noaa.gov/southeast/rules-regulations/current-fishing-regulations-south-atlantic' },
 ];
 
 // The high-interest species anglers get season-change alerts for by

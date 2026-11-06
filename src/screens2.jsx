@@ -1087,7 +1087,7 @@ export function RegulationDetailScreen({ id, state, jurisdiction, stale, onSpeci
           <a
             href={s.hms
               ? 'https://www.fisheries.noaa.gov/topic/atlantic-highly-migratory-species'
-              : (jurisdiction.regsUrl || 'https://www.fisheries.noaa.gov/southeast/recreational-fishing/recreational-fishing-gulf-mexico')}
+              : (jurisdiction.regsUrl || 'https://www.fisheries.noaa.gov/southeast/rules-regulations/fishing-regulations-and-seasonal-closures-gulf-america')}
             target="_blank" rel="noopener noreferrer"
             style={{
               display: 'inline-block',
