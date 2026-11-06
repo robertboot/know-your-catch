@@ -13,6 +13,7 @@
 */
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { forecastModelsParam, mergeModelHourly } from '../../../src/forecast-models.js';
 
 // Each edition's forecast comes from ONE point, and the email has to say
 // which — the app names its source on every screen and a weekly email
@@ -592,12 +593,14 @@ type Day = { date: string; dayLabel: string; score: number; grade: string; color
 async function weekForecast(lat: number, lon: number): Promise<Day[]> {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
     + `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code`
-    + `&forecast_days=8&wind_speed_unit=kn&timezone=auto`;
+    + `&forecast_days=8&wind_speed_unit=kn&timezone=auto`
+    // RRFS 3 km for the first ~84 hours, best_match for the rest of the week.
+    + forecastModelsParam(lat, lon);
   const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
     + `&hourly=wave_height,wave_period&forecast_days=8&timezone=auto`;
   const [r, mr] = await Promise.all([fetch(url), fetch(marineUrl).catch(() => null)]);
   if (!r.ok) return [];
-  const j = await r.json();
+  const j = mergeModelHourly(await r.json());
   let mh: Record<string, number[]> | null = null;
   try { const mj = mr && mr.ok ? await mr.json() : null; mh = mj?.hourly ?? null; } catch { /* marine is optional */ }
 

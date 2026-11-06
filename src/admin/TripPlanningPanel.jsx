@@ -24,6 +24,7 @@ import { SNAPSHOT_BOUNDS, snapshotUrl } from '../ocean-snapshots.js';
 import { habitatScore } from '../species-habitat.js';
 import { speciesPhoto } from '../helpers.js';
 import { createCurrentFlowLayer } from '../current-flow.js';
+import { forecastModelsParam, mergeModelHourly } from '../forecast-models.js';
 import { SPECIES, JURISDICTIONS } from '../data.js';
 import { BASEMAP_URL, BASEMAP_LABELS_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } from '../basemap.js';
 
@@ -330,12 +331,14 @@ export default function TripPlanningPanel() {
       try {
         const wx = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
           + `&hourly=wind_speed_10m,wind_gusts_10m,weather_code`
-          + `&forecast_days=10&timezone=auto&wind_speed_unit=kn&cell_selection=sea`;
+          + `&forecast_days=10&timezone=auto&wind_speed_unit=kn&cell_selection=sea`
+          // RRFS 3 km for the first ~84 hours, best_match for the rest of the ten days.
+          + forecastModelsParam(lat, lon);
         const mr = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
           + `&hourly=wave_height,wave_period&forecast_days=10&timezone=auto&cell_selection=sea`;
         const [a, b] = await Promise.all([fetch(wx), fetch(mr).catch(() => null)]);
         if (!a.ok) throw new Error(`weather ${a.status}`);
-        const j = await a.json();
+        const j = mergeModelHourly(await a.json());
         const m = b && b.ok ? await b.json() : null;
         if (!alive) return;
         const times = j.hourly?.time || [];

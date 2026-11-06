@@ -43,6 +43,7 @@ import {
 } from './components.jsx';
 import { identifyPhoto, ANALYSIS_FEATURES } from './identifyPhoto.js';
 import AnnouncementBanner from './AnnouncementBanner.jsx';
+import { forecastModelsParam, mergeModelHourly } from './forecast-models.js';
 import { SpeciesPickerModal } from './admin/pickers.jsx';
 
 /* ============================================================
@@ -445,7 +446,9 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           // the marine fetch below carries the seas. Same fields the
           // Forecast screen asks for, so both score the same week.
           + `&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max,wind_direction_10m_dominant&forecast_days=10`
-          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`;
+          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`
+          // RRFS 3 km for US waters, best_match past its 84 hours — see forecast-models.js.
+          + forecastModelsParam(lat, lon);
         const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}`
           + `&current=wave_height,wave_period,sea_surface_temperature`
           // daily maxima for the ten-day strip; hourly only needs today.
@@ -455,7 +458,7 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
           fetchWithTimeout(url), fetchWithTimeout(marineUrl).catch(() => null),
         ]);
         if (!r.ok) throw new Error('wx');
-        const j = await r.json();
+        const j = mergeModelHourly(await r.json());
         const cur = j.current || {};
         let waveFt = null, periodS = null, sstF = null;
         let marineByMs = null;
@@ -3310,7 +3313,9 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset`
           + `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code,pressure_msl`
           + `&forecast_days=10&past_days=1`
-          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`;
+          + `&temperature_unit=fahrenheit&wind_speed_unit=kn&timezone=auto&cell_selection=sea`
+          // RRFS 3 km for US waters, best_match past its 84 hours — see forecast-models.js.
+          + forecastModelsParam(lat, lon);
         // Marine data lives on a separate Open-Meteo endpoint with water-only
         // coverage (inland points return nulls), so fetch it alongside — not
         // blocking — the main forecast. Heights are meters → feet, SST is
@@ -3328,7 +3333,7 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
           fetchWithTimeout(marineUrl).catch(() => null),
         ]);
         if (!r.ok) throw new Error(`open-meteo ${r.status}`);
-        const j = await r.json();
+        const j = mergeModelHourly(await r.json());
         if (!alive) return;
         setCurrent(j.current || null);
 
