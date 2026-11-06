@@ -126,6 +126,16 @@ const LAYERS = {
     legendStops: sstLegendStops(),
     blurb: 'Warm-to-cool edges (temperature breaks) concentrate pelagics. Look for tight color gradients, not just the warmest water.',
   },
+  /* One day, not eight: sharper color breaks and weed lines, with holes
+     wherever cloud sat that day. NOAA-20 VIIRS, 4 km, served only by
+     coastwatch.noaa.gov — see refresh-ocean-maps for why not S-NPP. */
+  chld: {
+    key: 'chld', label: 'Chlorophyll (daily)',
+    dataset: 'noaacwN20VIIRSchlaDaily', variable: 'chlor_a',
+    units: 'mg/m³',
+    legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
+    blurb: 'Yesterday\'s water color, sharper than the 8-day view. Blank patches are clouds — switch to Chlorophyll for the gap-free picture.',
+  },
 };
 
 /* Suggested-spot colours by edge kind — match the popup copy. */
@@ -291,6 +301,12 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
          can't be set at all. That left the whole 29-32 °C summer Gulf
          pinned at the top of the default scale, solid red. griddap
          honours .colorBar, which is the only way to fix it. */
+      if (cfg.key === 'chld') {
+        const t = dateISO ? `(${dateISO}T12:00:00Z)` : '(last)';
+        const [[sLat, wLon], [nLat, eLon]] = REGION_BOUNDS;
+        const subset = `${cfg.variable}[${t}][(0.0)][(${sLat}):(${nLat})][(${wLon}):(${eLon})]`;
+        return `https://coastwatch.noaa.gov/erddap/griddap/${cfg.dataset}.transparentPng?${subset}&.colorBar=Rainbow||Log|0.03|30|`;
+      }
       if (cfg.key === 'sst') {
         const [lo, hi] = sstRangeC();
         const t = dateISO ? `(${dateISO}T12:00:00Z)` : '(last)';
@@ -1271,7 +1287,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           <>
             <div style={{
               height: 14, borderRadius: 4, marginTop: 10,
-              background: active === 'chl'
+              background: active === 'chl' || active === 'chld'
                 ? 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #9acd32, #d4d400, #7a3d00)'
                 : 'linear-gradient(90deg, #2b2f6b, #1f6f8b, #2bb673, #d4d400, #d47a00, #c62828)',
             }} />

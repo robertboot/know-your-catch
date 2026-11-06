@@ -74,6 +74,21 @@ const LAYERS = {
     legendStops: ['68°', '72°', '77°', '82°', '86°', '89°'],
     blurb: 'Warm-to-cool edges (temperature breaks) concentrate pelagics. Look for tight color gradients, not just the warmest water.',
   },
+  // NOAA-20 VIIRS daily, 4 km. Only coastwatch.noaa.gov carries it, so it
+  // names its own WMS host; the others use ERDDAP_WMS.
+  chld: {
+    key: 'chld',
+    label: 'Chlorophyll (daily)',
+    dataset: 'noaacwN20VIIRSchlaDaily',
+    variable: 'chlor_a',
+    wms: 'https://coastwatch.noaa.gov/erddap/wms',
+    palette: 'rainbow',
+    range: '0.03,30',
+    log: true,
+    units: 'mg/m³',
+    legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
+    blurb: 'One day of water color: sharper breaks than the 8-day view, with holes where cloud sat.',
+  },
 };
 
 export default function OceanHeatmapPanel() {
@@ -164,7 +179,7 @@ export default function OceanHeatmapPanel() {
       transparent: 'true',
     });
     if (dateISO) params.set('time', `${dateISO}T12:00:00Z`);
-    const url = `${ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
+    const url = `${cfg.wms || ERDDAP_WMS}/${cfg.dataset}/request?${params.toString()}`;
 
     const layer = L.imageOverlay(url, REGION_BOUNDS, {
       opacity: 0.72,

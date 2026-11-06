@@ -13,6 +13,7 @@
    Writes to the public `ocean-maps` bucket:
      chl-latest.png    chlorophyll, current 8-day composite
      sst-latest.png    sea surface temp, current daily MUR field
+     chld-latest.png   chlorophyll, newest single day (NOAA-20 VIIRS)
      manifest.json     { capturedAt, layers: { chl: {...}, sst: {...} } }
 
    The manifest is what the client checks — it carries per-layer ok/
@@ -65,9 +66,27 @@ const DEFAULT_H = 816;
 const FETCH_TIMEOUT_MS = 90_000;
 
 const LAYERS = [
-  { key: 'chl', dataset: 'erdMH1chla8day_R2022NRT', variable: 'chlorophyll' },
-  { key: 'sst', dataset: 'jplMURSST41',             variable: 'analysed_sst' },
+  { key: 'chl',  dataset: 'erdMH1chla8day_R2022NRT', variable: 'chlorophyll' },
+  { key: 'sst',  dataset: 'jplMURSST41',             variable: 'analysed_sst' },
+  { key: 'chld', dataset: 'noaacwN20VIIRSchlaDaily', variable: 'chlor_a' },
 ];
+
+/* Daily chlorophyll: NOAA-20 VIIRS, 4 km, one day old (checked
+   2026-11-05: newest day 2026-11-03). The S-NPP twin
+   (noaacwNPPVIIRSchlaDaily) ends with that satellite's mission on
+   2026-11-02, so it is not used. Daily means sharper breaks and cloud
+   holes; the 8-day layer stays as the gap-free view.
+
+   Only coastwatch.noaa.gov carries it (coastwatch.pfeg answers 404), so
+   it is fetched from there directly rather than through the host walk.
+   griddap .transparentPng with the same log 0.03-30 mg/m3 scale the
+   8-day legend prints, so both chlorophyll layers read on one key. The
+   dataset has an altitude axis with a single 0.0 value. */
+const CW_ERDDAP = 'https://coastwatch.noaa.gov/erddap';
+function chlDailyUrl(dataset: string, variable: string) {
+  const subset = `${variable}[(last)][(0.0)][(${REGION.south}):(${REGION.north})][(${REGION.west}):(${REGION.east})]`;
+  return `${CW_ERDDAP}/griddap/${dataset}.transparentPng?${subset}&.colorBar=Rainbow||Log|0.03|30|`;
+}
 
 /* SST colour range in °C, by month. Must stay in sync with sstRangeC()
    in src/screens_ocean.jsx, which draws the legend.
@@ -260,8 +279,10 @@ Deno.serve(async (req: Request) => {
     if (layer.key === 'sst') sstRange = await measuredSstRangeC(layer.dataset, layer.variable);
     const url = layer.key === 'sst'
       ? sstGriddapUrl(layer.dataset, layer.variable, sstRange![0], sstRange![1])
-      : wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
-    const got = await fetchLayer(url);
+      : layer.key === 'chld'
+        ? chlDailyUrl(layer.dataset, layer.variable)
+        : wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
+    const got = layer.key === 'chld' ? await fetchLayerFrom(url, CW_ERDDAP) : await fetchLayer(url);
     if (!got.ok) {
       // Leave whatever is already in the bucket alone — a stale image
       // beats a missing one.
