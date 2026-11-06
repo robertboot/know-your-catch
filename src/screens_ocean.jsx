@@ -25,7 +25,7 @@ import { BASEMAP_URL, BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, addBasinLabel } fro
 import { createCurrentFlowLayer } from './current-flow.js';
 import { SNAPSHOT_BOUNDS, snapshotUrl } from './ocean-snapshots.js';
 import { TRIP_MODES } from './trip-modes.js';
-import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak, breakKey } from './home-water.js';
+import { DAYS_CACHE, homeWater, spotAgeNote, groupByBreak, breakKey, upcomingDays } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 import { createSpeciesZoneLayer, SPECIES_ZONE_COLORS } from './species-zone-layer.js';
 
@@ -446,7 +446,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   useEffect(() => {
     const w = homeWater(state);
     const hit = readMarineCache(DAYS_CACHE, w.lat, w.lon);
-    if (hit?.data?.length) setOutlook(hit.data);
+    if (hit?.data?.length) setOutlook(upcomingDays(hit.data));
   }, [state]);
 
   /* Species zones — where the mahi water is, rather than where the edges
@@ -1063,9 +1063,11 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       {!embedded && outlook?.length > 1 && (
         <div style={{ display: 'flex', gap: 7, marginBottom: 10, overflowX: 'auto', paddingBottom: 4 }}>
           {outlook.slice(0, 7).map((d, i) => {
-            const score = fishabilityHour({
+            // Stored by Home from the daylight hours (dayScore); the
+            // maxima fallback only serves an outlook cached by an older build.
+            const score = d.score !== undefined ? d.score : fishabilityHour({
               wind: d.windMax, gust: d.windMax != null ? d.windMax * 1.3 : null,
-              waveFt: d.waveFtMax, periodS: d.periodMaxS, code: d.code,
+              waveFt: d.waveFtMax, periodS: d.periodMaxS, weatherCode: d.code,
             });
             const on = i === dayPick;
             const dt = new Date(d.date + 'T12:00:00');

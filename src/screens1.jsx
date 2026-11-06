@@ -25,7 +25,7 @@ import {
 import {
   airColor, sstColor, windColor, waveColor, currColor, actColor, rainColor,
   biteIndex, nearestTideStation, nearbyTideStations, TIDE_STATIONS,
-  subScores, fishabilityHour, fishabilityColor, fishabilityGrade, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks, weatherCapInfo,
+  subScores, fishabilityHour, fishabilityColor, fishabilityGrade, fishabilityLabel, ratingWord, bestWindow, sixHourBlocks, weatherCapInfo, dayScore,
 } from './forecast-extras.js';
 import { brandAsset } from './brand-store.js';
 import { useScreenSize } from './screen-size.js';
@@ -564,13 +564,39 @@ function HomeConditions({ state, jurisdiction, onForecast, onOceanMaps, isTablet
            pass. Compact on purpose — four numbers a day, not the whole
            feed — because this sits in localStorage beside everything else. */
         const md = marineDaily || {};
+        // Each day's grade is computed HERE, from the hourly series, with
+        // dayScore — the same hours and model the score above and the
+        // best-window line use — and stored, so every strip that reads
+        // this cache shows the same letter. Today counts only the
+        // daylight still ahead; once that is gone today is dropped, so an
+        // evening strip starts tomorrow instead of grading a day that
+        // is over.
+        const dayHours = new Map();
+        ht.forEach((iso, i) => {
+          const when = new Date(iso).getTime();
+          const mw = marineByMs?.get(when) || null;
+          const key = iso.slice(0, 10);
+          if (!dayHours.has(key)) dayHours.set(key, []);
+          dayHours.get(key).push({
+            when,
+            isDaylight: sunPosition(new Date(when), lat, lon).altitudeDeg > 0,
+            wind: j.hourly.wind_speed_10m?.[i],
+            gust: j.hourly.wind_gusts_10m?.[i],
+            waveFt: mw?.waveFt ?? null,
+            periodS: mw?.periodS ?? null,
+            weatherCode: j.hourly.weather_code?.[i],
+            bite: biteIndex(new Date(when), lat, lon, moonIllum),
+          });
+        });
+        const todayKey = (j.daily?.time || [])[0];
         const outlook = (j.daily?.time || []).map((iso, i) => ({
           date: iso,
+          score: dayScore(dayHours.get(iso), iso === todayKey ? nowMs : null),
           windMax: j.daily.wind_speed_10m_max?.[i] ?? null,
           code: j.daily.weather_code?.[i] ?? null,
           waveFtMax: md.wave_height_max?.[i] != null ? md.wave_height_max[i] * 3.28084 : null,
           periodMaxS: md.wave_period_max?.[i] ?? null,
-        }));
+        })).filter(d => !(d.date === todayKey && d.score == null));
         if (outlook.length) writeMarineCache(DAYS_CACHE, lat, lon, outlook);
 
         setCachedAt(null);

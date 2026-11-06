@@ -28,6 +28,14 @@ export function homeWater(state, jurisdiction) {
  * the day strip exists to be read on the way out of the pass. Keyed on
  * the water, not on 0,0, because an angler with two home ports has two
  * different weeks. */
+/* The cached outlook from today on. A strip opened the morning after the
+   last fetch would otherwise lead with yesterday. */
+export function upcomingDays(days) {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  const today = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return (days || []).filter(x => x.date >= today);
+}
+
 export const DAYS_CACHE = 'days.v1';
 
 /* Pick the best spot the angler can actually reach, and measure the run

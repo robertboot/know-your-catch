@@ -19,7 +19,7 @@ import { OceanMapsScreen, SPOT_COLORS, SPOT_LABELS } from './screens_ocean.jsx';
 import { readMarineCache, writeMarineCache, describeAge } from './marine-cache.js';
 import { DAYS_CACHE, homeWater, reachableSpots, compassPoint, MAX_RUN_NM,
          groupByBreak, spotStanding, spotAgeNote, breakKey,
-         plainWhy, spotStats, spotRankColor, formatLatLon } from './home-water.js';
+         plainWhy, spotStats, spotRankColor, formatLatLon, upcomingDays } from './home-water.js';
 import { fishabilityHour, fishabilityGrade, fishabilityColor } from './forecast-extras.js';
 
 /* A chip that opens a short list under itself. Used for the port and the
@@ -112,7 +112,7 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
   // weather itself, so it cannot disagree with the Home card about the week.
   useEffect(() => {
     const hit = readMarineCache(DAYS_CACHE, home.lat, home.lon);
-    if (hit?.data?.length) setOutlook(hit.data);
+    if (hit?.data?.length) setOutlook(upcomingDays(hit.data));
   }, [home.lat, home.lon]);
 
   useEffect(() => {
@@ -160,9 +160,12 @@ export function PlanTripScreen({ state, tier = 'phone' }) {
 
   useEffect(() => { setPick(0); }, [shown.length]);
 
-  const gradeOf = (d) => fishabilityHour({
+  // Home grades each day from its daylight hours and stores the score
+  // (see dayScore); this only reads it. The fallback is for an outlook
+  // cached by an older build, which stored daily maxima and no score.
+  const gradeOf = (d) => d.score !== undefined ? d.score : fishabilityHour({
     wind: d.windMax, gust: d.windMax != null ? d.windMax * 1.3 : null,
-    waveFt: d.waveFtMax, periodS: d.periodMaxS, code: d.code,
+    waveFt: d.waveFtMax, periodS: d.periodMaxS, weatherCode: d.code,
   });
 
   return (

@@ -333,6 +333,31 @@ export function ratingWord(score) {
   return 'Poor';
 }
 
+/* One grade for a whole day, from its daylight hours — the reduction the
+   weekly email and the admin Trip Planning grid already use: the mean of
+   the hourly scores, pulled down by the worst one (0.6 / 0.4), so one
+   blown-out afternoon cannot average away into a good-looking day.
+
+   Hourly, not daily maxima. The day strips used to grade the day's top
+   wind (often overnight), a gust guessed at 1.3x that, and the biggest
+   sea of the 24 hours — so a day whose fishable hours were an A could
+   show a D+ beside a "Best window 7am-5pm · A" line. And they passed the
+   weather code as `code`, which fishabilityHour does not read, so a
+   thunderstorm day was never capped.
+
+   `hours` are fishabilityHour inputs plus `when` (ms) and `isDaylight`.
+   Pass `fromMs` to grade only what is still ahead (today, mid-day).
+   Returns null when no daylight hour is left to grade. */
+export function dayScore(hours, fromMs = null) {
+  const scores = (hours || [])
+    .filter(h => h.isDaylight && (fromMs == null || h.when + 3600000 > fromMs))
+    .map(fishabilityHour)
+    .filter(x => x != null);
+  if (!scores.length) return null;
+  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+  return Math.round(0.6 * mean + 0.4 * Math.min(...scores));
+}
+
 /* Best fishing window: scan daylight (+ dawn/dusk) units over the feed,
    score each, and pick the highest-scoring contiguous run. Prefer the
    earliest strong window so the recommendation is actionable today/
