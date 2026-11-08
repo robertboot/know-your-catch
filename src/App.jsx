@@ -1925,7 +1925,11 @@ function CenterCaptureBtn({ onClick, size = 'phone' }) {
           unlabelled button next to four labelled ones reads as "some
           other thing", which is why Fish ID also had a tab of its own. */}
       <span style={{
-        marginTop: size === 'phone' ? 26 : 30,
+        /* The circle rises out of the bar, so this label starts higher
+           than the four beside it and sat tighter under its icon. Four
+           more pixels put the gap under the camera in line with the
+           gap under Home and Logbook. */
+        marginTop: size === 'phone' ? 30 : 34,
         fontSize: size === 'phone' ? 11 : size === 'tablet' ? 13 : 14,
         fontWeight: 600, color: TAB_INACTIVE, whiteSpace: 'nowrap',
         letterSpacing: 0.2,
