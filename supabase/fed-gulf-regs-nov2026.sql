@@ -85,8 +85,8 @@ update public.regulations r
      'Sub-cap of 1 within the 20-fish reef-fish aggregate. An in-season closure can come earlier.'),
 
     -- Harvest prohibited outright, so there is no season to go stale.
-    ('goliath_grouper', 'all', 'Harvest prohibited in federal Gulf waters.', null),
-    ('nassau_grouper',  'all', 'Harvest prohibited in federal Gulf waters.', null)
+    ('goliath_grouper', 'all', 'Harvest prohibited in federal Gulf waters.', null::text),
+    ('nassau_grouper',  'all', 'Harvest prohibited in federal Gulf waters.', null::text)
   ) as v(species_id, sector, season_text, notes)
  where r.species_id = v.species_id
    and r.jurisdiction_id = 'fed_gulf'
