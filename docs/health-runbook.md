@@ -142,6 +142,15 @@ run's `detail`.
 
 ## Weekly
 
+### 0. The watch list is a file, not a memory
+
+The pages worth diffing are the seven in `regulations/.sources.json`.
+Read that file and check those URLs. Do not check a regulation URL you
+remember: NOAA moved its Gulf and South Atlantic pages in November 2026,
+and a report that files two 404s against the OLD paths says nothing
+about whether our monitoring works — the repository has not pointed at
+those paths for days.
+
 ### 1. Spot-check five regulations against the agencies
 Pick five pairs an angler would actually look up (red snapper, red drum,
 speckled trout, gag grouper, cobia — rotate the jurisdictions). For each:
@@ -253,9 +262,17 @@ Confirm, by asking the owner rather than by reading anything:
 the Android upload keystore and its password are backed up off the Mac,
 and the Supabase service-role key is not in the repo.
 ```bash
-git -C . grep -nE "(sb_secret|service_role|-----BEGIN)" -- . ':!*.md' | head
+git -C . grep -nE "(sb_secret_[A-Za-z0-9_-]{10,}|eyJhbGciOiJIUzI1NiI[A-Za-z0-9._-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)" -- . ':!*.md' | head
 ```
-Any hit is an emergency; report it first, above everything else.
+Match KEY SHAPES, not words. The first version of this looked for
+`service_role` — which is the name of a Postgres role, written in plain
+sight in every `grant execute ... to service_role` line and in the
+comments explaining them. It filed an EMERGENCY against a SQL comment,
+top of the report, on a repository with no secret in it. The patterns
+above match an actual Supabase secret key, a JWT and a PEM private key.
+
+Any hit is an emergency; report it first, above everything else — and
+quote the matched text, so a false one is obvious at a glance.
 
 ### 7. The build
 ```bash
