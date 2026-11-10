@@ -1,0 +1,13 @@
+{
+  "appId": "com.reelintel.app",
+  "appName": "ReelIntel",
+  "webDir": "dist",
+  "ios": {
+    "scheme": "ReelIntel",
+    "contentInset": "never"
+  },
+  "plugins": {
+    "Camera": {},
+    "Geolocation": {}
+  }
+}

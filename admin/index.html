@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ReelIntel — Admin</title>
+<style>
+  :root { --bg:#081826; --card:#0E2436; --edge:#1E3E55; --ink:#EAF3F7; --soft:#A7BECB; --mute:#6E8A9B; --teal:#34C2D6; --warn:#E7B042; --ok:#46C76F; --bad:#F05A50; }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui,sans-serif; }
+  header { background:#0A1B2A; border-bottom:1px solid var(--edge); padding:14px 18px; display:flex; align-items:center; justify-content:space-between; }
+  header b { color:var(--teal); letter-spacing:1px; } main { max-width:920px; margin:0 auto; padding:18px; }
+  .card { background:var(--card); border:1px solid var(--edge); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--mute); margin:10px 0 4px; font-weight:700; }
+  input,select,textarea { width:100%; padding:9px 11px; background:#0F2A3D; border:1.5px solid var(--edge); border-radius:6px; color:var(--ink); font:inherit; }
+  textarea { min-height:340px; font-family:ui-monospace,Menlo,monospace; font-size:12px; white-space:pre; }
+  button { background:var(--teal); color:#06141f; border:0; padding:10px 16px; border-radius:6px; font-weight:800; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--teal); border:1.5px solid var(--teal); }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; } .tabs button { background:#0F2A3D; color:var(--soft); border:1.5px solid var(--edge); }
+  .tabs button.on { background:var(--teal); color:#06141f; border-color:var(--teal); }
+  .row { display:grid; grid-template-columns:1.1fr .8fr 1.1fr 1.5fr 1fr 1fr; gap:8px; align-items:center; padding:10px 0; border-top:1px solid #1E3E5566; }
+  .row b { font-size:13px; } .hint { color:var(--mute); font-size:12px; } .msg { padding:10px 12px; border-radius:6px; margin:10px 0; font-weight:600; }
+  .msg.ok { background:#10311F; color:var(--ok); } .msg.err { background:#371513; color:var(--bad); } a { color:var(--teal); }
+  .big { padding:14px; font-size:16px; }
+  .thumb { width:64px; height:48px; object-fit:cover; border-radius:5px; background:#0F2A3D; border:1px solid var(--edge); display:block; }
+  .filebtn { display:inline-block; background:#0F2A3D; color:var(--teal); border:1.5px solid var(--teal); border-radius:6px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; margin-top:5px; }
+  @media (max-width:680px){ .row{ grid-template-columns:1fr; gap:6px; padding:14px 0; } .row b{ font-size:16px; margin-bottom:2px; } }
+</style>
+</head>
+<body>
+<header><b>KNOW YOUR CATCH · ADMIN</b><span class="hint">Git-backed · commits to GitHub</span></header>
+<main>
+  <div class="card">
+    <h2 style="margin:0 0 4px;font-size:18px;color:var(--teal)">Connect to GitHub</h2>
+    <p class="hint" style="margin:0 0 16px">One-time. Your token stays in this browser tab only and is never committed.</p>
+
+    <label>Step 1 — Paste your GitHub token here</label>
+    <input id="tok" class="big" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ghp_… or github_pat_…">
+    <div style="margin:8px 0 18px">
+      <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=KYC%20Admin" target="_blank" rel="noopener">Need one? Tap here to create a token →</a>
+      <div class="hint">Copy it on the GitHub screen, come back, paste above.</div>
+    </div>
+
+    <button class="big" style="width:100%" onclick="connect()">Step 2 — Connect</button>
+    <div id="conn" class="hint" style="margin-top:12px">Not connected yet.</div>
+
+    <details style="margin-top:14px">
+      <summary class="hint" style="cursor:pointer">Advanced — repo &amp; branch (already set, rarely change)</summary>
+      <label>Repo</label><input id="repo" value="robertboot/know-your-catch">
+      <label>Branch</label><input id="branch" value="claude/upload-app-assets-NUxRr">
+      <button class="ghost" style="margin-top:10px" onclick="loadAll()">Reload data</button>
+    </details>
+  </div>
+
+  <div class="tabs">
+    <button id="t-photos" class="on" onclick="tab('photos')">Photos</button>
+    <button id="t-regs" onclick="tab('regs')">Regulations</button>
+  </div>
+
+  <div id="pane-photos" class="card">
+    <p class="hint">Per species: <b>Choose photo</b> uploads your proprietary image (preview shows immediately; it commits to <code>photos/proprietary/</code> on Save). Or expand the licensed-web-photo option. <b>none</b> = the app draws its illustration.</p>
+    <div id="plist"></div>
+    <div style="margin-top:14px"><button class="big" onclick="savePhotos()">Save all changes</button> <span id="pmsg" class="hint"></span></div>
+  </div>
+
+  <div id="pane-regs" class="card" style="display:none">
+    <label>Feed file</label>
+    <select id="feedsel" onchange="loadFeed()"></select>
+    <p class="hint">Edit the verified feed JSON. It is schema-checked before commit. Keep <code>verified:true</code> only for figures you confirmed against the official source.</p>
+    <textarea id="feedjson" spellcheck="false"></textarea>
+    <div style="margin-top:10px"><button onclick="saveFeed()">Validate &amp; commit feed</button> <span id="fmsg" class="hint"></span></div>
+  </div>
+</main>
+<script>
+const API = 'https://api.github.com';
+let manifest=null, manifestSha=null, feed=null, feedSha=null, feedPath=null, pending={};
+const today=()=>new Date().toISOString().slice(0,10);
+const rawUrl=p=>'https://raw.githubusercontent.com/'+repo()+'/'+encodeURIComponent(branch()).replace(/%2F/g,'/')+'/'+p;
+const $=id=>document.getElementById(id);
+const gh=async(path,opts={})=>{
+  const r=await fetch(API+path,{...opts,headers:{Authorization:'Bearer '+$('tok').value.trim(),Accept:'application/vnd.github+json',...(opts.headers||{})}});
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).message||('HTTP '+r.status));
+  return r.status===204?null:r.json();
+};
+const b64e=s=>btoa(unescape(encodeURIComponent(s)));
+const b64d=b=>decodeURIComponent(escape(atob(b.replace(/\n/g,''))));
+const repo=()=>$('repo').value.trim(), branch=()=>$('branch').value.trim();
+sessionStorage.tok && ($('tok').value=sessionStorage.tok);
+
+async function connect(){
+  sessionStorage.tok=$('tok').value.trim();
+  try{ const u=await gh('/repos/'+repo()); $('conn').innerHTML='Connected to <b>'+u.full_name+'</b> ('+(u.private?'private':'public')+'). '; await loadAll(); }
+  catch(e){ $('conn').innerHTML='<span style="color:var(--bad)">'+e.message+'</span>'; }
+}
+async function getFile(path){
+  const j=await gh('/repos/'+repo()+'/contents/'+path+'?ref='+encodeURIComponent(branch()));
+  return { json:JSON.parse(b64d(j.content)), sha:j.sha };
+}
+async function putFile(path,obj,sha,message){
+  return gh('/repos/'+repo()+'/contents/'+path,{method:'PUT',body:JSON.stringify({
+    message, branch:branch(), sha, content:b64e(JSON.stringify(obj,null,2)+'\n')
+  })});
+}
+async function loadAll(){
+  pending={};
+  const m=await getFile('photos/manifest.json'); manifest=m.json; manifestSha=m.sha; renderPhotos();
+  const dir=await gh('/repos/'+repo()+'/contents/regulations/feed?ref='+encodeURIComponent(branch()));
+  $('feedsel').innerHTML=dir.filter(f=>f.name.endsWith('.json')).map(f=>'<option>'+f.name+'</option>').join('');
+  await loadFeed();
+}
+const esc=v=>(v||'').replace(/"/g,'&quot;');
+function renderPhotos(){
+  const s=manifest.species;
+  $('plist').innerHTML='<div class="row hint"><b>Species</b><span>Primary</span><span>Proprietary</span><span>Fallback URL</span><span>Credit</span><span>License</span></div>'+
+   Object.keys(s).sort((a,b)=>s[a].name.localeCompare(s[b].name)).map(id=>{
+    const e=s[id], f=e.fallback||{};
+    const prop = e.primary==='proprietary'&&e.proprietary ? rawUrl(e.proprietary) : '';
+    return '<div class="row" data-id="'+id+'">'+
+      '<b>'+e.name+'</b>'+
+      '<select class="p-primary">'+
+        '<option'+(e.primary==='none'?' selected':'')+'>none</option>'+
+        '<option value="fallback"'+(e.primary==='fallback'?' selected':'')+'>fallback</option>'+
+        '<option value="proprietary"'+(e.primary==='proprietary'?' selected':'')+'>proprietary</option>'+
+      '</select>'+
+      '<div>'+
+        '<img class="p-thumb thumb" '+(prop?'src="'+prop+'"':'style="display:none"')+' onerror="this.style.display=\'none\'">'+
+        '<label class="filebtn">Upload<input type="file" accept="image/*" class="p-file" style="display:none" onchange="pickPhoto(\''+id+'\',this)"></label>'+
+      '</div>'+
+      '<div>'+
+        '<input class="p-url" placeholder="https://… licensed" value="'+esc(f.url)+'" oninput="urlPrev(this)">'+
+        '<img class="p-urlthumb thumb" style="margin-top:5px;'+(f.url?'':'display:none')+'" '+(f.url?'src="'+esc(f.url)+'"':'')+' onerror="this.style.display=\'none\'">'+
+      '</div>'+
+      '<input class="p-credit" placeholder="Photographer / NOAA" value="'+esc(f.credit)+'">'+
+      '<input class="p-license" placeholder="Public domain / CC BY 4.0" value="'+esc(f.license)+'">'+
+    '</div>';
+  }).join('');
+}
+function urlPrev(input){
+  const img=input.parentElement.querySelector('.p-urlthumb'); const v=input.value.trim();
+  if(v){ img.src=v; img.style.display=''; } else { img.style.display='none'; }
+}
+const EXT={'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp','image/heic':'heic','image/gif':'gif'};
+function pickPhoto(id,input){
+  const file=input.files&&input.files[0]; if(!file) return;
+  const row=input.closest('.row');
+  const r=new FileReader();
+  r.onload=()=>{
+    const b64=String(r.result).split(',')[1];
+    pending[id]={ b64, ext:EXT[file.type]||(file.name.split('.').pop()||'jpg').toLowerCase() };
+    const img=row.querySelector('.p-thumb'); img.src=r.result; img.style.display='';
+    row.querySelector('.p-primary').value='proprietary';
+  };
+  r.readAsDataURL(file);
+}
+async function savePhotos(){
+  $('pmsg').textContent='Saving…';
+  try{
+    document.querySelectorAll('#plist .row[data-id]').forEach(row=>{
+      const id=row.dataset.id, e=manifest.species[id];
+      e.primary=row.querySelector('.p-primary').value;
+      const url=row.querySelector('.p-url').value.trim();
+      e.fallback=url?{url,credit:row.querySelector('.p-credit').value.trim(),license:row.querySelector('.p-license').value.trim()}:null;
+      e.updated=today();
+    });
+    let uploaded=0;
+    for(const [id,pf] of Object.entries(pending)){
+      const path='photos/proprietary/'+id+'.'+pf.ext;
+      let sha; try{ sha=(await gh('/repos/'+repo()+'/contents/'+encodeURIComponent(path).replace(/%2F/g,'/')+'?ref='+encodeURIComponent(branch()))).sha; }catch(_){ sha=undefined; }
+      await gh('/repos/'+repo()+'/contents/'+encodeURIComponent(path).replace(/%2F/g,'/'),{method:'PUT',body:JSON.stringify({message:'admin: upload photo '+id, branch:branch(), content:pf.b64, sha})});
+      const e=manifest.species[id]; e.primary='proprietary'; e.proprietary=path; e.updated=today(); uploaded++;
+    }
+    manifest.updated=today();
+    const res=await putFile('photos/manifest.json',manifest,manifestSha,'admin: update photo manifest');
+    manifestSha=res.content.sha; pending={}; renderPhotos();
+    $('pmsg').innerHTML='<span style="color:var(--ok)">Committed — '+uploaded+' photo(s) uploaded.</span>';
+  }catch(e){ $('pmsg').innerHTML='<span style="color:var(--bad)">'+e.message+'</span>'; }
+}
+async function loadFeed(){
+  if(!$('feedsel').value) return;
+  feedPath='regulations/feed/'+$('feedsel').value;
+  const r=await getFile(feedPath); feed=r.json; feedSha=r.sha;
+  $('feedjson').value=JSON.stringify(feed,null,2);
+}
+async function saveFeed(){
+  $('fmsg').textContent='Validating…';
+  let obj; try{ obj=JSON.parse($('feedjson').value); }catch(e){ return $('fmsg').innerHTML='<span style="color:var(--bad)">Invalid JSON: '+e.message+'</span>'; }
+  if(obj.schema!=='kyc-regulations/v1'||!obj.rules||typeof obj.rules!=='object') return $('fmsg').innerHTML='<span style="color:var(--bad)">schema must be kyc-regulations/v1 with a rules object</span>';
+  for(const [k,v] of Object.entries(obj.rules)){ if(!v.open||typeof v.verified!=='boolean'||!v.source||!v.lastUpdated) return $('fmsg').innerHTML='<span style="color:var(--bad)">'+k+': needs open, verified, source, lastUpdated</span>'; }
+  try{ const res=await putFile(feedPath,obj,feedSha,'admin: update '+$('feedsel').value+' (verified data)'); feedSha=res.content.sha; $('fmsg').innerHTML='<span style="color:var(--ok)">Committed. CI will re-validate.</span>'; }
+  catch(e){ $('fmsg').innerHTML='<span style="color:var(--bad)">'+e.message+'</span>'; }
+}
+function tab(n){ for(const x of ['photos','regs']){ $('pane-'+x).style.display=x===n?'':'none'; $('t-'+x).className=x===n?'on':''; } }
+</script>
+</body>
+</html>
