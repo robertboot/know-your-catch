@@ -46,4 +46,47 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    }
+
+}
+
+/* iOS 27 refuses to launch an app built against its SDK unless the app
+   adopts the scene lifecycle: UIKit traps at startup
+   (UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption) and the
+   app dies before the first frame. This is that adoption, kept as thin as
+   it can be: the storyboard still builds the window, and the two things
+   UIKit now delivers to the scene instead of the app delegate - URL opens
+   and universal links - are handed to Capacitor exactly as before.
+
+   It lives in this file on purpose. A new .swift file has to be added to
+   the Xcode project by hand, and one that is not is silently left out of
+   the build - which here would mean the same crash. */
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        // Plugins still look for the window on the app delegate.
+        (UIApplication.shared.delegate as? AppDelegate)?.window = window
+
+        // A cold launch from a link arrives here, not in openURLContexts.
+        if let context = connectionOptions.urlContexts.first {
+            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: context.url, options: [:])
+        }
+        if let activity = connectionOptions.userActivities.first {
+            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, continue: activity, restorationHandler: { _ in })
+        }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let context = URLContexts.first else { return }
+        _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: context.url, options: [:])
+    }
+
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, continue: userActivity, restorationHandler: { _ in })
+    }
+
 }
