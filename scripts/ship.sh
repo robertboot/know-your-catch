@@ -97,6 +97,7 @@ echo "✓ auth gate: web needs an account, app keeps guest"
 # height is slow to carry the chop a fresh breeze stands up, which is how
 # a 15 kt morning once graded A.
 node scripts/fishability-test/run.mjs >/dev/null || { echo "✗ fishability scoring FAILED"; node scripts/fishability-test/run.mjs | tail -12; exit 1; }
+node scripts/tile-cache-test/run.mjs >/dev/null || { echo "✗ saved-image cache FAILED"; node scripts/tile-cache-test/run.mjs | tail -12; exit 1; }
 echo "✓ fishability: wind builds its own sea"
 
 # The cached model and its species list must belong together. A torn

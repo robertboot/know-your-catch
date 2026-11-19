@@ -80,10 +80,16 @@ export async function fetchAndCache(url, timeoutMs = 10000) {
 export async function imageUrl(url) {
   const hit = await getCachedImage(url);
   if (hit) {
-    // Refresh in the background so the next look is current, without
-    // making this one wait on a link that may not answer.
-    fetchAndCache(url).catch(() => {});
-    return { url: hit, cached: true };
+    /* Refresh in the background, without making this look wait on a link
+       that may not answer — and HAND THE RESULT BACK. This used to drop
+       it: the new image went into the store for "the next look", so every
+       visit showed the image fetched on the visit before. Open the map
+       once a fortnight and it showed a fortnight-old ocean, on full
+       signal, with a banner blaming the signal. `fresh` resolves to the
+       new blob URL, or null if the network refused; a caller that draws
+       something that goes stale swaps it in. */
+    const fresh = fetchAndCache(url).catch(() => null);
+    return { url: hit, cached: true, fresh };
   }
   const fresh = await fetchAndCache(url);
   return fresh ? { url: fresh, cached: false } : { url: null, cached: false };

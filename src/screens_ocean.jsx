@@ -317,7 +317,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
        shown immediately and refreshed behind the screen, so the map is
        useful the moment it opens and current the moment there is signal. */
     const addOverlay = (url, onError) => {
-      imageUrl(url).then(({ url: src, cached }) => {
+      imageUrl(url).then(({ url: src, cached, fresh }) => {
         if (!alive) return;
         if (!src) { onError?.(); return; }
         const layer = L.imageOverlay(src, REGION_BOUNDS, {
@@ -327,8 +327,18 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
         layer.on('error', () => { map.removeLayer(layer); onError?.(); });
         layer.addTo(map);
         overlayRef.current = layer;
-        if (cached) cacheAge(url).then(ms => setOverlayAge(ms)).catch(() => {});
-        else setOverlayAge(null);
+        /* A saved image is a stopgap for the second the download takes,
+           not the answer. When the fresh one lands it replaces what is on
+           the map; the "saved, N days old" banner is raised only if it
+           does NOT land, because only then is it true. */
+        setOverlayAge(null);
+        if (cached) {
+          fresh.then((next) => {
+            if (!alive || overlayRef.current !== layer) return;
+            if (next) layer.setUrl(next);
+            else cacheAge(url).then(ms => { if (alive) setOverlayAge(ms); }).catch(() => {});
+          });
+        }
         // Added only once the composite is down, so it lands on top of it.
         if (cfg.key === 'chl' && !dateISO) addDaily();
       }).catch(() => onError?.());
@@ -340,12 +350,16 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     const addDaily = () => {
       const url = snapshotUrl(CHL_DAILY_KEY);
       if (!url) return;
-      imageUrl(url).then(({ url: src }) => {
+      imageUrl(url).then(({ url: src, fresh }) => {
         if (!alive || !src) return;
         const layer = L.imageOverlay(src, REGION_BOUNDS, { opacity: 0.85 });
         layer.on('error', () => map.removeLayer(layer));
         layer.addTo(map);
         dailyRef.current = layer;
+        // Yesterday's pass is the layer that goes stale fastest.
+        fresh?.then((next) => {
+          if (alive && next && dailyRef.current === layer) layer.setUrl(next);
+        });
       }).catch(() => {});
     };
 
@@ -1275,7 +1289,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           border: `1px solid ${T.warn}88`, padding: '10px 13px', borderRadius: 10,
           fontSize: 12.5, fontWeight: 700, lineHeight: 1.5,
         }}>
-          Saved image · {describeAge(overlayAge)} — no signal, showing what your phone downloaded.
+          Saved image · {describeAge(overlayAge)} — couldn&rsquo;t reach the latest, showing what your phone downloaded.
         </div>
       )}
 
