@@ -115,13 +115,27 @@ scheduled.
 
 ### 6. The website and the browser app
 ```bash
-for u in https://reelintel.ai https://reelintel.ai/app https://reelintel.ai/privacy \
-         https://reelintel.ai/delete-account \
+for u in https://www.reelintel.ai https://www.reelintel.ai/app https://www.reelintel.ai/privacy \
+         https://www.reelintel.ai/delete-account \
          https://www.reelintel.ai/brand/newsletter-desktop-ad.jpg \
          https://www.reelintel.ai/brand/pb-spotlight.jpg; do
   curl -s -o /dev/null -w "%{http_code} $u\n" --max-time 30 -L "$u"
 done
+# and once, that the bare domain still forwards to www:
+curl -s -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 30 https://reelintel.ai
 ```
+The site lives on `www.reelintel.ai`. The bare `reelintel.ai` answers
+**308 and forwards to www — that is the healthy answer**, not an outage.
+On 2026-11-20 a run reported four pages BROKEN for answering 308; every
+one of them loaded fine for an angler. So:
+
+- Judge a page by the status **after following redirects** (`-L`). If you
+  fetch a URL any other way, follow the redirect yourself before judging.
+- A page is BROKEN only on a final 4xx/5xx or a timeout. A 3xx is never
+  BROKEN by itself.
+- The bare domain is wrong only if it does NOT answer 308 to
+  `https://www.reelintel.ai/`.
+
 The two brand images matter the week a newsletter goes out: a 404 there
 is a broken image in everyone's inbox.
 
