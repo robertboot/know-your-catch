@@ -1,12 +1,54 @@
 {
   "_comment": "Watched official sources. The monitor hashes each page's text and flags changes for human review. Baseline hashes are filled on first run.",
   "sources": [
-    { "id": "ecfr-622.37-sizes", "jurisdiction": "fed_gulf", "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-B/section-622.37", "lastHash": null, "lastChecked": null },
-    { "id": "ecfr-622.38-baglimits", "jurisdiction": "fed_gulf", "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-B/section-622.38", "lastHash": null, "lastChecked": null },
-    { "id": "ecfr-622.34-grouper-closures", "jurisdiction": "fed_gulf", "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-B/section-622.34", "lastHash": null, "lastChecked": null },
-    { "id": "ecfr-622.380-cmp", "jurisdiction": "fed_gulf", "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-Q/section-622.380", "lastHash": null, "lastChecked": null },
-    { "id": "noaa-sero-gulf-closures", "jurisdiction": "fed_gulf", "url": "https://www.fisheries.noaa.gov/southeast/rules-regulations/fishing-regulations-and-seasonal-closures-gulf-america", "lastHash": null, "lastChecked": null },
-    { "id": "fl-fwc-saltwater-rec", "jurisdiction": "fl_state", "url": "https://myfwc.com/fishing/saltwater/recreational/", "lastHash": null, "lastChecked": null },
-    { "id": "al-dcnr-saltwater", "jurisdiction": "al_state", "url": "https://www.outdooralabama.com/fishing/saltwater-fishing", "lastHash": null, "lastChecked": null }
+    {
+      "id": "ecfr-622.37-sizes",
+      "jurisdiction": "fed_gulf",
+      "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-B/section-622.37",
+      "lastHash": "ce14bcf76ede7639304458d5a1efb3ab64f0db69f71701de2fafd9354c442db0",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    },
+    {
+      "id": "ecfr-622.38-baglimits",
+      "jurisdiction": "fed_gulf",
+      "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-B/section-622.38",
+      "lastHash": "ce14bcf76ede7639304458d5a1efb3ab64f0db69f71701de2fafd9354c442db0",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    },
+    {
+      "id": "ecfr-622.34-grouper-closures",
+      "jurisdiction": "fed_gulf",
+      "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-B/section-622.34",
+      "lastHash": "ce14bcf76ede7639304458d5a1efb3ab64f0db69f71701de2fafd9354c442db0",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    },
+    {
+      "id": "ecfr-622.380-cmp",
+      "jurisdiction": "fed_gulf",
+      "url": "https://www.ecfr.gov/current/title-50/chapter-VI/part-622/subpart-Q/section-622.380",
+      "lastHash": "ce14bcf76ede7639304458d5a1efb3ab64f0db69f71701de2fafd9354c442db0",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    },
+    {
+      "id": "noaa-sero-gulf-closures",
+      "jurisdiction": "fed_gulf",
+      "url": "https://www.fisheries.noaa.gov/southeast/rules-regulations/fishing-regulations-and-seasonal-closures-gulf-america",
+      "lastHash": "0f16b15d6057e4b1eb90a2dd66092e482fcd7dc84038a0e08d3f0a6604840c94",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    },
+    {
+      "id": "fl-fwc-saltwater-rec",
+      "jurisdiction": "fl_state",
+      "url": "https://myfwc.com/fishing/saltwater/recreational/",
+      "lastHash": "cb30eb783f1b2b305ea2ad1568f2669982f5130300d5ad101a735e0feeba8b11",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    },
+    {
+      "id": "al-dcnr-saltwater",
+      "jurisdiction": "al_state",
+      "url": "https://www.outdooralabama.com/fishing/saltwater-fishing",
+      "lastHash": "dbf062503337b1f0ca2529a7801cbc28c0552cbd2eabc1b03ca43f2f53be3c37",
+      "lastChecked": "2026-11-23T23:39:54.991Z"
+    }
   ]
 }
