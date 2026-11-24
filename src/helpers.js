@@ -155,10 +155,48 @@ function parseRanges(text, fallbackYear) {
     }
     // Explicitly-dated inverted ranges are data errors — drop them
     // rather than evaluate a window that can never be active.
-    if (a && b && b >= a) out.push({ a, b, idx: m.index });
+    if (a && b && b >= a) out.push({ a, b, idx: m.index, end: m.index + m[0].length });
   }
   return out;
 }
+
+/* Which ranges are CLOSURES and which are the season itself.
+
+   The rule used to be position alone: every range after the first
+   closure word is a closure. That is right for "Closed Jan 1 – Feb 28"
+   and wrong for the sentence the regulation updater writes once a season
+   is over:
+
+     "Closed — 2026 season was September 1, 2026 - October 14, 2026 …"
+     "Closed — 2026 Gulf state waters season (Sept 1 – Oct 13, 2026) has ended …"
+
+   There the range is the season that RAN. Read as a closure it becomes a
+   closure that finished in October, and "outside the stated closure" is
+   open - so Alabama and Florida greater amberjack both showed Season
+   Open six weeks after they shut. A past-tense marker beside the range
+   says which it is: before it ("ran", "was", "were", "opened"), or after
+   it ("has ended", "concluded"). The clause is judged on its own, so
+   "Open Aug 1 – Dec 31; closed Jan 1 – Feb 28" still splits correctly. */
+const RAN_BEFORE_RE = /\b(?:ran|was|were|opened)\b/;
+const ENDED_AFTER_RE = /^[\s)]*(?:has|have|had)?\s*(?:ended|concluded)\b/;
+function splitRanges(raw, ranges) {
+  const o = String(raw).toLowerCase();
+  const closedAt = o.search(CLOSURE_VOCAB_RE);
+  const closedRanges = [];
+  const openRanges = [];
+  for (const r of ranges) {
+    const before = o.slice(0, r.idx).split(/[;.]/).pop();
+    const after = o.slice(r.end ?? r.idx).split(/[;.]/)[0];
+    const ranPast = RAN_BEFORE_RE.test(before) || ENDED_AFTER_RE.test(after);
+    if (closedAt >= 0 && r.idx >= closedAt && !ranPast) closedRanges.push(r);
+    else openRanges.push(r);
+  }
+  return { closedAt, closedRanges, openRanges };
+}
+
+/* "Closed — …", "Closed. …", "Closed; …": the row opens by stating its
+   status. Not "Closed Jan 1 – Feb 28", where the word begins a window. */
+const STATED_CLOSED_RE = /^closed\s*(?:[—–.;]|-\s)/;
 
 // Words that mean "you cannot keep this fish" — shared by the season
 // parser and the catch-legality logic so a prohibition never renders
@@ -189,9 +227,18 @@ export function seasonState(open, today = new Date()) {
   // retention/harvest/take' all count, so "Harvest prohibited May 1 –
   // Jul 15" reads as a closure, not an open window. Ranges at/after
   // the closure word are closures.
-  const closedAt = o.search(CLOSURE_VOCAB_RE);
-  const closedRanges = closedAt < 0 ? [] : ranges.filter(r => r.idx >= closedAt);
-  const openRanges = ranges.filter(r => !closedRanges.includes(r));
+  const { closedAt, closedRanges, openRanges } = splitRanges(raw, ranges);
+
+  /* A row that begins by saying it is closed, and gives no closure window
+     to be outside of, is closed - whatever dates it goes on to mention.
+     Those dates are the season that ran, or the next opener; neither can
+     make a stated closure read as open. */
+  if (STATED_CLOSED_RE.test(o) && closedRanges.length === 0) {
+    const next = openRanges.filter(r => today < r.a).sort((x, y) => x.a - y.a)[0];
+    if (next && next.a - today <= OPENS_SOON_DAYS * DAY_MS)
+      return { status: 'upcoming', reason: `Opens ${fmtDate(next.a)}`, opensOn: next.a.toISOString() };
+    return { status: 'closed', reason: openRanges.length ? 'Season has ended for this year' : (cleanSeason(open) || 'Closed') };
+  }
 
   const activeClosure = closedRanges.find(r => inRange(today, r));
   if (activeClosure) {
@@ -308,9 +355,9 @@ function nextCloseDate(raw, today) {
   const year = today.getUTCFullYear();
   const ranges = parseRanges(raw, year);
   if (!ranges.length) return null;
-  const closedAt = String(raw).toLowerCase().search(CLOSURE_VOCAB_RE);
-  const closedRanges = closedAt < 0 ? [] : ranges.filter(r => r.idx >= closedAt);
-  const openRanges = ranges.filter(r => !closedRanges.includes(r));
+  const { closedRanges, openRanges } = splitRanges(raw, ranges);
+  // A stated closure has no "last legal day" ahead of it.
+  if (STATED_CLOSED_RE.test(String(raw).trim().toLowerCase()) && closedRanges.length === 0) return null;
   const cands = [];
   const activeOpen = openRanges.find(r => today >= r.a && today <= r.b);
   if (activeOpen) cands.push(activeOpen.b);
