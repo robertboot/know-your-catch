@@ -14,7 +14,7 @@ export const JURISDICTIONS = [
   { id: 'al_state', name: 'Alabama State Waters', short: 'AL', agency: 'Alabama DCNR', boundary: '3 nm', regsUrl: 'https://www.outdooralabama.com/fishing/saltwater-fishing' },
   { id: 'fl_state', name: 'Florida Gulf State Waters', short: 'FL', agency: 'FWC', boundary: '9 nm', regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
   { id: 'fl_atlantic', name: 'Florida Atlantic State Waters', short: 'FL-ATL', agency: 'FWC', boundary: '3 nm', coast: 'atlantic', regsUrl: 'https://myfwc.com/fishing/saltwater/recreational/' },
-  { id: 'ms_state', name: 'Mississippi State Waters', short: 'MS', agency: 'MDMR', boundary: '3 nm', regsUrl: 'https://dmr.ms.gov/' },
+  { id: 'ms_state', name: 'Mississippi State Waters', short: 'MS', agency: 'MDMR', boundary: '3 nm', regsUrl: 'https://dmr.ms.gov/recreational-catch-limits/' },
   { id: 'la_state', name: 'Louisiana State Waters', short: 'LA', agency: 'LDWF', boundary: '3 nm', regsUrl: 'https://www.wlf.louisiana.gov/' },
   { id: 'tx_state', name: 'Texas State Waters', short: 'TX', agency: 'TPWD', boundary: '9 nm', regsUrl: 'https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing' },
   { id: 'fed_gulf', name: 'Federal Gulf Waters', short: 'FED', agency: 'NOAA / GMFMC', boundary: 'Beyond state waters', regsUrl: 'https://www.fisheries.noaa.gov/southeast/rules-regulations/fishing-regulations-and-seasonal-closures-gulf-america' },
