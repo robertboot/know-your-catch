@@ -24,6 +24,37 @@ export async function getLocation(opts = {}) {
   });
 }
 
+/* What the native picker knew about the photo it last returned.
+
+   getPhoto hands back a data URL and nothing else, and the metadata the
+   plugin read alongside it was being dropped on the floor - which is how
+   a library photo taken forty miles out got logged at the dock: the
+   catch screen never saw where the picture was taken, so it asked the
+   phone where IT was. Only the most recent photo is remembered; a
+   lookup for any other image answers null. */
+let lastPhotoInfo = null;
+
+/** { lat, lon, time, fromCamera } for the photo getPhoto just returned,
+    as far as the picker could tell; nulls where it could not. */
+export function photoInfoFor(dataUrl) {
+  const info = lastPhotoInfo && lastPhotoInfo.dataUrl === dataUrl ? lastPhotoInfo : null;
+  if (!info) return null;
+  const gps = info.exif?.GPS || null;
+  const num = (v) => (typeof v === 'number' ? v : parseFloat(v));
+  let lat = gps ? num(gps.Latitude) : NaN;
+  let lon = gps ? num(gps.Longitude) : NaN;
+  // EXIF stores magnitudes plus a hemisphere letter.
+  if (Number.isFinite(lat) && /^s/i.test(String(gps.LatitudeRef || ''))) lat = -Math.abs(lat);
+  if (Number.isFinite(lon) && /^w/i.test(String(gps.LongitudeRef || ''))) lon = -Math.abs(lon);
+  const ok = Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0);
+  return {
+    lat: ok ? lat : null,
+    lon: ok ? lon : null,
+    time: info.exif?.DateTimeOriginal || info.exif?.DateTimeDigitized || info.exif?.DateTime || null,
+    fromCamera: info.fromCamera,
+  };
+}
+
 /** Resolve to a data URL of the chosen photo, or null if the user cancelled.
     Options:
       source =
@@ -59,6 +90,10 @@ export async function getPhoto({ source = 'prompt', cameraOnly = false } = {}) {
         // Silent skip if the user denies the "add to Photos" permission.
         saveToGallery: true,
       });
+      // Kept beside the image for whoever logs it: the plugin reads the
+      // photo's own metadata, and `saved` is true only for a fresh camera
+      // shot. See photoInfoFor.
+      if (photo.dataUrl) lastPhotoInfo = { dataUrl: photo.dataUrl, exif: photo.exif || null, fromCamera: photo.saved === true };
       return photo.dataUrl || null;
     } catch (e) {
       // Capacitor throws for a plain user-cancel too, so ONLY the known

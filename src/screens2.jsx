@@ -70,7 +70,7 @@ import {
 import { AccountSection } from './auth-ui.jsx';
 import { getMyPreferences, optOutOfFeatureEmails } from './preferences-store.js';
 import { useScreenSize } from './screen-size.js';
-import { getLocation, getPhoto, isNative } from './native.js';
+import { getLocation, getPhoto, isNative, photoInfoFor } from './native.js';
 import { SpeciesPickerModal, SpeciesSuggestModal } from './admin/pickers.jsx';
 import { newClientSpeciesId, submitSuggestion } from './species-suggestions-store.js';
 import { identifyPhoto } from './identifyPhoto.js';
@@ -3327,7 +3327,52 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
       .then(({ lat, lon }) => setLoc({ lat, lon, error: null, loading: false }))
       .catch(err => setLoc({ lat: null, lon: null, error: err.message || 'GPS denied', loading: false }));
   };
-  useEffect(() => { if (!isEdit) fetchGps(); }, []);
+  /* Where the catch was, on arrival.
+
+     A photo handed in from Home's "Log your catch" (prefilledPhoto) used
+     to be ignored here: this effect asked the phone for ITS position and
+     that was the end of it. So a picture taken offshore last weekend, or
+     sent by a friend, was logged wherever the angler happened to be
+     standing when they picked it. The in-screen upload button has always
+     read the photo; this path never did.
+
+     Now the photo is asked first, two ways - the EXIF block in the image
+     itself, then whatever the native picker read beside it. Only if
+     neither holds a position does the phone's GPS stand in, and then the
+     screen says that is what it is, unless the photo was taken with the
+     camera a moment ago, where the phone's position IS the catch's. */
+  useEffect(() => {
+    if (isEdit) return;
+    if (!prefilledPhoto) { fetchGps(); return; }
+    let cancelled = false;
+    (async () => {
+      const native = photoInfoFor(prefilledPhoto);
+      let lat = null, lon = null, time = null;
+      try {
+        const meta = await exifr.parse(prefilledPhoto, {
+          tiff: true, exif: true, gps: true, translateValues: true, reviveValues: true, sanitize: true, mergeOutput: true,
+          pick: ['latitude', 'longitude', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef',
+                 'DateTimeOriginal', 'CreateDate', 'ModifyDate'],
+        });
+        if (meta && Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude)) { lat = meta.latitude; lon = meta.longitude; }
+        time = parseExifDate(meta?.DateTimeOriginal) || parseExifDate(meta?.CreateDate) || parseExifDate(meta?.ModifyDate);
+      } catch { /* no readable EXIF in the image; the picker may still know */ }
+      if (lat == null && native?.lat != null) { lat = native.lat; lon = native.lon; }
+      if (!time && native?.time) time = parseExifDate(native.time);
+      if (cancelled) return;
+      if (time) setWhen(time);
+      if (lat != null) {
+        setLoc({ lat, lon, error: null, loading: false });
+        setMetaSource('photo');
+        setPhotoExifStatus(time ? 'gps+time' : 'gps');
+        return;
+      }
+      fetchGps();
+      if (native?.fromCamera) { setMetaSource('device'); return; }
+      setPhotoExifStatus(time ? 'nogps-device' : 'nometa-device');
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // The Identify flow hands us a full-res data URL (FileReader output,
   // no downscale step). savePhoto owns the tier-aware downscale.
@@ -4337,6 +4382,12 @@ export function CatchEntryScreen({ state, jurisdiction, update, onDone, onCancel
         {photoExifStatus === 'none' && (
           <div style={{ fontSize: 12, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
             Photo 1 had no location or time metadata — set them manually below or use device GPS.
+          </div>
+        )}
+        {(photoExifStatus === 'nogps-device' || photoExifStatus === 'nometa-device') && (
+          <div style={{ fontSize: 12, color: T.warn, padding: '6px 8px', background: T.warnBg, borderRadius: 6, lineHeight: 1.45, marginBottom: 8 }}>
+            This photo carries no location, so the location below is where your phone is now — not where the fish was caught.
+            {photoExifStatus === 'nometa-device' ? ' It carries no time either.' : ''} Edit it if that is wrong.
           </div>
         )}
         {photoExifStatus === 'gps' && (
