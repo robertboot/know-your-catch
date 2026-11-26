@@ -3894,125 +3894,12 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
 
             return (
               <>
-                {/* Hero — the answer first */}
-                <Card className="kyc-fadeup" style={{
-                  marginBottom: 14, padding: isTablet ? 24 : 18, borderRadius: 24,
-                  background: `linear-gradient(155deg, ${T.card} 0%, ${T.oceanDeep} 100%)`,
-                  border: `1px solid ${T.cardEdge}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                    {/* "On the water", not just "today".
-                        Every reading in this card comes from the nearest SEA
-                        grid cell (cell_selection=sea), not the town — which is
-                        the whole point, after a morning that graded A- on shore
-                        readings while it was blowing 15 offshore. The cost of
-                        not saying so is that an angler who checks us against a
-                        land forecast sees us a few degrees cooler and a knot or
-                        two breezier and concludes we are wrong. We are
-                        answering a different, more useful question, and the
-                        label is what makes that legible. */}
-                    <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 800, letterSpacing: 1.4, color: T.brass }}>{CONDITIONS_TITLE}</span>
-                    <span style={{ flexShrink: 0, fontSize: isTablet ? 13 : 11, fontWeight: 900, letterSpacing: 0.6, color: T.oceanDeep, background: sColor, borderRadius: 999, padding: '4px 12px' }}>
-                      {score != null ? `${fishabilityGrade(score)} · ${fishabilityLabel(score)}` : '—'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: isTablet ? 16 : 12 }}>
-                      <div style={{ flexShrink: 0 }}>{weatherIcon(current.weather_code, isTablet ? 54 : 42, T.warn)}</div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: isTablet ? 44 : 34, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{Math.round(current.temperature_2m)}°</div>
-                        <div style={{ fontSize: isTablet ? 15 : 13, color: T.inkSoft, fontWeight: 600, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{weatherLabel(current.weather_code)}</div>
-                        {daily[0] && (
-                          <div style={{ fontSize: sz(12, 14.5, 17), color: T.inkMute, fontWeight: 700, marginTop: 4 }}>
-                            <span style={{ color: T.warn }}>H {Math.round(daily[0].tMax)}°</span>
-                            <span style={{ margin: '0 6px' }}>·</span>
-                            <span>L {Math.round(daily[0].tMin)}°</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {/* Fishability gauge + jump-to-Why link */}
-                    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                      <div style={{ position: 'relative', width: gSize, height: gSize }}>
-                        <svg width={gSize} height={gSize}>
-                          <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={T.cardEdge} strokeWidth={gStroke} opacity={0.5} />
-                          <circle cx={gSize / 2} cy={gSize / 2} r={gR} fill="none" stroke={sColor} strokeWidth={gStroke} strokeLinecap="round"
-                            strokeDasharray={gC} strokeDashoffset={gOff}
-                            style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }} />
-                        </svg>
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: isTablet ? 40 : 32, fontWeight: 900, color: T.ink, lineHeight: 1 }}>{score != null ? fishabilityGrade(score) : '—'}</span>
-                          <span style={{ fontSize: isTablet ? 10 : 8, fontWeight: 800, letterSpacing: 1.2, color: T.inkMute, marginTop: 2 }}>FISHABILITY</span>
-                        </div>
-                      </div>
-                      {/* Severe-weather limiter — the one line the Why card
-                          carried that nothing else shows: without it a
-                          thunderstorm silently caps the score to F. */}
-                      {(() => {
-                        const wc = weatherCapInfo(repHour?.weatherCode);
-                        return wc ? (
-                          <div style={{ fontSize: isTablet ? 13 : 11, fontWeight: 800, color: '#e8a75a', whiteSpace: 'nowrap' }}>
-                            {wc.reason} — capped at {fishabilityGrade(wc.cap)}
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
-                  {/* Best window for whichever tab is active */}
-                  {winLine && (
-                    <div style={{ marginTop: 10, textAlign: 'center', fontSize: sz(12, 14, 16), fontWeight: 700, color: T.inkSoft }}>
-                      {winLine.text} ·{' '}
-                      <span style={{ color: fishabilityColor(winLine.avg), fontWeight: 900 }}>{fishabilityGrade(winLine.avg)}</span>
-                    </div>
-                  )}
-                  {/* Seas + period — shared block, see SeaStateReadout. */}
-                  <SeaStateReadout waveFt={seasFt} periodS={periodS} tier={size} />
-                  {/* Condition chips — wind (+gusts) and tide, ex-glance-row data */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
-                      <Wind size={14} color={T.brass} /> {windTxt} {windKt} kt{gust != null ? ` · gusts ${gust}` : ''}
-                    </span>
-                    {tideVal != null && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 999, padding: sz(7, 9, 11) + 'px ' + sz(13, 16, 20) + 'px', fontSize: sz(12, 14.5, 17), fontWeight: 700, color: T.ink }}>
-                        <Anchor size={14} color={T.brass} /> {tideVal.toFixed(1)} ft{tideTrend ? ` ${tideTrend.toLowerCase()}` : ''}
-                      </span>
-                    )}
-                  </div>
-                  {/* Fishability legend toggle + panel */}
-                  <button className="kyc-press" onClick={() => setShowLegend(v => !v)} style={{
-                    marginTop: 14, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-                    display: 'inline-flex', alignItems: 'center', gap: 5, color: T.brass, fontSize: isTablet ? 13 : 12, fontWeight: 800,
-                  }}>
-                    <Info size={15} /> How the Fishability score works
-                  </button>
-                  {showLegend && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.cardEdge}` }}>
-                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, lineHeight: 1.55, marginBottom: 12 }}>
-                        A letter grade (A–F) for how good the fishing should be, weighted for both catching fish
-                        and a comfortable ride: <strong style={{ color: T.ink }}>seas</strong>,{' '}
-                        <strong style={{ color: T.ink }}>wind</strong>, and{' '}
-                        <strong style={{ color: T.ink }}>wave period</strong>, nudged by the{' '}
-                        <strong style={{ color: T.ink }}>solunar bite</strong> (sun & moon). Higher is better.
-                      </div>
-                      {/* Gradient stops + tick positions match the real 0–100
-                          fishability axis (FISH_STOPS in forecast-extras). */}
-                      {/* Keep these stops identical to FISH_STOPS in
-                          forecast-extras.js — the legend is the promise
-                          the grid's colours have to keep. */}
-                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #8f2417 0%, #8f2417 30%, #c0392b 55%, #e07b2f 66%, #d9b038 76%, #9bb03a 84%, #4fa64a 92%, #63e08a 98%, #63e08a 100%)' }} />
-                      <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
-                        <span style={{ position: 'absolute', left: '0%' }}>F</span>
-                        <span style={{ position: 'absolute', left: '65%', transform: 'translateX(-50%)' }}>C</span>
-                        <span style={{ position: 'absolute', left: '82%', transform: 'translateX(-50%)' }}>B</span>
-                        <span style={{ position: 'absolute', right: '0%' }}>A</span>
-                      </div>
-                      <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 12, lineHeight: 1.5 }}>
-                        Fishability is ReelIntel's own estimate — always confirm marine conditions with your
-                        local NOAA/NWS forecast before heading out.
-                      </div>
-                    </div>
-                  )}
-                </Card>
+                {/* No hero card here. This screen is reached by tapping "See full
+                    conditions" on the Home card, and it used to open by showing
+                    that same card again - the same grade, seas, period, wind and
+                    tide the angler had just read - before the thing they came
+                    for. The grid is the screen now. The score explainer lived in
+                    the card, so it moves to sit under the grid. */}
 
                 {/* Segmented tabs — Overview (24-hour detail) + 10-Day forecast */}
                 <div style={{ position: 'relative', display: 'flex', background: T.oceanDeep, border: `1px solid ${T.cardEdge}`, borderRadius: 16, padding: 4, marginBottom: 14 }}>
@@ -4044,6 +3931,43 @@ export function WeatherForecastScreen({ jurisdiction, state, update, onOceanMaps
                     subtitle={tideSubtitle}
                   />
                 )}
+
+                <div style={{ marginBottom: 6 }}>
+                  {/* Fishability legend toggle + panel */}
+                  <button className="kyc-press" onClick={() => setShowLegend(v => !v)} style={{
+                    marginTop: 2, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 5, color: T.brass, fontSize: isTablet ? 13 : 12, fontWeight: 800,
+                  }}>
+                    <Info size={15} /> How the Fishability score works
+                  </button>
+                  {showLegend && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.cardEdge}` }}>
+                      <div style={{ fontSize: isTablet ? 14 : 12, color: T.inkSoft, lineHeight: 1.55, marginBottom: 12 }}>
+                        A letter grade (A–F) for how good the fishing should be, weighted for both catching fish
+                        and a comfortable ride: <strong style={{ color: T.ink }}>seas</strong>,{' '}
+                        <strong style={{ color: T.ink }}>wind</strong>, and{' '}
+                        <strong style={{ color: T.ink }}>wave period</strong>, nudged by the{' '}
+                        <strong style={{ color: T.ink }}>solunar bite</strong> (sun & moon). Higher is better.
+                      </div>
+                      {/* Gradient stops + tick positions match the real 0–100
+                          fishability axis (FISH_STOPS in forecast-extras). */}
+                      {/* Keep these stops identical to FISH_STOPS in
+                          forecast-extras.js — the legend is the promise
+                          the grid's colours have to keep. */}
+                      <div style={{ height: 12, borderRadius: 999, background: 'linear-gradient(90deg, #8f2417 0%, #8f2417 30%, #c0392b 55%, #e07b2f 66%, #d9b038 76%, #9bb03a 84%, #4fa64a 92%, #63e08a 98%, #63e08a 100%)' }} />
+                      <div style={{ position: 'relative', height: isTablet ? 16 : 14, marginTop: 6, fontSize: isTablet ? 12 : 10, fontWeight: 800, color: T.inkMute }}>
+                        <span style={{ position: 'absolute', left: '0%' }}>F</span>
+                        <span style={{ position: 'absolute', left: '65%', transform: 'translateX(-50%)' }}>C</span>
+                        <span style={{ position: 'absolute', left: '82%', transform: 'translateX(-50%)' }}>B</span>
+                        <span style={{ position: 'absolute', right: '0%' }}>A</span>
+                      </div>
+                      <div style={{ fontSize: isTablet ? 12 : 10, color: T.inkMute, marginTop: 12, lineHeight: 1.5 }}>
+                        Fishability is ReelIntel's own estimate — always confirm marine conditions with your
+                        local NOAA/NWS forecast before heading out.
+                      </div>
+                    </div>
+                  )}
+                </div>
 
               </>
             );
@@ -4335,6 +4259,16 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
     ] : []),
   ];
 
+  // Where the Wave and Period rows sit, measured from the same heights
+  // the rows are drawn with so the box cannot drift off them.
+  const seaBox = (() => {
+    const wi = ROWS.findIndex(r => r.key === 'wave');
+    const pi = ROWS.findIndex(r => r.key === 'per');
+    if (wi < 0 || pi !== wi + 1) return null;
+    const above = ROWS.slice(0, wi).reduce((sum, r) => sum + r.h, 0);
+    return { top: HEAD_H + ICON_H + TICK_H + above, height: ROWS[wi].h + ROWS[pi].h };
+  })();
+
   const tickBg = `repeating-linear-gradient(90deg, ${T.cardEdge} 0 1px, transparent 1px ${COL_W / 6}px)`;
   // Today from the clock, NOT from cols[0]: the grid now opens with
   // history, so before 6am the first block belongs to yesterday and
@@ -4387,7 +4321,22 @@ function ForecastMatrix({ cols, isTablet, tide, mode, title, subtitle }) {
         {subtitle && <span style={{ fontSize: isTablet ? 11 : 9, color: T.inkMute }}>{subtitle}</span>}
       </div>
       <TimelineBar blocks={cols} scrollRef={scrollRef} isTablet={isTablet} mode={mode} />
-      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', position: 'relative' }}>
+        {/* The sea-state box. Wave and Period are the two rows that decide
+            whether the ride is worth it, and they read as one fact - a
+            2 ft sea at 4 seconds and at 9 seconds are different days. So
+            they get the same treatment across the grid that the read
+            line gives one column down it: a light band with a bright
+            edge. It spans the label column too, so the box names what it
+            holds. */}
+        {seaBox && (
+          <div style={{
+            position: 'absolute', left: -4, right: -4, top: seaBox.top, height: seaBox.height,
+            border: '1.5px solid rgba(255,255,255,0.55)', borderRadius: 8,
+            background: 'rgba(255,255,255,0.05)', boxShadow: '0 0 0 1px rgba(2,22,36,0.5)',
+            zIndex: 4, pointerEvents: 'none',
+          }} />
+        )}
         {/* Fixed label column */}
         <div style={{ flexShrink: 0, background: T.card, paddingRight: 10, borderRight: `1px solid ${T.cardEdge}` }}>
           <div style={{ height: HEAD_H }} />
