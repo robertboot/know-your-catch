@@ -672,7 +672,15 @@ const SITE = 'https://www.reelintel.ai';
 
    Featured with the angler's permission — the submission email asks for
    it explicitly, and a catch goes in here only if that line was kept. */
-const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = null;
+const PB_SPOTLIGHT: { image: string; alt: string; headline: string; body: string } | null = {
+  // A new file name every issue, never a reused one: mail clients cache
+  // images by address, and the last PB went out as pb-spotlight.jpg.
+  image: 'pb-spotlight-2026-11-30.jpg',
+  alt: 'Harper on the dock holding a 59-inch wahoo, a new personal best',
+  headline: 'Harper\u2019s 59-inch wahoo \u2014 a new PB',
+  body: '59 inches, caught trolling a DTX Minnow 220 in Alabama waters on November 23. '
+      + 'Congratulations Harper, and thank you for sending it in.',
+};
 
 /* The browser version, in the slot the spotlight usually holds.
    One image and one link, because a newsletter ad that needs three
