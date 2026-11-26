@@ -117,7 +117,7 @@ const LAYERS = {
     dataset: 'erdMH1chla8day_R2022NRT', variable: 'chlorophyll',
     units: 'mg/m³',
     legendStops: ['0.03', '0.1', '0.5', '1', '3', '30'],
-    blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water. Sharp areas are yesterday\'s satellite pass; softer areas are the 8-day average filling in under clouds.',
+    blurb: 'Green = phytoplankton blooms. Bait and gamefish stack on the color breaks between blue (clear) and green (rich) water. Sharp areas are the last three days of satellite passes; softer areas are the 8-day average filling in under clouds.',
   },
   sst: {
     key: 'sst', label: 'Sea temp',
@@ -128,14 +128,17 @@ const LAYERS = {
   },
 };
 
-/* Chlorophyll is one button, two images. The 8-day composite has no
-   cloud holes but smears a break that moved during the week; the daily
-   NOAA-20 VIIRS pass (chld-latest.png, see refresh-ocean-maps) is sharp
-   but blank wherever cloud sat. Drawn daily-over-8-day, the sharp edges
-   show where yesterday was clear and the composite fills the holes, on
-   the same log 0.03-30 scale so the two meet without a seam in colour.
-   Latest view only: there is no daily snapshot for a past date. */
-const CHL_DAILY_KEY = 'chld';
+/* Chlorophyll is one button, several images. The 8-day composite has no
+   cloud holes but is a 4 km grid - about two nautical miles a pixel,
+   which on a 150 nm view is visibly blocks, and Rob said so. Over it go
+   the three newest NOAA-21 VIIRS passes at 750 m (chlh0 newest … chlh2,
+   see refresh-ocean-maps): five times finer each way, blank wherever
+   cloud sat that day. Stacked oldest-first, the newest clear look wins
+   every pixel, an older pass shows through its cloud holes, and the
+   composite fills whatever all three missed - on one log 0.03-30 scale,
+   so they meet without a seam in colour.
+   Latest view only: there is no pass snapshot for a past date. */
+const CHL_PASS_KEYS = ['chlh2', 'chlh1', 'chlh0'];   // drawn in this order
 
 /* Suggested-spot colours by edge kind — match the popup copy. */
 export const SPOT_COLORS = {
@@ -159,7 +162,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
-  const dailyRef = useRef(null);   // the daily chlorophyll pass over the 8-day one
+  const dailyRef = useRef([]);     // the 750 m chlorophyll passes over the 8-day one
   /* No satellite view by default, current on.
      A composite is a wall of colour that hides everything drawn on it, so
      opening on one meant the spots, catches and current were all invisible
@@ -204,19 +207,15 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
   const [speciesOn, setSpeciesOn] = useState(readSpeciesPrefs);
   const [zoneRows, setZoneRows] = useState(null);
 
-  /* The exclusivity rule, in one place so the chips cannot drift from it.
-     clearOverlays runs when a composite is chosen; toggleOverlay takes the
-     composite away when an overlay goes ON — but not when one goes off, so
-     clearing the last overlay leaves you on bare water rather than
-     surprising you with a satellite image. */
-  const clearOverlays = () => {
-    setShowSpots(false); setShowCatches(false);
-    setShowCurrent(false); setShowSpecies(false);
-  };
-  const toggleOverlay = (setter) => setter(prev => {
-    if (!prev) setActive(null);
-    return !prev;
-  });
+  /* Overlays and the satellite picture are independent.
+     They used to be mutually exclusive - picking chlorophyll cleared the
+     spots, switching spots on took the picture away - on the theory that
+     a dot over solid colour is unreadable. Rob's answer, from the boat:
+     the whole point is to see a suggested spot, a past catch or the
+     current AGAINST the colour break it sits on. So the only rule left
+     is the one between the two pictures: chlorophyll or sea temp, one at
+     a time. Everything else stays where the angler put it. */
+  const toggleOverlay = (setter) => setter(prev => !prev);
   const [outlook, setOutlook] = useState(null);   // ten-day, from the Home fetch
   const [dayPick, setDayPick] = useState(0);      // index into outlook
   const zonesRef = useRef(null);
@@ -276,7 +275,8 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
     const map = mapRef.current;
     if (!map) return;
     if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
-    if (dailyRef.current) { map.removeLayer(dailyRef.current); dailyRef.current = null; }
+    for (const l of dailyRef.current || []) map.removeLayer(l);
+    dailyRef.current = [];
     let alive = true;
     // No layer chosen: bare basemap, and no "didn't load" to explain —
     // nothing was asked for.
@@ -344,23 +344,27 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       }).catch(() => onError?.());
     };
 
-    /* Best effort: no daily image (not rendered yet, or nothing cached
-       offline) just leaves the 8-day composite showing, which is the
-       whole picture this layer used to be. */
+    /* Best effort: a pass that is missing (not rendered yet, or nothing
+       cached offline) is simply not drawn, and the 8-day composite shows
+       through, which is the whole picture this layer used to be.
+       zIndex, not arrival order, decides what is on top: the images load
+       when they load, and the newest pass must win wherever it arrives. */
     const addDaily = () => {
-      const url = snapshotUrl(CHL_DAILY_KEY);
-      if (!url) return;
-      imageUrl(url).then(({ url: src, fresh }) => {
-        if (!alive || !src) return;
-        const layer = L.imageOverlay(src, REGION_BOUNDS, { opacity: 0.85 });
-        layer.on('error', () => map.removeLayer(layer));
-        layer.addTo(map);
-        dailyRef.current = layer;
-        // Yesterday's pass is the layer that goes stale fastest.
-        fresh?.then((next) => {
-          if (alive && next && dailyRef.current === layer) layer.setUrl(next);
-        });
-      }).catch(() => {});
+      CHL_PASS_KEYS.forEach((key, i) => {
+        const url = snapshotUrl(key);
+        if (!url) return;
+        imageUrl(url).then(({ url: src, fresh }) => {
+          if (!alive || !src) return;
+          const layer = L.imageOverlay(src, REGION_BOUNDS, { opacity: 0.85, zIndex: 2 + i });
+          layer.on('error', () => map.removeLayer(layer));
+          layer.addTo(map);
+          dailyRef.current.push(layer);
+          // The passes are the layers that go stale fastest.
+          fresh?.then((next) => {
+            if (alive && next && dailyRef.current.includes(layer)) layer.setUrl(next);
+          });
+        }).catch(() => {});
+      });
     };
 
     // "Latest" reads the pre-rendered snapshot; if it's missing (bucket
@@ -979,15 +983,10 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
       {/* Layer toggle + marker overlays. Satellite layers are exclusive;
           Spots and Catches stack on top of whichever is active. */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        {/* A satellite composite and anything drawn on top are mutually
-            exclusive, in both directions.
-            Chlorophyll and sea temp are solid colour edge to edge, so a
-            dot, a blob or a current streak over one is just one more
-            colour — unreadable, and worse, readable-looking. So picking a
-            composite clears the overlays, and switching any overlay on
-            takes the picture away. Tapping the composite you are already
-            on also turns it off, which is how you get to bare water.
-            The four overlays are free to combine with each other. */}
+        {/* Chlorophyll and sea temp swap with each other; tapping the one
+            you are on turns it off, which is how you get to bare water.
+            The four overlays draw on top of either and are free to
+            combine - see toggleOverlay. */}
         <div style={{ width: '100%' }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.1,
                         color: T.inkMute, textTransform: 'uppercase', marginBottom: 6 }}>
@@ -996,7 +995,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {Object.values(LAYERS).map(l => viewChip(active === l.key, l.label, () => {
               setActive(prev => (prev === l.key ? null : l.key));
-              if (active !== l.key) clearOverlays();
             }))}
           </div>
 
@@ -1184,7 +1182,6 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {Object.values(LAYERS).map(l => viewChip(active === l.key, l.label, () => {
                     setActive(prev => (prev === l.key ? null : l.key));
-                    if (active !== l.key) clearOverlays();
                   }))}
                 </div>
 
@@ -1357,7 +1354,7 @@ export function OceanMapsScreen({ isTablet, initialLayer, state, embedded = fals
           </div>
         )}
         <div style={{ fontSize: 11, color: T.inkMute, marginTop: 8 }}>
-          Data: NOAA CoastWatch / NASA Ocean Color (public domain). 8-day composites — cloud gaps fill in over time.
+          Data: NOAA CoastWatch / NASA Ocean Color (public domain). 750 m satellite passes over an 8-day composite — cloud gaps fill in over time.
         </div>
       </Card>
       )}

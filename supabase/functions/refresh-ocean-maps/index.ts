@@ -13,7 +13,8 @@
    Writes to the public `ocean-maps` bucket:
      chl-latest.png    chlorophyll, current 8-day composite
      sst-latest.png    sea surface temp, current daily MUR field
-     chld-latest.png   chlorophyll, newest single day (NOAA-20 VIIRS)
+     chlh0..2-latest.png  chlorophyll, three newest 750 m passes (NOAA-21 VIIRS)
+     chld-latest.png   a copy of chlh0, the name older app builds draw
      manifest.json     { capturedAt, layers: { chl: {...}, sst: {...} } }
 
    The manifest is what the client checks — it carries per-layer ok/
@@ -68,24 +69,66 @@ const FETCH_TIMEOUT_MS = 90_000;
 const LAYERS = [
   { key: 'chl',  dataset: 'erdMH1chla8day_R2022NRT', variable: 'chlorophyll' },
   { key: 'sst',  dataset: 'jplMURSST41',             variable: 'analysed_sst' },
-  { key: 'chld', dataset: 'noaacwN20VIIRSchlaDaily', variable: 'chlor_a' },
 ];
 
-/* Daily chlorophyll: NOAA-20 VIIRS, 4 km, one day old (checked
-   2026-11-05: newest day 2026-11-03). The S-NPP twin
-   (noaacwNPPVIIRSchlaDaily) ends with that satellite's mission on
-   2026-11-02, so it is not used. Daily means sharper breaks and cloud
-   holes; the 8-day layer stays as the gap-free view.
+/* Sharp chlorophyll: NOAA-21 VIIRS at 750 m, the three newest passes.
 
-   Only coastwatch.noaa.gov carries it (coastwatch.pfeg answers 404), so
-   it is fetched from there directly rather than through the host walk.
-   griddap .transparentPng with the same log 0.03-30 mg/m3 scale the
-   8-day legend prints, so both chlorophyll layers read on one key. The
-   dataset has an altitude axis with a single 0.0 value. */
+   The layer this replaces was NOAA-20 VIIRS at 4 km - one pixel is about
+   two nautical miles, so a 150 nm view of it is visibly squares, and Rob
+   asked whether the picture could be more accurate. It could: the same
+   server publishes the US sector at 750 m (0.0075 deg), five times finer
+   each way. Measured 2026-11-26 over this box: the 4 km layer covered
+   14.8% of it and its newest day was ten days old; one 750 m pass
+   covered 21.4%, three or four stacked about 36%, newest four days old.
+
+   Three passes, not one, because a single day is mostly cloud. The app
+   stacks them oldest-first over the 8-day composite, so the newest clear
+   look wins each pixel.
+
+   Only coastwatch.noaa.gov carries it, so it is fetched from there
+   directly rather than through the host walk. That server answers 502
+   to roughly one request in three and then succeeds on the next, so
+   every fetch here retries. griddap .transparentPng with the same log
+   0.03-30 mg/m3 scale the legend prints. The dataset has an altitude
+   axis with a single 0.0 value, and a time axis of real pass times -
+   which is why the passes are asked for by the time the axis reports
+   rather than as "(last-1)", which this server quietly reads as (last). */
 const CW_ERDDAP = 'https://coastwatch.noaa.gov/erddap';
-function chlDailyUrl(dataset: string, variable: string) {
-  const subset = `${variable}[(last)][(0.0)][(${REGION.south}):(${REGION.north})][(${REGION.west}):(${REGION.east})]`;
-  return `${CW_ERDDAP}/griddap/${dataset}.transparentPng?${subset}&.colorBar=Rainbow||Log|0.03|30|`;
+const CHL_HI = { dataset: 'noaacwN21VIIRSchlaNSWUSDaily', variable: 'chlor_a', passes: 3 };
+const HI_TRIES = 3;
+
+function chlHiUrl(timeIso: string) {
+  const subset = `${CHL_HI.variable}[(${timeIso})][(0.0)][(${REGION.south}):(${REGION.north})][(${REGION.west}):(${REGION.east})]`;
+  return `${CW_ERDDAP}/griddap/${CHL_HI.dataset}.transparentPng?${subset}&.colorBar=Rainbow||Log|0.03|30|`;
+}
+
+/** The newest pass times, newest first. Empty if the axis cannot be read. */
+async function chlHiTimes(): Promise<string[]> {
+  const url = `${CW_ERDDAP}/griddap/${CHL_HI.dataset}.json?time[last-${CHL_HI.passes - 1}:1:last]`;
+  for (let i = 0; i < HI_TRIES; i++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20_000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      if (r.ok) {
+        const rows = (await r.json())?.table?.rows as string[][] | undefined;
+        const times = (rows || []).map((x) => x[0]).filter(Boolean).reverse();
+        if (times.length) return times;
+      }
+    } catch { /* retried below */ } finally { clearTimeout(timer); }
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  return [];
+}
+
+async function fetchHi(url: string) {
+  let last: { ok: true; bytes: Uint8Array } | { ok: false; error: string } = { ok: false, error: 'not tried' };
+  for (let i = 0; i < HI_TRIES; i++) {
+    last = await fetchLayerFrom(url, CW_ERDDAP);
+    if (last.ok) return last;
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  return last;
 }
 
 /* SST colour range in °C, by month. Must stay in sync with sstRangeC()
@@ -279,10 +322,8 @@ Deno.serve(async (req: Request) => {
     if (layer.key === 'sst') sstRange = await measuredSstRangeC(layer.dataset, layer.variable);
     const url = layer.key === 'sst'
       ? sstGriddapUrl(layer.dataset, layer.variable, sstRange![0], sstRange![1])
-      : layer.key === 'chld'
-        ? chlDailyUrl(layer.dataset, layer.variable)
-        : wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
-    const got = layer.key === 'chld' ? await fetchLayerFrom(url, CW_ERDDAP) : await fetchLayer(url);
+      : wmsUrl(layer.key, layer.dataset, layer.variable, width, height);
+    const got = await fetchLayer(url);
     if (!got.ok) {
       // Leave whatever is already in the bucket alone — a stale image
       // beats a missing one.
@@ -317,6 +358,33 @@ Deno.serve(async (req: Request) => {
       dataset: layer.dataset, width, height,
     };
   }
+
+  /* The 750 m passes, fetched together: one takes ~16 s to render, and
+     three in a row plus retries would crowd the function's wall clock.
+     chlh0 is the newest. A pass that fails leaves the file already in the
+     bucket alone - an older sharp image beats a hole.
+
+     The newest pass is ALSO written as chld-latest.png. Every app already
+     installed draws that name over the composite, so they get the sharp
+     picture today, without waiting for an update. */
+  const hiTimes = await chlHiTimes();
+  if (!hiTimes.length) results.chlh = { ok: false, error: 'could not read pass times', dataset: CHL_HI.dataset };
+  await Promise.all(hiTimes.map(async (t, i) => {
+    const key = `chlh${i}`;
+    const got = await fetchHi(chlHiUrl(t));
+    if (!got.ok) { results[key] = { ok: false, error: got.error, dataset: CHL_HI.dataset, time: t }; return; }
+    const names = i === 0 ? [`${key}-latest.png`, 'chld-latest.png'] : [`${key}-latest.png`];
+    for (const path of names) {
+      const { error } = await db.storage.from(BUCKET).upload(path, got.bytes, {
+        contentType: 'image/png', upsert: true, cacheControl: '3600',
+      });
+      if (error) { results[key] = { ok: false, error: `upload ${path}: ${error.message}`, dataset: CHL_HI.dataset, time: t }; return; }
+    }
+    published += 1;
+    results[key] = { ok: true, path: names[0], bytes: got.bytes.byteLength, dataset: CHL_HI.dataset, time: t };
+    // The admin Ocean panel reads the daily layer's status under its old key.
+    if (i === 0) results.chld = { ...(results[key] as object), path: 'chld-latest.png' };
+  }));
 
   const manifest = {
     capturedAt,
