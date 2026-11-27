@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /admin
 
-Sitemap: https://reelintel.ai/sitemap.xml
+Sitemap: https://www.reelintel.ai/sitemap.xml

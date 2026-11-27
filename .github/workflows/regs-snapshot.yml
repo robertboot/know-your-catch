@@ -1,0 +1,51 @@
+# Keeps the public regulation pages honest.
+#
+# Once a day this reads the verified regulations the way any visitor's
+# browser can, works out open/closed for today with the app's own season
+# logic, and writes regulations/public/snapshot.json. If that file is
+# different from the one in the repo - a rule changed, or a date passed
+# and a season flipped - it commits it, and the commit is what makes the
+# site rebuild its pages. No change, no commit, no deploy.
+#
+# The key below is the site's PUBLISHABLE key. It is in the JavaScript
+# every visitor downloads and can only read what the public can read; it
+# is not a secret and is deliberately not stored as one.
+name: Regulation pages snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * *'   # 09:23 UTC, about 3:23 am Central
+
+permissions:
+  contents: write
+
+concurrency:
+  group: regs-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Rebuild the snapshot
+        env:
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_GmKeILiR7nbmeS3bcg_ZUQ_LEIuq9kn
+        run: node scripts/reg-snapshot.mjs
+      - name: Commit if it changed
+        run: |
+          if git diff --quiet -- regulations/public/snapshot.json; then
+            echo "No change."
+            exit 0
+          fi
+          git config user.name "reelintel-bot"
+          git config user.email "bot@reelintel.ai"
+          git add regulations/public/snapshot.json
+          git commit -m "regs: daily public snapshot ($(date -u +%F))"
+          git push

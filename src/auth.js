@@ -10,6 +10,7 @@
                of https://reelintel.ai/reset-password → detectSessionInUrl
                picks it up → ResetPasswordPage calls updatePassword. */
 import { client } from './supabase-client.js';
+import { getReferral } from './referral.js';
 
 /* Where password-reset (and email-confirm) links land. On web
    (reelintel.ai OR www.reelintel.ai OR any Vercel preview) we
@@ -130,10 +131,12 @@ export async function signUp({ email, password }) {
   const trimmed = (email || '').trim();
   const c = client();
   if (!c) return { ok: false, error: 'Supabase is not configured.' };
+  const ref = getReferral();
   try {
     const { data, error } = await c.auth.signUp({
       email: trimmed, password,
-      options: { emailRedirectTo: RESET_REDIRECT },
+      // `ref` is which link brought them here, if any - see referral.js.
+      options: { emailRedirectTo: RESET_REDIRECT, ...(ref ? { data: { ref: ref.ref, ref_at: ref.at } } : {}) },
     });
     if (error) return { ok: false, error: error.message || String(error) };
     if (data.session) markAuthedLocally(trimmed);

@@ -695,7 +695,7 @@ const DESKTOP_AD: { image: string; alt: string; line: string; cta: string; href:
   line: 'The planning tools you know, on a full-size screen: satellite maps, marine '
       + 'forecasts and your own catches on one map. Free, and nothing to download.',
   cta: 'Start planning free',
-  href: 'https://www.reelintel.ai/app?signup&next=plan',
+  href: 'https://www.reelintel.ai/app?signup&next=plan&ref=newsletter',
 };
 
 const PB_MAILTO = "mailto:harper@reelintel.ai?subject=My%20personal%20best&body=Hi%20Harper%2C%0A%0AHere%27s%20my%20personal%20best%20%E2%80%94%20photo%20attached.%0A%0ASpecies%3A%0ALength%20/%20weight%3A%0AGeneral%20area%20%28no%20exact%20numbers%20needed%29%3A%0ADate%20caught%3A%0A%0AShirt%20size%3A%0AMailing%20address%3A%0A%0A%0A---%20Permission%20---%0AKeep%20the%20line%20below%20if%20you%27re%20happy%20for%20us%20to%20run%20this%20catch%20in%20the%0Aweekly%20newsletter.%20Delete%20it%20if%20you%27d%20rather%20we%20didn%27t%20%E2%80%94%20either%20way%20the%0Ashirt%20is%20yours.%0A%0AI%20give%20ReelIntel%20permission%20to%20feature%20this%20catch%2C%20my%20first%20name%20and%20this%0Aphoto%20in%20the%20ReelIntel%20weekly%20email.%20My%20exact%20location%20will%20not%20be%20shared.%0A%0AThanks%2C%0A";
@@ -927,6 +927,17 @@ function renderHtml(p: any, best: Day | undefined): string {
       </td></tr>
     </table></div>`)}
 
+  ${wrap(`<div style="padding:26px 0 0;font-family:${F};">
+    <!-- The pass-it-on line. A weekly email that is useful gets
+         forwarded anyway; this gives the person it lands on somewhere to
+         go, and ?ref=forward says afterwards that this is how they came. -->
+    <div style="border:1px solid ${EDGE};border-radius:12px;padding:14px 16px;font-size:14px;color:${SOFT};line-height:1.6;">
+      <strong style="color:${INK};">Fish with someone who should see this?</strong>
+      Forward it to them. If this was forwarded to you, the app and this weekly email are free:
+      <a href="${SITE}/?ref=forward" style="color:${CYAN};text-decoration:none;font-weight:bold;">get ReelIntel</a>.
+    </div>
+  </div>`)}
+
   ${wrap(`<div style="padding:30px 0 0;font-family:${F};">
     <div style="font-size:15px;color:${INK};line-height:1.6;">
       Tight lines this week. If something in here helped you pick a day &mdash; or if it got it wrong &mdash;
@@ -1004,5 +1015,6 @@ function renderText(p: any, best: Day | undefined): string {
     `Regulations change without notice. Confirm with ${p.agency} or NOAA before you fish.`,
     '',
     `To stop receiving this, reply with "unsubscribe" or email harper@reelintel.ai.`);
+  lines.push('', 'Fish with someone who should see this? Forward it. Forwarded to you? The app and this email are free: ' + SITE + '/?ref=forward');
   return lines.join('\n');
 }

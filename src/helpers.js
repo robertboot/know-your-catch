@@ -137,25 +137,42 @@ function mkDate(monthStr, day, year) {
 //   - no years at all: fallbackYear for both, and an inverted result
 //     (Nov 1 – Feb 28) is a calendar wrap → end rolls into next year
 const RANGE_SEP = `(?:\\s*[–—-]\\s*|\\s+(?:to|through|thru|until)\\s+)`;
-const RANGE_RE_SRC = `${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?${RANGE_SEP}${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`;
+// The second month is optional - "April 1-30, 2026" is a range inside one
+// month, and reading it as no range at all left an April spawning closure
+// invisible. A bare second number is only a day when it is not a measure:
+// "Jan 1 - 2 fish" and "Sept 1 - 15 in" are limits, not dates.
+const NOT_A_MEASURE = `(?!\\d)(?!\\s*(?:in\\b|inch|fish|per\\b|ft\\b|lb|"|\u201d))`;
+const RANGE_RE_SRC = `${MONTH_RE}\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?${RANGE_SEP}(?:${MONTH_RE}\\s+(\\d{1,2})|(\\d{1,2})${NOT_A_MEASURE})(?:,?\\s*(\\d{4}))?`;
 function parseRanges(text, fallbackYear) {
   const re = new RegExp(RANGE_RE_SRC, 'ig');
   const out = [];
   let m;
   while ((m = re.exec(text)) !== null) {
-    const yearA = m[3] ? +m[3] : (m[6] ? +m[6] : fallbackYear);
-    const yearB = m[6] ? +m[6] : fallbackYear;
+    // Groups: 1 month, 2 day, 3 year | 4 month, 5 day (two-month form)
+    // or 6 day (same-month form) | 7 year.
+    const monB = m[4] || m[1];
+    const dayB = +(m[5] || m[6]);
+    const yearA = m[3] ? +m[3] : (m[7] ? +m[7] : fallbackYear);
+    const yearB = m[7] ? +m[7] : (m[4] ? fallbackYear : yearA);
     let a = mkDate(m[1], +m[2], yearA);
-    let b = mkDate(m[4], +m[5], yearB);
+    let b = mkDate(monB, dayB, yearB);
     // Calendar wrap without explicit years: "Nov 1 – Feb 28" means
     // the end lands in the following year, not eleven months before
     // the start.
-    if (a && b && b < a && !m[3] && !m[6]) {
-      b = mkDate(m[4], +m[5], yearB + 1);
+    const wrapped = !!(a && b && b < a && !m[3] && !m[7]);
+    if (wrapped) {
+      b = mkDate(monB, dayB, yearB + 1);
     }
     // Explicitly-dated inverted ranges are data errors — drop them
     // rather than evaluate a window that can never be active.
-    if (a && b && b >= a) out.push({ a, b, idx: m.index, end: m.index + m[0].length });
+    if (a && b && b >= a) out.push({ a, b, idx: m.index, end: m.index + m[0].length, yearless: !m[3] && !m[7] });
+    // "Nov 1 – Feb 28" with no years, read in January, is the window that
+    // began LAST November. Only the coming one was produced, so a winter
+    // closure read as not-yet-started for its whole second half.
+    if (a && b && wrapped) {
+      const a0 = mkDate(m[1], +m[2], yearA - 1), b0 = mkDate(monB, dayB, yearB);
+      if (a0 && b0 && b0 >= a0) out.push({ a: a0, b: b0, idx: m.index, end: m.index + m[0].length });
+    }
   }
   return out;
 }
@@ -188,10 +205,47 @@ function splitRanges(raw, ranges) {
     const before = o.slice(0, r.idx).split(/[;.]/).pop();
     const after = o.slice(r.end ?? r.idx).split(/[;.]/)[0];
     const ranPast = RAN_BEFORE_RE.test(before) || ENDED_AFTER_RE.test(after);
-    if (closedAt >= 0 && r.idx >= closedAt && !ranPast) closedRanges.push(r);
+    // "Closed Oct 15 - Nov 30; open Dec 1 - Oct 14 otherwise": the second
+    // range sits after the word "closed" but its own clause says open.
+    // ...or says it straight after: "May 1 - Dec 31, 2026 open, next
+    // closure begins Jan 1".
+    const saysOpen = (/\bopen\b/.test(before) && !CLOSURE_VOCAB_RE.test(before))
+      || /^[\s,]*open\b/.test(after);
+    if (closedAt >= 0 && r.idx >= closedAt && !ranPast && !saysOpen) closedRanges.push(r);
     else openRanges.push(r);
   }
   return { closedAt, closedRanges, openRanges };
+}
+
+/* The sentence to judge, with commentary set aside.
+
+   Parentheses in these rows are asides, and they are full of dates that
+   are not the season: "Year-round (Sep 1, 2025 - Aug 31, 2026 regulation
+   cycle)" is open all year, but its aside is a date range that ended, so
+   it read as a season that had ended - Texas snook showed Closed. And
+   "Open year-round except closed April 1-30, 2026 (Jan 1 - Mar 31 and
+   May 1 - Dec 31)" lists its OPEN months after the word "closed", so they
+   read as closures and Florida Atlantic amberjack showed closed in
+   November.
+
+   So the text outside the parentheses is read first, and used alone when
+   it says enough to decide: a date range, "year-round", or a stated
+   closure. Only when it says nothing of the kind - "Open (June 1 - Aug
+   31)" - are the parentheses the season, and then they are kept. */
+function seasonCore(full) {
+  // An aside that itself states a closure or a prohibition is not
+  // commentary - "Year-round (closed November 1 - November 30)" - and
+  // stays in the sentence.
+  const outside = full
+    .replace(/\([^)]*\)/g, (p) => (CLOSURE_VOCAB_RE.test(p.toLowerCase()) || PROHIBITED_RE.test(p) ? p : ' '))
+    .replace(/\s{2,}/g, ' ').trim();
+  if (!outside || outside === full) return full;
+  const lo = outside.toLowerCase();
+  const decisive = parseRanges(outside, 2000).length > 0
+    || /\byear[- ]round\b/.test(lo)
+    || /^closed\b/.test(lo)
+    || PROHIBITED_RE.test(lo);
+  return decisive ? outside : full;
 }
 
 /* "Closed — …", "Closed. …", "Closed; …": the row opens by stating its
@@ -209,7 +263,7 @@ const inRange = (d, r) => d >= r.a && d <= r.b;
 export function seasonState(open, today = new Date()) {
   const fallback = (status) => ({ status, reason: cleanSeason(open) || 'See official source' });
   if (!open) return { status: 'unknown', reason: 'No season on file' };
-  const raw = String(open).trim();
+  const raw = seasonCore(String(open).trim());
   const o = raw.toLowerCase();
   const year = today.getUTCFullYear();
 
@@ -247,16 +301,63 @@ export function seasonState(open, today = new Date()) {
     // plan trips around imminent openers (gag grouper, greater
     // amberjack reopening Sept 1). Farther-off reopenings stay closed.
     const reopen = addDay(activeClosure.b);
+    /* The day a closure ends is only the day the season opens if the
+       sentence has no open window of its own. "Open May 1 - June 30
+       (currently CLOSED July 1 - December 31)" does not open on Jan 1;
+       it opens on the next May 1.
+       Only a window written WITHOUT a year can be carried forward like
+       that - it is a standing annual season. One written with its year,
+       "Open Dec 1, 2025 - Oct 14, 2026; closed Oct 15 - Nov 30", is last
+       season's dates, and there the end of the closure is the opener. */
+    const annual = openRanges.filter(r => r.yearless);
+    if (annual.length && !openRanges.some(r => inRange(reopen, r))) {
+      const nextStart = annual.map((r) => {
+        const d = new Date(r.a);
+        while (d <= today) d.setUTCFullYear(d.getUTCFullYear() + 1);
+        return d;
+      }).sort((x, y) => x - y)[0];
+      if (nextStart - reopen > DAY_MS) {
+        if (nextStart - today <= OPENS_SOON_DAYS * DAY_MS)
+          return { status: 'upcoming', reason: `Opens ${fmtDate(nextStart)}`, opensOn: nextStart.toISOString() };
+        return { status: 'closed', reason: `Closed until ${fmtDate(nextStart)}`, opensOn: nextStart.toISOString() };
+      }
+    }
     if (reopen - today <= OPENS_SOON_DAYS * DAY_MS)
       return { status: 'upcoming', reason: `Opens ${fmtDate(reopen)}`, opensOn: reopen.toISOString() };
     return { status: 'closed', reason: `Closed until ${fmtDate(reopen)}`, opensOn: reopen.toISOString() };
   }
+
+  // "Year-round" is the answer. Any other date range in the sentence is
+  // a detail of it - a regulation cycle, a licence year - not a season
+  // that can end. Only an active closure, handled above, overrides it.
+  //
+  // Unless the sentence forbids keeping the fish. "Year-round (harvest
+  // prohibited)", "Year-round closure", "Year-round closed to retention"
+  // are how a protected species is written, and the prohibition is as
+  // often inside the parentheses as outside them - so it is looked for
+  // in the whole sentence, not the trimmed one.
+  const fullLo = String(open).toLowerCase();
+  // "Year-round closure" and "closed year-round" forbid; "subject to
+  // closure if the quota is met" and "no seasonal closure" do not.
+  const forbids = PROHIBITED_RE.test(fullLo)
+    || /\byear[- ]round\s+(?:clos|harvest\s+prohib)/.test(fullLo)
+    || /\bclosed\s+year[- ]round\b/.test(fullLo);
+  if (/^(open\s+)?year[- ]round\b/.test(o) && !forbids)
+    return { status: 'open', reason: closedRanges.length ? 'Open (outside the stated closure)' : 'Open year-round' };
+  if (/^(open\s+)?year[- ]round\b/.test(o) && forbids && !ranges.length)
+    return { status: 'closed', reason: cleanSeason(open) || 'Retention prohibited' };
 
   if (openRanges.length) {
     if (openRanges.some(r => inRange(today, r)))
       return { status: 'open', reason: cleanSeason(open) };
     const next = openRanges.filter(r => today < r.a).sort((x, y) => x.a - y.a)[0];
     if (next) return { status: 'upcoming', reason: `Opens ${fmtDate(next.a)}`, opensOn: next.a.toISOString() };
+    // "Open Dec 1, 2025 - Oct 14, 2026; closed Oct 15 - Nov 30, 2026",
+    // read in December: last season's window is over, but so is the
+    // closure that followed it, and the fish is open again.
+    const lastOpenEnd = openRanges.reduce((m, r) => (r.b > m ? r.b : m), openRanges[0].b);
+    if (closedRanges.some(r => r.a > lastOpenEnd && r.b < today))
+      return { status: 'open', reason: 'Open (the stated closure has ended)' };
     return { status: 'closed', reason: 'Season has ended for this year' };
   }
 
@@ -320,7 +421,7 @@ export function seasonState(open, today = new Date()) {
   // Retention prohibitions with no dates at all — "Retention
   // prohibited (Atlantic)", "Catch and release only" — are closed
   // seasons for keep-or-release purposes, full stop.
-  if (PROHIBITED_RE.test(o))
+  if (PROHIBITED_RE.test(o) || PROHIBITED_RE.test(String(open).toLowerCase()))
     return { status: 'closed', reason: cleanSeason(open) || 'Retention prohibited' };
 
   // No open windows: a leading Open/Year-round (or a string that only
@@ -351,7 +452,8 @@ const DAY_MS = 86400000;
 // is open with no dated close ahead (year-round / no scheduled
 // closure). Considers the end of an active open window AND the start of
 // the next scheduled closure, whichever comes first.
-function nextCloseDate(raw, today) {
+function nextCloseDate(full, today) {
+  const raw = seasonCore(String(full).trim());
   const year = today.getUTCFullYear();
   const ranges = parseRanges(raw, year);
   if (!ranges.length) return null;
@@ -665,7 +767,7 @@ const _fmtDate = (iso) => {
    iOS to the App Store, works on any platform the share lands on, and
    most messengers render it as a rich preview card. Single source of
    truth — every share footer + the shareReport safety net use this. */
-export const SHARE_URL = 'https://reelintel.ai';
+export const SHARE_URL = 'https://reelintel.ai/?ref=share';   // ?ref: see referral.js
 const _SHARE_CTA = `📲 Get ReelIntel → ${SHARE_URL}`;
 
 /* PB report. Format is fixed per Section 6 spec:
